@@ -26,7 +26,7 @@ if [ ! -f ".env" ]; then
     if [ -f "env.example" ]; then
         log "Создаю .env из примера..."
         cp env.example .env
-        warning "Отредактируйте .env с вашими настройками!"
+        error "Файл .env создан из примера. Отредактируйте его с вашими настройками и запустите скрипт снова!"
     else
         error "Создайте .env файл"
     fi
