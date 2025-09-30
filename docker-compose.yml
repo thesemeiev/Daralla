@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: daralla-bot
+    restart: unless-stopped
+    environment:
+      # Переменные окружения загружаются из .env файла
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_ID=${ADMIN_ID}
+    volumes:
+      # Монтируем базы данных для сохранения данных
+      - ./notifications.db:/app/notifications.db
+      - ./referral_system.db:/app/referral_system.db
+      - ./vpn_keys.db:/app/vpn_keys.db
+      # Монтируем .env файл если он есть
+      - ./.env:/app/.env:ro
+    networks:
+      - bot-network
+    # Ограничения ресурсов для продакшена
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+networks:
+  bot-network:
+    driver: bridge
