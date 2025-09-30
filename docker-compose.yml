@@ -10,10 +10,10 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - ADMIN_ID=${ADMIN_ID}
     volumes:
-      # Монтируем базы данных для сохранения данных
-      - ./notifications.db:/app/notifications.db
-      - ./referral_system.db:/app/referral_system.db
-      - ./vpn_keys.db:/app/vpn_keys.db
+      # Монтируем базы данных для сохранения данных (с правами на запись)
+      - ./notifications.db:/app/notifications.db:rw
+      - ./referral_system.db:/app/referral_system.db:rw
+      - ./vpn_keys.db:/app/vpn_keys.db:rw
       # Монтируем .env файл если он есть
       - ./.env:/app/.env:ro
     networks:
