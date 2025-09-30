@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Скрипт деплоя Daralla Bot для Linux
-# Использование: ./deploy.sh [update]
+# Использование: ./deploy.sh 
 
 set -e
 
@@ -36,8 +36,15 @@ fi
 source .env
 
 # Проверяем настройки
-[ -z "$BOT_TOKEN" ] || [ "$BOT_TOKEN" = "your_telegram_bot_token_here" ] && error "Настройте BOT_TOKEN в .env"
-[ -z "$ADMIN_ID" ] || [ "$ADMIN_ID" = "your_admin_telegram_id_here" ] && error "Настройте ADMIN_ID в .env"
+if [ -z "$BOT_TOKEN" ] || [ "$BOT_TOKEN" = "your_telegram_bot_token_here" ]; then
+    error "Настройте BOT_TOKEN в .env файле"
+fi
+
+if [ -z "$ADMIN_ID" ] || [ "$ADMIN_ID" = "your_admin_telegram_id_here" ]; then
+    error "Настройте ADMIN_ID в .env файле"
+fi
+
+log "Настройки проверены: BOT_TOKEN и ADMIN_ID заданы"
 
 # Проверяем Docker
 command -v docker >/dev/null 2>&1 || error "Установите Docker"
