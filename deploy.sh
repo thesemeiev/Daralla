@@ -1,126 +1,90 @@
 #!/bin/bash
 
-# Универсальный скрипт для деплоя Daralla Bot
+# Скрипт деплоя Daralla Bot для Linux
 # Использование: ./deploy.sh [update]
 
-set -e  # Остановка при ошибке
+set -e
 
-echo "🚀 Daralla Bot - Деплой на сервер"
+echo "🚀 Daralla Bot - Деплой"
 
-# Цвета для вывода
+# Цвета
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Функция для логирования
-log() {
-    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
-}
+log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
-error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-    exit 1
-}
+# Проверки
+[ ! -f "docker-compose.yml" ] && error "Запустите из корня проекта"
 
-success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-# Проверяем, что мы в правильной директории
-if [ ! -f "docker-compose.yml" ]; then
-    error "docker-compose.yml не найден. Запустите скрипт из корня проекта."
-fi
-
-# Проверяем наличие .env файла
 if [ ! -f ".env" ]; then
     if [ -f "env.example" ]; then
-        log "Создаем .env файл из примера..."
+        log "Создаю .env из примера..."
         cp env.example .env
-        warning "Файл .env создан из примера. Отредактируйте его с вашими настройками!"
+        warning "Отредактируйте .env с вашими настройками!"
     else
-        error "Файл .env не найден. Создайте его с необходимыми переменными окружения."
+        error "Создайте .env файл"
     fi
 fi
 
-# Загружаем переменные окружения
+# Загружаем переменные
 source .env
 
-# Проверяем обязательные переменные
-if [ -z "$BOT_TOKEN" ] || [ "$BOT_TOKEN" = "your_telegram_bot_token_here" ]; then
-    error "BOT_TOKEN не настроен в файле .env"
-fi
+# Проверяем настройки
+[ -z "$BOT_TOKEN" ] || [ "$BOT_TOKEN" = "your_telegram_bot_token_here" ] && error "Настройте BOT_TOKEN в .env"
+[ -z "$ADMIN_ID" ] || [ "$ADMIN_ID" = "your_admin_telegram_id_here" ] && error "Настройте ADMIN_ID в .env"
 
-if [ -z "$ADMIN_ID" ] || [ "$ADMIN_ID" = "your_admin_telegram_id_here" ]; then
-    error "ADMIN_ID не настроен в файле .env"
-fi
+# Проверяем Docker
+command -v docker >/dev/null 2>&1 || error "Установите Docker"
+command -v docker-compose >/dev/null 2>&1 || error "Установите Docker Compose"
 
-# Проверяем наличие Docker
-if ! command -v docker &> /dev/null; then
-    error "Docker не установлен. Установите Docker и попробуйте снова."
-fi
-
-# Проверяем наличие docker-compose
-if ! command -v docker-compose &> /dev/null; then
-    error "Docker Compose не установлен. Установите Docker Compose и попробуйте снова."
-fi
-
-# Если передан аргумент "update", обновляем код
+# Обновление кода
 if [ "$1" = "update" ]; then
-    log "Обновляем код из репозитория..."
-    git pull origin main || warning "Не удалось обновить код из Git"
+    log "Обновляю код..."
+    git pull origin main || warning "Не удалось обновить"
 fi
 
-# Останавливаем существующий контейнер
-log "Останавливаем существующий контейнер..."
-docker-compose down || warning "Контейнер не был запущен"
+# Останавливаем и удаляем старый контейнер
+log "Останавливаю старый контейнер..."
+docker-compose down 2>/dev/null || true
 
-# Удаляем старый образ для полной пересборки
-log "Удаляем старый образ..."
-docker image rm daralla_telegram-bot 2>/dev/null || warning "Старый образ не найден"
+# Удаляем старый образ
+log "Удаляю старый образ..."
+docker image rm daralla_telegram-bot 2>/dev/null || true
 
-# Собираем новый образ
-log "Собираем Docker образ..."
+# Собираем и запускаем
+log "Собираю образ..."
 docker-compose build --no-cache
 
-# Запускаем контейнер
-log "Запускаем бота..."
+log "Запускаю бота..."
 docker-compose up -d
 
-# Ждем запуска контейнера
-sleep 5
+# Ждем запуска
+sleep 3
 
 # Проверяем статус
-log "Проверяем статус контейнера..."
 if docker-compose ps | grep -q "Up"; then
-    success "Бот успешно запущен!"
+    success "Бот запущен!"
 else
-    error "Не удалось запустить бота. Проверьте логи: docker-compose logs"
+    error "Ошибка запуска. Логи: docker-compose logs"
 fi
 
-# Показываем статус
 echo ""
-log "Статус контейнера:"
+log "Статус:"
 docker-compose ps
 
-# Показываем последние логи
 echo ""
-log "Последние логи (последние 20 строк):"
-docker-compose logs --tail=20
+log "Логи:"
+docker-compose logs --tail=10
 
-# Показываем полезные команды
 echo ""
-success "Деплой завершен!"
-echo ""
-echo "💡 Полезные команды:"
-echo "   Просмотр логов:     docker-compose logs -f"
-echo "   Остановка бота:     docker-compose down"
-echo "   Перезапуск:         docker-compose restart"
-echo "   Обновление:         ./deploy.sh update"
-echo "   Статус:             docker-compose ps"
-echo ""
+success "Готово!"
+echo "💡 Команды:"
+echo "   Логи:    docker-compose logs -f"
+echo "   Стоп:    docker-compose down"
+echo "   Обновить: ./deploy.sh update"
