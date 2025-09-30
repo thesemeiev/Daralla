@@ -48,7 +48,27 @@ log "Настройки проверены: BOT_TOKEN и ADMIN_ID заданы"
 
 # Проверяем Docker
 command -v docker >/dev/null 2>&1 || error "Установите Docker"
-command -v docker-compose >/dev/null 2>&1 || error "Установите Docker Compose"
+
+# Проверяем docker-compose и исправляем права доступа
+if ! command -v docker-compose >/dev/null 2>&1; then
+    # Пробуем docker compose (новая версия)
+    if docker compose version >/dev/null 2>&1; then
+        log "Используем docker compose (новая версия)"
+        DOCKER_COMPOSE_CMD="docker compose"
+    else
+        # Проверяем права доступа к docker-compose
+        if [ -f "/usr/local/bin/docker-compose" ]; then
+            log "Исправляю права доступа к docker-compose..."
+            sudo chmod +x /usr/local/bin/docker-compose
+        fi
+        command -v docker-compose >/dev/null 2>&1 || error "Установите Docker Compose"
+        DOCKER_COMPOSE_CMD="docker-compose"
+    fi
+else
+    DOCKER_COMPOSE_CMD="docker-compose"
+fi
+
+log "Используем команду: $DOCKER_COMPOSE_CMD"
 
 # Обновление кода
 if [ "$1" = "update" ]; then
@@ -58,7 +78,7 @@ fi
 
 # Останавливаем и удаляем старый контейнер
 log "Останавливаю старый контейнер..."
-docker-compose down 2>/dev/null || true
+$DOCKER_COMPOSE_CMD down 2>/dev/null || true
 
 # Удаляем старый образ
 log "Удаляю старый образ..."
@@ -66,32 +86,32 @@ docker image rm daralla_telegram-bot 2>/dev/null || true
 
 # Собираем и запускаем
 log "Собираю образ..."
-docker-compose build --no-cache
+$DOCKER_COMPOSE_CMD build --no-cache
 
 log "Запускаю бота..."
-docker-compose up -d
+$DOCKER_COMPOSE_CMD up -d
 
 # Ждем запуска
 sleep 3
 
 # Проверяем статус
-if docker-compose ps | grep -q "Up"; then
+if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
     success "Бот запущен!"
 else
-    error "Ошибка запуска. Логи: docker-compose logs"
+    error "Ошибка запуска. Логи: $DOCKER_COMPOSE_CMD logs"
 fi
 
 echo ""
 log "Статус:"
-docker-compose ps
+$DOCKER_COMPOSE_CMD ps
 
 echo ""
 log "Логи:"
-docker-compose logs --tail=10
+$DOCKER_COMPOSE_CMD logs --tail=10
 
 echo ""
 success "Готово!"
 echo "💡 Команды:"
-echo "   Логи:    docker-compose logs -f"
-echo "   Стоп:    docker-compose down"
+echo "   Логи:    $DOCKER_COMPOSE_CMD logs -f"
+echo "   Стоп:    $DOCKER_COMPOSE_CMD down"
 echo "   Обновить: ./deploy.sh update"
