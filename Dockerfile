@@ -15,7 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем код приложения
 COPY bot/ ./bot/
-COPY *.db ./
 
 # Создаем пользователя для безопасности
 RUN useradd --create-home --shell /bin/bash app && \

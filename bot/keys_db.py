@@ -7,8 +7,11 @@ import os
 
 # Определяем путь к базам данных относительно корневой папки проекта
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, 'vpn_keys.db')
-REFERRAL_DB_PATH = os.path.join(BASE_DIR, 'referral_system.db')
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+# Создаем папку data если её нет
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, 'vpn_keys.db')
+REFERRAL_DB_PATH = os.path.join(DATA_DIR, 'referral_system.db')
 logger = logging.getLogger(__name__)
 async def register_simple_user(user_id: str):
     """Регистрирует пользователя в таблице users (upsert)."""
@@ -35,18 +38,26 @@ async def is_known_user(user_id: str) -> bool:
         return False
 
 async def init_payments_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS payments (
-                user_id TEXT,
-                payment_id TEXT PRIMARY KEY,
-                status TEXT,
-                created_at INTEGER,
-                meta TEXT,
-                activated INTEGER DEFAULT 0
-            )
-        ''')
-        await db.commit()
+    logger.info(f"INIT_PAYMENTS_DB: Начинаем инициализацию базы данных по пути {DB_PATH}")
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            logger.info("INIT_PAYMENTS_DB: Подключение к базе данных успешно")
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS payments (
+                    user_id TEXT,
+                    payment_id TEXT PRIMARY KEY,
+                    status TEXT,
+                    created_at INTEGER,
+                    meta TEXT,
+                    activated INTEGER DEFAULT 0
+                )
+            ''')
+            logger.info("INIT_PAYMENTS_DB: Таблица payments создана/проверена")
+            await db.commit()
+            logger.info("INIT_PAYMENTS_DB: Изменения зафиксированы")
+    except Exception as e:
+        logger.error(f"INIT_PAYMENTS_DB: Ошибка при инициализации: {e}")
+        raise
 
 async def add_payment(user_id: str, payment_id: str, status: str, created_at: int, meta: dict):
     async with aiosqlite.connect(DB_PATH) as db:

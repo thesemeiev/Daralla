@@ -23,6 +23,7 @@ try:
         get_notification_stats,
         get_daily_notification_stats,
         clear_user_notifications,
+        clear_key_notifications,
         get_notification_settings,
         set_notification_setting
     )
@@ -37,6 +38,7 @@ except ImportError:
         get_notification_stats,
         get_daily_notification_stats,
         clear_user_notifications,
+        clear_key_notifications,
         get_notification_settings,
         set_notification_setting
     )
@@ -204,22 +206,28 @@ class NotificationManager:
                         expiry_time = datetime.datetime.fromtimestamp(expiry_time_ms / 1000)
                         time_diff = expiry_time - now
                         
-                        # Определяем тип уведомления
+                        # Определяем тип уведомления (только для активных ключей)
                         notification_type = None
-                        if time_diff.total_seconds() <= 3600:  # Меньше 1 часа
-                            notification_type = "1hour"
-                            time_text = "менее чем через час"
-                        elif time_diff.total_seconds() <= 86400:  # Меньше 1 дня
-                            notification_type = "1day"
-                            time_text = "менее чем через день"
-                        elif time_diff.total_seconds() <= 259200:  # Меньше 3 дней
-                            notification_type = "3days"
-                            time_text = "менее чем через 3 дня"
+                        if time_diff.total_seconds() > 0:  # Ключ еще активен
+                            if time_diff.total_seconds() <= 3600:  # Меньше 1 часа
+                                notification_type = "1hour"
+                            elif time_diff.total_seconds() <= 86400:  # Меньше 1 дня
+                                notification_type = "1day"
+                            elif time_diff.total_seconds() <= 259200:  # Меньше 3 дней
+                                notification_type = "3days"
                         
-                        # Отправляем уведомление если нужно
+                        # Вычисляем точное оставшееся время
                         if notification_type:
+                            # Импортируем функцию вычисления времени
+                            try:
+                                from .bot import calculate_time_remaining
+                            except ImportError:
+                                from bot import calculate_time_remaining
+                            
+                            time_remaining = calculate_time_remaining(expiry_time_ms / 1000)
+                            
                             success = await self._send_expiry_notification(
-                                user_id, email, notification_type, time_text, 
+                                user_id, email, notification_type, time_remaining, 
                                 key.get('server_name', ''), time_diff.days
                             )
                             
@@ -241,7 +249,7 @@ class NotificationManager:
             await self._notify_admin(f"Ошибка в check_expiring_keys: {e}\n{traceback.format_exc()}")
     
     async def _send_expiry_notification(self, user_id: str, email: str, notification_type: str, 
-                                      time_text: str, server_name: str, days_until_expiry: int) -> bool:
+                                      time_remaining: str, server_name: str, days_until_expiry: int) -> bool:
         """Отправляет уведомление об истекающем ключе"""
         try:
             # Проверяем, не отправляли ли уже это уведомление
@@ -249,10 +257,10 @@ class NotificationManager:
                 return False
             
             # Создаем сообщение
-            message = self._create_expiry_message(email, server_name, time_text)
+            message = self._create_expiry_message(email, server_name, time_remaining)
             
             # Создаем клавиатуру
-            keyboard = self._create_expiry_keyboard(email)
+            keyboard = self._create_expiry_keyboard(email, user_id)
             
             # Отправляем уведомление
             await self.bot.send_message(
@@ -305,23 +313,91 @@ class NotificationManager:
             await record_notification_metrics(notification_type, False)
             return False
     
-    def _create_expiry_message(self, email: str, server_name: str, time_text: str) -> str:
+    def _create_expiry_message(self, email: str, server_name: str, time_remaining: str) -> str:
         """Создает сообщение об истекающем ключе"""
         try:
             from .bot import UIMessages  # Импортируем здесь, чтобы избежать циклического импорта
         except ImportError:
             from bot import UIMessages
         
-        return UIMessages.key_expiring_message(email, server_name, 
-                                             datetime.datetime.now().strftime('%d.%m.%Y %H:%M'), 
-                                             time_text)
+        return UIMessages.key_expiring_message(email, server_name, time_remaining)
     
-    def _create_expiry_keyboard(self, email: str) -> InlineKeyboardMarkup:
+    def _create_deletion_message(self, email: str, server_name: str, days_expired: int) -> str:
+        """Создает сообщение об удаленном ключе"""
+        try:
+            from .bot import UIMessages  # Импортируем здесь, чтобы избежать циклического импорта
+        except ImportError:
+            from bot import UIMessages
+        
+        return UIMessages.key_deleted_message(email, server_name, days_expired)
+    
+    async def _send_deletion_notification(self, user_id: str, email: str, server_name: str, days_expired: int) -> bool:
+        """Отправляет уведомление об удаленном ключе"""
+        try:
+            # Проверяем, не отправляли ли уже это уведомление
+            if await is_notification_sent(user_id, email, "deleted"):
+                return False
+            
+            # Создаем сообщение
+            message = self._create_deletion_message(email, server_name, days_expired)
+            
+            # Создаем клавиатуру
+            keyboard = self._create_deletion_keyboard()
+            
+            # Отправляем уведомление
+            await self.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            
+            # Отмечаем как отправленное
+            await mark_notification_sent(user_id, email, "deleted", server_name)
+            
+            # Записываем метрики
+            await record_notification_metrics("deleted", True)
+            
+            logger.info(f"Отправлено уведомление об удалении ключа пользователю {user_id} для ключа {email}")
+            return True
+            
+        except telegram.error.Forbidden as e:
+            # Пользователь заблокировал бота или удалил чат
+            logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат (deletion notification): {e}")
+            await mark_notification_sent(user_id, email, "deleted", server_name)
+            await record_notification_metrics("deleted", False, user_blocked=True)
+            return False
+        except telegram.error.BadRequest as e:
+            if "Chat not found" in str(e):
+                logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат (deletion notification): {e}")
+                await mark_notification_sent(user_id, email, "deleted", server_name)
+                await record_notification_metrics("deleted", False, user_blocked=True)
+            else:
+                logger.error(f'BadRequest ошибка отправки уведомления об удалении пользователю {user_id}: {e}')
+                await record_notification_metrics("deleted", False)
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об удалении пользователю {user_id}: {e}")
+            await record_notification_metrics("deleted", False)
+            return False
+    
+    def _create_deletion_keyboard(self) -> InlineKeyboardMarkup:
+        """Создает клавиатуру для уведомления об удаленном ключе"""
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("Купить новый ключ", callback_data="buy_menu")],
+            [InlineKeyboardButton("Мои ключи", callback_data="mykey")]
+        ])
+    
+    def _create_expiry_keyboard(self, email: str, user_id: str = None) -> InlineKeyboardMarkup:
         """Создает клавиатуру для уведомления об истекающем ключе"""
         import hashlib
         
-        # Создаем короткий ID для кнопки продления
-        short_id = hashlib.md5(f"extend:{email}".encode()).hexdigest()[:8]
+        # Создаем короткий ID для кнопки продления (используем тот же формат, что и в extend_key_callback)
+        if user_id:
+            short_id = hashlib.md5(f"{user_id}:{email}".encode()).hexdigest()[:8]
+        else:
+            # Fallback для случаев, когда user_id не передан
+            short_id = hashlib.md5(f"extend:{email}".encode()).hexdigest()[:8]
         
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить ключ", callback_data=f"ext_key:{short_id}")],
@@ -337,6 +413,15 @@ class NotificationManager:
             
         except Exception as e:
             logger.error(f"Ошибка очистки уведомлений: {e}")
+    
+    async def clear_key_notifications(self, user_id: str, email: str) -> bool:
+        """Очищает все уведомления для конкретного ключа (при продлении)"""
+        try:
+            from .notifications_db import clear_key_notifications as clear_key_notifications_db
+            return await clear_key_notifications_db(user_id, email)
+        except Exception as e:
+            logger.error(f"Ошибка очистки уведомлений для ключа {email}: {e}")
+            return False
     
     async def _collect_metrics(self):
         """Собирает и анализирует метрики"""

@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 # Определяем путь к базе данных относительно корневой папки проекта
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NOTIFICATIONS_DB_PATH = os.path.join(BASE_DIR, 'notifications.db')
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+# Создаем папку data если её нет
+os.makedirs(DATA_DIR, exist_ok=True)
+NOTIFICATIONS_DB_PATH = os.path.join(DATA_DIR, 'notifications.db')
 
 async def init_notifications_db():
     """Инициализация базы данных уведомлений"""
@@ -349,6 +352,31 @@ async def clear_user_notifications(user_id: str) -> int:
             
     except Exception as e:
         logger.error(f"Ошибка очистки уведомлений пользователя {user_id}: {e}")
+        return 0
+
+async def clear_key_notifications(user_id: str, key_email: str) -> int:
+    """Очищает все уведомления для конкретного ключа (при продлении)"""
+    try:
+        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
+            # Удаляем отправленные уведомления для конкретного ключа
+            cursor = await db.execute("""
+                DELETE FROM sent_notifications WHERE user_id = ? AND key_email = ?
+            """, (user_id, key_email))
+            deleted_notifications = cursor.rowcount
+            
+            # Удаляем записи эффективности для конкретного ключа
+            cursor = await db.execute("""
+                DELETE FROM notification_effectiveness WHERE user_id = ? AND key_email = ?
+            """, (user_id, key_email))
+            deleted_effectiveness = cursor.rowcount
+            
+            await db.commit()
+            
+            logger.info(f"Очищено {deleted_notifications} уведомлений и {deleted_effectiveness} записей эффективности для ключа {key_email}")
+            return deleted_notifications + deleted_effectiveness
+            
+    except Exception as e:
+        logger.error(f"Ошибка очистки уведомлений для ключа {key_email}: {e}")
         return 0
 
 async def get_notification_settings() -> Dict[str, str]:

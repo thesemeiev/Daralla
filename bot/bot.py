@@ -1,4 +1,6 @@
 import logging
+import html
+from logging.handlers import RotatingFileHandler
 import datetime
 import json
 import uuid
@@ -220,6 +222,9 @@ def decode_referral_code(code: str) -> str:
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Поддержка нескольких админов через переменную окружения
+ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
 
 # Проверяем наличие обязательных переменных
 if not TELEGRAM_TOKEN:
@@ -258,11 +263,22 @@ for i, server in enumerate(SERVERS):
     if not server["host"] or not server["login"] or not server["password"]:
         print(f"ВНИМАНИЕ: Сервер {i+1} не настроен! Проверьте переменные XUI_HOST, XUI_LOGIN, XUI_PASSWORD")
 
+# Настраиваем файловый лог с ротацией в папке data/logs
+try:
+    from .keys_db import DATA_DIR
+except Exception:
+    DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+
+logs_dir = os.path.join(DATA_DIR, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+app_log_path = os.path.join(logs_dir, 'bot.log')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.StreamHandler()
+        logging.StreamHandler(),
+        RotatingFileHandler(app_log_path, maxBytes=1_048_576, backupCount=3, encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -794,7 +810,7 @@ server_manager = MultiServerManager(SERVERS)
 # Менеджер только для новых клиентов
 new_client_manager = MultiServerManager(NEW_CLIENT_SERVERS)
 
-def calculate_time_remaining(expiry_timestamp):
+def calculate_time_remaining(expiry_timestamp, show_expired_as_negative=False):
     """
     Вычисляет оставшееся время до деактивации ключа
     """
@@ -810,7 +826,27 @@ def calculate_time_remaining(expiry_timestamp):
         time_diff = expiry_dt - now
         
         if time_diff.total_seconds() <= 0:
-            return "Истек"
+            if show_expired_as_negative:
+                # Показываем, сколько времени прошло с момента истечения
+                expired_diff = now - expiry_dt
+                days = expired_diff.days
+                hours, remainder = divmod(expired_diff.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                
+                time_parts = []
+                if days > 0:
+                    time_parts.append(f"{days} дн.")
+                if hours > 0:
+                    time_parts.append(f"{hours} ч.")
+                if minutes > 0:
+                    time_parts.append(f"{minutes} мин.")
+                
+                if not time_parts:
+                    return "Только что истек"
+                
+                return f"Истек {time_parts[0]}" if len(time_parts) == 1 else f"Истек {' '.join(time_parts)}"
+            else:
+                return "Истек"
         
         # Извлекаем дни, часы и минуты
         days = time_diff.days
@@ -849,7 +885,6 @@ def format_vpn_key_message(email, status, server, expiry, key, expiry_timestamp=
         f"<b>Email:</b> <code>{email}</code>\n"
         f"<b>Статус:</b> {status_icon} {UIStyles.highlight(status)}\n"
         f"<b>Сервер:</b> {server}\n"
-        f"<b>Истекает:</b> {expiry}\n"
         f"<b>Осталось:</b> {time_remaining}\n\n"
         f"<code>{key}</code>\n"
         f"{UIStyles.description('Нажмите на ключ выше, чтобы скопировать')}"
@@ -968,6 +1003,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 if connection_saved:
                     days = await get_config('points_days_per_point', '14')
+                    logger.info(f"START_REFERRAL: Получено значение days из конфигурации = {days}")
                     welcome_text = UIMessages.welcome_referral_new_user_message(days)
                 else:
                     # Пользователь уже участвовал в реферальной системе — показываем общее сообщение как для не нового пользователя
@@ -1158,7 +1194,8 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def update_payment_activation(payment_id: str, activated: int):
     import aiosqlite
-    async with aiosqlite.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'vpn_keys.db')) as db:
+    from .keys_db import DB_PATH
+    async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (activated, payment_id))
         await db.commit()
     logger.info(f"Обновлен статус активации: payment_id={payment_id}, activated={activated}")
@@ -1185,7 +1222,28 @@ async def handle_payment(update, context, price, period):
         
         # Проверяем pending платежи пользователя и отменяем только неоплаченные
         import aiosqlite
-        async with aiosqlite.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'vpn_keys.db')) as db:
+        from .keys_db import DB_PATH
+        logger.info(f"HANDLE_PAYMENT: Подключаемся к базе данных по пути: {DB_PATH}")
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Проверяем существование таблицы payments
+            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments'") as cursor:
+                table_exists = await cursor.fetchone()
+                logger.info(f"HANDLE_PAYMENT: Таблица payments существует: {table_exists is not None}")
+                if not table_exists:
+                    logger.error("HANDLE_PAYMENT: Таблица payments не найдена! Создаем её...")
+                    await db.execute('''
+                        CREATE TABLE IF NOT EXISTS payments (
+                            user_id TEXT,
+                            payment_id TEXT PRIMARY KEY,
+                            status TEXT,
+                            created_at INTEGER,
+                            meta TEXT,
+                            activated INTEGER DEFAULT 0
+                        )
+                    ''')
+                    await db.commit()
+                    logger.info("HANDLE_PAYMENT: Таблица payments создана")
+            
             # Получаем все pending платежи пользователя
             async with db.execute('''
                 SELECT payment_id, status FROM payments WHERE user_id = ? AND status = ?
@@ -1320,7 +1378,13 @@ async def handle_payment(update, context, price, period):
         # Показываем ссылку на оплату
         try:
             # Определяем переменные для текста
-            period_text = "1 месяц" if period == "month" else "3 месяца"
+            if period.startswith('extend_'):
+                # Для продления убираем префикс extend_
+                actual_period = period.replace('extend_', '')
+                period_text = "1 месяц" if actual_period == "month" else "3 месяца"
+            else:
+                # Для обычной покупки
+                period_text = "1 месяц" if period == "month" else "3 месяца"
             payment_url = payment.confirmation.confirmation_url
             
             # Сохраняем message_id для отслеживания платежа
@@ -1377,12 +1441,6 @@ async def handle_payment(update, context, price, period):
         logger.exception(f"Ошибка в handle_payment для user_id={user_id}")
         await safe_edit_or_reply(message, 'Произошла внутренняя ошибка. Администратор уже уведомлён.')
         await notify_admin(context.bot, f"Ошибка в handle_payment для user_id={user_id}: {e}\n{traceback.format_exc()}")
-
-
-
-
-
-
 
 
 
@@ -1481,7 +1539,6 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 page_text += f"<b>Email:</b> <code>{client['email']}</code>\n"
                 page_text += f"<b>Статус:</b> {status_icon} {status}\n"
                 page_text += f"<b>Сервер:</b> {server_name}\n"
-                page_text += f"<b>Истекает:</b> {expiry_str}\n"
                 page_text += f"<b>Осталось:</b> {time_remaining}\n\n"
                 page_text += f"<code>{link}</code>\n\n"
                 page_text += f"{UIStyles.description('Нажмите на ключ выше, чтобы скопировать')}\n\n"
@@ -1532,9 +1589,31 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def init_all_db():
-    from .keys_db import init_payments_db
+    from .keys_db import init_payments_db, DB_PATH, REFERRAL_DB_PATH, DATA_DIR
+    from .notifications_db import init_notifications_db, NOTIFICATIONS_DB_PATH
+    
+    # Создаем папку data если её нет
+    import os
+    os.makedirs(DATA_DIR, exist_ok=True)
+    logger.info(f"Создана/проверена папка для баз данных: {DATA_DIR}")
+    
+    logger.info("Инициализация баз данных...")
+    logger.info(f"Путь к базе платежей: {DB_PATH}")
+    logger.info(f"Путь к реферальной базе: {REFERRAL_DB_PATH}")
+    logger.info(f"Путь к базе уведомлений: {NOTIFICATIONS_DB_PATH}")
+    
+    logger.info("Вызываем init_payments_db()...")
     await init_payments_db()
+    logger.info("init_payments_db() завершена")
+    logger.info("База данных платежей инициализирована")
+    
     await init_referral_db()  # Инициализируем реферальную систему и конфиг
+    logger.info("Реферальная база данных инициализирована")
+    
+    await init_notifications_db()  # Инициализируем базу данных уведомлений
+    logger.info("База данных уведомлений инициализирована")
+    
+    logger.info("Все базы данных успешно инициализированы")
 
 
 async def auto_activate_keys(app):
@@ -1575,6 +1654,46 @@ async def auto_activate_keys(app):
                 old_count = await cleanup_old_payments(days_old=7)
                 if old_count > 0:
                     logger.info(f"Удалено {old_count} старых записей платежей (старше 7 дней)")
+                
+                # Очищаем кэш ключей для продления (старше 1 часа)
+                hour_ago = int(datetime.datetime.now().timestamp()) - 3600
+                old_keys = []
+                for short_id, key_email in list(extension_keys_cache.items()):
+                    # Проверяем, существует ли ключ на серверах
+                    try:
+                        xui, server_name = server_manager.find_client_on_any_server(key_email)
+                        if not xui or not server_name:
+                            old_keys.append(short_id)
+                    except:
+                        old_keys.append(short_id)
+                
+                for short_id in old_keys:
+                    extension_keys_cache.pop(short_id, None)
+                
+                if old_keys:
+                    logger.info(f"Очищено {len(old_keys)} старых записей из extension_keys_cache")
+                
+                # Очищаем кэш платежей (старше 1 часа)
+                old_payments = []
+                for payment_id in list(payment_message_ids.keys()):
+                    # Проверяем, есть ли активный платеж в базе
+                    try:
+                        from .keys_db import get_all_pending_payments
+                        pending_payments = await get_all_pending_payments()
+                        pending_ids = [p['payment_id'] for p in pending_payments]
+                        if payment_id not in pending_ids:
+                            old_payments.append(payment_id)
+                    except:
+                        old_payments.append(payment_id)
+                
+                for payment_id in old_payments:
+                    payment_message_ids.pop(payment_id, None)
+                
+                if old_payments:
+                    logger.info(f"Очищено {len(old_payments)} старых записей из payment_message_ids")
+                
+                # Убрали очистку буфера - используем стандартный Docker подход
+                
                 cycle_count = 0  # Сбрасываем счетчик
             
             # Автоматическое удаление просроченных ключей каждые 720 циклов (каждые 2 часа при sleep=10)
@@ -1582,10 +1701,11 @@ async def auto_activate_keys(app):
                 deleted_keys_count = await auto_cleanup_expired_keys()
                 if deleted_keys_count > 0:
                     logger.info(f"Автоматически удалено {deleted_keys_count} просроченных ключей")
-                    await notify_admin(app.bot, f"🧹 Автоочистка: удалено {deleted_keys_count} просроченных ключей (старше 3 дней после истечения)")
+                    logger.info(f"🧹 Автоочистка: удалено {deleted_keys_count} просроченных ключей (старше 3 дней после истечения)")
                 else:
                     logger.info("Автоочистка: просроченных ключей для удаления не найдено")
             
+            from .keys_db import get_all_pending_payments
             pending_payments = await get_all_pending_payments()
             logger.info(f"Проверка pending платежей: найдено {len(pending_payments)} платежей")
             for payment in pending_payments:
@@ -1607,6 +1727,9 @@ async def auto_activate_keys(app):
                 # Если платеж успешен
                 if pay.status == 'succeeded':
                     period = meta.get('type', 'month')
+                    
+                    # Получаем message_id для редактирования сообщения
+                    message_id = payment_message_ids.get(payment_id)
                     
                     # Проверяем, это продление или новая покупка
                     is_extension = period.startswith('extend_')
@@ -1685,18 +1808,18 @@ async def auto_activate_keys(app):
                                                     expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
                                                     break
                                     
-                                    # Уведомления об истечении очищаются автоматически в NotificationManager
-                                    
-                                    # Записываем эффективность уведомления (если есть менеджер)
+                                    # Очищаем старые уведомления об истечении для продленного ключа
                                     global notification_manager
                                     if notification_manager:
+                                        await notification_manager.clear_key_notifications(user_id, extension_email)
                                         await notification_manager.record_key_extension(user_id, extension_email)
                                     
                                     extension_message = UIMessages.key_extended_message(
                                         email=extension_email,
                                         server_name=server_name,
                                         days=days,
-                                        expiry_str=expiry_str
+                                        expiry_str=expiry_str,
+                                        period=actual_period
                                     )
                                     
                                     # Проверяем, есть ли сохраненная информация о сообщении продления
@@ -1981,6 +2104,11 @@ async def auto_cleanup_expired_keys():
                             inbound_id = inbound['id']
                             email = client.get('email', '')
                             
+                            # Извлекаем user_id из email (формат: user_id_email@domain.com)
+                            user_id = None
+                            if '_' in email:
+                                user_id = email.split('_')[0]
+                            
                             # Формируем URL для удаления
                             url = f"{xui.host}/panel/api/inbounds/{inbound_id}/delClient/{client_id}"
                             logger.info(f"Автоудаление просроченного ключа: inbound_id={inbound_id}, client_id={client_id}, email={email}")
@@ -1996,6 +2124,69 @@ async def auto_cleanup_expired_keys():
                                 days_expired = (datetime.datetime.now() - expiry_date).days
                                 
                                 logger.info(f'Автоудален просроченный ключ: {email} с сервера {server["name"]} (истек {days_expired} дней назад)')
+                                
+                                # Очищаем связанные данные из кэшей
+                                try:
+                                    # Очищаем extension_keys_cache
+                                    keys_to_remove = []
+                                    for short_id, key_email in extension_keys_cache.items():
+                                        if key_email == email:
+                                            keys_to_remove.append(short_id)
+                                    for short_id in keys_to_remove:
+                                        extension_keys_cache.pop(short_id, None)
+                                    
+                                    if keys_to_remove:
+                                        logger.info(f"Очищено {len(keys_to_remove)} записей из extension_keys_cache для удаленного ключа {email}")
+                                    
+                                    # Очищаем payment_message_ids (платежи для этого ключа)
+                                    payments_to_remove = []
+                                    for payment_id in list(payment_message_ids.keys()):
+                                        # Проверяем, связан ли платеж с этим ключом
+                                        try:
+                                            from .keys_db import get_all_pending_payments
+                                            pending_payments = await get_all_pending_payments()
+                                            for payment in pending_payments:
+                                                if payment['payment_id'] == payment_id:
+                                                    meta = payment.get('meta', {})
+                                                    if meta.get('key_email') == email:
+                                                        payments_to_remove.append(payment_id)
+                                                    break
+                                        except:
+                                            pass
+                                    
+                                    for payment_id in payments_to_remove:
+                                        payment_message_ids.pop(payment_id, None)
+                                        extension_messages.pop(payment_id, None)
+                                    
+                                    if payments_to_remove:
+                                        logger.info(f"Очищено {len(payments_to_remove)} записей из payment_message_ids и extension_messages для удаленного ключа {email}")
+                                    
+                                    # Очищаем уведомления для удаленного ключа
+                                    if user_id:
+                                        try:
+                                            from .notifications import notification_manager
+                                            if notification_manager:
+                                                await notification_manager.clear_key_notifications(user_id, email)
+                                        except Exception as e:
+                                            logger.error(f"Ошибка очистки уведомлений для удаленного ключа {email}: {e}")
+                                        
+                                except Exception as e:
+                                    logger.error(f"Ошибка очистки кэшей при удалении ключа {email}: {e}")
+                                
+                                # Отправляем уведомление пользователю об удалении ключа
+                                if user_id:
+                                    try:
+                                        # Получаем глобальный экземпляр NotificationManager
+                                        from .notifications import notification_manager
+                                        if notification_manager:
+                                            await notification_manager._send_deletion_notification(
+                                                user_id=user_id,
+                                                email=email,
+                                                server_name=server["name"],
+                                                days_expired=days_expired
+                                            )
+                                    except Exception as e:
+                                        logger.error(f"Ошибка отправки уведомления об удалении пользователю {user_id}: {e}")
                             else:
                                 logger.warning(f"Не удалось удалить ключ {email}: status_code={getattr(result, 'status_code', None)}")
                                 
@@ -2170,19 +2361,23 @@ notification_manager = None
 async def on_startup(app):
     global notification_manager
     
-    await init_all_db()
-    await init_referral_db()  # Инициализируем реферальную систему
+    logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
+    
+    await init_all_db()  # Уже включает init_referral_db()
     
     # Инициализируем менеджер уведомлений
+    logger.info("Инициализация менеджера уведомлений...")
     notification_manager = NotificationManager(app.bot, server_manager, ADMIN_IDS)
     await notification_manager.initialize()
     await notification_manager.start()
+    logger.info("Менеджер уведомлений запущен")
+    
+    logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
     
     # Запускаем остальные задачи
     asyncio.create_task(auto_activate_keys(app))
     asyncio.create_task(server_health_monitor(app))
 
-ADMIN_IDS = [6735703554]  # Замените на свой Telegram user_id
 
 # ==================== СТИЛЬ ИНТЕРФЕЙСА ====================
 
@@ -2287,8 +2482,6 @@ class UIMessages:
         warning_msg = "Используя данный сервис, вы соглашаетесь с <a href=\"" + terms_url + "\">условиями использования</a> и обязуетесь соблюдать законодательство РФ."
         return (
             f"{UIStyles.header('Добро пожаловать в Daralla VPN!')}\n\n"
-            f"{UIStyles.description('Быстрый и надёжный доступ к VPN-сервису.')}\n"
-            f"{UIStyles.description('Выберите действие с помощью кнопок ниже:')}\n\n"
             f"{UIStyles.warning_message(warning_msg)}"
         )
     
@@ -2326,15 +2519,26 @@ class UIMessages:
         )
     
     @staticmethod
-    def key_expiring_message(email, server, expiry, time_text):
+    def key_expiring_message(email, server, time_remaining):
         """Сообщение об истекающем ключе"""
         return (
             f"{UIStyles.warning_message('Внимание! Ключ скоро истечет')}\n\n"
             f"<b>Ключ:</b> <code>{email}</code>\n"
             f"<b>Сервер:</b> {server}\n"
-            f"<b>Истекает:</b> {expiry}\n"
-            f"<b>Осталось:</b> {time_text}\n\n"
+            f"<b>Осталось:</b> {time_remaining}\n\n"
             f"{UIStyles.description('Продлите ключ, чтобы не потерять доступ к VPN!')}"
+        )
+    
+    @staticmethod
+    def key_deleted_message(email, server, days_expired):
+        """Сообщение об удаленном ключе"""
+        return (
+            f"{UIStyles.error_message('Ключ был удален')}\n\n"
+            f"<b>Ключ:</b> <code>{email}</code>\n"
+            f"<b>Сервер:</b> {server}\n"
+            f"<b>Истек:</b> {days_expired} дней назад\n\n"
+            f"{UIStyles.description('Ключ был автоматически удален из-за истечения срока действия.')}\n"
+            f"{UIStyles.description('Купите новый ключ для продолжения использования VPN.')}"
         )
     
     @staticmethod
@@ -2346,15 +2550,25 @@ class UIMessages:
         )
     
     @staticmethod
-    def key_extended_message(email, server_name, days, expiry_str):
+    def key_extended_message(email, server_name, days, expiry_str, period=None):
         """Сообщение о продлении ключа"""
+        # Определяем текст периода
+        if period:
+            if period == '3month':
+                period_text = "3 месяца"
+            elif period == 'month':
+                period_text = "1 месяц"
+            else:
+                period_text = f"{days} дней"
+        else:
+            period_text = f"{days} дней"
+        
         return (
             f"{UIEmojis.SUCCESS} Ключ успешно продлен!\n\n"
             f"Ключ: `{email}`\n"
             f"Сервер: {server_name}\n"
-            f"Продлен на: {days} дней\n"
-            f"Новое время истечения: {expiry_str}\n\n"
-            f"Ваш ключ продолжает работать с теми же настройками."
+            f"Продлен на: {period_text}\n"
+            f"Новое время истечения: {expiry_str}"
         )
     
     
@@ -2394,12 +2608,11 @@ class UIMessages:
         warning_msg = "Используя данный сервис, вы соглашаетесь с <a href=\"" + terms_url + "\">условиями использования</a> и обязуетесь соблюдать законодательство РФ."
         return (
             f"{UIStyles.header('Добро пожаловать в Daralla VPN!')}\n\n"
+            f"{UIStyles.warning_message(warning_msg)}\n\n"
             f"{UIStyles.success_message('Вы пришли по реферальной ссылке!')}\n\n"
             f"После покупки VPN ваш друг получит 1 балл!\n"
-            f"1 балл = {days} дней VPN бесплатно!\n\n"
-            f"{UIStyles.description('Быстрый и надёжный доступ к VPN-сервису.')}\n"
-            f"{UIStyles.description('Выберите действие с помощью кнопок ниже:')}\n\n"
-            f"{UIStyles.warning_message(warning_msg)}"
+            f"1 балл = {days} дней VPN бесплатно!"
+            
         )
     
     @staticmethod
@@ -2409,12 +2622,11 @@ class UIMessages:
         warning_msg = "Используя данный сервис, вы соглашаетесь с <a href=\"" + terms_url + "\">условиями использования</a> и обязуетесь соблюдать законодательство РФ."
         return (
             f"{UIStyles.header('Добро пожаловать в Daralla VPN!')}\n\n"
-            f"{UIStyles.warning_message('Вы пришли по реферальной ссылке')}\n\n"
+            f"{UIStyles.warning_message(warning_msg)}\n\n"
+            f"{UIStyles.success_message('Вы пришли по реферальной ссылке')}\n\n"
             f"Но вы не новый пользователь.\n"
-            f"Реферальная награда не будет выдана.\n\n"
-            f"{UIStyles.description('Здесь вы можете управлять своими ключами.')}\n"
-            f"{UIStyles.description('Выберите действие с помощью кнопок ниже:')}\n\n"
-            f"{UIStyles.warning_message(warning_msg)}"
+            f"Реферальная награда не будет выдана."
+            
         )
 
 # Глобальный словарь для хранения message_id платежей
@@ -2467,45 +2679,32 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        import subprocess
-        # Используем полный путь к journalctl
-        result = subprocess.run(['/usr/bin/journalctl', '-u', 'vpnbot', '-n', '20', '--no-pager'], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            logs = result.stdout.strip()
-            if logs:
-                # Разбиваем на части, если лог слишком длинный
-                if len(logs) > 4000:
-                    logs = logs[-4000:]  # Последние 4000 символов
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-                ])
-                message_obj = update.message if update.message else update.callback_query.message
-                await safe_edit_or_reply(message_obj, f"Последние логи:\n```\n{logs}\n```", parse_mode='Markdown', reply_markup=keyboard)
-            else:
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-                ])
-                message_obj = update.message if update.message else update.callback_query.message
-                await safe_edit_or_reply(message_obj, 'Логи пусты или сервис не найден.', reply_markup=keyboard)
+        # Читаем ротационный файл логов приложения
+        from .keys_db import DATA_DIR
+        import os
+        logs_path = os.path.join(DATA_DIR, 'logs', 'bot.log')
+        logs = ''
+        if os.path.exists(logs_path):
+            with open(logs_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                logs = ''.join(lines[-200:])  # последние ~200 строк
         else:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-            ])
-            message_obj = update.message if update.message else update.callback_query.message
-            await safe_edit_or_reply(message_obj, f'{UIEmojis.ERROR} Ошибка получения логов. Проверьте, запущен ли сервис.', reply_markup=keyboard)
-    except subprocess.TimeoutExpired:
+            logs = 'Файл логов не найден. Он будет создан автоматически при работе бота.'
+
+        if len(logs) > 4000:
+            logs = logs[-4000:]
+
+        # Экранируем HTML и выводим как код
+        escaped = html.escape(logs)
+
         keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors")],
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, '⏰ Таймаут при получении логов.', reply_markup=keyboard)
-    except FileNotFoundError:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-        ])
-        message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f'{UIEmojis.ERROR} journalctl не найден. Это не Linux система.', reply_markup=keyboard)
+        await safe_edit_or_reply(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+                               parse_mode='HTML', reply_markup=keyboard)
+            
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
         keyboard = InlineKeyboardMarkup([
@@ -2668,9 +2867,53 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Получаем email ключа из кэша
     key_email = extension_keys_cache.get(short_id)
     if not key_email:
-        await query.answer("Ошибка: ключ не найден в кэше")
-        logger.error(f"Не найден key_email для short_id: {short_id}")
-        return
+        # Пытаемся найти ключ по short_id, созданному из уведомления
+        # Проверяем все возможные форматы short_id
+        import hashlib
+        
+        # Ищем ключ пользователя на серверах
+        try:
+            all_clients = []
+            for server in server_manager.servers:
+                try:
+                    xui = server["x3"]
+                    inbounds = xui.list()['obj']
+                    for inbound in inbounds:
+                        settings = json.loads(inbound['settings'])
+                        clients = settings.get("clients", [])
+                        for client in clients:
+                            if client['email'].startswith(f"{user_id}_") or client['email'].startswith(f"trial_{user_id}_"):
+                                all_clients.append(client)
+                except Exception as e:
+                    logger.error(f"Ошибка при поиске ключей на сервере {server['name']}: {e}")
+                    continue
+            
+            # Ищем ключ, который соответствует short_id
+            for client in all_clients:
+                email = client['email']
+                # Проверяем разные форматы short_id
+                possible_short_ids = [
+                    hashlib.md5(f"{user_id}:{email}".encode()).hexdigest()[:8],
+                    hashlib.md5(f"extend:{email}".encode()).hexdigest()[:8]
+                ]
+                
+                if short_id in possible_short_ids:
+                    key_email = email
+                    # Добавляем в кэш для будущих использований
+                    extension_keys_cache[short_id] = email
+                    logger.info(f"Найден ключ по short_id: {short_id} -> {email}")
+                    break
+            
+            if not key_email:
+                await query.answer("Ошибка: ключ не найден")
+                logger.error(f"Не найден key_email для short_id: {short_id}")
+                return
+                
+        except Exception as e:
+            logger.error(f"Ошибка поиска ключа по short_id: {e}")
+            await query.answer("Ошибка: ключ не найден")
+            return
+    
     await query.answer()
     
     logger.info(f"Запрос на продление ключа: user_id={user_id}, key_email={key_email}")
@@ -2707,10 +2950,10 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     ])
     
     message_text = (
-        f"Продление ключа\n\n"
-        f"Ключ: `{key_email}`\n"
-        f"Сервер: {server_name}\n\n"
-        f"Выберите период продления:"
+        f"{UIStyles.header('Продление ключа')}\n\n"
+        f"<b>Ключ:</b> <code>{key_email}</code>\n"
+        f"<b>Сервер:</b> {server_name}\n\n"
+        f"{UIStyles.description('Выберите период продления:')}"
     )
     
     await safe_edit_or_reply(query.message, message_text, reply_markup=keyboard, parse_mode="HTML")
@@ -2861,11 +3104,16 @@ async def admin_set_days_start(update: Update, context: ContextTypes.DEFAULT_TYP
         f"Введите новое количество дней (от {min_days} до {max_days}):"
     )
     
+    # Создаем клавиатуру с кнопкой отмены
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
+    ])
+    
     # Сохраняем message_id для последующего редактирования
     context.user_data['config_message_id'] = query.message.message_id
     context.user_data['config_chat_id'] = query.message.chat_id
     
-    await query.edit_message_text(message, parse_mode="HTML")
+    await query.edit_message_text(message, parse_mode="HTML", reply_markup=keyboard)
     
     return WAITING_FOR_DAYS
 
@@ -2908,6 +3156,11 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Сохраняем новое значение
         success = await set_config('points_days_per_point', str(days), 'Количество дней VPN за 1 балл')
+        logger.info(f"ADMIN_SET_DAYS: Сохранение конфигурации points_days_per_point = {days}, success = {success}")
+        
+        # Проверяем, что значение действительно сохранилось
+        saved_days = await get_config('points_days_per_point', '14')
+        logger.info(f"ADMIN_SET_DAYS: Проверка сохраненного значения = {saved_days}")
         
         if success:
             message = (
@@ -3197,8 +3450,13 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # === Навигационный стек и универсальный обработчик "Назад" ===
-def push_nav(context, state):
+def push_nav(context, state, max_size=10):
     stack = context.user_data.setdefault('nav_stack', [])
+    
+    # Ограничиваем размер стека
+    if len(stack) >= max_size:
+        stack.pop(0)  # Удаляем самый старый элемент
+    
     stack.append(state)
     logger.info(f"PUSH: {state} -> Stack: {stack}")
 
@@ -3528,13 +3786,13 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
         
         points_days = await get_config('points_days_per_point', '14')
         message = (
-            f"*Продление ключа за баллы*\n\n"
-            f"У вас есть: *{mdv2(points_info['points'])} баллов*\n"
-            f"1 балл \\= продление на {mdv2(points_days)} дней\n\n"
-            f"Выберите ключ для продления:"
+            f"{UIStyles.header('Продление ключа за баллы')}\n\n"
+            f"<b>У вас есть:</b> {points_info['points']} баллов\n"
+            f"<b>1 балл</b> = продление на {points_days} дней\n\n"
+            f"{UIStyles.description('Выберите ключ для продления:')}"
         )
         
-        await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode="MarkdownV2", disable_web_page_preview=True)
+        await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
             
     except Exception as e:
         logger.error(f"Ошибка при получении списка ключей: {e}")
@@ -3557,8 +3815,10 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
         points_days = int(await get_config('points_days_per_point', '14'))
         response = xui.extendClient(email, points_days)
         if response and response.status_code == 200:
-            # Очищаем уведомления об истечении для продленного ключа
-            # Уведомления об истечении очищаются автоматически в NotificationManager
+            # Очищаем старые уведомления об истечении для продленного ключа
+            global notification_manager
+            if notification_manager:
+                await notification_manager.clear_key_notifications(user_id, email)
             
             # Получаем новое время истечения
             clients_response = xui.list()
@@ -3576,7 +3836,8 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                 email=email,
                 server_name=server_name,
                 days=points_days,
-                expiry_str=expiry_str
+                expiry_str=expiry_str,
+                period=None  # Для продления за баллы период не указываем
             )
             
             keyboard = InlineKeyboardMarkup([
@@ -3744,7 +4005,8 @@ if __name__ == '__main__':
             CallbackQueryHandler(admin_set_days_cancel, pattern="^admin_set_days_cancel$")
         ],
         per_user=True,
-        per_chat=True
+        per_chat=True,
+        per_message=False
     )
     app.add_handler(admin_set_days_conv)
     
