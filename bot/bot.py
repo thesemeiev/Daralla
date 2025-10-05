@@ -1696,8 +1696,8 @@ async def auto_activate_keys(app):
                 
                 cycle_count = 0  # Сбрасываем счетчик
             
-            # Автоматическое удаление просроченных ключей каждые 720 циклов (каждые 2 часа при sleep=10)
-            if cycle_count % 720 == 0:
+            # Автоматическое удаление просроченных ключей (тестово ~каждую минуту при sleep=10)
+            if cycle_count % 6 == 0:
                 deleted_keys_count = await auto_cleanup_expired_keys()
                 if deleted_keys_count > 0:
                     logger.info(f"Автоматически удалено {deleted_keys_count} просроченных ключей")
