@@ -25,7 +25,9 @@ MANIFEST
 
 # Virtual environments
 .env
-/bot/.env
+.env.*
+!.env.example
+bot/.env
 .venv
 env/
 venv/
@@ -52,13 +54,18 @@ Thumbs.db
 # Logs
 *.log
 logs/
+data/logs/
 
 # Temporary files
 tmp/
 temp/
 
-# Database files (если нужно исключить из Git)
-#
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/backups/
 
 # Docker volumes
 docker-data/
@@ -66,3 +73,14 @@ docker-data/
 # Backup files
 *.bak
 *.backup
+backups/
+*.tar.gz
+
+# CI/CD secrets
+.github/workflows/secrets.yml
+
+# Server scripts (опционально - раскомментируйте если не нужны в репозитории)
+# deploy-server.sh
+# rollback.sh
+# backup.sh
+# setup-server.sh

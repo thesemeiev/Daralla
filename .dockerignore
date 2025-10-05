@@ -19,7 +19,6 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
-.git
 .mypy_cache
 .pytest_cache
 .hypothesis
@@ -48,19 +47,40 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
-
-# Documentation
-README.md
-*.md
-
 # Logs
 *.log
 logs/
+data/logs/
 
 # Temporary files
 tmp/
 temp/
+
+# Database files (не копируем в контейнер)
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+
+# Backup files
+*.bak
+*.backup
+backups/
+*.tar.gz
+
+# Environment files (будут монтироваться)
+.env
+.env.*
+
+# CI/CD
+.github/
+
+# Documentation
+*.md
+!README.md
+
+# Server scripts
+deploy-server.sh
+rollback.sh
+backup.sh
+setup-server.sh

@@ -477,12 +477,19 @@ async def add_points(user_id: str, points: int, description: str, source_id: str
         logger.error(f"ADD_POINTS: Critical error - {e}")
         return False
 
-async def spend_points(user_id: str, points: int, description: str, source_id: str = None) -> bool:
+async def spend_points(user_id: str, points: int, description: str, source_id: str = None, bot=None) -> bool:
     """Тратит баллы пользователя. Возвращает True если успешно"""
     try:
         # Валидация входных данных
         if not user_id or not isinstance(points, int) or points <= 0:
             logger.error(f"SPEND_POINTS: Invalid input - user_id={user_id}, points={points}")
+            # Уведомляем админа о некорректных данных
+            if bot:
+                try:
+                    from .bot import notify_admin
+                    await notify_admin(bot, f"🚨 Ошибка валидации при списании баллов:\nuser_id={user_id}, points={points}, description={description}")
+                except Exception as e:
+                    logger.error(f"Failed to notify admin about spend_points validation error: {e}")
             return False
             
         async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
@@ -520,6 +527,13 @@ async def spend_points(user_id: str, points: int, description: str, source_id: s
             
     except Exception as e:
         logger.error(f"SPEND_POINTS: Critical error - {e}")
+        # Уведомляем админа о критической ошибке
+        if bot:
+            try:
+                from .bot import notify_admin
+                await notify_admin(bot, f"🚨 Критическая ошибка при списании баллов:\nuser_id={user_id}, points={points}, description={description}\nОшибка: {str(e)}")
+            except Exception as notify_e:
+                logger.error(f"Failed to notify admin about spend_points critical error: {notify_e}")
         return False
 
 async def get_user_points(user_id: str) -> dict:

@@ -7,7 +7,6 @@ import uuid
 import os
 import requests
 import asyncio
-import base64
 from dotenv import load_dotenv
 import pathlib
 import telegram
@@ -136,81 +135,37 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
 
-import hashlib
-import hmac
-
-# Секретный ключ для подписи реферальных кодов (в продакшене должен быть в .env)
-REFERRAL_SECRET_KEY = os.getenv("REFERRAL_SECRET_KEY", "default_secret_key_change_in_production")
-
-# Срок действия реферальных ссылок в днях (0 = без ограничений)
-REFERRAL_LINK_EXPIRY_DAYS = int(os.getenv("REFERRAL_LINK_EXPIRY_DAYS", "0"))
+# Упрощенная реферальная система - используем только user_id
 
 def generate_referral_code(user_id: str) -> str:
-    """Генерирует короткий защищенный реферальный код"""
+    """Генерирует простой реферальный код на основе user_id"""
     try:
         if not user_id:
             logger.error(f"GENERATE_REFERRAL_CODE: Invalid user_id - {user_id}")
             return None
             
-        # Создаем короткий код - только user_id с короткой подписью
-        data = user_id
-        
-        # Создаем короткую HMAC подпись (только первые 8 символов)
-        signature = hmac.new(
-            REFERRAL_SECRET_KEY.encode(),
-            data.encode(),
-            hashlib.sha256
-        ).hexdigest()[:8]
-        
-        # Объединяем данные и подпись
-        signed_data = f"{data}:{signature}"
-        code = base64.b64encode(signed_data.encode()).decode()
-        
-        logger.info(f"GENERATE_REFERRAL_CODE: Generated short code for user {user_id}, length: {len(code)}")
-        return code
+        # Простой код - просто user_id
+        logger.info(f"GENERATE_REFERRAL_CODE: Generated simple code for user {user_id}")
+        return user_id
         
     except Exception as e:
         logger.error(f"GENERATE_REFERRAL_CODE: Critical error - {e}")
         return None
 
 def decode_referral_code(code: str) -> str:
-    """Декодирует и проверяет подлинность короткого реферального кода"""
+    """Декодирует простой реферальный код (просто возвращает user_id)"""
     try:
         if not code:
             logger.error(f"DECODE_REFERRAL_CODE: Empty code")
             return None
             
-        # Добавляем padding если нужно
-        while len(code) % 4:
-            code += '='
-            
-        # Декодируем base64
-        signed_data = base64.b64decode(code.encode()).decode()
-        
-        # Разделяем данные и подпись (теперь только 2 части: user_id:signature)
-        parts = signed_data.split(':')
-        if len(parts) != 2:
-            logger.error(f"DECODE_REFERRAL_CODE: Invalid code format - {code}")
+        # Простая проверка - код должен быть числом (user_id)
+        if not code.isdigit():
+            logger.warning(f"DECODE_REFERRAL_CODE: Invalid code format - {code}")
             return None
             
-        user_id, signature = parts
-        
-        # Проверяем подпись
-        data = user_id
-        expected_signature = hmac.new(
-            REFERRAL_SECRET_KEY.encode(),
-            data.encode(),
-            hashlib.sha256
-        ).hexdigest()[:8]  # Берем только первые 8 символов
-        
-        # Сравниваем подписи безопасно
-        if not hmac.compare_digest(signature, expected_signature):
-            logger.warning(f"DECODE_REFERRAL_CODE: Invalid signature for code - {code}")
-            return None
-            
-        # Без ограничений по сроку - ссылки работают вечно
-        logger.info(f"DECODE_REFERRAL_CODE: Valid code for user {user_id}")
-        return user_id
+        logger.info(f"DECODE_REFERRAL_CODE: Valid code for user {code}")
+        return code
         
     except Exception as e:
         logger.error(f"DECODE_REFERRAL_CODE: Critical error - {e}")
@@ -347,7 +302,7 @@ class X3:
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 
 
-    def addClient(self, day, tg_id, user_email, timeout=15, hours=None):
+    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name=""):
         if hours is not None:
             # Для тестовых ключей используем часы
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (hours * 3600000)
@@ -364,7 +319,7 @@ class X3:
             "expiryTime": x_time,
             "enable": True,
             "tgId": str(tg_id),
-            "subId": "",
+            "subId": key_name,  # Сохраняем имя ключа в поле subId
             "flow": "xtls-rprx-vision"
         }
         data1 = {
@@ -596,6 +551,78 @@ class X3:
                     return result
         logger.warning(f"Клиент с email={user_email} не найден ни в одном inbound")
         return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    def updateClientName(self, user_email, new_name, timeout=15):
+        """
+        Обновляет имя ключа (сохраняет в поле subId)
+        :param user_email: Email клиента
+        :param new_name: Новое имя ключа
+        :param timeout: Таймаут запроса
+        :return: Response объект
+        """
+        try:
+            # Сначала получаем информацию о клиенте
+            inbounds_data = self.list(timeout=timeout)
+            if not inbounds_data.get('success', False):
+                raise Exception("Не удалось получить список клиентов")
+            
+            client_found = False
+            client_data = None
+            inbound_id = None
+            
+            # Ищем клиента по email
+            for inbound in inbounds_data.get('obj', []):
+                settings = json.loads(inbound.get('settings', '{}'))
+                clients = settings.get('clients', [])
+                
+                for client in clients:
+                    if client.get('email') == user_email:
+                        client_found = True
+                        client_data = client.copy()
+                        inbound_id = inbound.get('id')
+                        
+                        # Обновляем имя ключа в поле subId
+                        client_data['subId'] = new_name
+                        
+                        logger.info(f"Обновление имени ключа {user_email}: новое имя = {new_name}")
+                        break
+                
+                if client_found:
+                    break
+            
+            if not client_found:
+                raise Exception(f"Клиент с email {user_email} не найден")
+            
+            # Обновляем клиента
+            header = {"Accept": "application/json"}
+            data = {
+                "id": inbound_id,
+                "settings": json.dumps({"clients": [client_data]})
+            }
+            
+            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', headers=header, json=data, timeout=timeout)
+            logger.info(f"XUI updateClientName Response - Status: {response.status_code}")
+            logger.info(f"XUI updateClientName Response - Text: {response.text[:200]}...")
+            
+            # Проверяем, не истекла ли сессия
+            if response.status_code == 200 and not response.text.strip():
+                logger.warning("Получен пустой ответ при обновлении имени, переподключаюсь...")
+                self._login()
+                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
+                                       headers=header, json=data, timeout=timeout)
+                logger.info(f"XUI updateClientName Response после переподключения - Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                logger.info(f"Имя ключа успешно обновлено: {user_email} -> {new_name}")
+            else:
+                logger.error(f"Ошибка обновления имени ключа: {response.status_code} - {response.text}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении имени ключа {user_email}: {e}")
+            raise
 
     def link(self, user_id: str):
         inbounds_list = self.list()['obj']
@@ -952,27 +979,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Сначала проверяем context.args (основной способ)
     if context.args and len(context.args) > 0:
         logger.info(f"START_REFERRAL: context.args={context.args}")
-        if context.args[0].startswith('ref_'):
-            referral_code = context.args[0][4:]  # Убираем 'ref_'
+        # Проверяем, является ли аргумент числом (user_id)
+        if context.args[0].isdigit():
+            referral_code = context.args[0]
             logger.info(f"START_REFERRAL: Found referral code in context.args: {referral_code}")
         else:
-            logger.info(f"START_REFERRAL: context.args[0] doesn't start with 'ref_': {context.args[0]}")
+            logger.info(f"START_REFERRAL: context.args[0] is not a digit: {context.args[0]}")
     else:
         logger.info(f"START_REFERRAL: context.args is empty or None: {context.args}")
     
     # Если не нашли в context.args, проверяем update.message.text (резервный способ)
     if not referral_code and update.message and update.message.text:
         logger.info(f"START_REFERRAL: Checking message text: {update.message.text}")
-        if 'ref_' in update.message.text:
-            import re
-            match = re.search(r'ref_([A-Za-z0-9+/=]+)', update.message.text)
-            if match:
-                referral_code = match.group(1)
-                logger.info(f"START_REFERRAL: Found referral code in message text: {referral_code}")
-            else:
-                logger.info(f"START_REFERRAL: 'ref_' found in text but regex didn't match")
+        import re
+        # Ищем числовые ID в тексте сообщения
+        match = re.search(r'(\d+)', update.message.text)
+        if match:
+            referral_code = match.group(1)
+            logger.info(f"START_REFERRAL: Found referral code in message text: {referral_code}")
         else:
-            logger.info(f"START_REFERRAL: 'ref_' not found in message text")
+            logger.info(f"START_REFERRAL: No numeric ID found in message text")
     
     if referral_code:
         referrer_id = decode_referral_code(referral_code)
@@ -1270,7 +1296,7 @@ async def handle_payment(update, context, price, period):
         
         # Проверяем, это покупка за баллы
         if period == "points_month":
-            # Покупка за баллы - создаем ключ сразу
+            # Покупка за баллы - сначала создаем ключ, потом списываем баллы
             try:
                 # Проверяем баллы
                 points_info = await get_user_points(user_id)
@@ -1278,19 +1304,26 @@ async def handle_payment(update, context, price, period):
                     await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Недостаточно баллов!")
                     return
                 
-                # Списываем баллы
-                success = await spend_points(user_id, 1, "Покупка VPN за баллы")
-                if not success:
-                    await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
-                    return
-                
-                # Создаем VPN ключ
+                # Создаем VPN ключ СНАЧАЛА
                 user_choice = context.user_data.get("selected_server", "auto")
                 xui, server_name = new_client_manager.get_server_by_user_choice(user_choice)
                 points_days = int(await get_config('points_days_per_point', '14'))
                 response = xui.addClient(day=points_days, tg_id=user.id, user_email=unique_email, timeout=15)
                 
                 if response and getattr(response, 'status_code', None) == 200:
+                    # Ключ создан успешно - ТЕПЕРЬ списываем баллы
+                    success = await spend_points(user_id, 1, "Покупка VPN за баллы", bot=context.bot)
+                    if not success:
+                        # Если не удалось списать баллы, удаляем созданный ключ
+                        try:
+                            xui.removeClient(unique_email)
+                            logger.warning(f"Removed key {unique_email} due to points spending failure")
+                        except Exception as e:
+                            logger.error(f"Failed to remove key {unique_email} after points failure: {e}")
+                            # Уведомляем админа о критической ошибке
+                            await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось удалить ключ после неудачного списания баллов:\nКлюч: {unique_email}\nПользователь: {user_id}\nОшибка: {str(e)}")
+                        await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
+                        return
                     expiry_time = datetime.datetime.now() + datetime.timedelta(days=points_days)
                     expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
                     expiry_timestamp = int(expiry_time.timestamp())
@@ -1329,21 +1362,23 @@ async def handle_payment(update, context, price, period):
                                     logger.error(f"Ошибка отправки уведомления рефереру {referrer_id}: {e}")
                             else:
                                 logger.error(f"Ошибка выдачи реферальной награды для {referrer_id}")
+                                # Уведомляем админа о критической ошибке реферальной системы
+                                await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось выдать реферальную награду:\nРеферер: {referrer_id}\nРеферал: {user_id}\nПлатеж: points_{key_id}")
                     except Exception as e:
                         logger.error(f"Ошибка обработки реферальной награды: {e}")
+                        # Уведомляем админа о критической ошибке реферальной системы
+                        await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Ошибка обработки реферальной награды:\nРеферер: {referrer_id}\nРеферал: {user_id}\nОшибка: {str(e)}")
                     
                     return
                 else:
-                    # Возвращаем баллы при ошибке атомарно
-                    await atomic_refund_points(user_id, 1, "Возврат за ошибку создания ключа")
-                    await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при создании ключа. Баллы возвращены.")
+                    # Ключ не создан - баллы не списывались, просто сообщаем об ошибке
+                    await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при создании ключа.")
                     return
                     
             except Exception as e:
                 logger.error(f"Ошибка покупки за баллы: {e}")
-                # Возвращаем баллы при ошибке атомарно
-                await atomic_refund_points(user_id, 1, "Возврат за ошибку")
-                await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при покупке. Баллы возвращены.")
+                # Баллы не списывались, просто сообщаем об ошибке
+                await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при покупке.")
                 return
         
         # Обычная покупка за деньги
@@ -1372,6 +1407,8 @@ async def handle_payment(update, context, price, period):
             payment_id = payment.id
         except Exception as e:
             logger.exception(f"Ошибка создания платежа для user_id={user_id}")
+            # Уведомляем админа о критической ошибке создания платежа
+            await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать платеж:\nПользователь: {user_id}\nПериод: {period}\nЦена: {price}\nОшибка: {str(e)}")
             await safe_edit_or_reply(message, 'Ошибка при создании платежа. Попробуйте позже.')
             return
         
@@ -1535,7 +1572,13 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Вычисляем оставшееся время
                 time_remaining = calculate_time_remaining(expiry)
                 
-                page_text += f"{UIStyles.subheader(f'{i}. Ключ #{i}')}\n"
+                # Получаем имя ключа из поля subId
+                key_name = client.get('subId', '').strip()
+                if key_name:
+                    page_text += f"{UIStyles.subheader(f'{i}. {key_name}')}\n"
+                else:
+                    page_text += f"{UIStyles.subheader(f'{i}. Ключ #{i}')}\n"
+                
                 page_text += f"<b>Email:</b> <code>{client['email']}</code>\n"
                 page_text += f"<b>Статус:</b> {status_icon} {status}\n"
                 page_text += f"<b>Сервер:</b> {server_name}\n"
@@ -1559,6 +1602,10 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 short_id = hashlib.md5(f"{user_id}:{current_client['email']}".encode()).hexdigest()[:8]
                 extension_keys_cache[short_id] = current_client['email']
                 keyboard_buttons.append([InlineKeyboardButton("Продлить ключ", callback_data=f"ext_key:{short_id}")])
+            
+            # Кнопка для переименования ключа
+            rename_short_id = hashlib.md5(f"rename:{current_client['email']}".encode()).hexdigest()[:8]
+            keyboard_buttons.append([InlineKeyboardButton("Переименовать ключ", callback_data=f"rename_key:{rename_short_id}")])
         
         # Кнопки навигации по страницам
         nav_buttons = []
@@ -1791,6 +1838,8 @@ async def auto_activate_keys(app):
                                             pass
                                 except Exception as e:
                                     logger.error(f"Ошибка выдачи реферальных баллов при продлении в auto_activate_keys: {e}")
+                                    # Уведомляем админа о критической ошибке реферальной системы
+                                    await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Ошибка выдачи реферальных баллов при продлении:\nПользователь: {user_id}\nПлатеж: {payment_id}\nОшибка: {str(e)}")
                                 
                                 # Логика учёта покупок перенесена; агрегаты в users не ведём
                                 
@@ -1937,6 +1986,8 @@ async def auto_activate_keys(app):
                                         pass
                             except Exception as e:
                                 logger.error(f"Ошибка выдачи реферальных баллов в auto_activate_keys: {e}")
+                                # Уведомляем админа о критической ошибке реферальной системы
+                                await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Ошибка выдачи реферальных баллов в auto_activate_keys:\nПользователь: {user_id}\nПлатеж: {payment_id}\nОшибка: {str(e)}")
                             
                             # Логика учёта покупок перенесена; агрегаты в users не ведём
                             
@@ -2047,6 +2098,8 @@ async def auto_activate_keys(app):
                         continue
                     except Exception as e:
                         logger.error(f"Ошибка активации ключа: {e}")
+                        # Уведомляем админа о критической ошибке активации ключа
+                        await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось активировать ключ:\nПлатеж: {payment_id}\nПользователь: {user_id}\nОшибка: {str(e)}")
                         continue
 
                 # Если платеж отменен
@@ -2196,6 +2249,8 @@ async def auto_cleanup_expired_keys():
                     
             except Exception as e:
                 logger.error(f"Ошибка при автоочистке сервера {server['name']}: {e}")
+                # Уведомляем админа о критической ошибке автоочистки
+                await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Ошибка при автоочистке сервера:\nСервер: {server['name']}\nОшибка: {str(e)}")
                 continue
         
         logger.info(f"Автоочистка завершена. Всего удалено просроченных ключей: {total_deleted_count}")
@@ -2203,6 +2258,8 @@ async def auto_cleanup_expired_keys():
         
     except Exception as e:
         logger.error(f"Критическая ошибка в auto_cleanup_expired_keys: {e}")
+        # Уведомляем админа о критической ошибке автоочистки
+        await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Критическая ошибка в auto_cleanup_expired_keys:\nОшибка: {str(e)}")
         return 0
 
 
@@ -3816,16 +3873,24 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
         email = client['email']
         server_name = client.get('server_name', 'Неизвестно')
         
-        # Списываем баллы
-        success = await spend_points(user_id, 1, f"Продление ключа {email} за баллы")
-        if not success:
-            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
-            return
-        
-        # Продлеваем ключ на количество дней из конфига
+        # Продлеваем ключ СНАЧАЛА
         points_days = int(await get_config('points_days_per_point', '14'))
         response = xui.extendClient(email, points_days)
         if response and response.status_code == 200:
+            # Ключ продлен успешно - ТЕПЕРЬ списываем баллы
+            success = await spend_points(user_id, 1, f"Продление ключа {email} за баллы", bot=context.bot)
+            if not success:
+                # Если не удалось списать баллы, откатываем продление
+                try:
+                    # Откатываем продление (уменьшаем на те же дни)
+                    xui.extendClient(email, -points_days)
+                    logger.warning(f"Rolled back extension for key {email} due to points spending failure")
+                except Exception as e:
+                    logger.error(f"Failed to rollback extension for key {email} after points failure: {e}")
+                    # Уведомляем админа о критической ошибке
+                    await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось откатить продление ключа после неудачного списания баллов:\nКлюч: {email}\nПользователь: {user_id}\nОшибка: {str(e)}")
+                await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
+                return
             # Очищаем старые уведомления об истечении для продленного ключа
             if notification_manager:
                 await notification_manager.clear_key_notifications(user_id, email)
@@ -3856,15 +3921,13 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
             
             await safe_edit_or_reply(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML")
         else:
-            # Возвращаем баллы при ошибке
-            await add_points(user_id, 1, "Возврат за ошибку продления ключа")
-            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа. Баллы возвращены.")
+            # Ключ не продлен - баллы не списывались, просто сообщаем об ошибке
+            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.")
             
     except Exception as e:
         logger.error(f"Ошибка продления выбранного ключа за баллы: {e}")
-        # Возвращаем баллы при ошибке
-        await add_points(user_id, 1, "Возврат за ошибку")
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении. Баллы возвращены.")
+        # Баллы не списывались, просто сообщаем об ошибке
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении.")
 
 async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора ключа для продления за баллы"""
@@ -3921,7 +3984,7 @@ async def referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Генерируем реферальную ссылку
     referral_code = generate_referral_code(user_id)
     bot_username = context.bot.username
-    referral_link = f"https://t.me/{bot_username}?start=ref_{referral_code}"
+    referral_link = f"https://t.me/{bot_username}?start={referral_code}"
     
     # Используем единый стиль для реферального меню
     message = (
@@ -3946,11 +4009,275 @@ async def referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"Поделиться в Telegram", url=f"https://t.me/share/url?url={referral_link}&text=Попробуй%20этот%20VPN-бот,%20первые%2014%20дней%20бесплатно:")],
+        [InlineKeyboardButton(f"Поделиться в Telegram", url=f"https://t.me/share/url?url={referral_link}")],
         [UIButtons.back_button()]
     ])
     
     await safe_edit_or_reply(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML")
+
+async def rename_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик переименования ключа"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    short_id = query.data.split(':')[1]
+    
+    try:
+        # Ищем ключ по short_id
+        key_email = None
+        for server in server_manager.servers:
+            try:
+                xui = server["x3"]
+                inbounds = xui.list()['obj']
+                for inbound in inbounds:
+                    settings = json.loads(inbound['settings'])
+                    clients = settings.get("clients", [])
+                    for client in clients:
+                        if client['email'].startswith(f"{user_id}_") or client['email'].startswith(f"trial_{user_id}_"):
+                            # Проверяем short_id
+                            import hashlib
+                            possible_short_ids = [
+                                hashlib.md5(f"rename:{client['email']}".encode()).hexdigest()[:8]
+                            ]
+                            if short_id in possible_short_ids:
+                                key_email = client['email']
+                                break
+                    if key_email:
+                        break
+                if key_email:
+                    break
+            except Exception as e:
+                logger.error(f"Ошибка при поиске ключа на сервере {server['name']}: {e}")
+                continue
+        
+        if not key_email:
+            await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Ключ не найден!")
+            return
+        
+        # Сохраняем email ключа и message_id в контексте для последующего использования
+        context.user_data['rename_key_email'] = key_email
+        context.user_data['rename_message_id'] = query.message.message_id
+        context.user_data['rename_chat_id'] = query.message.chat_id
+        
+        # Запрашиваем новое имя ключа
+        message = (
+            f"{UIStyles.header('Переименование ключа')}\n\n"
+            f"<b>Текущий ключ:</b> <code>{key_email}</code>\n\n"
+            f"{UIStyles.description('Введите новое имя для ключа (максимум 50 символов):')}\n\n"
+            f"{UIStyles.warning_message('Имя будет отображаться в списке ваших ключей')}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [UIButtons.back_button()]
+        ])
+        
+        await safe_edit_or_reply(query.message, message, reply_markup=keyboard, parse_mode="HTML")
+        
+        # Устанавливаем состояние ожидания ввода имени
+        context.user_data['waiting_for_key_name'] = True
+        
+    except Exception as e:
+        logger.error(f"Ошибка в rename_key_callback: {e}")
+        await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Ошибка при переименовании ключа!")
+
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик текстовых сообщений для переименования ключей"""
+    if not await check_private_chat(update):
+        return
+    
+    # Проверяем, ожидаем ли мы ввод имени ключа
+    if not context.user_data.get('waiting_for_key_name', False):
+        return
+    
+    user_id = str(update.message.from_user.id)
+    new_name = update.message.text.strip()
+    
+    # Удаляем сообщение пользователя
+    try:
+        await update.message.delete()
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение пользователя: {e}")
+    
+    # Получаем данные из контекста
+    message_id = context.user_data.get('rename_message_id')
+    chat_id = context.user_data.get('rename_chat_id')
+    
+    if not message_id or not chat_id:
+        logger.error("Не найдены message_id или chat_id в контексте")
+        return
+    
+    # Валидация имени
+    if len(new_name) > 50:
+        error_message = (
+            f"{UIStyles.header('Переименование ключа')}\n\n"
+            f"{UIEmojis.ERROR} <b>Ошибка:</b> Имя ключа слишком длинное!\n\n"
+            f"{UIStyles.description('Максимум 50 символов. Попробуйте еще раз.')}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [UIButtons.back_button()]
+        ])
+        
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Ошибка редактирования сообщения: {e}")
+        return
+    
+    if not new_name:
+        error_message = (
+            f"{UIStyles.header('Переименование ключа')}\n\n"
+            f"{UIEmojis.ERROR} <b>Ошибка:</b> Имя ключа не может быть пустым!\n\n"
+            f"{UIStyles.description('Введите корректное имя для ключа.')}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [UIButtons.back_button()]
+        ])
+        
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Ошибка редактирования сообщения: {e}")
+        return
+    
+    try:
+        key_email = context.user_data.get('rename_key_email')
+        if not key_email:
+            error_message = (
+                f"{UIStyles.header('Переименование ключа')}\n\n"
+                f"{UIEmojis.ERROR} <b>Ошибка:</b> Ключ не найден в контексте!"
+            )
+            
+            keyboard = InlineKeyboardMarkup([
+                [UIButtons.back_button()]
+            ])
+            
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка редактирования сообщения: {e}")
+            return
+        
+        # Находим сервер с ключом
+        xui, server_name = server_manager.find_client_on_any_server(key_email)
+        if not xui or not server_name:
+            error_message = (
+                f"{UIStyles.header('Переименование ключа')}\n\n"
+                f"{UIEmojis.ERROR} <b>Ошибка:</b> Ключ не найден на серверах!"
+            )
+            
+            keyboard = InlineKeyboardMarkup([
+                [UIButtons.back_button()]
+            ])
+            
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка редактирования сообщения: {e}")
+            return
+        
+        # Обновляем имя ключа
+        response = xui.updateClientName(key_email, new_name)
+        
+        if response and response.status_code == 200:
+            # Очищаем состояние
+            context.user_data.pop('waiting_for_key_name', None)
+            context.user_data.pop('rename_key_email', None)
+            context.user_data.pop('rename_message_id', None)
+            context.user_data.pop('rename_chat_id', None)
+            
+            # Показываем успешное сообщение в том же окне
+            success_message = (
+                f"{UIStyles.header('Переименование ключа')}\n\n"
+                f"{UIEmojis.SUCCESS} <b>Ключ успешно переименован!</b>\n\n"
+                f"<b>Новое имя:</b> {new_name}\n"
+                f"<b>Email:</b> <code>{key_email}</code>\n\n"
+                f"{UIStyles.description('Имя будет отображаться в списке ваших ключей')}"
+            )
+            
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
+                [UIButtons.back_button()]
+            ])
+            
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=success_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка редактирования сообщения: {e}")
+        else:
+            error_message = (
+                f"{UIStyles.header('Переименование ключа')}\n\n"
+                f"{UIEmojis.ERROR} <b>Ошибка:</b> Не удалось обновить имя ключа на сервере!"
+            )
+            
+            keyboard = InlineKeyboardMarkup([
+                [UIButtons.back_button()]
+            ])
+            
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка редактирования сообщения: {e}")
+    
+    except Exception as e:
+        logger.error(f"Ошибка при переименовании ключа: {e}")
+        error_message = (
+            f"{UIStyles.header('Переименование ключа')}\n\n"
+            f"{UIEmojis.ERROR} <b>Ошибка:</b> {str(e)}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [UIButtons.back_button()]
+        ])
+        
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as edit_e:
+            logger.error(f"Ошибка редактирования сообщения: {edit_e}")
 
 async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_private_chat(update):
@@ -4214,5 +4541,9 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(extend_with_points_callback, pattern="^extend_with_points$"))
     app.add_handler(CallbackQueryHandler(extend_points_key_callback, pattern="^extend_points_key:"))
     app.add_handler(CallbackQueryHandler(referral_callback, pattern="^referral$"))
+    app.add_handler(CallbackQueryHandler(rename_key_callback, pattern="^rename_key:"))
+    
+    # Обработчик текстовых сообщений для переименования ключей
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
     app.run_polling()
