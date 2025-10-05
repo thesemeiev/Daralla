@@ -126,7 +126,7 @@ from .keys_db import (
     get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
     init_referral_db, save_referral_connection, get_pending_referral, mark_referral_reward_given,
     add_points, spend_points, get_user_points, get_points_history, get_referral_stats,
-    is_known_user, register_simple_user,
+    is_known_user, register_simple_user, get_all_user_ids,
     atomic_referral_reward, atomic_refund_points,
     get_config, set_config, get_all_config
 )
@@ -1696,8 +1696,8 @@ async def auto_activate_keys(app):
                 
                 cycle_count = 0  # Сбрасываем счетчик
             
-            # Автоматическое удаление просроченных ключей (тестово ~каждую минуту при sleep=10)
-            if cycle_count % 6 == 0:
+            # Автоматическое удаление просроченных ключей каждые 720 циклов (каждые 2 часа при sleep=10)
+            if cycle_count % 720 == 0:
                 deleted_keys_count = await auto_cleanup_expired_keys()
                 if deleted_keys_count > 0:
                     logger.info(f"Автоматически удалено {deleted_keys_count} просроченных ключей")
@@ -1809,7 +1809,6 @@ async def auto_activate_keys(app):
                                                     break
                                     
                                     # Очищаем старые уведомления об истечении для продленного ключа
-                                    global notification_manager
                                     if notification_manager:
                                         await notification_manager.clear_key_notifications(user_id, extension_email)
                                         await notification_manager.record_key_extension(user_id, extension_email)
@@ -2164,7 +2163,7 @@ async def auto_cleanup_expired_keys():
                                     # Очищаем уведомления для удаленного ключа
                                     if user_id:
                                         try:
-                                            from .notifications import notification_manager
+                                            # Используем глобальный notification_manager, инициализируемый в on_startup
                                             if notification_manager:
                                                 await notification_manager.clear_key_notifications(user_id, email)
                                         except Exception as e:
@@ -2176,8 +2175,6 @@ async def auto_cleanup_expired_keys():
                                 # Отправляем уведомление пользователю об удалении ключа
                                 if user_id:
                                     try:
-                                        # Получаем глобальный экземпляр NotificationManager
-                                        from .notifications import notification_manager
                                         if notification_manager:
                                             await notification_manager._send_deletion_notification(
                                                 user_id=user_id,
@@ -2507,6 +2504,21 @@ class UIMessages:
     def admin_menu_message():
         """Сообщение админ-меню"""
         return f"{UIStyles.header('Панель администратора')}"
+
+    @staticmethod
+    def broadcast_intro_message():
+        return (
+            f"{UIStyles.header('Создание рассылки')}\n\n"
+            f"{UIStyles.description('Отправьте текст сообщения, которое нужно разослать всем пользователям.')}\n"
+            f"{UIStyles.info_message('Поддерживается HTML. Предпросмотр будет показан перед отправкой.')}"
+        )
+
+    @staticmethod
+    def broadcast_preview_message(text: str):
+        return (
+            f"{UIStyles.header('Предпросмотр рассылки')}\n\n"
+            f"{text}"
+        )
     
     @staticmethod
     def success_purchase_message(period, price):
@@ -2538,7 +2550,7 @@ class UIMessages:
             f"<b>Сервер:</b> {server}\n"
             f"<b>Истек:</b> {days_expired} дней назад\n\n"
             f"{UIStyles.description('Ключ был автоматически удален из-за истечения срока действия.')}\n"
-            f"{UIStyles.description('Купите новый ключ для продолжения использования VPN.')}"
+            f"{UIStyles.description('Купите новый ключ, чтобы продолжить пользоваться VPN.')}"
         )
     
     @staticmethod
@@ -2730,7 +2742,6 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        global notification_manager
         if notification_manager is None:
             await safe_edit_or_reply(update.callback_query.message, 
                                    f"{UIEmojis.ERROR} Менеджер уведомлений не инициализирован")
@@ -3816,7 +3827,6 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
         response = xui.extendClient(email, points_days)
         if response and response.status_code == 200:
             # Очищаем старые уведомления об истечении для продленного ключа
-            global notification_manager
             if notification_manager:
                 await notification_manager.clear_key_notifications(user_id, email)
             
@@ -3953,9 +3963,10 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not stack or stack[-1] != 'admin_menu':
         push_nav(context, 'admin_menu')
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{UIEmojis.ERROR} Ошибки", callback_data="admin_errors")],
+        [InlineKeyboardButton("Логи", callback_data="admin_errors")],
         [InlineKeyboardButton("Проверка серверов", callback_data="admin_check_servers")],
         [InlineKeyboardButton("Уведомления", callback_data="admin_notifications")],
+        [InlineKeyboardButton("Рассылка", callback_data="admin_broadcast_start")],
         [InlineKeyboardButton("Изменить дни за балл", callback_data="admin_set_days_start")],
         [UIButtons.back_button()],
     ])
@@ -3967,6 +3978,155 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Используем единый стиль для админ-меню
     admin_menu_text = UIMessages.admin_menu_message()
     await safe_edit_or_reply(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+
+
+# ===== РАССЫЛКА ДЛЯ АДМИНА =====
+BROADCAST_WAITING_TEXT = 1001
+BROADCAST_CONFIRM = 1002
+
+async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_private_chat(update):
+        return
+    if update.effective_user.id not in ADMIN_IDS:
+        await safe_edit_or_reply(update.callback_query.message, 'Нет доступа.')
+        return
+    await update.callback_query.answer()
+    # Сохраняем исходное сообщение для дальнейших редактирований
+    context.user_data['broadcast_text'] = None
+    context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
+    context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
+    keyboard = InlineKeyboardMarkup([[UIButtons.back_button()]])
+    await update.callback_query.message.edit_text(UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    return BROADCAST_WAITING_TEXT
+
+async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        return ConversationHandler.END
+    text = update.message.text
+    context.user_data['broadcast_text'] = text
+    # Удаляем сообщение админа с текстом
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Отправить", callback_data="admin_broadcast_send")],
+        [UIButtons.back_button()]
+    ])
+    # Редактируем исходное сообщение на предпросмотр
+    chat_id = context.user_data.get('broadcast_msg_chat_id')
+    msg_id = context.user_data.get('broadcast_msg_id')
+    try:
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
+            text=UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception:
+        await safe_edit_or_reply(update.effective_message, UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        context.user_data['broadcast_msg_chat_id'] = update.effective_message.chat_id
+        context.user_data['broadcast_msg_id'] = update.effective_message.message_id
+    return BROADCAST_CONFIRM
+
+async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        return ConversationHandler.END
+    await update.callback_query.answer()
+    text = context.user_data.get('broadcast_text')
+    if not text:
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Текст рассылки пуст.")
+        return ConversationHandler.END
+
+    # Получаем список получателей и исключаем админов
+    recipients = await get_all_user_ids()
+    admin_set = set(str(a) for a in ADMIN_IDS)
+    recipients = [uid for uid in recipients if str(uid) not in admin_set]
+    total = len(recipients)
+    sent = 0
+    failed = 0
+    # собираем подробную статистику
+    details = []  # [{'user_id': str, 'status': 'ok'|'failed'}]
+    batch = 40
+
+    # Готовим исходное сообщение к показу прогресса
+    chat_id = context.user_data.get('broadcast_msg_chat_id')
+    msg_id = context.user_data.get('broadcast_msg_id')
+    try:
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
+            text=f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.", parse_mode="HTML")
+    except Exception:
+        pass
+    for i in range(0, total, batch):
+        chunk = recipients[i:i+batch]
+        for user_id in chunk:
+            try:
+                await context.bot.send_message(chat_id=int(user_id), text=text, parse_mode="HTML", disable_web_page_preview=True)
+                sent += 1
+                if len(details) < 10000:
+                    details.append({'user_id': str(user_id), 'status': 'ok'})
+            except telegram.error.Forbidden:
+                failed += 1
+                if len(details) < 10000:
+                    details.append({'user_id': str(user_id), 'status': 'failed'})
+            except telegram.error.BadRequest as e:
+                failed += 1
+                if len(details) < 10000:
+                    details.append({'user_id': str(user_id), 'status': 'failed'})
+            except telegram.error.RetryAfter as e:
+                await asyncio.sleep(int(getattr(e, 'retry_after', 1)))
+                try:
+                    await context.bot.send_message(chat_id=int(user_id), text=text, parse_mode="HTML", disable_web_page_preview=True)
+                    sent += 1
+                    if len(details) < 10000:
+                        details.append({'user_id': str(user_id), 'status': 'ok'})
+                except Exception:
+                    failed += 1
+                    if len(details) < 10000:
+                        details.append({'user_id': str(user_id), 'status': 'failed'})
+            except Exception:
+                failed += 1
+                if len(details) < 10000:
+                    details.append({'user_id': str(user_id), 'status': 'failed'})
+            # лёгкая задержка между сообщениями
+            await asyncio.sleep(0.05)
+        # пауза между батчами
+        await asyncio.sleep(1.0)
+        try:
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
+                text=f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.", parse_mode="HTML")
+        except Exception:
+            pass
+
+    # сохраняем детали в user_data для кнопок
+    context.user_data['broadcast_details'] = details
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Экспорт CSV", callback_data="admin_broadcast_export")],
+        [UIButtons.back_button()]
+    ])
+    try:
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
+            text=f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
+    except Exception:
+        await safe_edit_or_reply(update.callback_query.message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
+    return ConversationHandler.END
+
+async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await admin_menu(update, context)
+    return ConversationHandler.END
+
+async def admin_broadcast_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    await update.callback_query.answer()
+    import io, csv
+    details = context.user_data.get('broadcast_details') or []
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["user_id", "status"])
+    for row in details:
+        writer.writerow([row.get('user_id',''), row.get('status','')])
+    output.seek(0)
+    bio = io.BytesIO(output.read().encode('utf-8'))
+    bio.name = 'broadcast_report.csv'
+    await context.bot.send_document(chat_id=update.effective_user.id, document=bio, caption="Отчёт рассылки")
 
 # Регистрируем команды
 if __name__ == '__main__':
@@ -4024,6 +4184,27 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
     app.add_handler(CallbackQueryHandler(admin_check_servers, pattern="^admin_check_servers$"))
     app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications$"))
+    
+    # Рассылка
+    admin_broadcast_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast_start$")],
+        states={
+            BROADCAST_WAITING_TEXT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_input),
+            ],
+            BROADCAST_CONFIRM: [
+                CallbackQueryHandler(admin_broadcast_send, pattern="^admin_broadcast_send$"),
+                CallbackQueryHandler(admin_broadcast_cancel, pattern="^back$")
+            ]
+        },
+        fallbacks=[CallbackQueryHandler(admin_broadcast_cancel, pattern="^back$")],
+        per_user=True,
+        per_chat=True,
+        per_message=False
+    )
+    app.add_handler(admin_broadcast_conv)
+    # Глобальный обработчик экспорта, чтобы работал и после завершения диалога
+    app.add_handler(CallbackQueryHandler(admin_broadcast_export, pattern="^admin_broadcast_export$"))
 
     
     # Обработчики для реферальной системы

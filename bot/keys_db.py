@@ -13,6 +13,23 @@ os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, 'vpn_keys.db')
 REFERRAL_DB_PATH = os.path.join(DATA_DIR, 'referral_system.db')
 logger = logging.getLogger(__name__)
+
+async def get_all_user_ids(min_last_seen: int = None) -> list:
+    """Возвращает список всех user_id из таблицы users.
+    Если передан min_last_seen (unix ts), вернёт только тех, кто был активен после этой даты.
+    """
+    try:
+        async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
+            if min_last_seen is not None:
+                async with db.execute('SELECT user_id FROM users WHERE last_seen >= ? ORDER BY last_seen DESC', (min_last_seen,)) as cur:
+                    rows = await cur.fetchall()
+            else:
+                async with db.execute('SELECT user_id FROM users ORDER BY last_seen DESC') as cur:
+                    rows = await cur.fetchall()
+            return [row[0] for row in rows]
+    except Exception as e:
+        logger.error(f"GET_ALL_USER_IDS error: {e}")
+        return []
 async def register_simple_user(user_id: str):
     """Регистрирует пользователя в таблице users (upsert)."""
     try:

@@ -56,8 +56,8 @@ class NotificationManager:
         
         # Настройки уведомлений по умолчанию
         self.default_settings = {
-            'check_interval': '60',  # тестово 1 минута (было 300)
-            'cleanup_interval': '3600',  # тестово 1 час (было 86400)
+            'check_interval': '300',  # 5 минут
+            'cleanup_interval': '86400',  # 24 часа
             'days_to_keep': '30',
             'enable_metrics': 'true',
             'enable_effectiveness_tracking': 'true'
