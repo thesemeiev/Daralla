@@ -116,7 +116,7 @@ jobs:
         script_stop: true
         script: |
           # Переходим в папку /root/Daralla
-          cd /root/Daralla
+          cd /root/Daralla || cd /home/root/Daralla || find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname
           
           # Создаем резервную копию данных если они есть
           echo "📦 Создаю резервную копию данных..."
@@ -138,6 +138,7 @@ jobs:
           # Скачиваем код напрямую с GitHub (для приватного репозитория)
           echo "📥 Скачиваю код с GitHub..."
           sudo wget -q --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/thesemeiev/Daralla/archive/main.zip -O /tmp/daralla.zip
+          sudo apt-get update -qq && sudo apt-get install -y -qq unzip
           sudo unzip -q /tmp/daralla.zip -d /tmp/
           sudo rm -rf /tmp/daralla.zip
           
