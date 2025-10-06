@@ -135,13 +135,27 @@ jobs:
           sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S') || true
           sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S') || true
           
-          # Скачиваем код через git (более надежно)
+          # Скачиваем код напрямую (простой подход)
           echo "📥 Скачиваю код с GitHub..."
-          sudo apt-get update -qq && sudo apt-get install -y -qq git
-          sudo rm -rf /tmp/Daralla
-          sudo git clone https://github.com/thesemeiev/Daralla.git /tmp/Daralla
-          cd /tmp/Daralla
-          sudo git checkout main
+          sudo apt-get update -qq && sudo apt-get install -y -qq wget
+          
+          # Скачиваем основные файлы напрямую
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/docker-compose.yml -O /tmp/docker-compose.yml
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/Dockerfile -O /tmp/Dockerfile
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/requirements.txt -O /tmp/requirements.txt
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/deploy.sh -O /tmp/deploy.sh
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/backup.sh -O /tmp/backup.sh
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/rollback.sh -O /tmp/rollback.sh
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/setup-server.sh -O /tmp/setup-server.sh
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/env.example -O /tmp/env.example
+          
+          # Скачиваем папку bot
+          sudo mkdir -p /tmp/bot
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/bot/__init__.py -O /tmp/bot/__init__.py
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/bot/bot.py -O /tmp/bot/bot.py
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/bot/keys_db.py -O /tmp/bot/keys_db.py
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/bot/notifications_db.py -O /tmp/bot/notifications_db.py
+          sudo wget -q https://raw.githubusercontent.com/thesemeiev/Daralla/main/bot/notifications.py -O /tmp/bot/notifications.py
           
           # Возвращаемся в рабочую папку
           cd /root/Daralla || cd /home/root/Daralla || find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname
@@ -156,8 +170,16 @@ jobs:
           sudo rm -rf .github/ || true
           
           # Копируем новые файлы
-          sudo cp -r /tmp/Daralla/* .
-          sudo rm -rf /tmp/Daralla/
+          sudo cp /tmp/docker-compose.yml .
+          sudo cp /tmp/Dockerfile .
+          sudo cp /tmp/requirements.txt .
+          sudo cp /tmp/deploy.sh .
+          sudo cp /tmp/backup.sh .
+          sudo cp /tmp/rollback.sh .
+          sudo cp /tmp/setup-server.sh .
+          sudo cp /tmp/env.example .
+          sudo cp -r /tmp/bot .
+          sudo rm -rf /tmp/docker-compose.yml /tmp/Dockerfile /tmp/requirements.txt /tmp/deploy.sh /tmp/backup.sh /tmp/rollback.sh /tmp/setup-server.sh /tmp/env.example /tmp/bot
           
           # Восстанавливаем данные
           sudo cp -r data_backup_* data/ || true
