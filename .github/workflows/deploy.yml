@@ -150,13 +150,17 @@ jobs:
           sudo git checkout main
           
           # Возвращаемся в рабочую папку
-          WORK_DIR=$(find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname)
-          if [ -z "$WORK_DIR" ]; then
+          echo "🔍 Ищу рабочую папку..."
+          WORK_DIR=$(find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+          if [ -z "$WORK_DIR" ] || [ ! -d "$WORK_DIR" ]; then
             WORK_DIR="/root/Daralla"
+            echo "📁 Создаю рабочую папку: $WORK_DIR"
             sudo mkdir -p "$WORK_DIR"
+          else
+            echo "📁 Найдена рабочая папка: $WORK_DIR"
           fi
           cd "$WORK_DIR"
-          echo "📁 Рабочая папка: $(pwd)"
+          echo "📁 Текущая папка: $(pwd)"
           
           # Удаляем старые файлы кода (кроме data и .env)
           sudo find . -maxdepth 1 -type f -name "*.py" -delete || true
