@@ -131,13 +131,11 @@ jobs:
           
           # Обновляем код
           echo "📥 Обновляю код..."
-          # Удаляем старый код и клонируем заново
-          sudo rm -rf .git
-          sudo rm -rf bot/
-          sudo rm -rf .github/
-          sudo rm -f *.py *.sh *.yml *.md *.txt
-          sudo git clone https://github.com/thesemeiev/Daralla.git .
-          sudo git checkout main
+          # Переходим в родительскую папку и клонируем заново
+          cd /root
+          sudo rm -rf Daralla
+          sudo git clone https://github.com/thesemeiev/Daralla.git Daralla
+          cd Daralla
           
           # Устанавливаем права на скрипты
           sudo chmod +x *.sh
