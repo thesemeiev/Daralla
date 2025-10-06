@@ -82,18 +82,29 @@ jobs:
           echo "🛑 Останавливаю старый бот..."
           sudo docker-compose down || true
           
-          # Сохраняем данные и чистим старые бэкапы
-          echo "📦 Сохраняю данные..."
+          # Создаем структуру для бэкапов
+          echo "📦 Подготовка к бэкапу..."
+          sudo mkdir -p backups/data backups/env
           timestamp=$(date +'%Y%m%d_%H%M%S')
-          if [ -d "data" ]; then
-            sudo cp -r data "data_backup_${timestamp}"
-            # Оставляем только 5 последних бэкапов данных
-            ls -td data_backup_* | tail -n +6 | xargs -r sudo rm -rf
+
+          # Бэкап баз данных
+          echo "💾 Создаю бэкап баз данных..."
+          if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
+            echo "📊 Найдены базы данных для бэкапа:"
+            ls -l data/*.db
+            sudo tar -czf "backups/data/backup_${timestamp}.tar.gz" data/*.db
+            echo "✅ Бэкап баз данных создан"
+            
+            # Оставляем только 5 последних бэкапов
+            ls -t backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
           fi
+
+          # Бэкап .env
           if [ -f ".env" ]; then
-            sudo cp .env ".env_backup_${timestamp}"
-            # Оставляем только 5 последних бэкапов .env
-            ls -t .env_backup_* | tail -n +6 | xargs -r sudo rm -f
+            echo "📄 Создаю бэкап .env файла..."
+            sudo cp .env "backups/env/env_${timestamp}"
+            # Оставляем только 5 последних копий .env
+            ls -t backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
           fi
           
           # Скачиваем код
@@ -116,19 +127,32 @@ jobs:
           
           # Восстанавливаем данные
           echo "🔄 Восстанавливаю данные..."
-          if [ -d "backups/data" ]; then
-            latest_data_backup=$(ls -t backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
-            if [ -n "$latest_data_backup" ]; then
-              sudo tar -xzf "$latest_data_backup" -C /
-            fi
+          
+          # Восстанавливаем базы данных
+          latest_db_backup=$(ls -t backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
+          if [ -n "$latest_db_backup" ]; then
+            echo "📦 Восстанавливаю базы данных из $latest_db_backup..."
+            sudo mkdir -p data
+            sudo tar -xzf "$latest_db_backup" -C .
+            echo "✅ Базы данных восстановлены"
+          else
+            echo "⚠️ Бэкапы баз данных не найдены"
           fi
 
-          if [ -d "backups/env" ]; then
-            latest_env_backup=$(ls -t backups/env/env_* 2>/dev/null | head -n1)
-            if [ -n "$latest_env_backup" ]; then
-              sudo cp "$latest_env_backup" .env
-            fi
+          # Восстанавливаем .env
+          latest_env=$(ls -t backups/env/env_* 2>/dev/null | head -n1)
+          if [ -n "$latest_env" ]; then
+            echo "📄 Восстанавливаю .env из $latest_env..."
+            sudo cp "$latest_env" .env
+            echo "✅ .env файл восстановлен"
+          else
+            echo "⚠️ Бэкап .env не найден"
           fi
+
+          # Проверяем восстановление
+          echo "✅ Проверяю восстановленные файлы..."
+          echo "📊 Базы данных:"
+          ls -lh data/*.db || echo "⚠️ Базы данных не найдены"
           
           # Исправляем права после восстановления
           sudo chown -R 1000:1000 data/ 2>/dev/null || true
