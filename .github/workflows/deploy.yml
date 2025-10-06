@@ -145,7 +145,7 @@ jobs:
           
           # Клонируем репозиторий с аутентификацией
           sudo rm -rf /tmp/Daralla
-          echo "https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git" | sudo git clone - /tmp/Daralla
+          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /tmp/Daralla
           cd /tmp/Daralla
           sudo git checkout main
           
