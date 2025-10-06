@@ -29,7 +29,7 @@ XUI_PASSWORD_ESTONIA=your_password
 ### **2. GitHub Secrets (для CI/CD):**
 - `SERVER_HOST` - IP или домен сервера
 - `SERVER_USER` - SSH пользователь
-- `SERVER_SSH_KEY` - приватный SSH ключ
+- `SERVER_PASSWORD` - пароль от сервера (или `SERVER_SSH_KEY` для ключа)
 - `SERVER_PORT` - SSH порт (опционально, по умолчанию 22)
 
 ### **3. Структура папок на сервере:**

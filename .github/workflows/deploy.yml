@@ -96,16 +96,27 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
 
+    - name: 🔍 Debug secrets
+      run: |
+        echo "SERVER_HOST: ${{ secrets.SERVER_HOST != '' && 'SET' || 'NOT SET' }}"
+        echo "SERVER_USER: ${{ secrets.SERVER_USER != '' && 'SET' || 'NOT SET' }}"
+        echo "SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
+        echo "SERVER_PORT: ${{ secrets.SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
+        echo "Workflow version: v2.0 - Updated $(date)"
+
     - name: 🚀 Deploy to server
-      uses: appleboy/ssh-action@v1.0.3
+      uses: appleboy/ssh-action@v1.0.5
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
+        password: ${{ secrets.SERVER_PASSWORD }}
         port: ${{ secrets.SERVER_PORT || 22 }}
+        timeout: 60s
+        command_timeout: 10m
+        script_stop: true
         script: |
           # Переходим в папку проекта
-          cd /home/${{ secrets.SERVER_USER }}/Daralla
+          cd /root/Daralla || cd /home/root/Daralla || find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname
           
           # Создаем резервную копию
           echo "📦 Создаю резервную копию..."
@@ -154,7 +165,7 @@ jobs:
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
+        password: ${{ secrets.SERVER_PASSWORD }}
         port: ${{ secrets.SERVER_PORT || 22 }}
         script: |
           cd /home/${{ secrets.SERVER_USER }}/Daralla

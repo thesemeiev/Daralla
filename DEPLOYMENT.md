@@ -12,7 +12,7 @@
 ```
 SERVER_HOST          # IP адрес или домен сервера
 SERVER_USER          # Пользователь для SSH (обычно root или ubuntu)
-SERVER_SSH_KEY       # Приватный SSH ключ для доступа к серверу
+SERVER_PASSWORD      # Пароль от сервера (или SERVER_SSH_KEY для ключа)
 ```
 
 ### Опциональные секреты:
