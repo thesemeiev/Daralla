@@ -10,8 +10,19 @@ services:
         max-file: "3"
     environment:
       # Переменные окружения загружаются из .env файла
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - ADMIN_ID=${ADMIN_ID}
+      - TELEGRAM_TOKEN=${BOT_TOKEN}
+      - ADMIN_IDS=${ADMIN_ID}
+      - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
+      - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY}
+      - XUI_HOST_FINLAND=${XUI_HOST_FINLAND}
+      - XUI_LOGIN_FINLAND=${XUI_LOGIN_FINLAND}
+      - XUI_PASSWORD_FINLAND=${XUI_PASSWORD_FINLAND}
+      - XUI_HOST_LATVIA=${XUI_HOST_LATVIA}
+      - XUI_LOGIN_LATVIA=${XUI_LOGIN_LATVIA}
+      - XUI_PASSWORD_LATVIA=${XUI_PASSWORD_LATVIA}
+      - XUI_HOST_ESTONIA=${XUI_HOST_ESTONIA}
+      - XUI_LOGIN_ESTONIA=${XUI_LOGIN_ESTONIA}
+      - XUI_PASSWORD_ESTONIA=${XUI_PASSWORD_ESTONIA}
     volumes:
       # Монтируем папку для баз данных
       - ./data:/app/data:rw

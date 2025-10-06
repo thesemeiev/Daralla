@@ -44,6 +44,19 @@ if [ -z "$ADMIN_ID" ] || [ "$ADMIN_ID" = "your_admin_telegram_id_here" ]; then
     error "Настройте ADMIN_ID в .env файле"
 fi
 
+# Проверяем конфигурацию серверов (предупреждение, не ошибка)
+if [ -z "$XUI_HOST_FINLAND" ] || [ -z "$XUI_LOGIN_FINLAND" ] || [ -z "$XUI_PASSWORD_FINLAND" ]; then
+    warning "Сервер Finland не настроен полностью"
+fi
+
+if [ -z "$XUI_HOST_LATVIA" ] || [ -z "$XUI_LOGIN_LATVIA" ] || [ -z "$XUI_PASSWORD_LATVIA" ]; then
+    warning "Сервер Latvia не настроен полностью"
+fi
+
+if [ -z "$XUI_HOST_ESTONIA" ] || [ -z "$XUI_LOGIN_ESTONIA" ] || [ -z "$XUI_PASSWORD_ESTONIA" ]; then
+    warning "Сервер Estonia не настроен полностью"
+fi
+
 log "Настройки проверены: BOT_TOKEN и ADMIN_ID заданы"
 
 # Проверяем Docker
