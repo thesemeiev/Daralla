@@ -188,35 +188,64 @@ if not TELEGRAM_TOKEN:
 if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
     print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
 
-# Конфигурация серверов - добавьте ваши серверы здесь
-SERVERS = [
-    { 
-        "name": "Finland", 
-        "host": os.getenv("XUI_HOST_FINLAND"),
-        "login": os.getenv("XUI_LOGIN_FINLAND"),
-        "password": os.getenv("XUI_PASSWORD_FINLAND")
-    },
-    {
-        "name": "Latvia",
-        "host": os.getenv("XUI_HOST_LATVIA"),
-        "login": os.getenv("XUI_LOGIN_LATVIA"),
-        "password": os.getenv("XUI_PASSWORD_LATVIA")
-    },
-    {
-        "name": "Estonia",
-        "host": os.getenv("XUI_HOST_ESTONIA"),
-        "login": os.getenv("XUI_LOGIN_ESTONIA"),
-        "password": os.getenv("XUI_PASSWORD_ESTONIA")
-    }
-]
+# Конфигурация серверов по локациям
+SERVERS_BY_LOCATION = {
+    "Finland": [
+        { 
+            "name": "Finland-1", 
+            "host": os.getenv("XUI_HOST_FINLAND_1"),
+            "login": os.getenv("XUI_LOGIN_FINLAND_1"),
+            "password": os.getenv("XUI_PASSWORD_FINLAND_1")
+        },
+        { 
+            "name": "Finland-2", 
+            "host": os.getenv("XUI_HOST_FINLAND_2"),
+            "login": os.getenv("XUI_LOGIN_FINLAND_2"),
+            "password": os.getenv("XUI_PASSWORD_FINLAND_2")
+        }
+    ],
+    "Latvia": [
+        {
+            "name": "Latvia-1",
+            "host": os.getenv("XUI_HOST_LATVIA_1"),
+            "login": os.getenv("XUI_LOGIN_LATVIA_1"),
+            "password": os.getenv("XUI_PASSWORD_LATVIA_1")
+        },
+        {
+            "name": "Latvia-2",
+            "host": os.getenv("XUI_HOST_LATVIA_2"),
+            "login": os.getenv("XUI_LOGIN_LATVIA_2"),
+            "password": os.getenv("XUI_PASSWORD_LATVIA_2")
+        }
+    ],
+    "Estonia": [
+        {
+            "name": "Estonia-1",
+            "host": os.getenv("XUI_HOST_ESTONIA_1"),
+            "login": os.getenv("XUI_LOGIN_ESTONIA_1"),
+            "password": os.getenv("XUI_PASSWORD_ESTONIA_1")
+        },
+        {
+            "name": "Estonia-2",
+            "host": os.getenv("XUI_HOST_ESTONIA_2"),
+            "login": os.getenv("XUI_LOGIN_ESTONIA_2"),
+            "password": os.getenv("XUI_PASSWORD_ESTONIA_2")
+        }
+    ]
+}
 
-# Сервера для новых клиентов 
-NEW_CLIENT_SERVERS = SERVERS.copy()
+# Создаем плоский список всех серверов для обратной совместимости
+SERVERS = []
+for location_servers in SERVERS_BY_LOCATION.values():
+    SERVERS.extend(location_servers)
+
+# Сервера для новых клиентов (теперь по локациям)
+NEW_CLIENT_SERVERS = SERVERS_BY_LOCATION
 
 # Проверяем конфигурацию серверов
 for i, server in enumerate(SERVERS):
     if not server["host"] or not server["login"] or not server["password"]:
-        print(f"ВНИМАНИЕ: Сервер {i+1} не настроен! Проверьте переменные XUI_HOST, XUI_LOGIN, XUI_PASSWORD")
+        print(f"ВНИМАНИЕ: Сервер {server['name']} не настроен! Проверьте переменные XUI_HOST_{server['name'].upper().replace('-', '_')}, XUI_LOGIN_{server['name'].upper().replace('-', '_')}, XUI_PASSWORD_{server['name'].upper().replace('-', '_')}")
 
 # Настраиваем файловый лог с ротацией в папке data/logs
 try:
@@ -668,98 +697,134 @@ class X3:
         return 'Клиент не найден.'
 
 class MultiServerManager:
-    def __init__(self, servers_config):
-        self.servers = []
+    def __init__(self, servers_by_location):
+        self.servers_by_location = {}
         self.server_health = {}  # Словарь для отслеживания состояния серверов
-        for server_config in servers_config:
-            try:
-                x3_server = X3(
-                    login=server_config["login"],
-                    password=server_config["password"], 
-                    host=server_config["host"]
-                )
-                self.servers.append({
-                    "name": server_config["name"],
-                    "x3": x3_server,
-                    "config": server_config
-                })
-                # Инициализируем состояние сервера
-                self.server_health[server_config["name"]] = {
-                    "status": "unknown",
-                    "last_check": None,
-                    "last_error": None,
-                    "consecutive_failures": 0,
-                    "uptime_percentage": 100.0
-                }
-                logger.info(f"Сервер {server_config['name']} успешно подключен")
-            except Exception as e:
-                logger.error(f"Ошибка подключения к серверу {server_config['name']}: {e}")
-                # Даже если сервер недоступен при инициализации, добавляем его в список
-                self.servers.append({
-                    "name": server_config["name"],
-                    "x3": None,
-                    "config": server_config
-                })
-                self.server_health[server_config["name"]] = {
-                    "status": "offline",
-                    "last_check": datetime.datetime.now(),
-                    "last_error": str(e),
-                    "consecutive_failures": 1,
-                    "uptime_percentage": 0.0
-                }
+        
+        # Инициализируем серверы по локациям
+        for location, servers_config in servers_by_location.items():
+            self.servers_by_location[location] = []
+            
+            for server_config in servers_config:
+                try:
+                    x3_server = X3(
+                        login=server_config["login"],
+                        password=server_config["password"], 
+                        host=server_config["host"]
+                    )
+                    self.servers_by_location[location].append({
+                        "name": server_config["name"],
+                        "x3": x3_server,
+                        "config": server_config
+                    })
+                    # Инициализируем состояние сервера
+                    self.server_health[server_config["name"]] = {
+                        "status": "unknown",
+                        "last_check": None,
+                        "last_error": None,
+                        "consecutive_failures": 0,
+                        "uptime_percentage": 100.0
+                    }
+                    logger.info(f"Сервер {server_config['name']} ({location}) успешно подключен")
+                except Exception as e:
+                    logger.error(f"Ошибка подключения к серверу {server_config['name']} ({location}): {e}")
+                    # Даже если сервер недоступен при инициализации, добавляем его в список
+                    self.servers_by_location[location].append({
+                        "name": server_config["name"],
+                        "x3": None,
+                        "config": server_config
+                    })
+                    self.server_health[server_config["name"]] = {
+                        "status": "offline",
+                        "last_check": datetime.datetime.now(),
+                        "last_error": str(e),
+                        "consecutive_failures": 1,
+                        "uptime_percentage": 0.0
+                    }
     
     def get_server_by_name(self, server_name):
         """Возвращает конкретный сервер по имени"""
-        for server in self.servers:
-            if server["name"].lower() == server_name.lower():
-                return server["x3"], server["name"]
+        for location, servers in self.servers_by_location.items():
+            for server in servers:
+                if server["name"].lower() == server_name.lower():
+                    return server["x3"], server["name"]
         raise Exception(f"Сервер {server_name} не найден или недоступен")
     
-    def get_server_with_least_clients(self):
-        """Возвращает сервер с наименьшим количеством клиентов"""
-        if not self.servers:
-            raise Exception("Нет доступных серверов")
+    def get_server_with_least_clients_in_location(self, location):
+        """Возвращает сервер с наименьшим количеством клиентов в конкретной локации"""
+        if location not in self.servers_by_location:
+            raise Exception(f"Локация {location} не найдена")
+        
+        servers = self.servers_by_location[location]
+        if not servers:
+            raise Exception(f"Нет доступных серверов в локации {location}")
         
         min_clients = float('inf')
         selected_server = None
         
-        for server in self.servers:
+        for server in servers:
             try:
                 client_count = server["x3"].get_client_count()
-                logger.info(f"Сервер {server['name']}: {client_count} клиентов")
+                logger.info(f"Сервер {server['name']} ({location}): {client_count} клиентов")
                 
                 if client_count < min_clients:
                     min_clients = client_count
                     selected_server = server
             except Exception as e:
-                logger.error(f"Ошибка при получении количества клиентов с сервера {server['name']}: {e}")
+                logger.error(f"Ошибка при получении количества клиентов с сервера {server['name']} ({location}): {e}")
                 continue
         
         if selected_server is None:
             # Если все серверы недоступны, используем первый
-            selected_server = self.servers[0]
-            logger.warning(f"Все серверы недоступны, использую {selected_server['name']}")
+            selected_server = servers[0]
+            logger.warning(f"Все серверы в локации {location} недоступны, использую {selected_server['name']}")
         
-        logger.info(f"Выбран сервер {selected_server['name']} с {min_clients} клиентами")
+        logger.info(f"Выбран сервер {selected_server['name']} ({location}) с {min_clients} клиентами")
         return selected_server["x3"], selected_server["name"]
     
-    def get_server_by_user_choice(self, user_choice):
-        """Возвращает сервер согласно выбору пользователя"""
+    def get_server_by_user_choice(self, location, user_choice):
+        """Возвращает сервер согласно выбору пользователя в конкретной локации"""
         if user_choice == "auto":
-            return self.get_server_with_least_clients()
+            return self.get_server_with_least_clients_in_location(location)
         else:
             return self.get_server_by_name(user_choice)
     
+    def get_best_location_server(self):
+        """Возвращает сервер с наименьшей нагрузкой из всех локаций"""
+        best_server = None
+        min_clients = float('inf')
+        best_location = None
+        
+        for location, servers in self.servers_by_location.items():
+            try:
+                server, server_name = self.get_server_with_least_clients_in_location(location)
+                # Получаем количество клиентов для сравнения
+                client_count = server.get_client_count()
+                if client_count < min_clients:
+                    min_clients = client_count
+                    best_server = server
+                    best_location = location
+            except Exception as e:
+                logger.error(f"Ошибка при получении сервера из локации {location}: {e}")
+                continue
+        
+        if best_server is None:
+            raise Exception("Нет доступных серверов в любой локации")
+        
+        logger.info(f"Выбрана лучшая локация: {best_location} с {min_clients} клиентами")
+        return best_server, best_location
+    
     def find_client_on_any_server(self, user_email):
         """Ищет клиента на любом из серверов"""
-        for server in self.servers:
-            try:
-                if server["x3"].client_exists(user_email):
-                    logger.info(f"Клиент {user_email} найден на сервере {server['name']}")
-                    return server["x3"], server["name"]
-            except Exception as e:
-                logger.error(f"Ошибка при поиске клиента на сервере {server['name']}: {e}")
-                continue
+        for location, servers in self.servers_by_location.items():
+            for server in servers:
+                try:
+                    if server["x3"] and server["x3"].client_exists(user_email):
+                        logger.info(f"Клиент {user_email} найден на сервере {server['name']} ({location})")
+                        return server["x3"], server["name"]
+                except Exception as e:
+                    logger.error(f"Ошибка при поиске клиента на сервере {server['name']} ({location}): {e}")
+                    continue
         return None, None
     
     
@@ -1070,7 +1135,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Если была реферальная ссылка, has_existing_keys уже проверен выше
         
         if is_new and not has_existing_keys:
-            xui, server_name = new_client_manager.get_server_with_least_clients()
+            xui, server_name = new_client_manager.get_best_location_server()
             unique_email = f"{user_id_str}_{uuid.uuid4()}"
             response = xui.addClient(day=14, tg_id=user_id_str, user_email=unique_email, timeout=15)
             if response and getattr(response, 'status_code', None) == 200:
@@ -1305,8 +1370,12 @@ async def handle_payment(update, context, price, period):
                     return
                 
                 # Создаем VPN ключ СНАЧАЛА
-                user_choice = context.user_data.get("selected_server", "auto")
-                xui, server_name = new_client_manager.get_server_by_user_choice(user_choice)
+                selected_location = context.user_data.get("selected_location", "auto")
+                if selected_location == "auto":
+                    # Для автовыбора выбираем лучшую локацию
+                    xui, server_name = new_client_manager.get_best_location_server()
+                else:
+                    xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
                 points_days = int(await get_config('points_days_per_point', '14'))
                 response = xui.addClient(day=points_days, tg_id=user.id, user_email=unique_email, timeout=15)
                 
@@ -1392,7 +1461,7 @@ async def handle_payment(update, context, price, period):
                     "user_id": user_id, 
                     "key_id": key_id, 
                     "type": period,
-                    "selected_server": context.user_data.get("selected_server", "auto")
+                    "selected_location": context.user_data.get("selected_location", "auto")
                 },
                 "receipt": {
                     "customer": {"email": f"{user_id}@vpn-x3.ru"},
@@ -1946,8 +2015,12 @@ async def auto_activate_keys(app):
                     # Создание ключа
                     try:
                         # В auto_activate_keys используем сохраненный выбор пользователя из метаданных платежа YooKassa
-                        selected_server = pay.metadata.get("selected_server", "auto")
-                        xui, server_name = new_client_manager.get_server_by_user_choice(selected_server)
+                        selected_location = pay.metadata.get("selected_location", "auto")
+                        if selected_location == "auto":
+                            # Для автовыбора выбираем лучшую локацию
+                            xui, server_name = new_client_manager.get_best_location_server()
+                        else:
+                            xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
                         response = xui.addClient(day=days, tg_id=user_id, user_email=unique_email, timeout=15)
                         
                         if response.status_code == 200:
@@ -3381,66 +3454,79 @@ async def server_selection_menu(update: Update, context: ContextTypes.DEFAULT_TY
     # Проверяем доступность всех серверов
     health_results = new_client_manager.check_all_servers_health()
     
-    # Создаем кнопки для всех доступных серверов с флагами и статусом
-    server_buttons = []
-    server_flags = {
+    # Создаем кнопки для локаций с флагами и статусом
+    location_buttons = []
+    location_flags = {
         "Finland": "🇫🇮",
         "Latvia": "🇱🇻", 
         "Estonia": "🇪🇪"
     }
     
-    # Формируем текст с информацией о серверах
-    server_info_text = ""
+    # Формируем текст с информацией о локациях
+    location_info_text = ""
     
-    for server in SERVERS:
-        if server["host"] and server["login"] and server["password"]:  # Проверяем что сервер настроен
-            server_name = server['name']
-            is_healthy = health_results.get(server_name, False)
-            flag = server_flags.get(server_name)
+    for location, servers in SERVERS_BY_LOCATION.items():
+        if not servers:
+            continue
             
-            # Определяем статус и иконку
-            if is_healthy:
-                status_icon = UIEmojis.SUCCESS
-                status_text = "Доступен"
-                button_text = f"{flag} {server_name} {status_icon}"
-                callback_data = f"select_server_{server_name.lower()}"
-            else:
-                status_icon = UIEmojis.ERROR
-                status_text = "Недоступен"
-                button_text = f"{flag} {server_name} {status_icon}"
-                callback_data = f"server_unavailable_{server_name.lower()}"
+        # Проверяем доступность серверов в локации
+        available_servers = 0
+        total_servers = 0
+        
+        for server in servers:
+            if server["host"] and server["login"] and server["password"]:
+                total_servers += 1
+                if health_results.get(server['name'], False):
+                    available_servers += 1
+        
+        if total_servers == 0:
+            continue
             
-            server_buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
-            
-            # Добавляем информацию о сервере в текст
-            server_info_text += f"{flag} <b>{server_name}</b> - {status_text}\n"
+        flag = location_flags.get(location)
+        
+        # Определяем статус локации
+        if available_servers > 0:
+            status_icon = UIEmojis.SUCCESS
+            status_text = f"Доступно {available_servers}/{total_servers} серверов"
+            button_text = f"{flag} {location} {status_icon}"
+            callback_data = f"select_server_{location.lower()}"
+        else:
+            status_icon = UIEmojis.ERROR
+            status_text = "Недоступно"
+            button_text = f"{flag} {location} {status_icon}"
+            callback_data = f"server_unavailable_{location.lower()}"
+        
+        location_buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+        
+        # Добавляем информацию о локации в текст
+        location_info_text += f"{flag} <b>{location}</b> - {status_text}\n"
     
     # Добавляем кнопку "Автовыбор" (только если есть доступные серверы)
     available_servers = sum(1 for is_healthy in health_results.values() if is_healthy)
     if available_servers > 0:
-        server_buttons.append([InlineKeyboardButton("Автовыбор", callback_data="select_server_auto")])
-        server_info_text += "<b>Автовыбор</b> - Сервер с наименьшей нагрузкой\n"
+        location_buttons.append([InlineKeyboardButton("🎯 Автовыбор", callback_data="select_server_auto")])
+        location_info_text += "<b>🎯 Автовыбор</b> - Локация с наименьшей нагрузкой\n"
     
-    server_buttons.append([InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="refresh_servers")])
+    location_buttons.append([InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="refresh_servers")])
     
     # Определяем текст периода и кнопку назад в зависимости от типа покупки
     pending_period = context.user_data.get("pending_period")
     if pending_period == "month":
         period_text = "1 месяц за 100₽"
-        server_buttons.append([UIButtons.back_button()])
+        location_buttons.append([UIButtons.back_button()])
     elif pending_period == "3month":
         period_text = "3 месяца за 250₽"
-        server_buttons.append([UIButtons.back_button()])
+        location_buttons.append([UIButtons.back_button()])
     elif pending_period == "points_month":
         period_text = "1 месяц за 1 балл"
-        server_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")])
+        location_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")])
     else:
         period_text = "Неизвестный период"
-        server_buttons.append([UIButtons.back_button()])
+        location_buttons.append([UIButtons.back_button()])
     
-    keyboard = InlineKeyboardMarkup(server_buttons)
+    keyboard = InlineKeyboardMarkup(location_buttons)
     
-    message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{server_info_text}"
+    message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{location_info_text}"
     
     await safe_edit_or_reply(message, message_text, reply_markup=keyboard, parse_mode="HTML")
 
@@ -3454,49 +3540,60 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
         await server_selection_menu(update, context)
         return
     
-    # Обработка недоступных серверов
+    # Обработка недоступных локаций
     if query.data.startswith("server_unavailable_"):
-        server_name = query.data.replace("server_unavailable_", "").title()
+        location_name = query.data.replace("server_unavailable_", "").title()
         await safe_edit_or_reply(
             query.message, 
-            f"{UIEmojis.ERROR} Сервер {server_name} временно недоступен\n\n"
-            f"Пожалуйста, выберите другой сервер или попробуйте позже.\n\n"
+            f"{UIEmojis.ERROR} Локация {location_name} временно недоступна\n\n"
+            f"Пожалуйста, выберите другую локацию или попробуйте позже.\n\n"
             f"Для обновления статуса серверов нажмите кнопку \"{UIEmojis.REFRESH} Обновить\"",
             parse_mode="HTML"
         )
         return
     
-    # Сохраняем выбранный сервер
-    selected_server = None
+    # Сохраняем выбранную локацию
+    selected_location = None
     if query.data == "select_server_auto":
-        selected_server = "auto"
+        selected_location = "auto"
     elif query.data == "select_server_finland":
-        selected_server = "Finland"
+        selected_location = "Finland"
     elif query.data == "select_server_latvia":
-        selected_server = "Latvia"
+        selected_location = "Latvia"
     elif query.data == "select_server_estonia":
-        selected_server = "Estonia"
+        selected_location = "Estonia"
     
-    if not selected_server:
-        await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Неверный выбор сервера")
+    if not selected_location:
+        await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Неверный выбор локации")
         return
     
-    # Проверяем доступность выбранного сервера
-    if selected_server != "auto":
-        # Проверяем конкретный сервер
-        is_healthy = new_client_manager.check_server_health(selected_server)
-        if not is_healthy:
+    # Проверяем доступность выбранной локации
+    if selected_location != "auto":
+        # Проверяем, есть ли доступные серверы в локации
+        available_servers = 0
+        for server in SERVERS_BY_LOCATION.get(selected_location, []):
+            if server["host"] and server["login"] and server["password"]:
+                if new_client_manager.check_server_health(server["name"]):
+                    available_servers += 1
+        
+        if available_servers == 0:
             await safe_edit_or_reply(
                 query.message, 
-                f"❌ Сервер {selected_server} недоступен\n\n"
-                f"Пожалуйста, выберите другой сервер или попробуйте позже.",
+                f"❌ Локация {selected_location} недоступна\n\n"
+                f"Все серверы в этой локации временно недоступны. Пожалуйста, выберите другую локацию.",
                 parse_mode="HTML"
             )
             return
     else:
-        # Для автовыбора проверяем, есть ли доступные серверы
-        healthy_servers = new_client_manager.get_healthy_servers()
-        if not healthy_servers:
+        # Для автовыбора проверяем, есть ли доступные серверы в любой локации
+        total_available = 0
+        for location, servers in SERVERS_BY_LOCATION.items():
+            for server in servers:
+                if server["host"] and server["login"] and server["password"]:
+                    if new_client_manager.check_server_health(server["name"]):
+                        total_available += 1
+        
+        if total_available == 0:
             await safe_edit_or_reply(
                 query.message, 
                 "❌ Нет доступных серверов\n\n"
@@ -3505,8 +3602,8 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
             return
     
-    # Сохраняем выбранный сервер
-    context.user_data["selected_server"] = selected_server
+    # Сохраняем выбранную локацию
+    context.user_data["selected_location"] = selected_location
     
     # Получаем сохраненные данные
     period = context.user_data.get("pending_period")
