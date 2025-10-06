@@ -115,101 +115,59 @@ jobs:
         command_timeout: 10m
         script_stop: true
         script: |
-          # Переходим в папку /root/Daralla
-          cd /root/Daralla || cd /home/root/Daralla || find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname
+          # Простой и надежный деплой
+          echo "🚀 Начинаю деплой..."
           
-          # Создаем резервную копию данных если они есть
-          echo "📦 Создаю резервную копию данных..."
-          if [ -d "data" ]; then
-            sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S')
-            echo "✅ Резервная копия создана"
-          fi
+          # Создаем рабочую папку
+          sudo mkdir -p /root/Daralla
+          cd /root/Daralla
           
           # Останавливаем старый бот
           echo "🛑 Останавливаю старый бот..."
           sudo docker-compose down || true
           
-          # Обновляем код
-          echo "📥 Обновляю код..."
-          # Сохраняем важные данные
-          sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S') || true
-          sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S') || true
+          # Сохраняем данные
+          echo "📦 Сохраняю данные..."
+          if [ -d "data" ]; then
+            sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S')
+          fi
+          if [ -f ".env" ]; then
+            sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S')
+          fi
           
-          # Скачиваем код через git с аутентификацией
-          echo "📥 Скачиваю код с GitHub..."
+          # Скачиваем код
+          echo "📥 Скачиваю код..."
           sudo apt-get update -qq && sudo apt-get install -y -qq git
-          
-          # Настраиваем git для аутентификации
-          sudo git config --global user.name "GitHub Actions"
-          sudo git config --global user.email "actions@github.com"
-          
-          # Клонируем репозиторий с аутентификацией
           sudo rm -rf /tmp/Daralla
           sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /tmp/Daralla
-          cd /tmp/Daralla
-          sudo git checkout main
           
-          # Возвращаемся в рабочую папку
-          echo "🔍 Ищу рабочую папку..."
-          WORK_DIR=$(find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
-          if [ -z "$WORK_DIR" ] || [ ! -d "$WORK_DIR" ]; then
-            WORK_DIR="/root/Daralla"
-            echo "📁 Создаю рабочую папку: $WORK_DIR"
-            sudo mkdir -p "$WORK_DIR"
-          else
-            echo "📁 Найдена рабочая папка: $WORK_DIR"
-          fi
-          cd "$WORK_DIR"
-          echo "📁 Текущая папка: $(pwd)"
-          
-          # Удаляем старые файлы кода (кроме data и .env)
-          sudo find . -maxdepth 1 -type f -name "*.py" -delete || true
-          sudo find . -maxdepth 1 -type f -name "*.sh" -delete || true
-          sudo find . -maxdepth 1 -type f -name "*.yml" -delete || true
-          sudo find . -maxdepth 1 -type f -name "*.md" -delete || true
-          sudo find . -maxdepth 1 -type f -name "*.txt" -delete || true
-          sudo rm -rf bot/ || true
-          sudo rm -rf .github/ || true
-          
-          # Копируем новые файлы
-          sudo cp -r /tmp/Daralla/* .
-          sudo rm -rf /tmp/Daralla/
+          # Копируем файлы
+          echo "📋 Копирую файлы..."
+          sudo cp /tmp/Daralla/*.yml /tmp/Daralla/*.py /tmp/Daralla/*.sh /tmp/Daralla/*.txt /tmp/Daralla/*.md . 2>/dev/null || true
+          sudo cp -r /tmp/Daralla/bot .
+          sudo rm -rf /tmp/Daralla
           
           # Восстанавливаем данные
-          sudo cp -r data_backup_* data/ || true
-          sudo cp .env_backup_* .env || true
+          echo "🔄 Восстанавливаю данные..."
+          sudo cp -r data_backup_* data/ 2>/dev/null || true
+          sudo cp .env_backup_* .env 2>/dev/null || true
           
-          # Устанавливаем права на скрипты
-          sudo chmod +x *.sh
-          
-          # Создаем папку для данных если не существует
+          # Создаем папку data и файлы БД
           sudo mkdir -p data
-          
-          # Создаем пустые файлы БД если не существуют
           sudo touch data/vpn_keys.db data/referral_system.db data/notifications.db
           
-          # Исправляем права на папку data (для Docker контейнера)
+          # Устанавливаем права
+          sudo chmod +x *.sh
           sudo chown -R 1000:1000 data/
           sudo chmod -R 755 data/
           
-          # Обновляем переменные окружения
-          echo "🔧 Обновляю переменные окружения..."
-          if [ -f .env.production ]; then
-            sudo cp .env.production .env
-          fi
-          
-          # Деплоим новую версию
-          echo "🚀 Деплою новую версию..."
-          sudo ./deploy.sh update
-          
-          # Исправляем права после деплоя
-          echo "🔧 Исправляю права на базы данных..."
-          sudo chown -R 1000:1000 data/
-          sudo chmod -R 755 data/
+          # Запускаем бота
+          echo "🚀 Запускаю бота..."
+          sudo docker-compose up -d
           
           # Проверяем статус
           echo "✅ Проверяю статус..."
-          sleep 10
+          sleep 5
           sudo docker-compose ps
           
           echo "🎉 Деплой завершен!"
