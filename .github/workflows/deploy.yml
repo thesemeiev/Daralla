@@ -157,6 +157,11 @@ jobs:
           sudo cp -r data_backup_* data/ 2>/dev/null || true
           sudo cp .env_backup_* .env 2>/dev/null || true
           
+          # Исправляем права после восстановления
+          sudo chown -R 1000:1000 data/ 2>/dev/null || true
+          sudo chmod -R 666 data/*.db 2>/dev/null || true
+          sudo chmod 755 data/ 2>/dev/null || true
+          
           # Создаем папку data и файлы БД
           sudo mkdir -p data
           sudo touch data/vpn_keys.db data/referral_system.db data/notifications.db
@@ -164,7 +169,8 @@ jobs:
           # Устанавливаем права
           sudo chmod +x *.sh
           sudo chown -R 1000:1000 data/
-          sudo chmod -R 755 data/
+          sudo chmod -R 666 data/*.db
+          sudo chmod 755 data/
           
           # Запускаем бота
           echo "🚀 Запускаю бота..."

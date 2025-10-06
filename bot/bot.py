@@ -197,12 +197,11 @@ SERVERS_BY_LOCATION = {
             "login": os.getenv("XUI_LOGIN_FINLAND_1"),
             "password": os.getenv("XUI_PASSWORD_FINLAND_1")
         },
-        { 
-            "name": "Finland-2", 
-            "host": os.getenv("XUI_HOST_FINLAND_2"),
-            "login": os.getenv("XUI_LOGIN_FINLAND_2"),
-            "password": os.getenv("XUI_PASSWORD_FINLAND_2")
-        }
+        
+
+
+
+        
     ],
     "Latvia": [
         {
