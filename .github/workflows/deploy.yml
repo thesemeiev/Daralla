@@ -3,6 +3,7 @@ name: 🚀 Deploy Daralla Bot
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Возможность запуска вручную
 
 env:
   REGISTRY: ghcr.io
