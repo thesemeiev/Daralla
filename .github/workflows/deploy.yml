@@ -115,27 +115,30 @@ jobs:
         command_timeout: 10m
         script_stop: true
         script: |
-          # Создаем папку для бота если не существует
-          sudo mkdir -p /root/Daralla
+          # Переходим в папку /root/Daralla
           cd /root/Daralla
           
-          # Клонируем репозиторий если папка пустая
-          if [ ! -f "docker-compose.yml" ]; then
-            echo "📥 Клонирую репозиторий..."
-            sudo git clone https://github.com/thesemeiev/Daralla.git .
+          # Создаем резервную копию данных если они есть
+          echo "📦 Создаю резервную копию данных..."
+          if [ -d "data" ]; then
+            sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S')
+            echo "✅ Резервная копия создана"
           fi
           
-          # Устанавливаем права на скрипты
-          sudo chmod +x *.sh
-          
-          # Создаем резервную копию
-          echo "📦 Создаю резервную копию..."
-          sudo ./backup.sh "auto_backup_$(date +'%Y%m%d_%H%M%S')"
+          # Останавливаем старый бот
+          echo "🛑 Останавливаю старый бот..."
+          sudo docker-compose down || true
           
           # Обновляем код
           echo "📥 Обновляю код..."
           sudo git fetch origin
           sudo git reset --hard origin/main
+          
+          # Устанавливаем права на скрипты
+          sudo chmod +x *.sh
+          
+          # Создаем папку для данных если не существует
+          sudo mkdir -p data
           
           # Обновляем переменные окружения
           echo "🔧 Обновляю переменные окружения..."
