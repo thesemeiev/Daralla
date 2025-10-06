@@ -131,8 +131,10 @@ jobs:
           
           # Обновляем код
           echo "📥 Обновляю код..."
-          sudo git fetch origin
-          sudo git reset --hard origin/main
+          # Удаляем старый код и клонируем заново
+          sudo rm -rf .git
+          sudo git clone https://github.com/thesemeiev/Daralla.git .
+          sudo git checkout main
           
           # Устанавливаем права на скрипты
           sudo chmod +x *.sh
