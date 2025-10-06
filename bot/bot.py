@@ -897,9 +897,9 @@ class MultiServerManager:
         return healthy_servers
 
 # Создаем глобальный экземпляр менеджера серверов
-server_manager = MultiServerManager(SERVERS)
+server_manager = MultiServerManager(SERVERS_BY_LOCATION)
 # Менеджер только для новых клиентов
-new_client_manager = MultiServerManager(NEW_CLIENT_SERVERS)
+new_client_manager = MultiServerManager(SERVERS_BY_LOCATION)
 
 def calculate_time_remaining(expiry_timestamp, show_expired_as_negative=False):
     """
