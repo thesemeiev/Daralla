@@ -116,41 +116,41 @@ jobs:
         script_stop: true
         script: |
           # Создаем папку для бота если не существует
-          mkdir -p /root/Daralla
+          sudo mkdir -p /root/Daralla
           cd /root/Daralla
           
           # Клонируем репозиторий если папка пустая
           if [ ! -f "docker-compose.yml" ]; then
             echo "📥 Клонирую репозиторий..."
-            git clone https://github.com/thesemeiev/Daralla.git .
+            sudo git clone https://github.com/thesemeiev/Daralla.git .
           fi
           
           # Устанавливаем права на скрипты
-          chmod +x *.sh
+          sudo chmod +x *.sh
           
           # Создаем резервную копию
           echo "📦 Создаю резервную копию..."
-          ./backup.sh "auto_backup_$(date +'%Y%m%d_%H%M%S')"
+          sudo ./backup.sh "auto_backup_$(date +'%Y%m%d_%H%M%S')"
           
           # Обновляем код
           echo "📥 Обновляю код..."
-          git fetch origin
-          git reset --hard origin/main
+          sudo git fetch origin
+          sudo git reset --hard origin/main
           
           # Обновляем переменные окружения
           echo "🔧 Обновляю переменные окружения..."
           if [ -f .env.production ]; then
-            cp .env.production .env
+            sudo cp .env.production .env
           fi
           
           # Деплоим новую версию
           echo "🚀 Деплою новую версию..."
-          ./deploy.sh update
+          sudo ./deploy.sh update
           
           # Проверяем статус
           echo "✅ Проверяю статус..."
           sleep 10
-          docker-compose ps
+          sudo docker-compose ps
           
           echo "🎉 Деплой завершен!"
 
