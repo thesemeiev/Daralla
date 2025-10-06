@@ -113,7 +113,6 @@ jobs:
         port: ${{ secrets.SERVER_PORT || 22 }}
         timeout: 60s
         command_timeout: 10m
-        script_stop: true
         script: |
           # Простой и надежный деплой
           echo "🚀 Начинаю деплой..."
@@ -169,6 +168,7 @@ jobs:
           
           # Запускаем бота
           echo "🚀 Запускаю бота..."
+          sudo docker-compose build --no-cache
           sudo docker-compose up -d
           
           # Проверяем статус
