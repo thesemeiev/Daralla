@@ -223,12 +223,6 @@ SERVERS_BY_LOCATION = {
             "host": os.getenv("XUI_HOST_ESTONIA_1"),
             "login": os.getenv("XUI_LOGIN_ESTONIA_1"),
             "password": os.getenv("XUI_PASSWORD_ESTONIA_1")
-        },
-        {
-            "name": "Estonia-2",
-            "host": os.getenv("XUI_HOST_ESTONIA_2"),
-            "login": os.getenv("XUI_LOGIN_ESTONIA_2"),
-            "password": os.getenv("XUI_PASSWORD_ESTONIA_2")
         }
     ]
 }
