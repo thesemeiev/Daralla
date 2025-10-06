@@ -81,13 +81,18 @@ jobs:
           echo "🛑 Останавливаю старый бот..."
           sudo docker-compose down || true
           
-          # Сохраняем данные
+          # Сохраняем данные и чистим старые бэкапы
           echo "📦 Сохраняю данные..."
+          timestamp=$(date +'%Y%m%d_%H%M%S')
           if [ -d "data" ]; then
-            sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S')
+            sudo cp -r data "data_backup_${timestamp}"
+            # Оставляем только 5 последних бэкапов данных
+            ls -td data_backup_* | tail -n +6 | xargs -r sudo rm -rf
           fi
           if [ -f ".env" ]; then
-            sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S')
+            sudo cp .env ".env_backup_${timestamp}"
+            # Оставляем только 5 последних бэкапов .env
+            ls -t .env_backup_* | tail -n +6 | xargs -r sudo rm -f
           fi
           
           # Скачиваем код
@@ -110,8 +115,19 @@ jobs:
           
           # Восстанавливаем данные
           echo "🔄 Восстанавливаю данные..."
-          sudo cp -r data_backup_* data/ 2>/dev/null || true
-          sudo cp .env_backup_* .env 2>/dev/null || true
+          if [ -d "backups/data" ]; then
+            latest_data_backup=$(ls -t backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
+            if [ -n "$latest_data_backup" ]; then
+              sudo tar -xzf "$latest_data_backup" -C /
+            fi
+          fi
+
+          if [ -d "backups/env" ]; then
+            latest_env_backup=$(ls -t backups/env/env_* 2>/dev/null | head -n1)
+            if [ -n "$latest_env_backup" ]; then
+              sudo cp "$latest_env_backup" .env
+            fi
+          fi
           
           # Исправляем права после восстановления
           sudo chown -R 1000:1000 data/ 2>/dev/null || true
