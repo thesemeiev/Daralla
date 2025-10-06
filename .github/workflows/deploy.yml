@@ -135,11 +135,24 @@ jobs:
           sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S') || true
           sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S') || true
           
-          # Переходим в родительскую папку и клонируем заново
-          cd /root
-          sudo rm -rf Daralla
-          sudo git clone https://github.com/thesemeiev/Daralla.git Daralla
-          cd Daralla
+          # Скачиваем код напрямую с GitHub
+          echo "📥 Скачиваю код с GitHub..."
+          sudo wget -q https://github.com/thesemeiev/Daralla/archive/main.zip -O /tmp/daralla.zip
+          sudo unzip -q /tmp/daralla.zip -d /tmp/
+          sudo rm -rf /tmp/daralla.zip
+          
+          # Удаляем старые файлы кода (кроме data и .env)
+          sudo find . -maxdepth 1 -type f -name "*.py" -delete || true
+          sudo find . -maxdepth 1 -type f -name "*.sh" -delete || true
+          sudo find . -maxdepth 1 -type f -name "*.yml" -delete || true
+          sudo find . -maxdepth 1 -type f -name "*.md" -delete || true
+          sudo find . -maxdepth 1 -type f -name "*.txt" -delete || true
+          sudo rm -rf bot/ || true
+          sudo rm -rf .github/ || true
+          
+          # Копируем новые файлы
+          sudo cp -r /tmp/Daralla-main/* .
+          sudo rm -rf /tmp/Daralla-main/
           
           # Восстанавливаем данные
           sudo cp -r data_backup_* data/ || true
