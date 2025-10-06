@@ -98,17 +98,14 @@ async def safe_edit_or_reply(message, text, reply_markup=None, parse_mode=None, 
 
 # Определяем путь к файлу .env
 current_dir = pathlib.Path(__file__).parent
-env_path = current_dir / '.env'
+project_root = current_dir.parent
+env_path = project_root / '.env'
 
-# Пытаемся загрузить .env из разных мест
+# Загружаем .env из корня проекта
 if env_path.exists():
     load_dotenv(env_path)
-elif pathlib.Path('.env').exists():
-    load_dotenv('.env')
-elif pathlib.Path('bot/.env').exists():
-    load_dotenv('bot/.env')
 else:
-    print("ВНИМАНИЕ: Файл .env не найден! Создайте файл bot/.env с переменными окружения.")
+    print("ВНИМАНИЕ: Файл .env не найден! Создайте файл .env в корне проекта с переменными окружения.")
 from urllib.parse import quote
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -178,7 +175,7 @@ YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 # Поддержка нескольких админов через переменную окружения
-ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
 ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
 
 # Проверяем наличие обязательных переменных
