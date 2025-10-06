@@ -143,8 +143,7 @@ jobs:
           
           # Копируем файлы
           echo "📋 Копирую файлы..."
-          sudo cp /tmp/Daralla/*.yml /tmp/Daralla/*.py /tmp/Daralla/*.sh /tmp/Daralla/*.txt /tmp/Daralla/*.md . 2>/dev/null || true
-          sudo cp -r /tmp/Daralla/bot .
+          sudo cp -r /tmp/Daralla/* .
           sudo rm -rf /tmp/Daralla
           
           # Восстанавливаем данные
