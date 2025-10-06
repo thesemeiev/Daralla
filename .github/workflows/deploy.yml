@@ -135,9 +135,9 @@ jobs:
           sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S') || true
           sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S') || true
           
-          # Скачиваем код напрямую с GitHub
+          # Скачиваем код напрямую с GitHub (для приватного репозитория)
           echo "📥 Скачиваю код с GitHub..."
-          sudo wget -q https://github.com/thesemeiev/Daralla/archive/main.zip -O /tmp/daralla.zip
+          sudo wget -q --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/thesemeiev/Daralla/archive/main.zip -O /tmp/daralla.zip
           sudo unzip -q /tmp/daralla.zip -d /tmp/
           sudo rm -rf /tmp/daralla.zip
           
