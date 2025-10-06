@@ -3,8 +3,6 @@ name: 🚀 Deploy Daralla Bot
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 env:
   REGISTRY: ghcr.io
@@ -43,52 +41,11 @@ jobs:
         flake8 bot/ --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 bot/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-  # Сборка Docker образа
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐳 Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: 🔐 Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: 🏷️ Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: 🏗️ Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+  # (Опционально) можно добавить сборку образа позже
 
   # Деплой на сервер
   deploy:
-    needs: [test, build]
+    needs: [test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
@@ -96,16 +53,15 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
 
-    - name: 🔍 Debug secrets
+    - name: 🔍 Check secrets presence
       run: |
         echo "SERVER_HOST: ${{ secrets.SERVER_HOST != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_USER: ${{ secrets.SERVER_USER != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PORT: ${{ secrets.SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
-        echo "Workflow version: v2.0 - Updated $(date)"
 
     - name: 🚀 Deploy to server
-      uses: appleboy/ssh-action@master
+      uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
@@ -174,6 +130,7 @@ jobs:
           
           # Запускаем бота
           echo "🚀 Запускаю бота..."
+          # Собираем контейнеры на сервере
           sudo docker-compose build --no-cache
           sudo docker-compose up -d
           
@@ -193,21 +150,4 @@ jobs:
           echo "❌ Ошибка при деплое!"
         fi
 
-  # Откат при ошибке
-  rollback:
-    needs: [deploy]
-    runs-on: ubuntu-latest
-    if: failure() && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: 🔄 Rollback deployment
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        password: ${{ secrets.SERVER_PASSWORD }}
-        port: ${{ secrets.SERVER_PORT || 22 }}
-        script: |
-          cd /home/${{ secrets.SERVER_USER }}/Daralla
-          echo "🔄 Выполняю откат..."
-          ./rollback.sh
+  # Откат можно вернуть позже при необходимости
