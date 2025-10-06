@@ -133,6 +133,9 @@ jobs:
           echo "📥 Обновляю код..."
           # Удаляем старый код и клонируем заново
           sudo rm -rf .git
+          sudo rm -rf bot/
+          sudo rm -rf .github/
+          sudo rm -f *.py *.sh *.yml *.md *.txt
           sudo git clone https://github.com/thesemeiev/Daralla.git .
           sudo git checkout main
           
