@@ -284,21 +284,36 @@ class X3:
         self.password = password
         self.host = host
         self.ses = requests.Session()
-        # SSL проверка включена для безопасности (продакшн)
-        self.ses.verify = True
-        # Только для разработки можно отключить SSL:
-        # self.ses.verify = False
-        # import urllib3
-        # urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Определяем протокол и настраиваем SSL соответственно
+        if host.startswith('https://'):
+            self.ses.verify = True
+        else:
+            self.ses.verify = False
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Увеличиваем таймауты для лучшей стабильности
+        self.ses.timeout = (30, 30)  # (connect timeout, read timeout)
         
         self.data = {"username": self.login, "password": self.password}
-        logger.info(f"Подключение к XUI серверу: {host}")
+        logger.info(f"Подключение к XUI серверу: {host} (SSL: {self.ses.verify})")
         self._login()
     
     def _login(self):
         """Выполняет вход в XUI панель"""
         try:
-            login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=15)
+            # Пробуем сначала с текущими настройками
+            try:
+                login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=30)
+            except requests.exceptions.SSLError:
+                # Если получили ошибку SSL, пробуем без проверки сертификата
+                logger.warning(f"SSL ошибка при подключении к {self.host}, пробуем без проверки сертификата")
+                self.ses.verify = False
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=30)
+            
             logger.info(f"XUI Login Response - Status: {login_response.status_code}")
             logger.info(f"XUI Login Response - Text: {login_response.text[:200]}...")
             
@@ -319,12 +334,18 @@ class X3:
         """Переподключается к серверу при истечении сессии"""
         logger.info(f"Переподключение к серверу {self.host}")
         self.ses = requests.Session()
-        # SSL проверка включена для безопасности (продакшн)
-        self.ses.verify = True
-        # Только для разработки можно отключить SSL:
-        # self.ses.verify = False
-        # import urllib3
-        # urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Восстанавливаем настройки SSL
+        if self.host.startswith('https://'):
+            self.ses.verify = True
+        else:
+            self.ses.verify = False
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Восстанавливаем увеличенные таймауты
+        self.ses.timeout = (30, 30)
+        
         self._login()
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
@@ -699,6 +720,7 @@ class MultiServerManager:
     def __init__(self, servers_by_location):
         self.servers_by_location = {}
         self.server_health = {}  # Словарь для отслеживания состояния серверов
+        self.servers = []  # Плоский список всех серверов
         
         # Инициализируем серверы по локациям
         for location, servers_config in servers_by_location.items():
@@ -711,11 +733,13 @@ class MultiServerManager:
                         password=server_config["password"], 
                         host=server_config["host"]
                     )
-                    self.servers_by_location[location].append({
+                    server_info = {
                         "name": server_config["name"],
                         "x3": x3_server,
                         "config": server_config
-                    })
+                    }
+                    self.servers_by_location[location].append(server_info)
+                    self.servers.append(server_info)
                     # Инициализируем состояние сервера
                     self.server_health[server_config["name"]] = {
                         "status": "unknown",
@@ -728,11 +752,13 @@ class MultiServerManager:
                 except Exception as e:
                     logger.error(f"Ошибка подключения к серверу {server_config['name']} ({location}): {e}")
                     # Даже если сервер недоступен при инициализации, добавляем его в список
-                    self.servers_by_location[location].append({
+                    server_info = {
                         "name": server_config["name"],
                         "x3": None,
                         "config": server_config
-                    })
+                    }
+                    self.servers_by_location[location].append(server_info)
+                    self.servers.append(server_info)
                     self.server_health[server_config["name"]] = {
                         "status": "offline",
                         "last_check": datetime.datetime.now(),
