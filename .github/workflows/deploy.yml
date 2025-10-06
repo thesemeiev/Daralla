@@ -140,6 +140,13 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq git
           sudo rm -rf /tmp/Daralla
           sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /tmp/Daralla
+          cd /tmp/Daralla
+          sudo git checkout main
+          sudo git pull origin main
+          echo "📋 Текущий коммит: $(sudo git log --oneline -1)"
+          
+          # Возвращаемся в рабочую папку
+          cd /root/Daralla
           
           # Копируем файлы
           echo "📋 Копирую файлы..."
