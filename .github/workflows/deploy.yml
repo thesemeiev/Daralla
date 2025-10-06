@@ -140,6 +140,10 @@ jobs:
           # Создаем папку для данных если не существует
           sudo mkdir -p data
           
+          # Исправляем права на папку data (для Docker контейнера)
+          sudo chown -R 1000:1000 data/
+          sudo chmod -R 755 data/
+          
           # Обновляем переменные окружения
           echo "🔧 Обновляю переменные окружения..."
           if [ -f .env.production ]; then
