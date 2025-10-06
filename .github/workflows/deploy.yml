@@ -131,11 +131,19 @@ jobs:
           
           # Обновляем код
           echo "📥 Обновляю код..."
+          # Сохраняем важные данные
+          sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S') || true
+          sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S') || true
+          
           # Переходим в родительскую папку и клонируем заново
           cd /root
           sudo rm -rf Daralla
           sudo git clone https://github.com/thesemeiev/Daralla.git Daralla
           cd Daralla
+          
+          # Восстанавливаем данные
+          sudo cp -r data_backup_* data/ || true
+          sudo cp .env_backup_* .env || true
           
           # Устанавливаем права на скрипты
           sudo chmod +x *.sh
