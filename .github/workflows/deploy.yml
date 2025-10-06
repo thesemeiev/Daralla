@@ -135,15 +135,16 @@ jobs:
           sudo cp -r data data_backup_$(date +'%Y%m%d_%H%M%S') || true
           sudo cp .env .env_backup_$(date +'%Y%m%d_%H%M%S') || true
           
-          # Скачиваем код напрямую с GitHub (для приватного репозитория)
+          # Скачиваем код через git (более надежно)
           echo "📥 Скачиваю код с GitHub..."
-          sudo wget -q --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/thesemeiev/Daralla/archive/main.zip -O /tmp/daralla.zip
-          echo "📋 Проверяю скачанный файл..."
-          file /tmp/daralla.zip
-          head -5 /tmp/daralla.zip
-          sudo apt-get update -qq && sudo apt-get install -y -qq unzip
-          sudo unzip -q /tmp/daralla.zip -d /tmp/
-          sudo rm -rf /tmp/daralla.zip
+          sudo apt-get update -qq && sudo apt-get install -y -qq git
+          sudo rm -rf /tmp/Daralla
+          sudo git clone https://github.com/thesemeiev/Daralla.git /tmp/Daralla
+          cd /tmp/Daralla
+          sudo git checkout main
+          
+          # Возвращаемся в рабочую папку
+          cd /root/Daralla || cd /home/root/Daralla || find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname
           
           # Удаляем старые файлы кода (кроме data и .env)
           sudo find . -maxdepth 1 -type f -name "*.py" -delete || true
@@ -155,8 +156,8 @@ jobs:
           sudo rm -rf .github/ || true
           
           # Копируем новые файлы
-          sudo cp -r /tmp/Daralla-main/* .
-          sudo rm -rf /tmp/Daralla-main/
+          sudo cp -r /tmp/Daralla/* .
+          sudo rm -rf /tmp/Daralla/
           
           # Восстанавливаем данные
           sudo cp -r data_backup_* data/ || true
