@@ -700,7 +700,8 @@ class X3:
             fingerprint = reality_settings.get('fingerprint', 'chrome')
             spx = reality_settings.get('spiderX', '/')
             dest = reality.get('dest', '')
-            sni = dest.split(':')[0] if dest else ''
+            sni = dest.split(':')[0] if dest else 'google.com'
+            logger.info(f"Reality настройки для {self.host}: dest='{dest}', sni='{sni}'")
             short_ids = reality.get('shortIds', [''])
             sid = short_ids[0] if short_ids else ''
             network = stream.get('network', 'tcp')
@@ -813,6 +814,7 @@ class MultiServerManager:
             logger.warning(f"Все серверы в локации {location} недоступны, использую {selected_server['name']}")
         
         logger.info(f"Выбран сервер {selected_server['name']} ({location}) с {min_clients} клиентами")
+        logger.info(f"Reality настройки будут проверены для сервера: {selected_server['name']}")
         return selected_server["x3"], selected_server["name"]
     
     def get_server_by_user_choice(self, location, user_choice):
@@ -1059,11 +1061,6 @@ async def check_user_has_existing_keys(user_id: str, server_manager) -> bool:
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Проверяем, не устарело ли сообщение
-    if (datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds() > 3600:  # 1 час
-        logger.info(f"Пропущено устаревшее сообщение от {update.effective_user.id} ({int((datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds())} сек назад)")
-        return
-
     if not await check_private_chat(update):
         return
     
@@ -1589,11 +1586,6 @@ async def handle_payment(update, context, price, period):
 
 
 async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Проверяем, не устарело ли сообщение
-    if (datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds() > 3600:  # 1 час
-        logger.info(f"Пропущено устаревшее сообщение от {update.effective_user.id} ({int((datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds())} сек назад)")
-        return
-
     if not await check_private_chat(update):
         return
     
