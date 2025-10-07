@@ -1376,12 +1376,9 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not stack or stack[-1] != 'instruction_menu':
         push_nav(context, 'instruction_menu')
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Android", callback_data="instr_android")],
-        [InlineKeyboardButton("iOS", callback_data="instr_ios")],
-        [InlineKeyboardButton("Windows", callback_data="instr_windows")],
-        [InlineKeyboardButton("macOS", callback_data="instr_macos")],
-        [InlineKeyboardButton("Android TV", callback_data="instr_tv")],
-        [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
+        [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
+        [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
+        [InlineKeyboardButton("Android TV", callback_data="instr_tv"), InlineKeyboardButton("FAQ", callback_data="instr_faq")],
         [UIButtons.back_button()],
     ])
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
