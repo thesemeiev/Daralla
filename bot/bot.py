@@ -309,19 +309,19 @@ ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if a
 IMAGE_PATHS = {
     'main_menu': 'images/main_menu.jpg',
     'instruction_menu': 'images/instruction_menu.jpg',
-    'instruction_platform': 'images/instruction_menu.jpg',  # Используем то же изображение
+    'instruction_platform': 'images/instruction_platform.jpg',
     'buy_menu': 'images/buy_menu.jpg',
     'mykeys_menu': 'images/mykeys_menu.jpg',
     'admin_menu': 'images/admin_menu.jpg',
-    'admin_errors': 'images/admin_menu.jpg',  # Используем то же изображение
-    'admin_notifications': 'images/admin_menu.jpg',  # Используем то же изображение
-    'admin_check_servers': 'images/admin_menu.jpg',  # Используем то же изображение
+    'admin_errors': 'images/admin_errors.jpg',
+    'admin_notifications': 'images/admin_notifications.jpg',
+    'admin_check_servers': 'images/admin_check_servers.jpg',
     'points_menu': 'images/points_menu.jpg',
     'referral_menu': 'images/referral_menu.jpg',
-    'server_selection': 'images/buy_menu.jpg',  # Используем изображение покупки
-    'extend_key': 'images/mykeys_menu.jpg',  # Используем изображение ключей
-    'rename_key': 'images/mykeys_menu.jpg',  # Используем изображение ключей
-    'broadcast': 'images/admin_menu.jpg'  # Используем админ изображение
+    'server_selection': 'images/server_selection.jpg',
+    'extend_key': 'images/extend_key.jpg',
+    'rename_key': 'images/rename_key.jpg',
+    'broadcast': 'images/broadcast.jpg'
 }
 
 # Проверяем наличие обязательных переменных
