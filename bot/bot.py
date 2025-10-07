@@ -207,6 +207,22 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
             else:
                 raise
 
+async def safe_edit_or_reply_universal(message, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None, menu_type=None):
+    """Универсальная функция для отправки/редактирования сообщений с автоматическим выбором фото или текста"""
+    if message is None:
+        logger.error("safe_edit_or_reply_universal: message is None")
+        return
+    
+    # Если указан тип меню и есть соответствующее изображение, используем фото
+    if menu_type and menu_type in IMAGE_PATHS:
+        photo_path = IMAGE_PATHS[menu_type]
+        if os.path.exists(photo_path):
+            await safe_edit_or_reply_photo(message, photo_path, text, reply_markup, parse_mode, disable_web_page_preview)
+            return
+    
+    # Иначе используем обычное текстовое сообщение
+    await safe_edit_or_reply(message, text, reply_markup, parse_mode, disable_web_page_preview)
+
 # Определяем путь к файлу .env
 current_dir = pathlib.Path(__file__).parent
 project_root = current_dir.parent
@@ -1321,9 +1337,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await register_simple_user(user_id)
     except Exception as e:
         logger.error(f"Register user failed: {e}")
-    # Отправляем фото с меню
-    photo_path = IMAGE_PATHS['main_menu']
-    await safe_edit_or_reply_photo(message, photo_path, welcome_text, reply_markup=keyboard, parse_mode="HTML")
+    # Отправляем меню с фото
+    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
 
 async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Редактирует существующее сообщение на главное меню"""
@@ -1337,9 +1352,8 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.callback_query.message
     logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
     try:
-        # Отправляем фото с меню
-        photo_path = IMAGE_PATHS['main_menu']
-        await safe_edit_or_reply_photo(message, photo_path, welcome_text, reply_markup=keyboard, parse_mode="HTML")
+        # Отправляем меню с фото
+        await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
         logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано")
     except Exception as e:
         logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования сообщения: {e}")
@@ -1374,8 +1388,7 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для сообщения
     instruction_text = UIMessages.instruction_menu_message()
-    photo_path = IMAGE_PATHS['instruction_menu']
-    await safe_edit_or_reply_photo(message, photo_path, instruction_text, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(message, instruction_text, reply_markup=keyboard, parse_mode="HTML", menu_type='instruction_menu')
 
 # Обработка кнопок инструкции
 async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1854,8 +1867,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
         # Отправляем сообщение с пагинацией
-        photo_path = IMAGE_PATHS['mykeys_menu']
-        await safe_edit_or_reply_photo(message, photo_path, page_text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply_universal(message, page_text, reply_markup=keyboard, parse_mode="HTML", menu_type='mykeys_menu')
         
     except Exception as e:
         logger.exception(f"Ошибка в mykey для user_id={user_id}: {e}")
@@ -3585,8 +3597,7 @@ async def buy_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для сообщения меню покупки
     buy_menu_text = UIMessages.buy_menu_message()
-    photo_path = IMAGE_PATHS['buy_menu']
-    await safe_edit_or_reply_photo(message, photo_path, buy_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
 
 # Новый обработчик выбора периода, который переводит к выбору сервера
 async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3967,8 +3978,7 @@ async def points_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     
     try:
-        photo_path = IMAGE_PATHS['points_menu']
-        await safe_edit_or_reply_photo(update.callback_query.message, photo_path, message, reply_markup=keyboard, parse_mode="MarkdownV2")
+        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
     except Exception as e:
         logger.exception(f"points_callback: failed to edit message: {e}")
 
@@ -4007,8 +4017,7 @@ async def spend_points_callback(update: Update, context: ContextTypes.DEFAULT_TY
         ])
     
     try:
-        photo_path = IMAGE_PATHS['points_menu']
-        await safe_edit_or_reply_photo(update.callback_query.message, photo_path, message, reply_markup=keyboard, parse_mode="MarkdownV2")
+        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
     except Exception as e:
         logger.exception(f"spend_points_callback: failed to edit message: {e}")
 
@@ -4266,8 +4275,7 @@ async def referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [UIButtons.back_button()]
     ])
     
-    photo_path = IMAGE_PATHS['referral_menu']
-    await safe_edit_or_reply_photo(update.callback_query.message, photo_path, message, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='referral_menu')
 
 async def rename_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик переименования ключа"""
@@ -4558,8 +4566,7 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для админ-меню
     admin_menu_text = UIMessages.admin_menu_message()
-    photo_path = IMAGE_PATHS['admin_menu']
-    await safe_edit_or_reply_photo(message, photo_path, admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
 
 
 # ===== РАССЫЛКА ДЛЯ АДМИНА =====
