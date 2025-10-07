@@ -1059,6 +1059,11 @@ async def check_user_has_existing_keys(user_id: str, server_manager) -> bool:
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем, не устарело ли сообщение
+    if (datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds() > 3600:  # 1 час
+        logger.info(f"Пропущено устаревшее сообщение от {update.effective_user.id} ({int((datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds())} сек назад)")
+        return
+
     if not await check_private_chat(update):
         return
     
@@ -1584,6 +1589,11 @@ async def handle_payment(update, context, price, period):
 
 
 async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем, не устарело ли сообщение
+    if (datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds() > 3600:  # 1 час
+        logger.info(f"Пропущено устаревшее сообщение от {update.effective_user.id} ({int((datetime.datetime.now(datetime.timezone.utc) - update.effective_message.date).total_seconds())} сек назад)")
+        return
+
     if not await check_private_chat(update):
         return
     
