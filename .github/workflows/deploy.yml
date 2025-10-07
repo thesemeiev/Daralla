@@ -1,67 +1,67 @@
-name: 🚀 Deploy Daralla Bot
+name: Deploy Daralla Bot
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Возможность запуска вручную
+  workflow_dispatch:  # Manual trigger option
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Тестирование и проверка кода
+  # Testing and code validation
   test:
     runs-on: ubuntu-latest
     steps:
-    - name: 📥 Checkout code
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: 🐍 Set up Python
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    - name: 📦 Install dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-asyncio
 
-    - name: 🧪 Run tests
+    - name: Run tests
       run: |
-        # Создаем тестовые файлы если их нет
+        # Create test files if they don't exist
         mkdir -p tests
         echo "import pytest" > tests/__init__.py
         echo "def test_basic(): assert True" > tests/test_basic.py
         pytest tests/ -v
 
-    - name: 🔍 Lint code
+    - name: Lint code
       run: |
         pip install flake8
         flake8 bot/ --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 bot/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-  # (Опционально) можно добавить сборку образа позже
+  # (Optional) can add image build later
 
-  # Деплой на сервер
+  # Deploy to server
   deploy:
     needs: [test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
-    - name: 📥 Checkout code
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: 🔍 Check secrets presence
+    - name: Check secrets presence
       run: |
         echo "SERVER_HOST: ${{ secrets.SERVER_HOST != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_USER: ${{ secrets.SERVER_USER != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PORT: ${{ secrets.SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
 
-    - name: 🚀 Deploy to server
+    - name: Deploy to server
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.SERVER_HOST }}
@@ -71,124 +71,124 @@ jobs:
         timeout: 60s
         command_timeout: 10m
         script: |
-          # Простой и надежный деплой
-          echo "🚀 Начинаю деплой..."
+          # Simple and reliable deployment
+          echo "Starting deployment..."
           
-          # Создаем рабочую папку
+          # Create working directory
           sudo mkdir -p /root/Daralla
           cd /root/Daralla
           
-          # Останавливаем старый бот
-          echo "🛑 Останавливаю старый бот..."
+          # Stop old bot
+          echo "Stopping old bot..."
           sudo docker-compose down || true
           
-          # Создаем структуру для бэкапов
-          echo "📦 Подготовка к бэкапу..."
+          # Create backup structure
+          echo "Preparing backup..."
           sudo mkdir -p backups/data backups/env
           timestamp=$(date +'%Y%m%d_%H%M%S')
 
-          # Бэкап баз данных
-          echo "💾 Создаю бэкап баз данных..."
+          # Database backup
+          echo "Creating database backup..."
           if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
-            echo "📊 Найдены базы данных для бэкапа:"
+            echo "Found databases for backup:"
             ls -l data/*.db
             sudo tar -czf "backups/data/backup_${timestamp}.tar.gz" data/*.db
-            echo "✅ Бэкап баз данных создан"
+            echo "Database backup created"
             
-            # Оставляем только 5 последних бэкапов
+            # Keep only 5 latest backups
             ls -t backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
           fi
 
-          # Бэкап .env
+          # .env backup
           if [ -f ".env" ]; then
-            echo "📄 Создаю бэкап .env файла..."
+            echo "Creating .env backup..."
             sudo cp .env "backups/env/env_${timestamp}"
-            # Оставляем только 5 последних копий .env
+            # Keep only 5 latest .env copies
             ls -t backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
           fi
           
-          # Скачиваем код
-          echo "📥 Скачиваю код..."
+          # Download code
+          echo "Downloading code..."
           sudo apt-get update -qq && sudo apt-get install -y -qq git
           sudo rm -rf /tmp/Daralla
           sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /tmp/Daralla
           cd /tmp/Daralla
           sudo git checkout main
           sudo git pull origin main
-          echo "📋 Текущий коммит: $(sudo git log --oneline -1)"
+          echo "Current commit: $(sudo git log --oneline -1)"
           
-          # Возвращаемся в рабочую папку
+          # Return to working directory
           cd /root/Daralla
           
-          # Копируем файлы
-          echo "📋 Копирую файлы..."
+          # Copy files
+          echo "Copying files..."
           sudo cp -r /tmp/Daralla/* .
           sudo rm -rf /tmp/Daralla
           
-          # Восстанавливаем данные
-          echo "🔄 Восстанавливаю данные..."
+          # Restore data
+          echo "Restoring data..."
           
-          # Восстанавливаем базы данных
+          # Restore databases
           latest_db_backup=$(ls -t backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
           if [ -n "$latest_db_backup" ]; then
-            echo "📦 Восстанавливаю базы данных из $latest_db_backup..."
+            echo "Restoring databases from $latest_db_backup..."
             sudo mkdir -p data
             sudo tar -xzf "$latest_db_backup" -C .
-            echo "✅ Базы данных восстановлены"
+            echo "Databases restored"
           else
-            echo "⚠️ Бэкапы баз данных не найдены"
+            echo "Database backups not found"
           fi
 
-          # Восстанавливаем .env
+          # Restore .env
           latest_env=$(ls -t backups/env/env_* 2>/dev/null | head -n1)
           if [ -n "$latest_env" ]; then
-            echo "📄 Восстанавливаю .env из $latest_env..."
+            echo "Restoring .env from $latest_env..."
             sudo cp "$latest_env" .env
-            echo "✅ .env файл восстановлен"
+            echo ".env file restored"
           else
-            echo "⚠️ Бэкап .env не найден"
+            echo ".env backup not found"
           fi
 
-          # Проверяем восстановление
-          echo "✅ Проверяю восстановленные файлы..."
-          echo "📊 Базы данных:"
-          ls -lh data/*.db || echo "⚠️ Базы данных не найдены"
+          # Check restoration
+          echo "Checking restored files..."
+          echo "Databases:"
+          ls -lh data/*.db || echo "Databases not found"
           
-          # Исправляем права после восстановления
+          # Fix permissions after restoration
           sudo chown -R 1000:1000 data/ 2>/dev/null || true
           sudo chmod -R 666 data/*.db 2>/dev/null || true
           sudo chmod 755 data/ 2>/dev/null || true
           
-          # Создаем папку data и файлы БД
+          # Create data directory and database files
           sudo mkdir -p data
           sudo touch data/vpn_keys.db data/referral_system.db data/notifications.db
           
-          # Устанавливаем права
+          # Set permissions
           sudo chmod +x *.sh
           sudo chown -R 1000:1000 data/
           sudo chmod -R 666 data/*.db
           sudo chmod 755 data/
           
-          # Запускаем бота
-          echo "🚀 Запускаю бота..."
-          # Собираем контейнеры на сервере
+          # Start bot
+          echo "Starting bot..."
+          # Build containers on server
           sudo docker-compose build --no-cache
           sudo docker-compose up -d
           
-          # Проверяем статус
-          echo "✅ Проверяю статус..."
+          # Check status
+          echo "Checking status..."
           sleep 5
           sudo docker-compose ps
           
-          echo "🎉 Деплой завершен!"
+          echo "Deployment completed!"
 
-    - name: 📢 Notify deployment
+    - name: Notify deployment
       if: always()
       run: |
         if [ "${{ job.status }}" == "success" ]; then
-          echo "✅ Деплой успешно завершен!"
+          echo "Deployment completed successfully!"
         else
-          echo "❌ Ошибка при деплое!"
+          echo "Deployment failed!"
         fi
 
-  # Откат можно вернуть позже при необходимости
+  # Rollback can be added later if needed
