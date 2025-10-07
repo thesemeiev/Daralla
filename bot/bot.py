@@ -1378,7 +1378,8 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
         [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
-        [InlineKeyboardButton("Android TV", callback_data="instr_tv"), InlineKeyboardButton("FAQ", callback_data="instr_faq")],
+        [InlineKeyboardButton("Linux", callback_data="instr_linux"), InlineKeyboardButton("Android TV", callback_data="instr_tv")],
+        [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
         [UIButtons.back_button()],
     ])
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -1397,74 +1398,92 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     data = query.data
     texts = {
         "instr_android": (
-            "<b>Android (v2RayTun)</b>\n"
-            "1. <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">Скачайте v2RayRun из Google Play</a>.\n"
+            "<b>Android (v2RayTun, Hiddify)</b>\n"
+            "1. Выберите приложение:\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">v2RayTun из Google Play</a>\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=app.hiddify.com\">Hiddify из Google Play</a>\n"
             "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
             "3. В приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Подключитесь к VPN.\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
         ),
         "instr_ios": (
-            "<b>iPhone (v2RayTun)</b>\n"
-            "1. <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone\">Скачайте v2RayTun из App Store</a>.\n"
+            "<b>iPhone (v2RayTun, Hiddify)</b>\n"
+            "1. Выберите приложение:\n"
+            "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone\">v2RayTun из App Store</a>\n"
+            "   • <a href=\"https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone\">Hiddify из App Store</a>\n"
             "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. Откройте приложение V2RayTun.\n"
+            "3. Откройте выбранное приложение.\n"
             "4. Нажмите + → Добавить из буфера обмена.\n"
             "5. Выберите добавленный профиль и подключитесь.\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
         ),
         "instr_windows": (
-            "<b>Windows (v2RayTun)</b>\n"
-            "1. <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">Скачайте v2RayTun для Windows</a> и установите программу.\n"
+            "<b>Windows (v2RayTun, Hiddify)</b>\n"
+            "1. Выберите приложение:\n"
+            "   • <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">v2RayTun для Windows</a>\n"
+            "   • <a href=\"https://app.hiddify.com/windows\">Hiddify для Windows</a>\n"
             "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В v2RayTun нажмите на + → Добавить из буфера обмена.\n"
+            "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
         ),
         "instr_macos": (
-            "<b>Mac (v2RayTun)</b>\n"
-            "1. <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac\">Скачайте v2RayTun для Mac</a>.\n"
+            "<b>Mac (v2RayTun, Hiddify)</b>\n"
+            "1. Выберите приложение:\n"
+            "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac\">v2RayTun для Mac</a>\n"
+            "   • <a href=\"https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone\">Hiddify для Mac</a>\n"
             "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В v2RayTun нажмите на + → Добавить из буфера обмена.\n"
+            "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Mac.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
         ),
         "instr_tv": (
-            "<b>Android TV (v2RayTun)</b>\n"
-            "1. <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">Скачайте v2RayTun для Android TV</a>.\n"
+            "<b>Android TV (v2RayTun, Hiddify)</b>\n"
+            "1. Выберите приложение:\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">v2RayTun для Android TV</a>\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=app.hiddify.com\">Hiddify для Android TV</a>\n"
             "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В v2RayTun нажмите на + → Добавить из буфера обмена.\n"
+            "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Android TV.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
+        ),
+        "instr_linux": (
+            "<b>Linux (Hiddify)</b>\n"
+            "1. <a href=\"https://app.hiddify.com/linux\">Скачайте Hiddify для Linux</a>.\n"
+            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
+            "3. В Hiddify нажмите + → Добавить из буфера обмена.\n"
+            "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
+            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
         ),
 
         "instr_faq": (
             "<b>Часто задаваемые вопросы (FAQ)</b>\n\n"
-            "<b>🔧 VPN не подключается</b>\n"
+            "<b>VPN не подключается</b>\n"
             "• Проверьте интернет-соединение (Wi-Fi/мобильный интернет)\n"
             "• Перезапустите приложение v2RayTun\n"
             "• Убедитесь, что скопировали VLESS-ссылку полностью\n"
             "• Отключите другие VPN-приложения\n"
             "• Попробуйте перезагрузить устройство\n\n"
-            "<b>📱 Не удаётся импортировать ключ</b>\n"
+            "<b>Не удаётся импортировать ключ</b>\n"
             "• Скопируйте ссылку из бота заново\n"
             "• Проверьте, что ссылка начинается с 'vless://'\n"
             "• Убедитесь, что приложение v2RayTun обновлено\n"
             "• Попробуйте закрыть и открыть приложение\n\n"
-            "<b>👥 Можно ли использовать один ключ на нескольких устройствах?</b>\n"
+            "<b>Можно ли использовать один ключ на нескольких устройствах?</b>\n"
             "• Нет, один ключ = одно устройство\n"
             "• Не делитесь ключом с другими людьми\n"
             "• Для каждого устройства нужен отдельный ключ\n\n"
-            "<b>⏰ Как продлить подписку?</b>\n"
-            "• Купите новый ключ через бота\n"
+            "<b>Как продлить подписку?</b>\n"
+            "• Купите новый ключ или продлите существующий через бота\n"
             "• Новый ключ автоматически заменит старый\n"
             "• Используйте баллы для продления (1 балл = 14 дней)\n\n"
-            "<b>💰 Как получить баллы?</b>\n"
+            "<b>Как получить баллы?</b>\n"
             "• Приглашайте друзей по реферальной ссылке\n"
             "• За каждого друга получаете 1 балл\n"
-            "• Баллы можно потратить на продление ключей\n\n"
-            "<b>🆘 Нужна помощь?</b>\n"
-            "• Обратитесь к администратору через бота\n"
+            "• Баллы можно потратить на продление и покупку ключей\n\n"
+            "<b>Нужна помощь?</b>\n"
+            "• Обратитесь в поддержку\n"
             "• Опишите проблему подробно\n"
             "• Приложите скриншот ошибки, если есть"
         )
@@ -1472,7 +1491,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "back":
         await universal_back_callback(update, context)
         return
-    elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_faq", "instr_tv"]:
+    elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_linux", "instr_tv", "instr_faq"]:
         stack = context.user_data.setdefault('nav_stack', [])
         if not stack or stack[-1] != 'instruction_platform':
             push_nav(context, 'instruction_platform')
