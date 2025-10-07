@@ -3061,7 +3061,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         message_obj = update.message if update.message else update.callback_query.message
         await safe_edit_or_reply_universal(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                               parse_mode='HTML', reply_markup=keyboard, menu_type='admin_errors')
+                               parse_mode='HTML', reply_markup=keyboard)
             
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
@@ -3069,7 +3069,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard, menu_type='admin_errors')
+        await safe_edit_or_reply_universal(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
 
 async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Дашборд уведомлений для админа"""
@@ -4573,7 +4573,7 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['broadcast_text'] = None
     context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
     context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
-    keyboard = InlineKeyboardMarkup([[UIButtons.back_button()]])
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]])
     await safe_edit_or_reply_universal(update.callback_query.message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='admin_errors')
     return BROADCAST_WAITING_TEXT
 
@@ -4589,7 +4589,7 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
         pass
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Отправить", callback_data="admin_broadcast_send")],
-        [UIButtons.back_button()]
+        [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
     ])
     # Редактируем исходное сообщение на предпросмотр
     chat_id = context.user_data.get('broadcast_msg_chat_id')
@@ -4678,7 +4678,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data['broadcast_details'] = details
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Экспорт CSV", callback_data="admin_broadcast_export")],
-        [UIButtons.back_button()]
+        [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
     ])
     try:
         await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML", menu_type='admin_errors')
@@ -4783,7 +4783,7 @@ if __name__ == '__main__':
                 CallbackQueryHandler(admin_broadcast_cancel, pattern="^back$")
             ]
         },
-        fallbacks=[CallbackQueryHandler(admin_broadcast_cancel, pattern="^back$")],
+        fallbacks=[CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$")],
         per_user=True,
         per_chat=True,
         per_message=False
@@ -4795,6 +4795,8 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast_start$"))
     # Глобальный обработчик для кнопки изменения дней (на случай если ConversationHandler заблокирован)
     app.add_handler(CallbackQueryHandler(admin_set_days_start, pattern="^admin_set_days_start$"))
+    # Глобальный обработчик для кнопки назад в рассылке
+    app.add_handler(CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"))
 
     
     # Обработчики для реферальной системы
