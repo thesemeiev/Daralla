@@ -2170,12 +2170,22 @@ async def auto_activate_keys(app):
                                                 [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
                                                 [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
                                             ])
-                                            await app.bot.edit_message_text(
-                                                chat_id=chat_id,
+                                            # Создаем объект сообщения для safe_edit_or_reply_universal
+                                            from telegram import Message, Chat, User
+                                            mock_chat = Chat(id=chat_id, type="private")
+                                            mock_user = User(id=int(user_id), is_bot=False, first_name="User")
+                                            mock_message = Message(
                                                 message_id=message_id,
-                                                text=extension_message,
-                                                parse_mode="HTML",
-                                                reply_markup=keyboard
+                                                date=datetime.datetime.now(),
+                                                chat=mock_chat,
+                                                from_user=mock_user
+                                            )
+                                            await safe_edit_or_reply_universal(
+                                                mock_message, 
+                                                extension_message, 
+                                                reply_markup=keyboard, 
+                                                parse_mode="HTML", 
+                                                menu_type='extend_key'
                                             )
                                             logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
                                             # Удаляем из кэша после успешного редактирования
@@ -2337,12 +2347,22 @@ async def auto_activate_keys(app):
                             # Если есть сообщение с оплатой, редактируем его
                             if message_id:
                                 try:
-                                    await app.bot.edit_message_text(
-                                        chat_id=int(user_id),
+                                    # Создаем объект сообщения для safe_edit_or_reply_universal
+                                    from telegram import Message, Chat, User
+                                    mock_chat = Chat(id=int(user_id), type="private")
+                                    mock_user = User(id=int(user_id), is_bot=False, first_name="User")
+                                    mock_message = Message(
                                         message_id=message_id,
-                                        text=full_message,
-                                        reply_markup=keyboard,
-                                        parse_mode="HTML"
+                                        date=datetime.datetime.now(),
+                                        chat=mock_chat,
+                                        from_user=mock_user
+                                    )
+                                    await safe_edit_or_reply_universal(
+                                        mock_message, 
+                                        full_message, 
+                                        reply_markup=keyboard, 
+                                        parse_mode="HTML", 
+                                        menu_type='mykeys_menu'
                                     )
                                     logger.info(f"Отредактировано сообщение с оплатой {message_id} на информацию о ключе")
                                 except Exception as edit_error:
