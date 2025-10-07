@@ -3064,8 +3064,16 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            await message_obj.edit_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                                       parse_mode='HTML', reply_markup=keyboard)
+            # Если сообщение содержит фото, сначала удаляем его
+            if message_obj.photo:
+                from telegram import InputMediaPhoto
+                await message_obj.edit_media(
+                    media=InputMediaPhoto(media="", caption=f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>"),
+                    reply_markup=keyboard
+                )
+            else:
+                await message_obj.edit_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+                                           parse_mode='HTML', reply_markup=keyboard)
         except Exception as e:
             logger.warning(f"Failed to edit logs as text, falling back to reply: {e}")
             await message_obj.reply_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
@@ -3080,7 +3088,15 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            await message_obj.edit_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
+            # Если сообщение содержит фото, сначала удаляем его
+            if message_obj.photo:
+                from telegram import InputMediaPhoto
+                await message_obj.edit_media(
+                    media=InputMediaPhoto(media="", caption=f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}'),
+                    reply_markup=keyboard
+                )
+            else:
+                await message_obj.edit_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
         except Exception as e:
             logger.warning(f"Failed to edit error message as text, falling back to reply: {e}")
             await message_obj.reply_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
@@ -3119,7 +3135,15 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            await message_obj.edit_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
+            # Если сообщение содержит фото, сначала удаляем его
+            if message_obj.photo:
+                from telegram import InputMediaPhoto
+                await message_obj.edit_media(
+                    media=InputMediaPhoto(media="", caption=dashboard_text),
+                    reply_markup=keyboard
+                )
+            else:
+                await message_obj.edit_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
         except Exception as e:
             logger.warning(f"Failed to edit notifications as text, falling back to reply: {e}")
             await message_obj.reply_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
@@ -3133,7 +3157,15 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            await message_obj.edit_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
+            # Если сообщение содержит фото, сначала удаляем его
+            if message_obj.photo:
+                from telegram import InputMediaPhoto
+                await message_obj.edit_media(
+                    media=InputMediaPhoto(media="", caption=f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}"),
+                    reply_markup=keyboard
+                )
+            else:
+                await message_obj.edit_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
         except Exception as e:
             logger.warning(f"Failed to edit error message as text, falling back to reply: {e}")
             await message_obj.reply_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
@@ -4584,7 +4616,15 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Принудительно редактируем как текстовое сообщение (убираем фото)
     try:
-        await message.edit_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+        # Если сообщение содержит фото, сначала удаляем его
+        if message.photo:
+            from telegram import InputMediaPhoto
+            await message.edit_media(
+                media=InputMediaPhoto(media="", caption=admin_menu_text),
+                reply_markup=keyboard
+            )
+        else:
+            await message.edit_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
         logger.warning(f"Failed to edit admin menu as text, falling back to reply: {e}")
         await message.reply_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
