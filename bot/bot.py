@@ -3533,6 +3533,10 @@ async def admin_set_days_cancel(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     
+    # Очищаем состояние изменения дней
+    context.user_data.pop('config_message_id', None)
+    context.user_data.pop('config_chat_id', None)
+    
     # Возвращаемся в админ меню
     await admin_menu(update, context)
     
@@ -4484,6 +4488,15 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         await safe_edit_or_reply(update.message, 'Нет доступа.')
         return
+    
+    # Очищаем состояние всех ConversationHandler'ов при входе в админ меню
+    context.user_data.pop('broadcast_text', None)
+    context.user_data.pop('broadcast_msg_chat_id', None)
+    context.user_data.pop('broadcast_msg_id', None)
+    context.user_data.pop('broadcast_details', None)
+    context.user_data.pop('config_message_id', None)
+    context.user_data.pop('config_chat_id', None)
+    
     stack = context.user_data.setdefault('nav_stack', [])
     if not stack or stack[-1] != 'admin_menu':
         push_nav(context, 'admin_menu')
@@ -4635,6 +4648,13 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
+    
+    # Очищаем состояние рассылки
+    context.user_data.pop('broadcast_text', None)
+    context.user_data.pop('broadcast_msg_chat_id', None)
+    context.user_data.pop('broadcast_msg_id', None)
+    context.user_data.pop('broadcast_details', None)
+    
     await admin_menu(update, context)
     return ConversationHandler.END
 
@@ -4731,6 +4751,10 @@ if __name__ == '__main__':
     app.add_handler(admin_broadcast_conv)
     # Глобальный обработчик экспорта, чтобы работал и после завершения диалога
     app.add_handler(CallbackQueryHandler(admin_broadcast_export, pattern="^admin_broadcast_export$"))
+    # Глобальный обработчик для кнопки рассылки (на случай если ConversationHandler заблокирован)
+    app.add_handler(CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast_start$"))
+    # Глобальный обработчик для кнопки изменения дней (на случай если ConversationHandler заблокирован)
+    app.add_handler(CallbackQueryHandler(admin_set_days_start, pattern="^admin_set_days_start$"))
 
     
     # Обработчики для реферальной системы
