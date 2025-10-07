@@ -525,8 +525,7 @@ class X3:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_fixed(2),
-        retry=retry_if_result(lambda x: x and x.status_code != 404)  # Повторять только если не 404
+        wait=wait_fixed(2)
     )
     def list(self, timeout=15):
         try:
@@ -550,7 +549,7 @@ class X3:
                 logger.error(f"XUI API вернул неверный статус: {response.status_code} для URL {url}")
                 if response.status_code == 404:
                     logger.error(f"Endpoint не найден на сервере {self.host}. Возможно, сервер не поддерживает API или требует обновления.")
-                    return None  # Прекращаем попытки при 404
+                    return {'success': False, 'error': '404 Not Found', 'obj': []}  # Возвращаем структуру, совместимую с ожидаемым форматом
                 raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
             
             # Проверяем, что ответ не пустой
