@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем код приложения
 COPY bot/ ./bot/
 
+# Копируем изображения для меню
+COPY images/ ./images/
+
 # Создаем пользователя для безопасности
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app

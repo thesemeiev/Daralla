@@ -96,6 +96,91 @@ async def safe_edit_or_reply(message, text, reply_markup=None, parse_mode=None, 
             else:
                 raise
 
+async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
+    """Безопасная отправка или редактирование сообщения с фото"""
+    if message is None:
+        logger.error("safe_edit_or_reply_photo: message is None")
+        return
+    
+    # Проверяем существование файла
+    if not os.path.exists(photo_path):
+        logger.warning(f"Photo file not found: {photo_path}, falling back to text message")
+        await safe_edit_or_reply(message, caption, reply_markup, parse_mode, disable_web_page_preview)
+        return
+    
+    # Максимальное количество попыток для сетевых ошибок
+    max_retries = 3
+    retry_delay = 2  # секунды
+    
+    for attempt in range(max_retries):
+        try:
+            # Пытаемся отредактировать существующее сообщение
+            await message.edit_media(
+                media=InputMediaPhoto(
+                    media=open(photo_path, 'rb'),
+                    caption=caption,
+                    parse_mode=parse_mode
+                ),
+                reply_markup=reply_markup
+            )
+            return  # Успешно отправлено
+        except telegram.error.BadRequest as e:
+            if "can't be edited" in str(e) and hasattr(message, 'reply_photo'):
+                # Пробуем отправить как новое сообщение с повторными попытками
+                for reply_attempt in range(max_retries):
+                    try:
+                        await message.reply_photo(
+                            photo=open(photo_path, 'rb'),
+                            caption=caption,
+                            reply_markup=reply_markup,
+                            parse_mode=parse_mode
+                        )
+                        return  # Успешно отправлено
+                    except telegram.error.NetworkError as net_err:
+                        if reply_attempt < max_retries - 1:
+                            logger.warning(f"Сетевая ошибка при отправке фото (попытка {reply_attempt + 1}/{max_retries}): {net_err}")
+                            await asyncio.sleep(retry_delay * (reply_attempt + 1))
+                        else:
+                            logger.error(f"Не удалось отправить фото после {max_retries} попыток: {net_err}")
+                            raise
+            elif "can't parse entities" in str(e) and hasattr(message, 'reply_photo'):
+                # Фолбэк: отправляем как обычный текст без форматирования
+                await message.reply_photo(
+                    photo=open(photo_path, 'rb'),
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode=None
+                )
+                return
+            elif "Message is not modified" in str(e):
+                # Сообщение не изменилось, это нормально
+                return
+            else:
+                # Другие ошибки - пробуем отправить как новое сообщение
+                if hasattr(message, 'reply_photo'):
+                    try:
+                        await message.reply_photo(
+                            photo=open(photo_path, 'rb'),
+                            caption=caption,
+                            reply_markup=reply_markup,
+                            parse_mode=parse_mode
+                        )
+                        return
+                    except:
+                        raise e  # Если и это не удалось, пробрасываем исходную ошибку
+                else:
+                    raise
+        except Exception as e:
+            if hasattr(message, 'reply_photo'):
+                await message.reply_photo(
+                    photo=open(photo_path, 'rb'),
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode
+                )
+            else:
+                raise
+
 # Определяем путь к файлу .env
 current_dir = pathlib.Path(__file__).parent
 project_root = current_dir.parent
@@ -107,7 +192,7 @@ if env_path.exists():
 else:
     print("ВНИМАНИЕ: Файл .env не найден! Создайте файл .env в корне проекта с переменными окружения.")
 from urllib.parse import quote
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
 def mdv2(s):
     return escape_markdown(str(s), version=2)
@@ -177,6 +262,17 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 # Поддержка нескольких админов через переменную окружения
 ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
 ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
+
+# Пути к изображениям для меню
+IMAGE_PATHS = {
+    'main_menu': 'images/main_menu.jpg',
+    'instruction_menu': 'images/instruction_menu.jpg',
+    'buy_menu': 'images/buy_menu.jpg',
+    'mykeys_menu': 'images/mykeys_menu.jpg',
+    'admin_menu': 'images/admin_menu.jpg',
+    'points_menu': 'images/points_menu.jpg',
+    'referral_menu': 'images/referral_menu.jpg'
+}
 
 # Проверяем наличие обязательных переменных
 if not TELEGRAM_TOKEN:
@@ -1199,7 +1295,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await register_simple_user(user_id)
     except Exception as e:
         logger.error(f"Register user failed: {e}")
-    await safe_edit_or_reply(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    # Отправляем фото с меню
+    photo_path = IMAGE_PATHS['main_menu']
+    await safe_edit_or_reply_photo(message, photo_path, welcome_text, reply_markup=keyboard, parse_mode="HTML")
 
 async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Редактирует существующее сообщение на главное меню"""
@@ -1213,7 +1311,9 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.callback_query.message
     logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
     try:
-        await message.edit_text(welcome_text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        # Отправляем фото с меню
+        photo_path = IMAGE_PATHS['main_menu']
+        await safe_edit_or_reply_photo(message, photo_path, welcome_text, reply_markup=keyboard, parse_mode="HTML")
         logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано")
     except Exception as e:
         logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования сообщения: {e}")
@@ -1248,7 +1348,8 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для сообщения
     instruction_text = UIMessages.instruction_menu_message()
-    await safe_edit_or_reply(message, instruction_text, reply_markup=keyboard, parse_mode="HTML")
+    photo_path = IMAGE_PATHS['instruction_menu']
+    await safe_edit_or_reply_photo(message, photo_path, instruction_text, reply_markup=keyboard, parse_mode="HTML")
 
 # Обработка кнопок инструкции
 async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1727,7 +1828,8 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
         # Отправляем сообщение с пагинацией
-        await safe_edit_or_reply(message, page_text, reply_markup=keyboard, parse_mode="HTML")
+        photo_path = IMAGE_PATHS['mykeys_menu']
+        await safe_edit_or_reply_photo(message, photo_path, page_text, reply_markup=keyboard, parse_mode="HTML")
         
     except Exception as e:
         logger.exception(f"Ошибка в mykey для user_id={user_id}: {e}")
@@ -3457,7 +3559,8 @@ async def buy_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для сообщения меню покупки
     buy_menu_text = UIMessages.buy_menu_message()
-    await safe_edit_or_reply(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    photo_path = IMAGE_PATHS['buy_menu']
+    await safe_edit_or_reply_photo(message, photo_path, buy_menu_text, reply_markup=keyboard, parse_mode="HTML")
 
 # Новый обработчик выбора периода, который переводит к выбору сервера
 async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3838,12 +3941,8 @@ async def points_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     
     try:
-        await update.callback_query.edit_message_text(
-            message,
-            reply_markup=keyboard,
-            parse_mode="MarkdownV2",
-            disable_web_page_preview=True,
-        )
+        photo_path = IMAGE_PATHS['points_menu']
+        await safe_edit_or_reply_photo(update.callback_query.message, photo_path, message, reply_markup=keyboard, parse_mode="MarkdownV2")
     except Exception as e:
         logger.exception(f"points_callback: failed to edit message: {e}")
 
@@ -3882,12 +3981,8 @@ async def spend_points_callback(update: Update, context: ContextTypes.DEFAULT_TY
         ])
     
     try:
-        await update.callback_query.edit_message_text(
-            message,
-            reply_markup=keyboard,
-            parse_mode="MarkdownV2",
-            disable_web_page_preview=True,
-        )
+        photo_path = IMAGE_PATHS['points_menu']
+        await safe_edit_or_reply_photo(update.callback_query.message, photo_path, message, reply_markup=keyboard, parse_mode="MarkdownV2")
     except Exception as e:
         logger.exception(f"spend_points_callback: failed to edit message: {e}")
 
@@ -4145,7 +4240,8 @@ async def referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [UIButtons.back_button()]
     ])
     
-    await safe_edit_or_reply(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML")
+    photo_path = IMAGE_PATHS['referral_menu']
+    await safe_edit_or_reply_photo(update.callback_query.message, photo_path, message, reply_markup=keyboard, parse_mode="HTML")
 
 async def rename_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик переименования ключа"""
@@ -4436,7 +4532,8 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для админ-меню
     admin_menu_text = UIMessages.admin_menu_message()
-    await safe_edit_or_reply(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    photo_path = IMAGE_PATHS['admin_menu']
+    await safe_edit_or_reply_photo(message, photo_path, admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
 
 
 # ===== РАССЫЛКА ДЛЯ АДМИНА =====
