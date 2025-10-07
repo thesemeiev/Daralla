@@ -3008,8 +3008,9 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             logs = 'Файл логов не найден. Он будет создан автоматически при работе бота.'
 
-        if len(logs) > 4000:
-            logs = logs[-4000:]
+        # Ограничиваем длину логов для Telegram (максимум 4000 символов)
+        if len(logs) > 3500:  # Оставляем место для HTML тегов
+            logs = logs[-3500:]
 
         # Экранируем HTML и выводим как код
         escaped = html.escape(logs)
@@ -3019,8 +3020,8 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                               parse_mode='HTML', reply_markup=keyboard)
+        await safe_edit_or_reply_universal(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+                               parse_mode='HTML', reply_markup=keyboard, menu_type='admin_errors')
             
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
@@ -3429,7 +3430,7 @@ async def admin_set_days_start(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data['config_message_id'] = query.message.message_id
     context.user_data['config_chat_id'] = query.message.chat_id
     
-    await query.edit_message_text(message, parse_mode="HTML", reply_markup=keyboard)
+    await safe_edit_or_reply_universal(query.message, message, parse_mode="HTML", reply_markup=keyboard, menu_type='admin_errors')
     
     return WAITING_FOR_DAYS
 
@@ -3460,13 +3461,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
             ])
             
-            await context.bot.edit_message_text(
-                chat_id=context.user_data['config_chat_id'],
-                message_id=context.user_data['config_message_id'],
-                text=message,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+            await safe_edit_or_reply_universal(update.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_errors')
             
             return WAITING_FOR_DAYS
         
@@ -3494,13 +3489,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_set_days_cancel")]
         ])
         
-        await context.bot.edit_message_text(
-            chat_id=context.user_data['config_chat_id'],
-            message_id=context.user_data['config_message_id'],
-            text=message,
-            reply_markup=keyboard,
-            parse_mode="HTML"
-        )
+        await safe_edit_or_reply_universal(update.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_errors')
         
         return WAITING_FOR_DAYS
         
@@ -3522,13 +3511,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
             [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
         ])
         
-        await context.bot.edit_message_text(
-            chat_id=context.user_data['config_chat_id'],
-            message_id=context.user_data['config_message_id'],
-            text=message,
-            reply_markup=keyboard,
-            parse_mode="HTML"
-        )
+        await safe_edit_or_reply_universal(update.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_errors')
         
         return WAITING_FOR_DAYS
         
@@ -3541,12 +3524,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
         
-        await context.bot.edit_message_text(
-            chat_id=context.user_data['config_chat_id'],
-            message_id=context.user_data['config_message_id'],
-            text=f'{UIEmojis.ERROR} Ошибка: {e}',
-            parse_mode="HTML"
-        )
+        await safe_edit_or_reply_universal(update.message, f'{UIEmojis.ERROR} Ошибка: {e}', parse_mode="HTML", menu_type='admin_errors')
         
         return ConversationHandler.END
 
@@ -4122,7 +4100,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             f"{UIStyles.description('Выберите ключ для продления:')}"
         )
         
-        await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='extend_key')
             
     except Exception as e:
         logger.error(f"Ошибка при получении списка ключей: {e}")
@@ -4585,7 +4563,7 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
     context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
     keyboard = InlineKeyboardMarkup([[UIButtons.back_button()]])
-    await update.callback_query.message.edit_text(UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    await safe_edit_or_reply_universal(update.callback_query.message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='admin_errors')
     return BROADCAST_WAITING_TEXT
 
 async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4606,10 +4584,14 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = context.user_data.get('broadcast_msg_chat_id')
     msg_id = context.user_data.get('broadcast_msg_id')
     try:
-        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
-            text=UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        # Получаем сообщение для редактирования
+        message = await context.bot.get_chat(chat_id).get_member(update.effective_user.id)
+        # Используем универсальную функцию для редактирования
+        await safe_edit_or_reply_universal(update.effective_message, UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='admin_errors')
+        context.user_data['broadcast_msg_chat_id'] = update.effective_message.chat_id
+        context.user_data['broadcast_msg_id'] = update.effective_message.message_id
     except Exception:
-        await safe_edit_or_reply(update.effective_message, UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        await safe_edit_or_reply_universal(update.effective_message, UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='admin_errors')
         context.user_data['broadcast_msg_chat_id'] = update.effective_message.chat_id
         context.user_data['broadcast_msg_id'] = update.effective_message.message_id
     return BROADCAST_CONFIRM
@@ -4638,8 +4620,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     chat_id = context.user_data.get('broadcast_msg_chat_id')
     msg_id = context.user_data.get('broadcast_msg_id')
     try:
-        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
-            text=f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.", parse_mode="HTML")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.", parse_mode="HTML", menu_type='admin_errors')
     except Exception:
         pass
     for i in range(0, total, batch):
@@ -4678,8 +4659,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         # пауза между батчами
         await asyncio.sleep(1.0)
         try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
-                text=f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.", parse_mode="HTML")
+            await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.", parse_mode="HTML", menu_type='admin_errors')
         except Exception:
             pass
 
@@ -4690,8 +4670,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         [UIButtons.back_button()]
     ])
     try:
-        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
-            text=f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML", menu_type='admin_errors')
     except Exception:
         await safe_edit_or_reply(update.callback_query.message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
     return ConversationHandler.END
