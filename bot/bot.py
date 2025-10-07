@@ -20,6 +20,27 @@ async def safe_edit_or_reply(message, text, reply_markup=None, parse_mode=None, 
     # Дополнительное логирование для отладки
     logger.info(f"SAFE_EDIT_OR_REPLY: message={message}, text_length={len(text) if text else 0}, reply_markup={reply_markup is not None}")
     
+    # Проверяем, есть ли у сообщения фото
+    if message.photo:
+        # Если сообщение содержит фото, используем edit_caption
+        try:
+            await message.edit_caption(
+                caption=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+            return
+        except Exception as e:
+            logger.warning(f"Failed to edit caption, falling back to reply: {e}")
+            # Fallback: отправляем новое сообщение
+            await message.reply_text(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+                disable_web_page_preview=disable_web_page_preview
+            )
+            return
+    
     # Максимальное количество попыток для сетевых ошибок
     max_retries = 3
     retry_delay = 2  # секунды
@@ -115,26 +136,28 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
     for attempt in range(max_retries):
         try:
             # Пытаемся отредактировать существующее сообщение
-            await message.edit_media(
-                media=InputMediaPhoto(
-                    media=open(photo_path, 'rb'),
-                    caption=caption,
-                    parse_mode=parse_mode
-                ),
-                reply_markup=reply_markup
-            )
+            with open(photo_path, 'rb') as photo_file:
+                await message.edit_media(
+                    media=InputMediaPhoto(
+                        media=photo_file,
+                        caption=caption,
+                        parse_mode=parse_mode
+                    ),
+                    reply_markup=reply_markup
+                )
             return  # Успешно отправлено
         except telegram.error.BadRequest as e:
             if "can't be edited" in str(e) and hasattr(message, 'reply_photo'):
                 # Пробуем отправить как новое сообщение с повторными попытками
                 for reply_attempt in range(max_retries):
                     try:
-                        await message.reply_photo(
-                            photo=open(photo_path, 'rb'),
-                            caption=caption,
-                            reply_markup=reply_markup,
-                            parse_mode=parse_mode
-                        )
+                        with open(photo_path, 'rb') as photo_file:
+                            await message.reply_photo(
+                                photo=photo_file,
+                                caption=caption,
+                                reply_markup=reply_markup,
+                                parse_mode=parse_mode
+                            )
                         return  # Успешно отправлено
                     except telegram.error.NetworkError as net_err:
                         if reply_attempt < max_retries - 1:
@@ -145,12 +168,13 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
                             raise
             elif "can't parse entities" in str(e) and hasattr(message, 'reply_photo'):
                 # Фолбэк: отправляем как обычный текст без форматирования
-                await message.reply_photo(
-                    photo=open(photo_path, 'rb'),
-                    caption=caption,
-                    reply_markup=reply_markup,
-                    parse_mode=None
-                )
+                with open(photo_path, 'rb') as photo_file:
+                    await message.reply_photo(
+                        photo=photo_file,
+                        caption=caption,
+                        reply_markup=reply_markup,
+                        parse_mode=None
+                    )
                 return
             elif "Message is not modified" in str(e):
                 # Сообщение не изменилось, это нормально
@@ -159,12 +183,13 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
                 # Другие ошибки - пробуем отправить как новое сообщение
                 if hasattr(message, 'reply_photo'):
                     try:
-                        await message.reply_photo(
-                            photo=open(photo_path, 'rb'),
-                            caption=caption,
-                            reply_markup=reply_markup,
-                            parse_mode=parse_mode
-                        )
+                        with open(photo_path, 'rb') as photo_file:
+                            await message.reply_photo(
+                                photo=photo_file,
+                                caption=caption,
+                                reply_markup=reply_markup,
+                                parse_mode=parse_mode
+                            )
                         return
                     except:
                         raise e  # Если и это не удалось, пробрасываем исходную ошибку
@@ -172,12 +197,13 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
                     raise
         except Exception as e:
             if hasattr(message, 'reply_photo'):
-                await message.reply_photo(
-                    photo=open(photo_path, 'rb'),
-                    caption=caption,
-                    reply_markup=reply_markup,
-                    parse_mode=parse_mode
-                )
+                with open(photo_path, 'rb') as photo_file:
+                    await message.reply_photo(
+                        photo=photo_file,
+                        caption=caption,
+                        reply_markup=reply_markup,
+                        parse_mode=parse_mode
+                    )
             else:
                 raise
 
