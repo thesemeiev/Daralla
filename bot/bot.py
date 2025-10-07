@@ -3064,13 +3064,11 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            # Если сообщение содержит фото, сначала удаляем его
+            # Если сообщение содержит фото, удаляем его и отправляем новое
             if message_obj.photo:
-                from telegram import InputMediaPhoto
-                await message_obj.edit_media(
-                    media=InputMediaPhoto(media="", caption=f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>"),
-                    reply_markup=keyboard
-                )
+                await message_obj.delete()
+                await message_obj.chat.send_message(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+                                                   parse_mode='HTML', reply_markup=keyboard)
             else:
                 await message_obj.edit_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
                                            parse_mode='HTML', reply_markup=keyboard)
@@ -3088,13 +3086,10 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            # Если сообщение содержит фото, сначала удаляем его
+            # Если сообщение содержит фото, удаляем его и отправляем новое
             if message_obj.photo:
-                from telegram import InputMediaPhoto
-                await message_obj.edit_media(
-                    media=InputMediaPhoto(media="", caption=f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}'),
-                    reply_markup=keyboard
-                )
+                await message_obj.delete()
+                await message_obj.chat.send_message(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
             else:
                 await message_obj.edit_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
         except Exception as e:
@@ -3135,13 +3130,10 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            # Если сообщение содержит фото, сначала удаляем его
+            # Если сообщение содержит фото, удаляем его и отправляем новое
             if message_obj.photo:
-                from telegram import InputMediaPhoto
-                await message_obj.edit_media(
-                    media=InputMediaPhoto(media="", caption=dashboard_text),
-                    reply_markup=keyboard
-                )
+                await message_obj.delete()
+                await message_obj.chat.send_message(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
             else:
                 await message_obj.edit_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
         except Exception as e:
@@ -3157,13 +3149,10 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Принудительно редактируем как текстовое сообщение (убираем фото)
         try:
-            # Если сообщение содержит фото, сначала удаляем его
+            # Если сообщение содержит фото, удаляем его и отправляем новое
             if message_obj.photo:
-                from telegram import InputMediaPhoto
-                await message_obj.edit_media(
-                    media=InputMediaPhoto(media="", caption=f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}"),
-                    reply_markup=keyboard
-                )
+                await message_obj.delete()
+                await message_obj.chat.send_message(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
             else:
                 await message_obj.edit_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
         except Exception as e:
@@ -4616,13 +4605,10 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Принудительно редактируем как текстовое сообщение (убираем фото)
     try:
-        # Если сообщение содержит фото, сначала удаляем его
+        # Если сообщение содержит фото, удаляем его и отправляем новое
         if message.photo:
-            from telegram import InputMediaPhoto
-            await message.edit_media(
-                media=InputMediaPhoto(media="", caption=admin_menu_text),
-                reply_markup=keyboard
-            )
+            await message.delete()
+            await message.chat.send_message(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
         else:
             await message.edit_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
