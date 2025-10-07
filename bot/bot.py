@@ -309,11 +309,19 @@ ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if a
 IMAGE_PATHS = {
     'main_menu': 'images/main_menu.jpg',
     'instruction_menu': 'images/instruction_menu.jpg',
+    'instruction_platform': 'images/instruction_menu.jpg',  # Используем то же изображение
     'buy_menu': 'images/buy_menu.jpg',
     'mykeys_menu': 'images/mykeys_menu.jpg',
     'admin_menu': 'images/admin_menu.jpg',
+    'admin_errors': 'images/admin_menu.jpg',  # Используем то же изображение
+    'admin_notifications': 'images/admin_menu.jpg',  # Используем то же изображение
+    'admin_check_servers': 'images/admin_menu.jpg',  # Используем то же изображение
     'points_menu': 'images/points_menu.jpg',
-    'referral_menu': 'images/referral_menu.jpg'
+    'referral_menu': 'images/referral_menu.jpg',
+    'server_selection': 'images/buy_menu.jpg',  # Используем изображение покупки
+    'extend_key': 'images/mykeys_menu.jpg',  # Используем изображение ключей
+    'rename_key': 'images/mykeys_menu.jpg',  # Используем изображение ключей
+    'broadcast': 'images/admin_menu.jpg'  # Используем админ изображение
 }
 
 # Проверяем наличие обязательных переменных
@@ -1456,7 +1464,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
     ])
-    await safe_edit_or_reply(query.message, texts.get(data, "Инструкция не найдена."), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    await safe_edit_or_reply_universal(query.message, texts.get(data, "Инструкция не найдена."), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='instruction_platform')
 
 async def update_payment_activation(payment_id: str, activated: int):
     import aiosqlite
@@ -3028,7 +3036,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
+        await safe_edit_or_reply_universal(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard, menu_type='admin_errors')
 
 async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Дашборд уведомлений для админа"""
@@ -3061,7 +3069,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_notifications')
         
     except Exception as e:
         logger.error(f"Ошибка в admin_notifications: {e}")
@@ -3069,7 +3077,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
+        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard, menu_type='admin_notifications')
 
 
 
@@ -3156,14 +3164,14 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, message, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_check_servers')
     except Exception as e:
         logger.exception("Ошибка в admin_check_servers")
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard)
+        await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type='admin_check_servers')
 
 
 # Callback для продления ключей
@@ -3272,7 +3280,7 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"{UIStyles.description('Выберите период продления:')}"
     )
     
-    await safe_edit_or_reply(query.message, message_text, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(query.message, message_text, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
 
 # Callback для выбора периода продления
 async def extend_period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3703,7 +3711,7 @@ async def server_selection_menu(update: Update, context: ContextTypes.DEFAULT_TY
     
     message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{location_info_text}"
     
-    await safe_edit_or_reply(message, message_text, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(message, message_text, reply_markup=keyboard, parse_mode="HTML", menu_type='server_selection')
 
 # Обработчик выбора сервера
 async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4334,7 +4342,7 @@ async def rename_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         
-        await safe_edit_or_reply(query.message, message, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply_universal(query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='rename_key')
         
         # Устанавливаем состояние ожидания ввода имени
         context.user_data['waiting_for_key_name'] = True
