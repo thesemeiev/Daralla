@@ -4360,13 +4360,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+            await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
         return
@@ -4383,13 +4377,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+            await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
         return
@@ -4407,13 +4395,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
+                await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
             return
@@ -4431,13 +4413,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
+                await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
             return
@@ -4467,13 +4443,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=success_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
+                await safe_edit_or_reply_universal(update.callback_query.message, success_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
         else:
@@ -4487,13 +4457,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
+                await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
     
@@ -4509,13 +4473,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+            await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
         except Exception as edit_e:
             logger.error(f"Ошибка редактирования сообщения: {edit_e}")
 
