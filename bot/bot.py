@@ -317,7 +317,11 @@ IMAGE_PATHS = {
     'referral_menu': 'images/referral_menu.jpg',
     'server_selection': 'images/server_selection.jpg',
     'extend_key': 'images/extend_key.jpg',
-    'rename_key': 'images/rename_key.jpg'
+    'rename_key': 'images/rename_key.jpg',
+    'admin_menu': 'images/admin_menu.jpg',
+    'admin_errors': 'images/admin_errors.jpg',
+    'admin_notifications': 'images/admin_notifications.jpg',
+    'admin_check_servers': 'images/admin_check_servers.jpg'
 }
 
 # Проверяем наличие обязательных переменных
@@ -3062,20 +3066,9 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         message_obj = update.message if update.message else update.callback_query.message
         
-        # Принудительно редактируем как текстовое сообщение (убираем фото)
-        try:
-            # Если сообщение содержит фото, удаляем его и отправляем новое
-            if message_obj.photo:
-                await message_obj.delete()
-                await message_obj.chat.send_message(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                                                   parse_mode='HTML', reply_markup=keyboard)
-            else:
-                await message_obj.edit_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                                           parse_mode='HTML', reply_markup=keyboard)
-        except Exception as e:
-            logger.warning(f"Failed to edit logs as text, falling back to reply: {e}")
-            await message_obj.reply_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                                       parse_mode='HTML', reply_markup=keyboard)
+        # Используем фото для логов
+        logs_text = f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>"
+        await safe_edit_or_reply_universal(message_obj, logs_text, reply_markup=keyboard, parse_mode='HTML', menu_type='admin_errors')
             
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
@@ -3084,17 +3077,9 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         message_obj = update.message if update.message else update.callback_query.message
         
-        # Принудительно редактируем как текстовое сообщение (убираем фото)
-        try:
-            # Если сообщение содержит фото, удаляем его и отправляем новое
-            if message_obj.photo:
-                await message_obj.delete()
-                await message_obj.chat.send_message(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
-            else:
-                await message_obj.edit_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
-        except Exception as e:
-            logger.warning(f"Failed to edit error message as text, falling back to reply: {e}")
-            await message_obj.reply_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
+        # Используем фото для ошибки логов
+        error_text = f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}'
+        await safe_edit_or_reply_universal(message_obj, error_text, reply_markup=keyboard, menu_type='admin_errors')
 
 async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Дашборд уведомлений для админа"""
@@ -3128,17 +3113,8 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         message_obj = update.message if update.message else update.callback_query.message
         
-        # Принудительно редактируем как текстовое сообщение (убираем фото)
-        try:
-            # Если сообщение содержит фото, удаляем его и отправляем новое
-            if message_obj.photo:
-                await message_obj.delete()
-                await message_obj.chat.send_message(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
-            else:
-                await message_obj.edit_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
-        except Exception as e:
-            logger.warning(f"Failed to edit notifications as text, falling back to reply: {e}")
-            await message_obj.reply_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
+        # Используем фото для уведомлений
+        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_notifications')
         
     except Exception as e:
         logger.error(f"Ошибка в admin_notifications: {e}")
@@ -3147,17 +3123,9 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         message_obj = update.message if update.message else update.callback_query.message
         
-        # Принудительно редактируем как текстовое сообщение (убираем фото)
-        try:
-            # Если сообщение содержит фото, удаляем его и отправляем новое
-            if message_obj.photo:
-                await message_obj.delete()
-                await message_obj.chat.send_message(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
-            else:
-                await message_obj.edit_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
-        except Exception as e:
-            logger.warning(f"Failed to edit error message as text, falling back to reply: {e}")
-            await message_obj.reply_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
+        # Используем фото для ошибки уведомлений
+        error_text = f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}"
+        await safe_edit_or_reply_universal(message_obj, error_text, reply_markup=keyboard, menu_type='admin_notifications')
 
 
 
@@ -4600,20 +4568,9 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("admin_menu: message is None")
         return
     
-    # Используем единый стиль для админ-меню
+    # Используем единый стиль для админ-меню с фото
     admin_menu_text = UIMessages.admin_menu_message()
-    
-    # Принудительно редактируем как текстовое сообщение (убираем фото)
-    try:
-        # Если сообщение содержит фото, удаляем его и отправляем новое
-        if message.photo:
-            await message.delete()
-            await message.chat.send_message(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
-        else:
-            await message.edit_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
-    except Exception as e:
-        logger.warning(f"Failed to edit admin menu as text, falling back to reply: {e}")
-        await message.reply_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    await safe_edit_or_reply_universal(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
 
 
 # ===== РАССЫЛКА ДЛЯ АДМИНА =====
