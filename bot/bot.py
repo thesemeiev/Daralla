@@ -128,7 +128,7 @@ from .keys_db import (
 )
 
 
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
 
@@ -523,16 +523,34 @@ class X3:
                     return True
         return False
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+        retry=retry_if_result(lambda x: x and x.status_code != 404)  # Повторять только если не 404
+    )
     def list(self, timeout=15):
         try:
-            response = self.ses.get(f'{self.host}/panel/api/inbounds/list', json=self.data, timeout=timeout)
+            url = f'{self.host}/panel/api/inbounds/list'
+            logger.info(f"Отправка запроса к {url}")
+            
+            # Проверяем доступность сервера
+            try:
+                health_check = self.ses.get(f'{self.host}/ping', timeout=5)
+                logger.info(f"Проверка доступности сервера {self.host}: {health_check.status_code}")
+            except Exception as e:
+                logger.warning(f"Сервер {self.host} недоступен: {e}")
+            
+            response = self.ses.get(url, json=self.data, timeout=timeout)
+            logger.info(f"XUI API Response - URL: {url}")
             logger.info(f"XUI API Response - Status: {response.status_code}, Headers: {dict(response.headers)}")
             logger.info(f"XUI API Response - Text: {response.text[:500]}...")  # Логируем первые 500 символов
             
             # Проверяем статус ответа
             if response.status_code != 200:
-                logger.error(f"XUI API вернул неверный статус: {response.status_code}")
+                logger.error(f"XUI API вернул неверный статус: {response.status_code} для URL {url}")
+                if response.status_code == 404:
+                    logger.error(f"Endpoint не найден на сервере {self.host}. Возможно, сервер не поддерживает API или требует обновления.")
+                    return None  # Прекращаем попытки при 404
                 raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
             
             # Проверяем, что ответ не пустой
@@ -2735,7 +2753,7 @@ class UIMessages:
         """Сообщение выбора сервера"""
         return (
             f"{UIStyles.header('Выбор сервера')}\n\n"
-            f"{UIStyles.description('Выберите сервер для вашего VPN-ключа:')}\n"
+            f"{UIStyles.description('Выберите локацию для вашего VPN-ключа:')}\n"
             f"{UIStyles.info_message('Рекомендуется выбрать ближайший к вам сервер для лучшей скорости.')}"
         )
     
