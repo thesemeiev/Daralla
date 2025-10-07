@@ -3057,8 +3057,8 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         escaped = html.escape(logs)
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_menu")]
+            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors_refresh")],
+            [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
         await safe_edit_or_reply(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
@@ -3067,7 +3067,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_menu")]
+            [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
         await safe_edit_or_reply(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
@@ -3098,7 +3098,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         dashboard_text = await notification_manager.get_notification_dashboard()
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_notifications")],
+            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_notifications_refresh")],
             [UIButtons.back_button()]
         ])
         
@@ -4769,8 +4769,10 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
+    app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors_refresh$"))
     app.add_handler(CallbackQueryHandler(admin_check_servers, pattern="^admin_check_servers$"))
     app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications$"))
+    app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications_refresh$"))
     
     # Рассылка
     admin_broadcast_conv = ConversationHandler(
