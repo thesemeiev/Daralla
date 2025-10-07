@@ -3890,11 +3890,11 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     elif prev_state == 'admin_menu':
         await admin_menu(update, context)
     elif prev_state == 'admin_errors':
-        await admin_errors(update, context)
+        await admin_menu(update, context)
     elif prev_state == 'admin_check_servers':
-        await admin_check_servers(update, context)
+        await admin_menu(update, context)
     elif prev_state == 'admin_notifications':
-        await admin_notifications(update, context)
+        await admin_menu(update, context)
     elif prev_state == 'buy_menu':
         await buy_menu_handler(update, context)
     else:
