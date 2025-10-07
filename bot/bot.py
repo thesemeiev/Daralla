@@ -3057,7 +3057,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_menu")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
         await safe_edit_or_reply_universal(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
@@ -3066,7 +3066,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_menu")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
         await safe_edit_or_reply_universal(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
@@ -3102,7 +3102,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_notifications')
+        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Ошибка в admin_notifications: {e}")
@@ -3110,7 +3110,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard, menu_type='admin_notifications')
+        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
 
 
 
