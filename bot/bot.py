@@ -3061,8 +3061,15 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
-                               parse_mode='HTML', reply_markup=keyboard)
+        
+        # Принудительно редактируем как текстовое сообщение (убираем фото)
+        try:
+            await message_obj.edit_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+                                       parse_mode='HTML', reply_markup=keyboard)
+        except Exception as e:
+            logger.warning(f"Failed to edit logs as text, falling back to reply: {e}")
+            await message_obj.reply_text(f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+                                       parse_mode='HTML', reply_markup=keyboard)
             
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
@@ -3070,7 +3077,13 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
+        
+        # Принудительно редактируем как текстовое сообщение (убираем фото)
+        try:
+            await message_obj.edit_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
+        except Exception as e:
+            logger.warning(f"Failed to edit error message as text, falling back to reply: {e}")
+            await message_obj.reply_text(f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
 
 async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Дашборд уведомлений для админа"""
@@ -3103,7 +3116,13 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML")
+        
+        # Принудительно редактируем как текстовое сообщение (убираем фото)
+        try:
+            await message_obj.edit_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception as e:
+            logger.warning(f"Failed to edit notifications as text, falling back to reply: {e}")
+            await message_obj.reply_text(dashboard_text, reply_markup=keyboard, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Ошибка в admin_notifications: {e}")
@@ -3111,7 +3130,13 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
+        
+        # Принудительно редактируем как текстовое сообщение (убираем фото)
+        try:
+            await message_obj.edit_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
+        except Exception as e:
+            logger.warning(f"Failed to edit error message as text, falling back to reply: {e}")
+            await message_obj.reply_text(f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
 
 
 
@@ -4556,7 +4581,13 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для админ-меню
     admin_menu_text = UIMessages.admin_menu_message()
-    await safe_edit_or_reply(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    
+    # Принудительно редактируем как текстовое сообщение (убираем фото)
+    try:
+        await message.edit_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
+    except Exception as e:
+        logger.warning(f"Failed to edit admin menu as text, falling back to reply: {e}")
+        await message.reply_text(admin_menu_text, reply_markup=keyboard, parse_mode="HTML")
 
 
 # ===== РАССЫЛКА ДЛЯ АДМИНА =====
