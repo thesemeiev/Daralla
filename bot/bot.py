@@ -223,6 +223,75 @@ async def safe_edit_or_reply_universal(message, text, reply_markup=None, parse_m
     # Иначе используем обычное текстовое сообщение
     await safe_edit_or_reply(message, text, reply_markup, parse_mode, disable_web_page_preview)
 
+async def safe_edit_or_reply_text_only(message, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
+    """Функция для принудительного редактирования сообщения как текстового (без фото)"""
+    if message is None:
+        logger.error("safe_edit_or_reply_text_only: message is None")
+        return
+    
+    # Максимальное количество попыток для сетевых ошибок
+    max_retries = 3
+    retry_delay = 2  # секунды
+    
+    for attempt in range(max_retries):
+        try:
+            await message.edit_text(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+                disable_web_page_preview=disable_web_page_preview
+            )
+            return  # Успешно отправлено
+        except telegram.error.BadRequest as e:
+            if "can't be edited" in str(e) and hasattr(message, 'reply_text'):
+                # Пробуем отправить как новое сообщение с повторными попытками
+                for reply_attempt in range(max_retries):
+                    try:
+                        await message.reply_text(
+                            text,
+                            reply_markup=reply_markup,
+                            parse_mode=parse_mode,
+                            disable_web_page_preview=disable_web_page_preview
+                        )
+                        return
+                    except telegram.error.NetworkError as net_err:
+                        if reply_attempt < max_retries - 1:
+                            logger.warning(f"Сетевая ошибка при отправке сообщения (попытка {reply_attempt + 1}/{max_retries}): {net_err}")
+                            await asyncio.sleep(retry_delay * (reply_attempt + 1))
+                        else:
+                            logger.error(f"Не удалось отправить сообщение после {max_retries} попыток: {net_err}")
+                            raise
+            elif "can't parse entities" in str(e).lower() and hasattr(message, 'reply_text'):
+                await message.reply_text(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=None,
+                    disable_web_page_preview=disable_web_page_preview
+                )
+                return
+            elif "Message is not modified" in str(e):
+                return
+            else:
+                if hasattr(message, 'reply_text'):
+                    await message.reply_text(
+                        text,
+                        reply_markup=reply_markup,
+                        parse_mode=parse_mode,
+                        disable_web_page_preview=disable_web_page_preview
+                    )
+                else:
+                    raise
+        except Exception as e:
+            if hasattr(message, 'reply_text'):
+                await message.reply_text(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                    disable_web_page_preview=disable_web_page_preview
+                )
+            else:
+                raise
+
 # Определяем путь к файлу .env
 current_dir = pathlib.Path(__file__).parent
 project_root = current_dir.parent
@@ -3060,7 +3129,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_menu")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
+        await safe_edit_or_reply_text_only(message_obj, f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>", 
                                parse_mode='HTML', reply_markup=keyboard)
             
     except Exception as e:
@@ -3069,7 +3138,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_menu")]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
+        await safe_edit_or_reply_text_only(message_obj, f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}', reply_markup=keyboard)
 
 async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Дашборд уведомлений для админа"""
@@ -3102,7 +3171,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply_text_only(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Ошибка в admin_notifications: {e}")
@@ -3110,7 +3179,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else update.callback_query.message
-        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
+        await safe_edit_or_reply_text_only(message_obj, f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}", reply_markup=keyboard)
 
 
 
