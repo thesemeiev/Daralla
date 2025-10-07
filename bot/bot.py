@@ -312,16 +312,11 @@ IMAGE_PATHS = {
     'instruction_platform': 'images/instruction_platform.jpg',
     'buy_menu': 'images/buy_menu.jpg',
     'mykeys_menu': 'images/mykeys_menu.jpg',
-    'admin_menu': 'images/admin_menu.jpg',
-    'admin_errors': 'images/admin_errors.jpg',
-    'admin_notifications': 'images/admin_notifications.jpg',
-    'admin_check_servers': 'images/admin_check_servers.jpg',
     'points_menu': 'images/points_menu.jpg',
     'referral_menu': 'images/referral_menu.jpg',
     'server_selection': 'images/server_selection.jpg',
     'extend_key': 'images/extend_key.jpg',
-    'rename_key': 'images/rename_key.jpg',
-    'broadcast': 'images/broadcast.jpg'
+    'rename_key': 'images/rename_key.jpg'
 }
 
 # Проверяем наличие обязательных переменных
