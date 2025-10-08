@@ -3951,6 +3951,9 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["pending_period"] = "3month"
         context.user_data["pending_price"] = "250.00"
     
+    # Обновляем навигационный стек
+    push_nav(context, 'buy_menu')
+    
     # Переходим к выбору сервера
     await server_selection_menu(update, context)
 
@@ -4118,6 +4121,9 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     # Сохраняем выбранную локацию
     context.user_data["selected_location"] = selected_location
+    
+    # Обновляем навигационный стек
+    push_nav(context, 'server_selection')
     
     # Получаем сохраненные данные
     period = context.user_data.get("pending_period")
