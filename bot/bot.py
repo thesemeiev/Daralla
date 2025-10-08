@@ -2164,38 +2164,36 @@ def create_webhook_app(bot_app):
             
             # Очистка данных теперь выполняется отдельной задачей cleanup_old_payments_task()
             
-            # Запускаем обработку платежа в отдельном потоке с изолированным event loop
-            def process_payment():
-                import asyncio
-                # Создаем новый event loop для этого потока
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    # Запускаем обработку платежа
+            # Запускаем обработку платежа в основном event loop бота
+            try:
+                # Получаем основной event loop бота
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Если event loop уже запущен, создаем задачу
+                    asyncio.create_task(process_payment_webhook(bot_app, payment_id, status))
+                    logger.info("🔔 WEBHOOK: Задача обработки платежа добавлена в основной event loop")
+                else:
+                    # Если event loop не запущен, запускаем его
                     loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
-                except Exception as e:
-                    logger.error(f"Ошибка обработки платежа в webhook: {e}")
-                finally:
-                    # Закрываем event loop
+                    logger.info("🔔 WEBHOOK: Платеж обработан в основном event loop")
+            except Exception as e:
+                logger.error(f"Ошибка обработки платежа в webhook: {e}")
+                # Fallback: используем отдельный поток только в случае ошибки
+                def process_payment_fallback():
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
                     try:
-                        # Даем время на завершение всех операций
-                        import time
-                        time.sleep(1)
-                        
-                        # Отменяем все pending задачи
-                        pending = asyncio.all_tasks(loop)
-                        for task in pending:
-                            task.cancel()
-                        # Ждем завершения отмененных задач
-                        if pending:
-                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    except Exception as e:
-                        logger.warning(f"Ошибка при закрытии event loop: {e}")
+                        loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
+                    except Exception as fallback_error:
+                        logger.error(f"Ошибка fallback обработки платежа: {fallback_error}")
                     finally:
                         loop.close()
-            
-            thread = threading.Thread(target=process_payment, daemon=True)
-            thread.start()
+                
+                import threading
+                thread = threading.Thread(target=process_payment_fallback, daemon=True)
+                thread.start()
+                logger.info("🔔 WEBHOOK: Использован fallback поток для обработки платежа")
             
             return jsonify({'status': 'ok'})
             
