@@ -2492,15 +2492,15 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="main_menu")]
+                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
                     ])
                     
                     # Формируем полное сообщение о покупке
                     success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
                     full_message = success_text + msg
                     
-                    # Кнопка "Назад" ведет прямо в главное меню (callback_data="main_menu")
-                    # Это простое решение для webhook'ов, которые не имеют доступа к навигационному стеку
+                    # Кнопка "Назад" использует universal_back_callback для правильной навигации
+                    # Это решает проблему двойного нажатия после webhook'ов
                     
                     # Получаем message_id из мета-данных платежа
                     payment_info = await get_payment_by_id(payment_id)
@@ -4186,10 +4186,16 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Navigating to {prev_state}")
     
-    # Если стек пустой — возвращаемся в главное меню
+    # Если стек пустой — проверяем, не находимся ли мы в сообщении с успешной покупкой
     if prev_state is None:
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, calling start()")
-        await start(update, context)
+        # Проверяем, есть ли в сообщении текст о успешной покупке
+        message_text = query.message.text or query.message.caption or ""
+        if "успешно" in message_text.lower() or "активирован" in message_text.lower() or "ключ" in message_text.lower():
+            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, but in success message, calling edit_main_menu")
+            await edit_main_menu(update, context)
+        else:
+            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, calling start()")
+            await start(update, context)
     elif prev_state == 'main_menu':
         # Если возвращаемся в main_menu, редактируем существующее сообщение
         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'main_menu', calling edit_main_menu")
