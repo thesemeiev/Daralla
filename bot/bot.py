@@ -4669,7 +4669,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MY_KEYS)],
+                [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MYKEYS_MENU)],
                 [UIButtons.back_button()]
             ])
             
@@ -5228,7 +5228,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
 
     # Этот обработчик покрывается навигационной системой - убираем дублирование
-    # app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
  
     # Эти обработчики покрываются навигационной системой - убираем дублирование
