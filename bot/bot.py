@@ -1476,8 +1476,14 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"MAIN_MENU_CALLBACK: Called with callback_data='{query.data}'")
+    logger.info(f"MAIN_MENU_CALLBACK: User ID: {query.from_user.id}")
+    logger.info(f"MAIN_MENU_CALLBACK: Message ID: {query.message.message_id}")
+    
     # Проверяем, не является ли сообщение уже главным меню
     message_text = query.message.text or query.message.caption or ""
+    logger.info(f"MAIN_MENU_CALLBACK: Message text preview: {message_text[:100]}...")
+    
     if "Добро пожаловать" in message_text or "Главное меню" in message_text:
         logger.info("MAIN_MENU_CALLBACK: Message is already main menu, skipping edit")
         return
@@ -4189,6 +4195,7 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Message ID: {query.message.message_id}")
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
     
     # Обычная логика навигации
