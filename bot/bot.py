@@ -3909,6 +3909,22 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await mykey(update, context)
     elif query.data == "instruction":
         await instruction(update, context)
+    elif query.data == "admin_notifications_refresh":
+        # Обновляем админ уведомления
+        if nav_system:
+            nav_system.navigate_to_state(context, NavStates.ADMIN_NOTIFICATIONS)
+        from .menu_handlers import MenuHandlers
+        menu_handlers = MenuHandlers({})
+        await menu_handlers.admin_notifications(update, context)
+    elif query.data == "back":
+        # Обработка кнопки "Назад" через навигационную систему
+        if nav_system:
+            await nav_system.handle_back_navigation(update, context)
+        else:
+            # Fallback - идем в главное меню
+            from .menu_handlers import MenuHandlers
+            menu_handlers = MenuHandlers({})
+            await menu_handlers.main_menu(update, context)
 
 
 # Функция buy_menu_handler удалена - дублирует функциональность из menu_handlers.py
@@ -5238,17 +5254,18 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
 
     # Этот обработчик покрывается навигационной системой - убираем дублирование
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*|admin_notifications_refresh|back)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
  
     # Эти обработчики покрываются навигационной системой - убираем дублирование
     # app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
+    # Эти обработчики покрываются навигационной системой
     # app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
-    app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors_refresh$"))
+    # app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors_refresh$"))
     # app.add_handler(CallbackQueryHandler(admin_check_servers, pattern="^admin_check_servers$"))
     # app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications$"))
-    app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications_refresh$"))
+    # app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications_refresh$"))
     
     # Рассылка
     admin_broadcast_conv = ConversationHandler(
