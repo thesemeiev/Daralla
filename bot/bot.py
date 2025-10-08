@@ -5106,7 +5106,8 @@ if __name__ == '__main__':
             ]
         },
         fallbacks=[
-            CallbackQueryHandler(admin_set_days_cancel, pattern="^admin_set_days_cancel$")
+            CallbackQueryHandler(admin_set_days_cancel, pattern="^admin_set_days_cancel$"),
+            CallbackQueryHandler(universal_back_callback, pattern="^back$")
         ],
         per_user=True,
         per_chat=True,
@@ -5144,7 +5145,10 @@ if __name__ == '__main__':
                 CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$")
             ]
         },
-        fallbacks=[CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$")],
+        fallbacks=[
+            CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"),
+            CallbackQueryHandler(universal_back_callback, pattern="^back$")
+        ],
         per_user=True,
         per_chat=True,
         per_message=False
