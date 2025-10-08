@@ -4118,43 +4118,54 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
     
-    logger.info(f"BACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
     prev_state = pop_nav(context)
-    logger.info(f"BACK: Previous state: {prev_state}")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Previous state: {prev_state}")
     
-    logger.info(f"BACK: Navigating to {prev_state}")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Navigating to {prev_state}")
     
     # Если стек пустой — возвращаемся в главное меню
     if prev_state is None:
-        logger.info("BACK: prev_state is None, calling start()")
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, calling start()")
         await start(update, context)
     elif prev_state == 'main_menu':
         # Если возвращаемся в main_menu, редактируем существующее сообщение
-        logger.info("BACK: prev_state == 'main_menu', calling edit_main_menu")
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'main_menu', calling edit_main_menu")
         await edit_main_menu(update, context)
     elif prev_state == 'instruction_menu':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_menu', calling instruction()")
         await instruction(update, context)
     elif prev_state == 'instruction_platform':
         # Возвращаемся к выбору платформы
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_platform', calling instruction()")
         await instruction(update, context)
 
     elif prev_state == 'payment':
         # После активации ключа возвращаемся в меню "Мои ключи"
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'payment', calling mykey()")
         await mykey(update, context)
     elif prev_state == 'mykeys_menu':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'mykeys_menu', calling mykey()")
         await mykey(update, context)
     elif prev_state == 'admin_menu':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_menu', calling admin_menu()")
         await admin_menu(update, context)
     elif prev_state == 'admin_errors':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_errors', calling admin_menu()")
         await admin_menu(update, context)
     elif prev_state == 'admin_check_servers':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_check_servers', calling admin_menu()")
         await admin_menu(update, context)
     elif prev_state == 'admin_notifications':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_notifications', calling admin_menu()")
         await admin_menu(update, context)
     elif prev_state == 'buy_menu':
+        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'buy_menu', calling buy_menu_handler()")
         await buy_menu_handler(update, context)
     else:
-        logger.warning(f"BACK: Unknown state {prev_state}, returning to main menu")
+        logger.warning(f"🔙 UNIVERSAL_BACK_CALLBACK: Unknown state {prev_state}, returning to main menu")
         await start(update, context)
 
 
