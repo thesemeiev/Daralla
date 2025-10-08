@@ -85,7 +85,7 @@ jobs:
           
           # Create backup structure
           echo "Preparing backup..."
-          sudo mkdir -p backups/data backups/env
+          sudo mkdir -p /root/backups/data /root/backups/env
           timestamp=$(date +'%Y%m%d_%H%M%S')
 
           # Database backup
@@ -93,11 +93,11 @@ jobs:
           if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
             echo "Found databases for backup:"
             ls -l data/*.db
-            sudo tar -czf "backups/data/backup_${timestamp}.tar.gz" data/*.db
-            echo "Database backup created: backups/data/backup_${timestamp}.tar.gz"
+            sudo tar -czf "/root/backups/data/backup_${timestamp}.tar.gz" data/*.db
+            echo "Database backup created: /root/backups/data/backup_${timestamp}.tar.gz"
             
             # Keep only 5 latest backups
-            ls -t backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
+            ls -t /root/backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
           else
             echo "No databases found to backup"
           fi
@@ -105,9 +105,9 @@ jobs:
           # .env backup
           if [ -f ".env" ]; then
             echo "Creating .env backup..."
-            sudo cp .env "backups/env/env_${timestamp}"
+            sudo cp .env "/root/backups/env/env_${timestamp}"
             # Keep only 5 latest .env copies
-            ls -t backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
+            ls -t /root/backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
           fi
           
           # Download code directly to working directory
@@ -145,7 +145,7 @@ jobs:
           echo "Restoring data..."
           
           # Restore databases
-          latest_db_backup=$(ls -t backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
+          latest_db_backup=$(ls -t /root/backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
           if [ -n "$latest_db_backup" ]; then
             echo "Restoring databases from $latest_db_backup..."
             sudo mkdir -p data
@@ -159,7 +159,7 @@ jobs:
           fi
 
           # Restore .env
-          latest_env=$(ls -t backups/env/env_* 2>/dev/null | head -n1)
+          latest_env=$(ls -t /root/backups/env/env_* 2>/dev/null | head -n1)
           if [ -n "$latest_env" ]; then
             echo "Restoring .env from $latest_env..."
             sudo cp "$latest_env" .env
@@ -172,6 +172,12 @@ jobs:
           echo "Checking restored files..."
           echo "Databases:"
           ls -lh data/*.db || echo "Databases not found"
+          
+          # Verify database content
+          if [ -f "data/vpn_keys.db" ]; then
+            echo "Checking vpn_keys.db content..."
+            sudo sqlite3 data/vpn_keys.db "SELECT name FROM sqlite_master WHERE type='table';" || echo "Cannot read vpn_keys.db"
+          fi
           
           # Fix permissions after restoration
           sudo chown -R 1000:1000 data/ 2>/dev/null || true
