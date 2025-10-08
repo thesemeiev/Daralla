@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from .menu_states import NavStates, CallbackData, STATE_TO_HANDLER
+from menu_states import NavStates, CallbackData, STATE_TO_HANDLER
 
 logger = logging.getLogger(__name__)
 
@@ -91,22 +91,22 @@ class NavigationManager:
         query = update.callback_query
         await query.answer()
         
-        logger.info(f"🔙 BACK_NAVIGATION: User {query.from_user.id}")
-        logger.info(f"🔙 BACK_NAVIGATION: Current stack: {self.get_stack(context)}")
+        logger.info(f"← BACK_NAVIGATION: User {query.from_user.id}")
+        logger.info(f"← BACK_NAVIGATION: Current stack: {self.get_stack(context)}")
         
         # Получаем предыдущее состояние
         prev_state = self.pop_state(context)
         
         if prev_state is None:
             # Стек пустой - идем в главное меню
-            logger.info("🔙 BACK_NAVIGATION: Empty stack, going to main menu")
+            logger.info("← BACK_NAVIGATION: Empty stack, going to main menu")
             return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
         # Специальная логика для webhook-сообщений
         if prev_state == NavStates.SERVER_SELECTION:
             message = query.message
             if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
-                logger.info("🔙 BACK_NAVIGATION: Server selection with success message, clearing stack and going to main menu")
+                logger.info("← BACK_NAVIGATION: Server selection with success message, clearing stack and going to main menu")
                 self.clear_stack(context)
                 return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
@@ -120,7 +120,7 @@ class NavigationBuilder:
     @staticmethod
     def create_back_button(text: str = "Назад", callback_data: str = CallbackData.BACK) -> InlineKeyboardButton:
         """Создает кнопку 'Назад'"""
-        return InlineKeyboardButton(f" {text}", callback_data=callback_data)
+        return InlineKeyboardButton(f"← {text}", callback_data=callback_data)
     
     @staticmethod
     def create_main_menu_button(text: str = "Главное меню", callback_data: str = CallbackData.MAIN_MENU) -> InlineKeyboardButton:

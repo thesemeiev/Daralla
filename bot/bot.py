@@ -13,9 +13,12 @@ import telegram
 from telegram.helpers import escape_markdown
 
 # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-from .navigation_integration import NavigationIntegration
-from .menu_states import NavStates, CallbackData
-from .navigation import nav_manager, NavigationBuilder
+from menu_handlers import NavigationIntegration, NavigationSystem
+from menu_states import NavStates, CallbackData
+from navigation import nav_manager, NavigationBuilder
+
+# Глобальная навигационная система (будет инициализирована в main())
+nav_system = None
 
 async def safe_edit_or_reply(message, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
     if message is None:
@@ -334,7 +337,7 @@ import threading
 import hmac
 import hashlib
 
-from .keys_db import (
+from keys_db import (
     init_payments_db, add_payment, get_payment, get_payment_by_id, update_payment_status, get_all_pending_payments,
     get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
     init_referral_db, save_referral_connection, get_pending_referral, mark_referral_reward_given,
@@ -487,7 +490,7 @@ for i, server in enumerate(SERVERS):
 
 # Настраиваем файловый лог с ротацией в папке data/logs
 try:
-    from .keys_db import DATA_DIR
+    from keys_db import DATA_DIR
 except Exception:
     DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 
@@ -1479,13 +1482,14 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.INSTRUCTION_MENU)
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.INSTRUCTION_MENU)
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     keyboard = NavigationBuilder.create_keyboard_with_back([
-        [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
-        [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
-        [InlineKeyboardButton("Linux", callback_data="instr_linux"), InlineKeyboardButton("Android TV", callback_data="instr_tv")],
-        [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
+        [InlineKeyboardButton("Android", callback_data=CallbackData.INSTR_ANDROID), InlineKeyboardButton("iOS", callback_data=CallbackData.INSTR_IOS)],
+        [InlineKeyboardButton("Windows", callback_data=CallbackData.INSTR_WINDOWS), InlineKeyboardButton("macOS", callback_data=CallbackData.INSTR_MACOS)],
+        [InlineKeyboardButton("Linux", callback_data=CallbackData.INSTR_LINUX), InlineKeyboardButton("Android TV", callback_data=CallbackData.INSTR_TV)],
+        [InlineKeyboardButton("FAQ", callback_data=CallbackData.INSTR_FAQ)],
     ])
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
@@ -1576,13 +1580,14 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "<b>Нужна помощь?</b> Обратитесь в поддержку"
         )
     }
-    if data == "back":
+    if data == CallbackData.BACK:
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         await nav_manager.handle_back_navigation(update, context)
         return
     elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_linux", "instr_tv", "instr_faq"]:
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-        nav_manager.push_state(context, NavStates.INSTRUCTION_PLATFORM)
+        if nav_system:
+            nav_system.navigate_to_state(context, NavStates.INSTRUCTION_PLATFORM)
         
         # Определяем menu_type для каждой платформы
         menu_type_map = {
@@ -1598,13 +1603,13 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         menu_type = menu_type_map.get(data, 'instruction_platform')
         
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+        [NavigationBuilder.create_back_button()]
     ])
     await safe_edit_or_reply_universal(query.message, texts.get(data, "Инструкция не найдена."), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type=menu_type)
 
 async def update_payment_activation(payment_id: str, activated: int):
     import aiosqlite
-    from .keys_db import DB_PATH
+    from keys_db import DB_PATH
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (activated, payment_id))
         await db.commit()
@@ -1616,7 +1621,8 @@ async def update_payment_activation(payment_id: str, activated: int):
 async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment вызвана: price={price}, period={period}")
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.PAYMENT)
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.PAYMENT)
     user = update.effective_user if hasattr(update, 'effective_user') else update.from_user
     user_id = str(user.id)
     logger.info(f"handle_payment: user_id={user_id}")
@@ -1631,7 +1637,7 @@ async def handle_payment(update, context, price, period):
         
         # Проверяем pending платежи пользователя и отменяем только неоплаченные
         import aiosqlite
-        from .keys_db import DB_PATH
+        from keys_db import DB_PATH
         logger.info(f"HANDLE_PAYMENT: Подключаемся к базе данных по пути: {DB_PATH}")
         async with aiosqlite.connect(DB_PATH) as db:
             # Проверяем существование таблицы payments
@@ -1725,7 +1731,7 @@ async def handle_payment(update, context, price, period):
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
+                        [NavigationBuilder.create_back_button()]
                     ])
                     await safe_edit_or_reply(message, msg, reply_markup=keyboard, parse_mode="HTML")
                     
@@ -1835,7 +1841,7 @@ async def handle_payment(update, context, price, period):
                 
                 # Создаем кнопку "Назад"
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+                    [NavigationBuilder.create_back_button()]
                 ])
                 
                 await safe_edit_or_reply_universal(message, payment_text, reply_markup=keyboard, parse_mode="HTML", menu_type='payment')
@@ -1873,7 +1879,8 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.MYKEYS_MENU)
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.MYKEYS_MENU)
     user = update.effective_user
     user_id = str(user.id)
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -1913,7 +1920,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not all_clients:
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
+                [NavigationBuilder.create_back_button()]
             ])
             await safe_edit_or_reply_universal(message, 'У вас нет активных ключей.', reply_markup=keyboard, menu_type='mykeys_menu')
             return
@@ -2002,7 +2009,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard_buttons.append(nav_buttons)
         
         # Кнопка "Назад"
-        keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")])
+        keyboard_buttons.append([NavigationBuilder.create_back_button()])
         
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
@@ -2012,7 +2019,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.exception(f"Ошибка в mykey для user_id={user_id}: {e}")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+            [NavigationBuilder.create_back_button()]
         ])
         await safe_edit_or_reply(message, f'{UIEmojis.ERROR} Ошибка: {e}', reply_markup=keyboard)
 
@@ -2020,8 +2027,8 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def init_all_db():
-    from .keys_db import init_payments_db, DB_PATH, REFERRAL_DB_PATH, DATA_DIR
-    from .notifications_db import init_notifications_db, NOTIFICATIONS_DB_PATH
+    from keys_db import init_payments_db, DB_PATH, REFERRAL_DB_PATH, DATA_DIR
+    from notifications_db import init_notifications_db, NOTIFICATIONS_DB_PATH
     
     # Создаем папку data если её нет
     import os
@@ -2215,8 +2222,8 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Попробовать снова", callback_data="mykey")],
-                        [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MY_KEYS)],
+                        [NavigationBuilder.create_main_menu_button()]
                     ])
                     
                     await safe_edit_message_with_photo(
@@ -2298,8 +2305,8 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     
                     if message_id:
                         keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
-                            [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MY_KEYS)],
+                            [NavigationBuilder.create_main_menu_button()]
                         ])
                         
                         await safe_edit_message_with_photo(
@@ -2436,7 +2443,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+                        [NavigationBuilder.create_back_button()]
                     ])
                     
                     # Формируем полное сообщение о покупке
@@ -2525,8 +2532,8 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
             )
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Попробовать снова", callback_data="buy_menu")],
-                [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.BUY_VPN)],
+                [NavigationBuilder.create_main_menu_button()]
             ])
             
             await safe_edit_message_with_photo(
@@ -2569,8 +2576,8 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 )
                 
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Попробовать снова", callback_data="mykey")],
-                    [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                    [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MY_KEYS)],
+                    [NavigationBuilder.create_main_menu_button()]
                 ])
                 
                 menu_type = 'extend_key'
@@ -2585,8 +2592,8 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 )
                 
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Попробовать снова", callback_data="buy_menu")],
-                    [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                    [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.BUY_VPN)],
+                    [NavigationBuilder.create_main_menu_button()]
                 ])
                 
                 menu_type = 'payment_failed'
@@ -3031,23 +3038,23 @@ class UIButtons:
     def main_menu_buttons(is_admin=False):
         """Кнопки главного меню"""
         buttons = [
-            [InlineKeyboardButton("Купить", callback_data="buy_menu")],
-            [InlineKeyboardButton("Мои ключи", callback_data="mykey"), 
-             InlineKeyboardButton("Инструкция", callback_data="instruction")],
-            [InlineKeyboardButton("Рефералы", callback_data="referral"), 
-             InlineKeyboardButton("Мои баллы", callback_data="points")],
+            [InlineKeyboardButton("Купить", callback_data=CallbackData.BUY_VPN)],
+            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MY_KEYS), 
+             InlineKeyboardButton("Инструкция", callback_data=CallbackData.INSTRUCTION)],
+            [InlineKeyboardButton("Рефералы", callback_data=CallbackData.REFERRAL), 
+             InlineKeyboardButton("Мои баллы", callback_data=CallbackData.POINTS)],
             [InlineKeyboardButton("Наш канал", url="https://t.me/DarallaNews")],
         ]
         
         if is_admin:
-            buttons.append([InlineKeyboardButton("Админ-меню", callback_data="admin_menu")])
+            buttons.append([InlineKeyboardButton("Админ-меню", callback_data=CallbackData.ADMIN_MENU)])
         
         return buttons
     
     @staticmethod
     def back_button():
         """Кнопка назад"""
-        return InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")
+        return NavigationBuilder.create_back_button()
     
     @staticmethod
     def refresh_button(callback_data="refresh"):
@@ -3225,7 +3232,6 @@ class UIMessages:
             
         )
 
-# payment_message_ids удален - теперь используем БД как единый источник истин
 
 # Глобальный словарь для хранения коротких идентификаторов ключей для продления
 # Ключ: короткий_id, Значение: key_email
@@ -3237,9 +3243,9 @@ extension_messages = {}
 
 # Импорт нового модуля уведомлений
 try:
-    from .notifications import NotificationManager
+    from notifications import NotificationManager
 except ImportError:
-    from .notifications import NotificationManager
+    from notifications import NotificationManager
 
 import traceback
 
@@ -3265,7 +3271,8 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.answer()
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-        nav_manager.push_state(context, NavStates.ADMIN_ERRORS)
+        if nav_system:
+            nav_system.navigate_to_state(context, NavStates.ADMIN_ERRORS)
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
@@ -3273,7 +3280,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Читаем ротационный файл логов приложения
-        from .keys_db import DATA_DIR
+        from keys_db import DATA_DIR
         import os
         logs_path = os.path.join(DATA_DIR, 'logs', 'bot.log')
         logs = ''
@@ -3292,7 +3299,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         escaped = html.escape(logs)
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors_refresh")],
+            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=CallbackData.ADMIN_ERRORS_REFRESH)],
             [UIButtons.back_button()]
         ])
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3324,7 +3331,8 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.callback_query:
         await update.callback_query.answer()
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-        nav_manager.push_state(context, NavStates.ADMIN_NOTIFICATIONS)
+        if nav_system:
+            nav_system.navigate_to_state(context, NavStates.ADMIN_NOTIFICATIONS)
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3341,7 +3349,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         dashboard_text = await notification_manager.get_notification_dashboard()
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_notifications_refresh")],
+            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=CallbackData.ADMIN_NOTIFICATIONS_REFRESH)],
             [UIButtons.back_button()]
         ])
         
@@ -3370,7 +3378,8 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.callback_query:
         await update.callback_query.answer()
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-        nav_manager.push_state(context, NavStates.ADMIN_CHECK_SERVERS)
+        if nav_system:
+            nav_system.navigate_to_state(context, NavStates.ADMIN_CHECK_SERVERS)
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
@@ -3441,15 +3450,15 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         message += f"Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_check_servers")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
+            [NavigationBuilder.create_back_button()]
         ])
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_check_servers')
     except Exception as e:
         logger.exception("Ошибка в admin_check_servers")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+            [NavigationBuilder.create_back_button()]
         ])
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type='admin_check_servers')
@@ -3551,7 +3560,7 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("1 месяц - 100₽", callback_data=f"ext_per:month:{short_id}")],
         [InlineKeyboardButton("3 месяца - 250₽", callback_data=f"ext_per:3month:{short_id}")],
-        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data="mykey")]
+        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MY_KEYS)]
     ])
     
     message_text = (
@@ -3604,7 +3613,7 @@ async def extend_period_callback(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.error(f"Ошибка создания платежа для продления: {e}")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data="mykey")]
+            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MY_KEYS)]
         ])
         await safe_edit_or_reply(query.message, "❌ Ошибка при создании платежа. Попробуйте позже.", reply_markup=keyboard)
 
@@ -3637,7 +3646,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += "• `/admin_set_days 30` - установить 30 дней за балл\n"
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
+            [NavigationBuilder.create_back_button()]
         ])
         
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3711,7 +3720,7 @@ async def admin_set_days_start(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # Создаем клавиатуру с кнопкой отмены
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
+        [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.ADMIN_SET_DAYS_CANCEL)]
     ])
     
     # Сохраняем message_id для последующего редактирования
@@ -3779,7 +3788,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
+                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.ADMIN_SET_DAYS_CANCEL)]
             ])
             
             await safe_edit_or_reply_universal(update.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
@@ -3807,7 +3816,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_set_days_cancel")]
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.ADMIN_SET_DAYS_CANCEL)]
         ])
         
         await edit_config_message(message, keyboard)
@@ -3829,7 +3838,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.ADMIN_SET_DAYS_CANCEL)]
         ])
         
         await edit_config_message(message, keyboard)
@@ -3858,8 +3867,12 @@ async def admin_set_days_cancel(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data.pop('config_message_id', None)
     context.user_data.pop('config_chat_id', None)
     
-    # Возвращаемся в админ меню
-    await admin_menu(update, context)
+    # Возвращаемся в админ меню через навигационную систему
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.ADMIN_MENU)
+    from menu_handlers import MenuHandlers
+    menu_handlers = MenuHandlers({})
+    await menu_handlers.admin_menu(update, context)
     
     return ConversationHandler.END
 
@@ -3869,7 +3882,12 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     logger.info(f"Обработка callback: {query.data}")
     if query.data == "buy_menu":
-        await buy_menu_handler(update, context)
+        # Вызываем обработчик из menu_handlers
+        if nav_system:
+            nav_system.navigate_to_state(context, NavStates.BUY_MENU)
+        from menu_handlers import MenuHandlers
+        menu_handlers = MenuHandlers({})
+        await menu_handlers.buy_menu(update, context)
     elif query.data.startswith("select_period_"):
         await select_period_callback(update, context)
     elif query.data.startswith("select_server_"):
@@ -3883,23 +3901,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await instruction(update, context)
 
 
-# Обработчик для кнопки "Купить" в меню покупки
-async def buy_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.BUY_MENU)
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("buy_menu_handler: message is None")
-        return
-    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    keyboard = NavigationBuilder.create_keyboard_with_back([
-        [InlineKeyboardButton("1 месяц — 100₽", callback_data="select_period_month")],
-        [InlineKeyboardButton("3 месяца — 250₽", callback_data="select_period_3month")],
-    ])
-    
-    # Используем единый стиль для сообщения меню покупки
-    buy_menu_text = UIMessages.buy_menu_message()
-    await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
+# Функция buy_menu_handler удалена - дублирует функциональность из menu_handlers.py
 
 # Новый обработчик выбора периода, который переводит к выбору сервера
 async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3915,99 +3917,18 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["pending_price"] = "250.00"
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.BUY_MENU)
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.BUY_MENU)
     
-    # Переходим к выбору сервера
-    await server_selection_menu(update, context)
+    # Переходим к выбору сервера через навигационную систему
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
+    # Вызываем обработчик из menu_handlers
+    from menu_handlers import MenuHandlers
+    menu_handlers = MenuHandlers({})
+    await menu_handlers.server_selection(update, context)
 
-# Меню выбора сервера
-async def server_selection_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.SERVER_SELECTION)
-    
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("server_selection_menu: message is None")
-        return
-    
-    # Проверяем доступность всех серверов
-    health_results = new_client_manager.check_all_servers_health()
-    
-    # Создаем кнопки для локаций с флагами и статусом
-    location_buttons = []
-    location_flags = {
-        "Finland": "🇫🇮",
-        "Latvia": "🇱🇻", 
-        "Estonia": "🇪🇪"
-    }
-    
-    # Формируем текст с информацией о локациях
-    location_info_text = ""
-    
-    for location, servers in SERVERS_BY_LOCATION.items():
-        if not servers:
-            continue
-            
-        # Проверяем доступность серверов в локации
-        available_servers = 0
-        total_servers = 0
-        
-        for server in servers:
-            if server["host"] and server["login"] and server["password"]:
-                total_servers += 1
-                if health_results.get(server['name'], False):
-                    available_servers += 1
-        
-        if total_servers == 0:
-            continue
-            
-        flag = location_flags.get(location)
-        
-        # Определяем статус локации
-        if available_servers > 0:
-            status_icon = UIEmojis.SUCCESS
-            status_text = f"Доступно {available_servers}/{total_servers} серверов"
-            button_text = f"{flag} {location} {status_icon}"
-            callback_data = f"select_server_{location.lower()}"
-        else:
-            status_icon = UIEmojis.ERROR
-            status_text = "Недоступно"
-            button_text = f"{flag} {location} {status_icon}"
-            callback_data = f"server_unavailable_{location.lower()}"
-        
-        location_buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
-        
-        # Добавляем информацию о локации в текст
-        location_info_text += f"{flag} <b>{location}</b> - {status_text}\n"
-    
-    # Добавляем кнопку "Автовыбор" (только если есть доступные серверы)
-    available_servers = sum(1 for is_healthy in health_results.values() if is_healthy)
-    if available_servers > 0:
-        location_buttons.append([InlineKeyboardButton("🎯 Автовыбор", callback_data="select_server_auto")])
-        location_info_text += "<b>🎯 Автовыбор</b> - Локация с наименьшей нагрузкой\n"
-    
-    location_buttons.append([InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="refresh_servers")])
-    
-    # Определяем текст периода и кнопку назад в зависимости от типа покупки
-    pending_period = context.user_data.get("pending_period")
-    if pending_period == "month":
-        period_text = "1 месяц за 100₽"
-        location_buttons.append([UIButtons.back_button()])
-    elif pending_period == "3month":
-        period_text = "3 месяца за 250₽"
-        location_buttons.append([UIButtons.back_button()])
-    elif pending_period == "points_month":
-        period_text = "1 месяц за 1 балл"
-        location_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")])
-    else:
-        period_text = "Неизвестный период"
-        location_buttons.append([UIButtons.back_button()])
-    
-    keyboard = InlineKeyboardMarkup(location_buttons)
-    
-    message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{location_info_text}"
-    
-    await safe_edit_or_reply_universal(message, message_text, reply_markup=keyboard, parse_mode="HTML", menu_type='server_selection')
+# Функция server_selection_menu удалена - дублирует функциональность из menu_handlers.py
 
 # Обработчик выбора сервера
 async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4016,7 +3937,10 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     # Обработка обновления списка серверов
     if query.data == "refresh_servers":
-        await server_selection_menu(update, context)
+        # Вызываем обработчик из menu_handlers
+        from menu_handlers import MenuHandlers
+        menu_handlers = MenuHandlers({})
+        await menu_handlers.server_selection(update, context)
         return
     
     # Обработка недоступных локаций
@@ -4085,7 +4009,8 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["selected_location"] = selected_location
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.SERVER_SELECTION)
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
     
     # Получаем сохраненные данные
     period = context.user_data.get("pending_period")
@@ -4214,9 +4139,9 @@ async def points_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"{icon} {mdv2(trans['amount'])} \\- {mdv2(trans['description'])} \\({mdv2(date_str)}\\)\n"
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Потратить баллы", callback_data="spend_points")],
-        [InlineKeyboardButton("Поделиться ссылкой", callback_data="referral")],
-        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
+        [InlineKeyboardButton("Потратить баллы", callback_data=CallbackData.SPEND_POINTS)],
+        [InlineKeyboardButton("Поделиться ссылкой", callback_data=CallbackData.REFERRAL)],
+        [NavigationBuilder.create_back_button()]
     ])
     
     try:
@@ -4240,8 +4165,8 @@ async def spend_points_callback(update: Update, context: ContextTypes.DEFAULT_TY
             f"1 реферал \\= {mdv2(points_days)} дней VPN"
         )
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Поделиться ссылкой", callback_data="referral")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="points")]
+            [InlineKeyboardButton("Поделиться ссылкой", callback_data=CallbackData.REFERRAL)],
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.POINTS)]
         ])
     else:
         message = (
@@ -4253,9 +4178,9 @@ async def spend_points_callback(update: Update, context: ContextTypes.DEFAULT_TY
             f"Выберите действие:"
         )
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"Купить {mdv2(points_days)} дней за 1 балл", callback_data="buy_with_points")],
-            [InlineKeyboardButton(f"Продлить ключ на {mdv2(points_days)} дней за 1 балл", callback_data="extend_with_points")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="points")]
+            [InlineKeyboardButton(f"Купить {mdv2(points_days)} дней за 1 балл", callback_data=CallbackData.BUY_WITH_POINTS)],
+            [InlineKeyboardButton(f"Продлить ключ на {mdv2(points_days)} дней за 1 балл", callback_data=CallbackData.EXTEND_WITH_POINTS)],
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.POINTS)]
         ])
     
     try:
@@ -4278,8 +4203,13 @@ async def buy_with_points_callback(update: Update, context: ContextTypes.DEFAULT
     context.user_data["pending_period"] = "points_month"
     context.user_data["pending_price"] = "1 балл"
     
-    # Переходим к выбору сервера
-    await server_selection_menu(update, context)
+    # Переходим к выбору сервера через навигационную систему
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
+    # Вызываем обработчик из menu_handlers
+    from menu_handlers import MenuHandlers
+    menu_handlers = MenuHandlers({})
+    await menu_handlers.server_selection(update, context)
 
 async def extend_with_points_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Продление ключа за баллы - выбор ключа"""
@@ -4290,7 +4220,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
     
     if points_info['points'] < 1:
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")]
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SPEND_POINTS)]
         ])
         await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard, menu_type='extend_key')
         return
@@ -4322,7 +4252,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
 
         if not all_clients:
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="spend_points")]
+                [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SPEND_POINTS)]
             ])
             await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard, menu_type='extend_key')
             return
@@ -4354,7 +4284,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             button_text = f"Ключ #{i} ({server_name}) - {expiry_str}"
             keyboard_buttons.append([InlineKeyboardButton(button_text, callback_data=f"extend_points_key:{short_id}")])
         
-        keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="spend_points")])
+        keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SPEND_POINTS)])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
         points_days = await get_config('points_days_per_point', '14')
@@ -4421,7 +4351,7 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
             )
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+                [NavigationBuilder.create_back_button()]
             ])
             
             await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
@@ -4739,7 +4669,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
+                [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MY_KEYS)],
                 [UIButtons.back_button()]
             ])
             
@@ -4802,40 +4732,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as edit_e:
             logger.error(f"Ошибка редактирования сообщения: {edit_e}")
 
-async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_private_chat(update):
-        return
-    
-    if update.effective_user.id not in ADMIN_IDS:
-        await safe_edit_or_reply(update.message, 'Нет доступа.')
-        return
-    
-    # Очищаем состояние всех ConversationHandler'ов при входе в админ меню
-    context.user_data.pop('broadcast_text', None)
-    context.user_data.pop('broadcast_msg_chat_id', None)
-    context.user_data.pop('broadcast_msg_id', None)
-    context.user_data.pop('broadcast_details', None)
-    context.user_data.pop('config_message_id', None)
-    context.user_data.pop('config_chat_id', None)
-    
-    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    nav_manager.push_state(context, NavStates.ADMIN_MENU)
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Логи", callback_data="admin_errors")],
-        [InlineKeyboardButton("Проверка серверов", callback_data="admin_check_servers")],
-        [InlineKeyboardButton("Уведомления", callback_data="admin_notifications")],
-        [InlineKeyboardButton("Рассылка", callback_data="admin_broadcast_start")],
-        [InlineKeyboardButton("Изменить дни за балл", callback_data="admin_set_days_start")],
-        [UIButtons.back_button()],
-    ])
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("admin_menu: message is None")
-        return
-    
-    # Используем единый стиль для админ-меню с фото
-    admin_menu_text = UIMessages.admin_menu_message()
-    await safe_edit_or_reply_universal(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
+# Функция admin_menu удалена - дублирует функциональность из menu_handlers.py
 
 
 # ===== РАССЫЛКА ДЛЯ АДМИНА =====
@@ -4853,7 +4750,7 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['broadcast_text'] = None
     context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
     context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_broadcast_back")]])
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.ADMIN_BROADCAST_BACK)]])
     await safe_edit_or_reply_universal(update.callback_query.message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
     return BROADCAST_WAITING_TEXT
 
@@ -4942,8 +4839,8 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
         pass
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Отправить", callback_data="admin_broadcast_send")],
-        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_broadcast_back")]
+        [InlineKeyboardButton("Отправить", callback_data=CallbackData.ADMIN_BROADCAST_SEND)],
+        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.ADMIN_BROADCAST_BACK)]
     ])
     
     # Редактируем исходное сообщение на предпросмотр
@@ -5165,8 +5062,8 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     # сохраняем детали в user_data для кнопок
     context.user_data['broadcast_details'] = details
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Экспорт CSV", callback_data="admin_broadcast_export")],
-        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_broadcast_back")]
+        [InlineKeyboardButton("Экспорт CSV", callback_data=CallbackData.ADMIN_BROADCAST_EXPORT)],
+        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.ADMIN_BROADCAST_BACK)]
     ])
     try:
         await safe_edit_message_with_photo(
@@ -5200,7 +5097,12 @@ async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.pop('broadcast_msg_id', None)
     context.user_data.pop('broadcast_details', None)
     
-    await admin_menu(update, context)
+    # Вызываем обработчик из menu_handlers
+    if nav_system:
+        nav_system.navigate_to_state(context, NavStates.ADMIN_MENU)
+    from menu_handlers import MenuHandlers
+    menu_handlers = MenuHandlers({})
+    await menu_handlers.admin_menu(update, context)
     return ConversationHandler.END
 
 async def admin_broadcast_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -5243,22 +5145,21 @@ if __name__ == '__main__':
     webhook_thread.start()
     logger.info("Webhook сервер запущен на порту 5000")
     
-    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+
     def setup_navigation():
         """Настройка системы навигации"""
         bot_handlers = {
             'edit_main_menu': edit_main_menu,
             'instruction': instruction,
             'instruction_callback': instruction_callback,
-            'buy_menu_handler': buy_menu_handler,
-            'server_selection_menu': server_selection_menu,
+            # 'buy_menu_handler' и 'server_selection_menu' удалены - дублируют функциональность из menu_handlers.py
             'handle_payment': handle_payment,
             'mykey': mykey,
             'points_callback': points_callback,
             'referral_callback': referral_callback,
             'extend_key_callback': extend_key_callback,
             'rename_key_callback': rename_key_callback,
-            'admin_menu': admin_menu,
+            # 'admin_menu' удален - дублирует функциональность из menu_handlers.py
             'admin_errors': admin_errors,
             'admin_notifications': admin_notifications,
             'admin_check_servers': admin_check_servers,
@@ -5270,6 +5171,26 @@ if __name__ == '__main__':
     # Создаем интеграцию навигации
     nav_integration = setup_navigation()
     
+    # Создаем глобальную навигационную систему
+    nav_system = NavigationSystem({
+        'edit_main_menu': edit_main_menu,
+        'instruction': instruction,
+        'instruction_callback': instruction_callback,
+        # 'buy_menu_handler' и 'server_selection_menu' удалены - дублируют функциональность из menu_handlers.py
+        'handle_payment': handle_payment,
+        'mykey': mykey,
+        'points_callback': points_callback,
+        'referral_callback': referral_callback,
+        'extend_key_callback': extend_key_callback,
+        'rename_key_callback': rename_key_callback,
+        # 'admin_menu' удален - дублирует функциональность из menu_handlers.py
+        'admin_errors': admin_errors,
+        'admin_notifications': admin_notifications,
+        'admin_check_servers': admin_check_servers,
+        'admin_broadcast_start': admin_broadcast_start,
+        'admin_set_days_start': admin_set_days_start,
+    })
+    
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler('start', start))
@@ -5277,6 +5198,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('instruction', instruction))
    
     app.add_handler(CommandHandler('check_servers', force_check_servers))
+    # Эти обработчики остаются, так как они не покрываются навигационной системой
     app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^instr_"))
     app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^back_instr$"))
     app.add_handler(CallbackQueryHandler(extend_key_callback, pattern="^ext_key:"))
@@ -5305,15 +5227,17 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
 
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
+    # Этот обработчик покрывается навигационной системой - убираем дублирование
+    # app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
  
-    app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
+    # Эти обработчики покрываются навигационной системой - убираем дублирование
+    # app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
-    app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
+    # app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors_refresh$"))
-    app.add_handler(CallbackQueryHandler(admin_check_servers, pattern="^admin_check_servers$"))
-    app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications$"))
+    # app.add_handler(CallbackQueryHandler(admin_check_servers, pattern="^admin_check_servers$"))
+    # app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications$"))
     app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications_refresh$"))
     
     # Рассылка
@@ -5352,13 +5276,13 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"))
 
     
-    # Обработчики для реферальной системы
-    app.add_handler(CallbackQueryHandler(points_callback, pattern="^points$"))
+    # Обработчики для реферальной системы - некоторые покрываются навигационной системой
+    # app.add_handler(CallbackQueryHandler(points_callback, pattern="^points$"))  # Покрывается навигацией
     app.add_handler(CallbackQueryHandler(spend_points_callback, pattern="^spend_points$"))
     app.add_handler(CallbackQueryHandler(buy_with_points_callback, pattern="^buy_with_points$"))
     app.add_handler(CallbackQueryHandler(extend_with_points_callback, pattern="^extend_with_points$"))
     app.add_handler(CallbackQueryHandler(extend_points_key_callback, pattern="^extend_points_key:"))
-    app.add_handler(CallbackQueryHandler(referral_callback, pattern="^referral$"))
+    # app.add_handler(CallbackQueryHandler(referral_callback, pattern="^referral$"))  # Покрывается навигацией
     app.add_handler(CallbackQueryHandler(rename_key_callback, pattern="^rename_key:"))
     
     # Обработчик текстовых сообщений для переименования ключей
