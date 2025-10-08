@@ -60,6 +60,7 @@ jobs:
         echo "SERVER_USER: ${{ secrets.SERVER_USER != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PORT: ${{ secrets.SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
+        echo "NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN != '' && 'SET' || 'NOT SET' }}"
 
     - name: Deploy to server
       uses: appleboy/ssh-action@v1.0.3
@@ -171,6 +172,14 @@ jobs:
           
           # Install and configure ngrok
           echo "Installing ngrok..."
+          
+          # Check if NGROK_AUTH_TOKEN is set
+          if [ -z "${{ secrets.NGROK_AUTH_TOKEN }}" ]; then
+            echo "❌ NGROK_AUTH_TOKEN not set in GitHub Secrets!"
+            echo "Please add NGROK_AUTH_TOKEN to GitHub Secrets"
+            exit 1
+          fi
+          
           sudo mkdir -p /opt/ngrok
           cd /opt/ngrok
           sudo wget -q https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
@@ -181,8 +190,8 @@ jobs:
           
           # Create ngrok config
           echo "Configuring ngrok..."
-          sudo mkdir -p /home/app/.config/ngrok
-          sudo tee /home/app/.config/ngrok/ngrok.yml > /dev/null << EOF
+          sudo mkdir -p /root/.config/ngrok
+          sudo tee /root/.config/ngrok/ngrok.yml > /dev/null << EOF
           version: "2"
           authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
           tunnels:
@@ -191,11 +200,10 @@ jobs:
               addr: 5000
               bind_tls: true
           EOF
-          sudo chown -R app:app /home/app/.config/ngrok
           
           # Start ngrok in background
           echo "Starting ngrok tunnel..."
-          sudo -u app ngrok start webhook --config=/home/app/.config/ngrok/ngrok.yml &
+          ngrok start webhook --config=/root/.config/ngrok/ngrok.yml &
           sleep 10
           
           # Get ngrok URL
