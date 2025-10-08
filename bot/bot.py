@@ -2966,8 +2966,8 @@ async def on_startup(app):
 class UIEmojis:
     
     # Навигация
-    BACK = "⬅️"
-    NEXT = "→"
+    BACK = "←"
+    NEXT = "←"
     PREV = "←"
     CLOSE = "✕"
     REFRESH = "↻"
