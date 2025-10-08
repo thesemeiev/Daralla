@@ -1482,6 +1482,11 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.info("MAIN_MENU_CALLBACK: Message is already main menu, skipping edit")
         return
     
+    # Если это сообщение о успешной покупке, переходим к главному меню
+    if "Покупка прошла успешно" in message_text or "активирован" in message_text.lower():
+        logger.info("MAIN_MENU_CALLBACK: Success message detected, transitioning to main menu")
+        # Не возвращаемся, продолжаем редактирование
+    
     # Очищаем навигационный стек и добавляем главное меню
     context.user_data['nav_stack'] = ['main_menu']
     logger.info(f"MAIN_MENU_CALLBACK: Initialized stack: {context.user_data['nav_stack']}")
