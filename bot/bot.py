@@ -322,7 +322,10 @@ IMAGE_PATHS = {
     'admin_errors': 'images/admin_errors.jpg',
     'admin_notifications': 'images/admin_notifications.jpg',
     'admin_check_servers': 'images/admin_check_servers.jpg',
-    'broadcast': 'images/broadcast.jpg'
+    'broadcast': 'images/broadcast.jpg',
+    'payment': 'images/payment.jpg',
+    'payment_success': 'images/payment_success.jpg',
+    'payment_failed': 'images/payment_failed.jpg'
 }
 
 # Проверяем наличие обязательных переменных
@@ -1741,7 +1744,7 @@ async def handle_payment(update, context, price, period):
                     [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
                 ])
                 
-                await message.edit_text(payment_text, reply_markup=keyboard, parse_mode="HTML")
+                await safe_edit_or_reply_universal(message, payment_text, reply_markup=keyboard, parse_mode="HTML", menu_type='payment')
                 logger.info(f"Отредактировано сообщение с меню выбора периода на информацию об оплате: message_id={message.message_id}")
             except Exception as e:
                 logger.error(f"Не удалось отредактировать сообщение с меню выбора периода: {e}")
@@ -2959,7 +2962,7 @@ class UIMessages:
     def server_selection_message():
         """Сообщение выбора сервера"""
         return (
-            f"{UIStyles.header('Выбор сервера')}\n\n"
+            f"{UIStyles.header('Выбор локации')}\n\n"
             f"{UIStyles.description('Выберите локацию для вашего VPN-ключа:')}\n"
             f"{UIStyles.info_message('Рекомендуется выбрать ближайший к вам сервер для лучшей скорости.')}"
         )
