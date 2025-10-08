@@ -3878,8 +3878,8 @@ async def admin_set_days_cancel(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data.pop('config_chat_id', None)
     
     # Возвращаемся в админ меню через навигационную систему
-        if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_MENU)
+    if nav_system:
+        await nav_system.navigate_to_state(update, context, NavStates.ADMIN_MENU)
     from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.admin_menu(update, context)
@@ -5124,8 +5124,8 @@ async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.pop('broadcast_details', None)
     
     # Вызываем обработчик из menu_handlers
-        if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_MENU)
+    if nav_system:
+        await nav_system.navigate_to_state(update, context, NavStates.ADMIN_MENU)
     from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.admin_menu(update, context)
