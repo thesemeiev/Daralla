@@ -1488,14 +1488,37 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Используем единый стиль для приветственного сообщения
     welcome_text = UIMessages.welcome_message()
     
+    # Прямое редактирование сообщения с фото для надежности
     try:
-        # ВСЕГДА редактируем существующее сообщение, не отправляем новое
-        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
-        logger.info("MAIN_MENU_CALLBACK: Successfully edited message to main menu")
+        photo_path = IMAGE_PATHS.get('main_menu')
+        if photo_path and os.path.exists(photo_path):
+            # Редактируем с фото
+            with open(photo_path, 'rb') as photo_file:
+                await query.message.edit_media(
+                    media=InputMediaPhoto(
+                        media=photo_file,
+                        caption=welcome_text,
+                        parse_mode="HTML"
+                    ),
+                    reply_markup=keyboard
+                )
+            logger.info("MAIN_MENU_CALLBACK: Successfully edited message with photo")
+        else:
+            # Редактируем только текст
+            await query.message.edit_text(
+                text=welcome_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+            logger.info("MAIN_MENU_CALLBACK: Successfully edited message text")
     except Exception as e:
-        logger.error(f"main_menu_callback failed: {e}")
-        # Fallback: если не удалось отредактировать, отправляем новое сообщение
-        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+        logger.error(f"main_menu_callback direct edit failed: {e}")
+        # Fallback: используем универсальную функцию
+        try:
+            await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+            logger.info("MAIN_MENU_CALLBACK: Fallback successful")
+        except Exception as fallback_error:
+            logger.error(f"main_menu_callback fallback failed: {fallback_error}")
 
 
 # Новая команда /instruction — с кнопками выбора платформы
