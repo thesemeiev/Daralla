@@ -3870,7 +3870,7 @@ async def admin_set_days_cancel(update: Update, context: ContextTypes.DEFAULT_TY
     # Возвращаемся в админ меню через навигационную систему
     if nav_system:
         nav_system.navigate_to_state(context, NavStates.ADMIN_MENU)
-    from menu_handlers import MenuHandlers
+    from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.admin_menu(update, context)
     
@@ -3885,7 +3885,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Вызываем обработчик из menu_handlers
         if nav_system:
             nav_system.navigate_to_state(context, NavStates.BUY_MENU)
-        from menu_handlers import MenuHandlers
+        from .menu_handlers import MenuHandlers
         menu_handlers = MenuHandlers({})
         await menu_handlers.buy_menu(update, context)
     elif query.data.startswith("select_period_"):
@@ -3924,7 +3924,7 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
     if nav_system:
         nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
     # Вызываем обработчик из menu_handlers
-    from menu_handlers import MenuHandlers
+    from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.server_selection(update, context)
 
@@ -3938,7 +3938,7 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
     # Обработка обновления списка серверов
     if query.data == "refresh_servers":
         # Вызываем обработчик из menu_handlers
-        from menu_handlers import MenuHandlers
+        from .menu_handlers import MenuHandlers
         menu_handlers = MenuHandlers({})
         await menu_handlers.server_selection(update, context)
         return
@@ -4207,7 +4207,7 @@ async def buy_with_points_callback(update: Update, context: ContextTypes.DEFAULT
     if nav_system:
         nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
     # Вызываем обработчик из menu_handlers
-    from menu_handlers import MenuHandlers
+    from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.server_selection(update, context)
 
@@ -5100,7 +5100,7 @@ async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_T
     # Вызываем обработчик из menu_handlers
     if nav_system:
         nav_system.navigate_to_state(context, NavStates.ADMIN_MENU)
-    from menu_handlers import MenuHandlers
+    from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.admin_menu(update, context)
     return ConversationHandler.END
