@@ -1,2038 +1,3 @@
-import logging
-import html
-from logging.handlers import RotatingFileHandler
-import datetime
-import json
-import uuid
-import os
-import requests
-import asyncio
-from dotenv import load_dotenv
-import pathlib
-import telegram
-from telegram.helpers import escape_markdown
-
-async def safe_edit_or_reply(message, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
-    if message is None:
-        logger.error("safe_edit_or_reply: message is None")
-        return
-    
-    # Дополнительное логирование для отладки
-    logger.info(f"SAFE_EDIT_OR_REPLY: message={message}, text_length={len(text) if text else 0}, reply_markup={reply_markup is not None}")
-    
-    # Проверяем, есть ли у сообщения фото
-    if message.photo:
-        # Если сообщение содержит фото, используем edit_caption
-        try:
-            await message.edit_caption(
-                caption=text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode
-            )
-            return
-        except Exception as e:
-            logger.warning(f"Failed to edit caption, falling back to reply: {e}")
-            # Fallback: отправляем новое сообщение
-            await message.reply_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode,
-                disable_web_page_preview=disable_web_page_preview
-            )
-            return
-    
-    # Максимальное количество попыток для сетевых ошибок
-    max_retries = 3
-    retry_delay = 2  # секунды
-    
-    for attempt in range(max_retries):
-        try:
-            await message.edit_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode,
-                disable_web_page_preview=disable_web_page_preview
-            )
-            return  # Успешно отправлено
-        except telegram.error.BadRequest as e:
-            if "can't be edited" in str(e) and hasattr(message, 'reply_text'):
-                # Пробуем отправить как новое сообщение с повторными попытками
-                for reply_attempt in range(max_retries):
-                    try:
-                        await message.reply_text(
-                            text,
-                            reply_markup=reply_markup,
-                            parse_mode=parse_mode,
-                            disable_web_page_preview=disable_web_page_preview
-                        )
-                        return  # Успешно отправлено
-                    except telegram.error.NetworkError as net_err:
-                        if reply_attempt < max_retries - 1:
-                            logger.warning(f"Сетевая ошибка при отправке сообщения (попытка {reply_attempt + 1}/{max_retries}): {net_err}")
-                            await asyncio.sleep(retry_delay * (reply_attempt + 1))
-                        else:
-                            logger.error(f"Не удалось отправить сообщение после {max_retries} попыток: {net_err}")
-                            raise
-            elif "can't parse entities" in str(e).lower() and hasattr(message, 'reply_text'):
-                # Фолбэк: отправляем как обычный текст без форматирования
-                await message.reply_text(
-                    text,
-                    reply_markup=reply_markup,
-                    parse_mode=None,
-                    disable_web_page_preview=disable_web_page_preview
-                )
-                return
-            elif "Message is not modified" in str(e):
-                # Игнорируем эту ошибку, так как сообщение уже содержит нужное содержимое
-                return
-            else:
-                raise
-        except telegram.error.NetworkError as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"Сетевая ошибка при редактировании сообщения (попытка {attempt + 1}/{max_retries}): {e}")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-            else:
-                logger.error(f"Не удалось отредактировать сообщение после {max_retries} попыток: {e}")
-                # Последняя попытка - пробуем отправить как новое сообщение
-                if hasattr(message, 'reply_text'):
-                    try:
-                        await message.reply_text(
-                            text,
-                            reply_markup=reply_markup,
-                            parse_mode=parse_mode,
-                            disable_web_page_preview=disable_web_page_preview
-                        )
-                    except:
-                        raise e  # Если и это не удалось, пробрасываем исходную ошибку
-                else:
-                    raise
-        except Exception as e:
-            if hasattr(message, 'reply_text'):
-                await message.reply_text(
-                    text,
-                    reply_markup=reply_markup,
-                    parse_mode=parse_mode,
-                    disable_web_page_preview=disable_web_page_preview
-                )
-            else:
-                raise
-
-async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
-    """Безопасная отправка или редактирование сообщения с фото"""
-    if message is None:
-        logger.error("safe_edit_or_reply_photo: message is None")
-        return
-    
-    # Проверяем существование файла
-    if not os.path.exists(photo_path):
-        logger.warning(f"Photo file not found: {photo_path}, falling back to text message")
-        await safe_edit_or_reply(message, caption, reply_markup, parse_mode, disable_web_page_preview)
-        return
-    
-    # Максимальное количество попыток для сетевых ошибок
-    max_retries = 3
-    retry_delay = 2  # секунды
-    
-    for attempt in range(max_retries):
-        try:
-            # Пытаемся отредактировать существующее сообщение
-            with open(photo_path, 'rb') as photo_file:
-                await message.edit_media(
-                    media=InputMediaPhoto(
-                        media=photo_file,
-                        caption=caption,
-                        parse_mode=parse_mode
-                    ),
-                    reply_markup=reply_markup
-                )
-            return  # Успешно отправлено
-        except telegram.error.BadRequest as e:
-            if "can't be edited" in str(e) and hasattr(message, 'reply_photo'):
-                # Пробуем отправить как новое сообщение с повторными попытками
-                for reply_attempt in range(max_retries):
-                    try:
-                        with open(photo_path, 'rb') as photo_file:
-                            await message.reply_photo(
-                                photo=photo_file,
-                                caption=caption,
-                                reply_markup=reply_markup,
-                                parse_mode=parse_mode
-                            )
-                        return  # Успешно отправлено
-                    except telegram.error.NetworkError as net_err:
-                        if reply_attempt < max_retries - 1:
-                            logger.warning(f"Сетевая ошибка при отправке фото (попытка {reply_attempt + 1}/{max_retries}): {net_err}")
-                            await asyncio.sleep(retry_delay * (reply_attempt + 1))
-                        else:
-                            logger.error(f"Не удалось отправить фото после {max_retries} попыток: {net_err}")
-                            raise
-            elif "can't parse entities" in str(e) and hasattr(message, 'reply_photo'):
-                # Фолбэк: отправляем как обычный текст без форматирования
-                with open(photo_path, 'rb') as photo_file:
-                    await message.reply_photo(
-                        photo=photo_file,
-                        caption=caption,
-                        reply_markup=reply_markup,
-                        parse_mode=None
-                    )
-                return
-            elif "Message is not modified" in str(e):
-                # Сообщение не изменилось, это нормально
-                return
-            else:
-                # Другие ошибки - пробуем отправить как новое сообщение
-                if hasattr(message, 'reply_photo'):
-                    try:
-                        with open(photo_path, 'rb') as photo_file:
-                            await message.reply_photo(
-                                photo=photo_file,
-                                caption=caption,
-                                reply_markup=reply_markup,
-                                parse_mode=parse_mode
-                            )
-                        return
-                    except:
-                        raise e  # Если и это не удалось, пробрасываем исходную ошибку
-                else:
-                    raise
-        except Exception as e:
-            if hasattr(message, 'reply_photo'):
-                with open(photo_path, 'rb') as photo_file:
-                    await message.reply_photo(
-                        photo=photo_file,
-                        caption=caption,
-                        reply_markup=reply_markup,
-                        parse_mode=parse_mode
-                    )
-            else:
-                raise
-
-async def safe_edit_or_reply_universal(message, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None, menu_type=None):
-    """Универсальная функция для отправки/редактирования сообщений с автоматическим выбором фото или текста"""
-    if message is None:
-        logger.error("safe_edit_or_reply_universal: message is None")
-        return
-    
-    # Если указан тип меню и есть соответствующее изображение, используем фото
-    if menu_type and menu_type in IMAGE_PATHS:
-        photo_path = IMAGE_PATHS[menu_type]
-        if os.path.exists(photo_path):
-            await safe_edit_or_reply_photo(message, photo_path, text, reply_markup, parse_mode, disable_web_page_preview)
-            return
-    
-    # Иначе используем обычное текстовое сообщение
-    await safe_edit_or_reply(message, text, reply_markup, parse_mode, disable_web_page_preview)
-
-async def safe_send_message_with_photo(bot, chat_id, text, reply_markup=None, parse_mode=None, menu_type=None):
-    """Безопасная отправка сообщения с фото через бота"""
-    if menu_type and menu_type in IMAGE_PATHS:
-        photo_path = IMAGE_PATHS[menu_type]
-        if os.path.exists(photo_path):
-            try:
-                with open(photo_path, 'rb') as photo_file:
-                    await bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo_file,
-                        caption=text,
-                        reply_markup=reply_markup,
-                        parse_mode=parse_mode
-                    )
-                return
-            except Exception as e:
-                logger.warning(f"Failed to send photo for menu_type {menu_type}: {e}")
-    
-    # Fallback to text message
-    await bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        reply_markup=reply_markup,
-        parse_mode=parse_mode
-    )
-
-async def safe_edit_message_with_photo(bot, chat_id, message_id, text, reply_markup=None, parse_mode=None, menu_type=None):
-    """Безопасное редактирование сообщения с фото через бота"""
-    if menu_type and menu_type in IMAGE_PATHS:
-        photo_path = IMAGE_PATHS[menu_type]
-        if os.path.exists(photo_path):
-            try:
-                with open(photo_path, 'rb') as photo_file:
-                    from telegram import InputMediaPhoto
-                    await bot.edit_message_media(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        media=InputMediaPhoto(
-                            media=photo_file,
-                            caption=text,
-                            parse_mode=parse_mode
-                        ),
-                        reply_markup=reply_markup
-                    )
-                return
-            except Exception as e:
-                logger.warning(f"Failed to edit message with photo for menu_type {menu_type}: {e}")
-    
-    # Fallback to text message
-    await bot.edit_message_text(
-        chat_id=chat_id,
-        message_id=message_id,
-        text=text,
-        reply_markup=reply_markup,
-        parse_mode=parse_mode
-    )
-
-
-# Определяем путь к файлу .env
-current_dir = pathlib.Path(__file__).parent
-project_root = current_dir.parent
-env_path = project_root / '.env'
-
-# Загружаем .env из корня проекта
-if env_path.exists():
-    load_dotenv(env_path)
-else:
-    print("ВНИМАНИЕ: Файл .env не найден! Создайте файл .env в корне проекта с переменными окружения.")
-from urllib.parse import quote
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
-
-def mdv2(s):
-    return escape_markdown(str(s), version=2)
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
-from telegram.request import HTTPXRequest
-from yookassa import Payment, Configuration
-Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
-Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
-
-# Импорт для webhook
-from flask import Flask, request, jsonify
-import threading
-import hmac
-import hashlib
-
-from .keys_db import (
-    init_payments_db, add_payment, get_payment, get_payment_by_id, update_payment_status, get_all_pending_payments,
-    get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
-    init_referral_db, save_referral_connection, get_pending_referral, mark_referral_reward_given,
-    add_points, spend_points, get_user_points, get_points_history, get_referral_stats,
-    is_known_user, register_simple_user, get_all_user_ids,
-    atomic_referral_reward, atomic_refund_points,
-    get_config, set_config, get_all_config
-)
-
-
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
-
-# ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
-
-# Упрощенная реферальная система - используем только user_id
-
-def generate_referral_code(user_id: str) -> str:
-    """Генерирует простой реферальный код на основе user_id"""
-    try:
-        if not user_id:
-            logger.error(f"GENERATE_REFERRAL_CODE: Invalid user_id - {user_id}")
-            return None
-            
-        # Простой код - просто user_id
-        logger.info(f"GENERATE_REFERRAL_CODE: Generated simple code for user {user_id}")
-        return user_id
-        
-    except Exception as e:
-        logger.error(f"GENERATE_REFERRAL_CODE: Critical error - {e}")
-        return None
-
-def decode_referral_code(code: str) -> str:
-    """Декодирует простой реферальный код (просто возвращает user_id)"""
-    try:
-        if not code:
-            logger.error(f"DECODE_REFERRAL_CODE: Empty code")
-            return None
-            
-        # Простая проверка - код должен быть числом (user_id)
-        if not code.isdigit():
-            logger.warning(f"DECODE_REFERRAL_CODE: Invalid code format - {code}")
-            return None
-            
-        logger.info(f"DECODE_REFERRAL_CODE: Valid code for user {code}")
-        return code
-        
-    except Exception as e:
-        logger.error(f"DECODE_REFERRAL_CODE: Critical error - {e}")
-        return None
-
-
-
-
-YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
-YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Поддержка нескольких админов через переменную окружения
-ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
-ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
-
-# Пути к изображениям для меню
-IMAGE_PATHS = {
-    'main_menu': 'images/main_menu.jpg',
-    'instruction_menu': 'images/instruction_menu.jpg',
-    'instruction_platform': 'images/instruction_platform.jpg',
-    'buy_menu': 'images/buy_menu.jpg',
-    'mykeys_menu': 'images/mykeys_menu.jpg',
-    'points_menu': 'images/points_menu.jpg',
-    'referral_menu': 'images/referral_menu.jpg',
-    'server_selection': 'images/server_selection.jpg',
-    'extend_key': 'images/extend_key.jpg',
-    'rename_key': 'images/rename_key.jpg',
-    'admin_menu': 'images/admin_menu.jpg',
-    'admin_errors': 'images/admin_errors.jpg',
-    'admin_notifications': 'images/admin_notifications.jpg',
-    'admin_check_servers': 'images/admin_check_servers.jpg',
-    'broadcast': 'images/broadcast.jpg',
-    'payment': 'images/payment.jpg',
-    'payment_success': 'images/payment_success.jpg',
-    'payment_failed': 'images/payment_failed.jpg',
-    'instruction_android': 'images/instruction_android.jpg',
-    'instruction_ios': 'images/instruction_ios.jpg',
-    'instruction_windows': 'images/instruction_windows.jpg',
-    'instruction_macos': 'images/instruction_macos.jpg',
-    'instruction_linux': 'images/instruction_linux.jpg',
-    'instruction_tv': 'images/instruction_tv.jpg',
-    'instruction_faq': 'images/instruction_faq.jpg',
-    'key_success': 'images/key_success.jpg',
-    'payment_success_key': 'images/payment_success_key.jpg'
-}
-
-# Проверяем наличие обязательных переменных
-if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN не найден в переменных окружения! Создайте файл bot/.env")
-
-if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
-    print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
-
-# Конфигурация серверов по локациям
-SERVERS_BY_LOCATION = {
-    "Finland": [
-        { 
-            "name": "Finland-1", 
-            "host": os.getenv("XUI_HOST_FINLAND_1"),
-            "login": os.getenv("XUI_LOGIN_FINLAND_1"),
-            "password": os.getenv("XUI_PASSWORD_FINLAND_1")
-        },
-        
-
-
-
-        
-    ],
-    "Latvia": [
-        {
-            "name": "Latvia-1",
-            "host": os.getenv("XUI_HOST_LATVIA_1"),
-            "login": os.getenv("XUI_LOGIN_LATVIA_1"),
-            "password": os.getenv("XUI_PASSWORD_LATVIA_1")
-        },
-        {
-            "name": "Latvia-2",
-            "host": os.getenv("XUI_HOST_LATVIA_2"),
-            "login": os.getenv("XUI_LOGIN_LATVIA_2"),
-            "password": os.getenv("XUI_PASSWORD_LATVIA_2")
-        }
-    ],
-    "Estonia": [
-        {
-            "name": "Estonia-1",
-            "host": os.getenv("XUI_HOST_ESTONIA_1"),
-            "login": os.getenv("XUI_LOGIN_ESTONIA_1"),
-            "password": os.getenv("XUI_PASSWORD_ESTONIA_1")
-        }
-    ]
-}
-
-# Создаем плоский список всех серверов для обратной совместимости
-SERVERS = []
-for location_servers in SERVERS_BY_LOCATION.values():
-    SERVERS.extend(location_servers)
-
-# Сервера для новых клиентов (теперь по локациям)
-NEW_CLIENT_SERVERS = SERVERS_BY_LOCATION
-
-# Проверяем конфигурацию серверов
-for i, server in enumerate(SERVERS):
-    if not server["host"] or not server["login"] or not server["password"]:
-        print(f"ВНИМАНИЕ: Сервер {server['name']} не настроен! Проверьте переменные XUI_HOST_{server['name'].upper().replace('-', '_')}, XUI_LOGIN_{server['name'].upper().replace('-', '_')}, XUI_PASSWORD_{server['name'].upper().replace('-', '_')}")
-
-# Настраиваем файловый лог с ротацией в папке data/logs
-try:
-    from .keys_db import DATA_DIR
-except Exception:
-    DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
-
-logs_dir = os.path.join(DATA_DIR, 'logs')
-os.makedirs(logs_dir, exist_ok=True)
-app_log_path = os.path.join(logs_dir, 'bot.log')
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        RotatingFileHandler(app_log_path, maxBytes=1_048_576, backupCount=3, encoding='utf-8')
-    ]
-)
-logger = logging.getLogger(__name__)
-
-async def check_private_chat(update: Update) -> bool:
-    """Проверяет, что команда используется в приватном чате.
-    Возвращает True если чат приватный, False если нет."""
-    if update.effective_chat.type != 'private':
-        await safe_edit_or_reply(update.message,
-            f"{UIEmojis.WARNING} Эта команда работает только в личных сообщениях.\n"
-            f"Напишите мне в личку для работы с VPN-ключами.",
-            parse_mode="HTML"
-        )
-        return False
-    return True
-
-class X3:
-    def __init__(self, login, password, host):
-        self.login = login
-        self.password = password
-        self.host = host
-        self.ses = requests.Session()
-        
-        # Определяем протокол и настраиваем SSL соответственно
-        if host.startswith('https://'):
-            self.ses.verify = True
-        else:
-            self.ses.verify = False
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        
-        # Увеличиваем таймауты для лучшей стабильности
-        self.ses.timeout = (30, 30)  # (connect timeout, read timeout)
-        
-        self.data = {"username": self.login, "password": self.password}
-        logger.info(f"Подключение к XUI серверу: {host} (SSL: {self.ses.verify})")
-        self._login()
-    
-    def _login(self):
-        """Выполняет вход в XUI панель"""
-        try:
-            # Пробуем сначала с текущими настройками
-            try:
-                login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=30)
-            except requests.exceptions.SSLError:
-                # Если получили ошибку SSL, пробуем без проверки сертификата
-                logger.warning(f"SSL ошибка при подключении к {self.host}, пробуем без проверки сертификата")
-                self.ses.verify = False
-                import urllib3
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=30)
-            
-            logger.info(f"XUI Login Response - Status: {login_response.status_code}")
-            logger.info(f"XUI Login Response - Text: {login_response.text[:200]}...")
-            
-            if login_response.status_code != 200:
-                logger.error(f"Ошибка входа в XUI: {login_response.status_code} - {login_response.text}")
-                raise Exception(f"Login failed with status {login_response.status_code}")
-            
-            # Проверяем, что мы действительно вошли (обычно в ответе есть что-то, указывающее на успешный вход)
-            if "error" in login_response.text.lower() or "invalid" in login_response.text.lower():
-                logger.error(f"Ошибка аутентификации: {login_response.text[:200]}")
-                raise Exception("Authentication failed")
-                
-        except Exception as e:
-            logger.error(f"Ошибка при подключении к XUI серверу {self.host}: {e}")
-            raise
-
-    def _reconnect(self):
-        """Переподключается к серверу при истечении сессии"""
-        logger.info(f"Переподключение к серверу {self.host}")
-        self.ses = requests.Session()
-        
-        # Восстанавливаем настройки SSL
-        if self.host.startswith('https://'):
-            self.ses.verify = True
-        else:
-            self.ses.verify = False
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        
-        # Восстанавливаем увеличенные таймауты
-        self.ses.timeout = (30, 30)
-        
-        self._login()
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-
-
-    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name=""):
-        if hours is not None:
-            # Для тестовых ключей используем часы
-            x_time = int(datetime.datetime.now().timestamp() * 1000) + (hours * 3600000)
-        else:
-            # Для обычных ключей используем дни
-            x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
-        header = {"Accept": "application/json"}
-        client_data = {
-            "id": str(uuid.uuid1()),
-            "alterId": 90,
-            "email": str(user_email),
-            "limitIp": 1,
-            "totalGB": 0,
-            "expiryTime": x_time,
-            "enable": True,
-            "tgId": str(tg_id),
-            "subId": key_name,  # Сохраняем имя ключа в поле subId
-            "flow": "xtls-rprx-vision"
-        }
-        data1 = {
-            "id": 1,
-            "settings": json.dumps({"clients": [client_data]})
-        }
-        logger.info(f"Добавление клиента: {user_email} на сервер {self.host}")
-        try:
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
-            logger.info(f"XUI addClient Response - Status: {response.status_code}")
-            logger.info(f"XUI addClient Response - Text: {response.text[:200]}...")
-            
-            # Проверяем, не истекла ли сессия
-            if response.status_code == 200 and not response.text.strip():
-                logger.warning("Получен пустой ответ, возможно истекла сессия. Переподключаюсь...")
-                self._login()
-                # Повторяем запрос после переподключения
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
-                logger.info(f"XUI addClient Response после переподключения - Status: {response.status_code}")
-                logger.info(f"XUI addClient Response после переподключения - Text: {response.text[:200]}...")
-            
-            return response
-        except Exception as e:
-            logger.error(f"Ошибка при добавлении клиента {user_email}: {e}")
-            raise
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def extendClient(self, user_email, extend_days, timeout=15):
-        """
-        Продлевает срок действия ключа клиента
-        :param user_email: Email клиента
-        :param extend_days: Количество дней для продления
-        :param timeout: Таймаут запроса
-        :return: Response объект
-        """
-        try:
-            # Сначала получаем информацию о клиенте
-            inbounds_data = self.list(timeout=timeout)
-            if not inbounds_data.get('success', False):
-                raise Exception("Не удалось получить список клиентов")
-            
-            client_found = False
-            client_data = None
-            inbound_id = None
-            
-            # Ищем клиента по email
-            for inbound in inbounds_data.get('obj', []):
-                settings = json.loads(inbound.get('settings', '{}'))
-                clients = settings.get('clients', [])
-                
-                for client in clients:
-                    if client.get('email') == user_email:
-                        client_found = True
-                        client_data = client.copy()
-                        inbound_id = inbound.get('id')
-                        
-                        # Вычисляем новое время истечения
-                        current_expiry = int(client.get('expiryTime', 0))
-                        if current_expiry == 0:
-                            # Если время истечения не установлено, начинаем с текущего времени
-                            current_expiry = int(datetime.datetime.now().timestamp() * 1000)
-                        
-                        # Добавляем дни к текущему времени истечения
-                        new_expiry = current_expiry + (extend_days * 86400000)  # 86400000 мс = 1 день
-                        client_data['expiryTime'] = new_expiry
-                        
-                        logger.info(f"Продление ключа {user_email}: старое время истечения = {current_expiry}, новое = {new_expiry}")
-                        break
-                
-                if client_found:
-                    break
-            
-            if not client_found:
-                raise Exception(f"Клиент с email {user_email} не найден")
-            
-            # Обновляем клиента
-            header = {"Accept": "application/json"}
-            data = {
-                "id": inbound_id,
-                "settings": json.dumps({"clients": [client_data]})
-            }
-            
-            logger.info(f"Продление клиента: {user_email} на сервере {self.host} на {extend_days} дней")
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
-                                   headers=header, json=data, timeout=timeout)
-            
-            logger.info(f"XUI extendClient Response - Status: {response.status_code}")
-            logger.info(f"XUI extendClient Response - Text: {response.text[:200]}...")
-            
-            # Проверяем, не истекла ли сессия
-            if response.status_code == 200 and not response.text.strip():
-                logger.warning("Получен пустой ответ при продлении, переподключаюсь...")
-                self._login()
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
-                                       headers=header, json=data, timeout=timeout)
-                logger.info(f"XUI extendClient Response после переподключения - Status: {response.status_code}")
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Ошибка при продлении клиента {user_email}: {e}")
-            raise
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def get_client_count(self, timeout=15):
-        """Подсчитывает общее количество клиентов на сервере"""
-        try:
-            response_data = self.list(timeout=timeout)
-            logger.info(f"XUI list response: {response_data}")
-            if 'obj' not in response_data:
-                logger.error(f"Неожиданный формат ответа XUI: {response_data}")
-                return 0
-            inbounds = response_data['obj']
-            total_clients = 0
-            for inbound in inbounds:
-                settings = json.loads(inbound['settings'])
-                total_clients += len(settings.get("clients", []))
-            return total_clients
-        except Exception as e:
-            logger.error(f"Ошибка при подсчете клиентов на {self.host}: {e}")
-            return 0
-
-    def get_clients_status_count(self, timeout=15):
-        """Подсчитывает количество клиентов по статусу (активные/истекшие)"""
-        try:
-            response_data = self.list(timeout=timeout)
-            if 'obj' not in response_data:
-                logger.error(f"Неожиданный формат ответа XUI: {response_data}")
-                return 0, 0, 0
-            
-            inbounds = response_data['obj']
-            total_clients = 0
-            active_clients = 0
-            expired_clients = 0
-            current_time = int(datetime.datetime.now().timestamp() * 1000)
-            
-            for inbound in inbounds:
-                settings = json.loads(inbound['settings'])
-                clients = settings.get("clients", [])
-                total_clients += len(clients)
-                
-                for client in clients:
-                    # Проверяем, активен ли клиент (не истек ли срок)
-                    expiry_time = client.get('expiryTime', 0)
-                    if expiry_time == 0 or current_time < expiry_time:
-                        active_clients += 1
-                    else:
-                        expired_clients += 1
-            
-            return total_clients, active_clients, expired_clients
-        except Exception as e:
-            logger.error(f"Ошибка при подсчете статуса клиентов на {self.host}: {e}")
-            return 0, 0, 0
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def client_exists(self, user_email):
-        for inbound in self.list()['obj']:
-            settings = json.loads(inbound['settings'])
-            for client in settings.get("clients", []):
-                if client['email'] == user_email:
-                    return True
-        return False
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(2)
-    )
-    def list(self, timeout=15):
-        try:
-            url = f'{self.host}/panel/api/inbounds/list'
-            logger.info(f"Отправка запроса к {url}")
-            
-            # Проверяем доступность сервера
-            try:
-                health_check = self.ses.get(f'{self.host}/ping', timeout=5)
-                logger.info(f"Проверка доступности сервера {self.host}: {health_check.status_code}")
-            except Exception as e:
-                logger.warning(f"Сервер {self.host} недоступен: {e}")
-            
-            response = self.ses.get(url, json=self.data, timeout=timeout)
-            logger.info(f"XUI API Response - URL: {url}")
-            logger.info(f"XUI API Response - Status: {response.status_code}, Headers: {dict(response.headers)}")
-            logger.info(f"XUI API Response - Text: {response.text[:500]}...")  # Логируем первые 500 символов
-            
-            # Проверяем статус ответа
-            if response.status_code != 200:
-                logger.error(f"XUI API вернул неверный статус: {response.status_code} для URL {url}")
-                if response.status_code == 404:
-                    logger.error(f"Endpoint не найден на сервере {self.host}. Возможно, сервер не поддерживает API или требует обновления.")
-                    return {'success': False, 'error': '404 Not Found', 'obj': []}  # Возвращаем структуру, совместимую с ожидаемым форматом
-                raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
-            
-            # Проверяем, что ответ не пустой
-            if not response.text.strip():
-                logger.error("XUI API вернул пустой ответ")
-                raise Exception("Пустой ответ от сервера")
-            
-            # Проверяем, что ответ начинается с '{' или '[' (признак JSON)
-            if not response.text.strip().startswith(('{', '[')):
-                logger.error(f"XUI API вернул не-JSON ответ: {response.text[:200]}")
-                # Если получили HTML вместо JSON, возможно сессия истекла
-                if "<html" in response.text.lower() or "login" in response.text.lower():
-                    logger.warning("Обнаружена истекшая сессия, переподключаюсь...")
-                    self._reconnect()
-                    # Повторяем запрос после переподключения
-                    response = self.ses.get(f'{self.host}/panel/api/inbounds/list', json=self.data, timeout=timeout)
-                    logger.info(f"XUI API Response после переподключения - Status: {response.status_code}")
-                    logger.info(f"XUI API Response после переподключения - Text: {response.text[:500]}...")
-                    
-                    if response.status_code != 200:
-                        raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
-                    
-                    if not response.text.strip().startswith(('{', '[')):
-                        raise Exception(f"Неверный формат ответа после переподключения: {response.text[:200]}")
-                
-                else:
-                    raise Exception(f"Неверный формат ответа: {response.text[:200]}")
-            
-            try:
-                return response.json()
-            except json.JSONDecodeError as json_error:
-                logger.error(f"Ошибка парсинга JSON: {json_error}")
-                logger.error(f"Ответ сервера: {response.text[:500]}")
-                raise Exception(f"Ошибка парсинга JSON: {json_error}")
-                
-        except Exception as e:
-            logger.error(f"Ошибка при запросе к XUI API: {e}")
-            logger.error(f"Response status: {getattr(response, 'status_code', 'N/A')}")
-            logger.error(f"Response text: {getattr(response, 'text', 'N/A')}")
-            raise
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def deleteClient(self, user_email, timeout=15):
-        for inbound in self.list(timeout=timeout)['obj']:
-            settings = json.loads(inbound['settings'])
-            for client in settings.get("clients", []):
-                if client['email'] == user_email:
-                    client_id = client['id']
-                    inbound_id = inbound['id']
-                    url = f"{self.host}/panel/api/inbounds/{inbound_id}/delClient/{client_id}"
-                    logger.info(f"Удаляю VLESS клиента: inbound_id={inbound_id}, client_id={client_id}, email={user_email}")
-                    result = self.ses.post(url, timeout=timeout)
-                    logger.info(f"Ответ XUI: status_code={getattr(result, 'status_code', None)}, text={getattr(result, 'text', None)}")
-                    if getattr(result, 'status_code', None) == 200:
-                        logger.info(f"Клиент успешно удалён: {user_email}")
-                    return result
-        logger.warning(f"Клиент с email={user_email} не найден ни в одном inbound")
-        return None
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def updateClientName(self, user_email, new_name, timeout=15):
-        """
-        Обновляет имя ключа (сохраняет в поле subId)
-        :param user_email: Email клиента
-        :param new_name: Новое имя ключа
-        :param timeout: Таймаут запроса
-        :return: Response объект
-        """
-        try:
-            # Сначала получаем информацию о клиенте
-            inbounds_data = self.list(timeout=timeout)
-            if not inbounds_data.get('success', False):
-                raise Exception("Не удалось получить список клиентов")
-            
-            client_found = False
-            client_data = None
-            inbound_id = None
-            
-            # Ищем клиента по email
-            for inbound in inbounds_data.get('obj', []):
-                settings = json.loads(inbound.get('settings', '{}'))
-                clients = settings.get('clients', [])
-                
-                for client in clients:
-                    if client.get('email') == user_email:
-                        client_found = True
-                        client_data = client.copy()
-                        inbound_id = inbound.get('id')
-                        
-                        # Обновляем имя ключа в поле subId
-                        client_data['subId'] = new_name
-                        
-                        logger.info(f"Обновление имени ключа {user_email}: новое имя = {new_name}")
-                        break
-                
-                if client_found:
-                    break
-            
-            if not client_found:
-                raise Exception(f"Клиент с email {user_email} не найден")
-            
-            # Обновляем клиента
-            header = {"Accept": "application/json"}
-            data = {
-                "id": inbound_id,
-                "settings": json.dumps({"clients": [client_data]})
-            }
-            
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', headers=header, json=data, timeout=timeout)
-            logger.info(f"XUI updateClientName Response - Status: {response.status_code}")
-            logger.info(f"XUI updateClientName Response - Text: {response.text[:200]}...")
-            
-            # Проверяем, не истекла ли сессия
-            if response.status_code == 200 and not response.text.strip():
-                logger.warning("Получен пустой ответ при обновлении имени, переподключаюсь...")
-                self._login()
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
-                                       headers=header, json=data, timeout=timeout)
-                logger.info(f"XUI updateClientName Response после переподключения - Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                logger.info(f"Имя ключа успешно обновлено: {user_email} -> {new_name}")
-            else:
-                logger.error(f"Ошибка обновления имени ключа: {response.status_code} - {response.text}")
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Ошибка при обновлении имени ключа {user_email}: {e}")
-            raise
-
-    def link(self, user_id: str):
-        inbounds_list = self.list()['obj']
-        for inbounds in inbounds_list:
-            settings = json.loads(inbounds['settings'])
-            stream = json.loads(inbounds['streamSettings'])
-
-            client = next((c for c in settings.get("clients", []) if c['email'] == user_id), None)
-            if not client:
-                continue
-
-            host_part = self.host.split('//')[-1]
-            host = host_part.split(':')[0] if ':' in host_part else host_part
-            port = inbounds.get('port', 443)
-            reality = stream.get('realitySettings', {})
-            reality_settings = reality.get('settings', {})
-            pbk = reality_settings.get('publicKey', '')
-            fingerprint = reality_settings.get('fingerprint', 'chrome')
-            spx = reality_settings.get('spiderX', '/')
-            dest = reality.get('dest', '')
-            sni = dest.split(':')[0] if dest else 'google.com'
-            logger.info(f"Reality настройки для {self.host}: dest='{dest}', sni='{sni}'")
-            short_ids = reality.get('shortIds', [''])
-            sid = short_ids[0] if short_ids else ''
-            network = stream.get('network', 'tcp')
-            security = stream.get('security', 'reality')
-
-            # Строго в правильном порядке
-            params = [
-                ("type", network),
-                ("security", security),
-                ("flow", "xtls-rprx-vision"),
-                ("pbk", pbk),
-                ("fp", fingerprint),
-                ("sni", sni),
-                ("sid", sid),
-                ("spx", quote(spx)),
-            ]
-            query = "&".join(f"{k}={v}" for k, v in params)
-            tag = f"Daralla-{user_id}"
-
-            return f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
-
-        return 'Клиент не найден.'
-
-class MultiServerManager:
-    def __init__(self, servers_by_location):
-        self.servers_by_location = {}
-        self.server_health = {}  # Словарь для отслеживания состояния серверов
-        self.servers = []  # Плоский список всех серверов
-        
-        # Инициализируем серверы по локациям
-        for location, servers_config in servers_by_location.items():
-            self.servers_by_location[location] = []
-            
-            for server_config in servers_config:
-                try:
-                    x3_server = X3(
-                        login=server_config["login"],
-                        password=server_config["password"], 
-                        host=server_config["host"]
-                    )
-                    server_info = {
-                        "name": server_config["name"],
-                        "x3": x3_server,
-                        "config": server_config
-                    }
-                    self.servers_by_location[location].append(server_info)
-                    self.servers.append(server_info)
-                    # Инициализируем состояние сервера
-                    self.server_health[server_config["name"]] = {
-                        "status": "unknown",
-                        "last_check": None,
-                        "last_error": None,
-                        "consecutive_failures": 0,
-                        "uptime_percentage": 100.0
-                    }
-                    logger.info(f"Сервер {server_config['name']} ({location}) успешно подключен")
-                except Exception as e:
-                    logger.error(f"Ошибка подключения к серверу {server_config['name']} ({location}): {e}")
-                    # Даже если сервер недоступен при инициализации, добавляем его в список
-                    server_info = {
-                        "name": server_config["name"],
-                        "x3": None,
-                        "config": server_config
-                    }
-                    self.servers_by_location[location].append(server_info)
-                    self.servers.append(server_info)
-                    self.server_health[server_config["name"]] = {
-                        "status": "offline",
-                        "last_check": datetime.datetime.now(),
-                        "last_error": str(e),
-                        "consecutive_failures": 1,
-                        "uptime_percentage": 0.0
-                    }
-    
-    def get_server_by_name(self, server_name):
-        """Возвращает конкретный сервер по имени"""
-        for location, servers in self.servers_by_location.items():
-            for server in servers:
-                if server["name"].lower() == server_name.lower():
-                    return server["x3"], server["name"]
-        raise Exception(f"Сервер {server_name} не найден или недоступен")
-    
-    def get_server_with_least_clients_in_location(self, location):
-        """Возвращает сервер с наименьшим количеством клиентов в конкретной локации"""
-        if location not in self.servers_by_location:
-            raise Exception(f"Локация {location} не найдена")
-        
-        servers = self.servers_by_location[location]
-        if not servers:
-            raise Exception(f"Нет доступных серверов в локации {location}")
-        
-        min_clients = float('inf')
-        selected_server = None
-        
-        for server in servers:
-            try:
-                client_count = server["x3"].get_client_count()
-                logger.info(f"Сервер {server['name']} ({location}): {client_count} клиентов")
-                
-                if client_count < min_clients:
-                    min_clients = client_count
-                    selected_server = server
-            except Exception as e:
-                logger.error(f"Ошибка при получении количества клиентов с сервера {server['name']} ({location}): {e}")
-                continue
-        
-        if selected_server is None:
-            # Если все серверы недоступны, используем первый
-            selected_server = servers[0]
-            logger.warning(f"Все серверы в локации {location} недоступны, использую {selected_server['name']}")
-        
-        logger.info(f"Выбран сервер {selected_server['name']} ({location}) с {min_clients} клиентами")
-        logger.info(f"Reality настройки будут проверены для сервера: {selected_server['name']}")
-        return selected_server["x3"], selected_server["name"]
-    
-    def get_server_by_user_choice(self, location, user_choice):
-        """Возвращает сервер согласно выбору пользователя в конкретной локации"""
-        if user_choice == "auto":
-            return self.get_server_with_least_clients_in_location(location)
-        else:
-            return self.get_server_by_name(user_choice)
-    
-    def get_best_location_server(self):
-        """Возвращает сервер с наименьшей нагрузкой из всех локаций"""
-        best_server = None
-        min_clients = float('inf')
-        best_location = None
-        
-        for location, servers in self.servers_by_location.items():
-            try:
-                server, server_name = self.get_server_with_least_clients_in_location(location)
-                # Получаем количество клиентов для сравнения
-                client_count = server.get_client_count()
-                if client_count < min_clients:
-                    min_clients = client_count
-                    best_server = server
-                    best_location = location
-            except Exception as e:
-                logger.error(f"Ошибка при получении сервера из локации {location}: {e}")
-                continue
-        
-        if best_server is None:
-            raise Exception("Нет доступных серверов в любой локации")
-        
-        logger.info(f"Выбрана лучшая локация: {best_location} с {min_clients} клиентами")
-        return best_server, best_location
-    
-    def find_client_on_any_server(self, user_email):
-        """Ищет клиента на любом из серверов"""
-        for location, servers in self.servers_by_location.items():
-            for server in servers:
-                try:
-                    if server["x3"] and server["x3"].client_exists(user_email):
-                        logger.info(f"Клиент {user_email} найден на сервере {server['name']} ({location})")
-                        return server["x3"], server["name"]
-                except Exception as e:
-                    logger.error(f"Ошибка при поиске клиента на сервере {server['name']} ({location}): {e}")
-                    continue
-        return None, None
-    
-    
-    def check_server_health(self, server_name):
-        """Проверяет здоровье конкретного сервера"""
-        server_info = None
-        for server in self.servers:
-            if server["name"] == server_name:
-                server_info = server
-                break
-        
-        if not server_info:
-            return False
-        
-        try:
-            if server_info["x3"] is None:
-                # Пытаемся переподключиться
-                server_config = server_info["config"]
-                server_info["x3"] = X3(
-                    login=server_config["login"],
-                    password=server_config["password"], 
-                    host=server_config["host"]
-                )
-            
-            # Проверяем доступность API
-            response = server_info["x3"].list(timeout=10)
-            if response and 'obj' in response:
-                # Сервер доступен
-                self.server_health[server_name]["status"] = "online"
-                self.server_health[server_name]["last_check"] = datetime.datetime.now()
-                self.server_health[server_name]["last_error"] = None
-                self.server_health[server_name]["consecutive_failures"] = 0
-                return True
-            else:
-                raise Exception("Неверный ответ от сервера")
-                
-        except Exception as e:
-            # Сервер недоступен
-            self.server_health[server_name]["status"] = "offline"
-            self.server_health[server_name]["last_check"] = datetime.datetime.now()
-            self.server_health[server_name]["last_error"] = str(e)
-            self.server_health[server_name]["consecutive_failures"] += 1
-            
-            # Если сервер долго недоступен, помечаем X3 как None
-            if self.server_health[server_name]["consecutive_failures"] > 3:
-                server_info["x3"] = None
-            
-            logger.warning(f"Сервер {server_name} недоступен: {e}")
-            return False
-    
-    def check_all_servers_health(self):
-        """Проверяет здоровье всех серверов"""
-        results = {}
-        for server in self.servers:
-            server_name = server["name"]
-            results[server_name] = self.check_server_health(server_name)
-        return results
-    
-    
-    
-    def get_server_health_status(self):
-        """Возвращает статус здоровья всех серверов"""
-        return self.server_health
-    
-    def get_healthy_servers(self):
-        """Возвращает список доступных серверов"""
-        healthy_servers = []
-        for server in self.servers:
-            if self.server_health[server["name"]]["status"] == "online":
-                healthy_servers.append(server)
-        return healthy_servers
-
-# Создаем глобальный экземпляр менеджера серверов
-server_manager = MultiServerManager(SERVERS_BY_LOCATION)
-# Менеджер только для новых клиентов
-new_client_manager = MultiServerManager(SERVERS_BY_LOCATION)
-
-def calculate_time_remaining(expiry_timestamp, show_expired_as_negative=False):
-    """
-    Вычисляет оставшееся время до деактивации ключа
-    """
-    if not expiry_timestamp or expiry_timestamp == 0:
-        return "—"
-    
-    try:
-        # Конвертируем timestamp в datetime
-        expiry_dt = datetime.datetime.fromtimestamp(expiry_timestamp)
-        now = datetime.datetime.now()
-        
-        # Вычисляем разность
-        time_diff = expiry_dt - now
-        
-        if time_diff.total_seconds() <= 0:
-            if show_expired_as_negative:
-                # Показываем, сколько времени прошло с момента истечения
-                expired_diff = now - expiry_dt
-                days = expired_diff.days
-                hours, remainder = divmod(expired_diff.seconds, 3600)
-                minutes, _ = divmod(remainder, 60)
-                
-                time_parts = []
-                if days > 0:
-                    time_parts.append(f"{days} дн.")
-                if hours > 0:
-                    time_parts.append(f"{hours} ч.")
-                if minutes > 0:
-                    time_parts.append(f"{minutes} мин.")
-                
-                if not time_parts:
-                    return "Только что истек"
-                
-                return f"Истек {time_parts[0]}" if len(time_parts) == 1 else f"Истек {' '.join(time_parts)}"
-            else:
-                return "Истек"
-        
-        # Извлекаем дни, часы и минуты
-        days = time_diff.days
-        hours, remainder = divmod(time_diff.seconds, 3600)
-        minutes, _ = divmod(remainder, 60)
-        
-        # Формируем строку
-        time_parts = []
-        if days > 0:
-            time_parts.append(f"{days} дн.")
-        if hours > 0:
-            time_parts.append(f"{hours} ч.")
-        if minutes > 0:
-            time_parts.append(f"{minutes} мин.")
-        
-        if not time_parts:
-            return "Менее минуты"
-        
-        return " ".join(time_parts)
-        
-    except Exception as e:
-        logger.error(f"Ошибка вычисления оставшегося времени: {e}")
-        return "—"
-
-def format_vpn_key_message(email, status, server, expiry, key, expiry_timestamp=None):
-    """
-    Форматирует сообщение с информацией о VPN ключе
-    """
-    status_icon = UIEmojis.SUCCESS if status == "Активен" else UIEmojis.ERROR
-    
-    # Вычисляем оставшееся время
-    time_remaining = calculate_time_remaining(expiry_timestamp) if expiry_timestamp else "—"
-    
-    message = (
-        f"{UIStyles.header('Ваш VPN ключ')}\n\n"
-        f"<b>Email:</b> <code>{email}</code>\n"
-        f"<b>Статус:</b> {status_icon} {UIStyles.highlight(status)}\n"
-        f"<b>Сервер:</b> {server}\n"
-        f"<b>Осталось:</b> {time_remaining}\n\n"
-        f"<code>{key}</code>\n"
-        f"{UIStyles.description('Нажмите на ключ выше, чтобы скопировать')}"
-    )
-    
-    return message
-
-
-async def check_user_has_existing_keys(user_id: str, server_manager) -> bool:
-    """
-    Проверяет, есть ли у пользователя существующие ключи на серверах
-    :param user_id: ID пользователя
-    :param server_manager: Менеджер серверов
-    :return: True если есть ключи, False если нет
-    """
-    try:
-        logger.info(f"Проверка существующих ключей для пользователя {user_id}")
-        
-        for server in server_manager.servers:
-            try:
-                xui = server["x3"]
-                server_name = server['name']
-                inbounds = xui.list()['obj']
-                
-                for inbound in inbounds:
-                    settings = json.loads(inbound['settings'])
-                    clients = settings.get("clients", [])
-                    
-                    for client in clients:
-                        email = client.get('email', '')
-                        # Проверяем, принадлежит ли ключ этому пользователю
-                        if email.startswith(f"{user_id}_") or email.startswith(f"trial_{user_id}_"):
-                            logger.info(f"Найден существующий ключ для пользователя {user_id}: {email} на сервере {server_name}")
-                            return True
-                            
-            except Exception as e:
-                logger.error(f"Ошибка проверки ключей на сервере {server['name']}: {e}")
-                continue
-        
-        logger.info(f"У пользователя {user_id} нет существующих ключей")
-        return False
-        
-    except Exception as e:
-        logger.error(f"Ошибка проверки существующих ключей для пользователя {user_id}: {e}")
-        return False
-
-
-# Команда /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_private_chat(update):
-        return
-    
-    user_id = str(update.effective_user.id)
-    has_existing_keys = False  # Инициализируем переменную
-    
-    # Дополнительное логирование для отладки
-    logger.info(f"START_DEBUG: user_id={user_id}, context.args={context.args}")
-    
-    # Регистрацию перенесли в конец start после обработки реферала и выдачи ключа
-    
-    # Проверяем реферальную ссылку
-    # Telegram передает аргументы команды /start в context.args
-    referral_code = None
-    
-    # Сначала проверяем context.args (основной способ)
-    if context.args and len(context.args) > 0:
-        logger.info(f"START_REFERRAL: context.args={context.args}")
-        # Проверяем, является ли аргумент числом (user_id)
-        if context.args[0].isdigit():
-            referral_code = context.args[0]
-            logger.info(f"START_REFERRAL: Found referral code in context.args: {referral_code}")
-        else:
-            logger.info(f"START_REFERRAL: context.args[0] is not a digit: {context.args[0]}")
-    else:
-        logger.info(f"START_REFERRAL: context.args is empty or None: {context.args}")
-    
-    # Если не нашли в context.args, проверяем update.message.text (резервный способ)
-    if not referral_code and update.message and update.message.text:
-        logger.info(f"START_REFERRAL: Checking message text: {update.message.text}")
-        import re
-        # Ищем числовые ID в тексте сообщения
-        match = re.search(r'(\d+)', update.message.text)
-        if match:
-            referral_code = match.group(1)
-            logger.info(f"START_REFERRAL: Found referral code in message text: {referral_code}")
-        else:
-            logger.info(f"START_REFERRAL: No numeric ID found in message text")
-    
-    if referral_code:
-        referrer_id = decode_referral_code(referral_code)
-        
-        if referrer_id and referrer_id != user_id:
-            # Логируем попытку создания реферальной связи
-            logger.info(f"START_REFERRAL: referrer_id={referrer_id}, referred_id={user_id}")
-            
-            # Проверяем, есть ли у пользователя платные покупки
-            has_paid_purchases = await is_known_user(user_id)
-            
-            # Проверяем, есть ли у пользователя существующие ключи на серверах
-            has_existing_keys = await check_user_has_existing_keys(user_id, new_client_manager)
-            
-            if has_paid_purchases or has_existing_keys:
-                # Пользователь уже имеет платные покупки или ключи - реферальная награда не будет выдана
-                if has_paid_purchases:
-                    logger.info(f"START_REFERRAL: User {user_id} has paid purchases, no referral reward")
-                if has_existing_keys:
-                    logger.info(f"START_REFERRAL: User {user_id} has existing keys on servers, no referral reward")
-                welcome_text = UIMessages.welcome_referral_existing_user_message()
-            else:
-                # Пытаемся сохранить реферальную связь
-                connection_saved = await save_referral_connection(referrer_id, user_id, server_manager)
-                
-                # Логируем результат
-                logger.info(f"START_REFERRAL: connection_saved={connection_saved}")
-                
-                if connection_saved:
-                    days = await get_config('points_days_per_point', '14')
-                    logger.info(f"START_REFERRAL: Получено значение days из конфигурации = {days}")
-                    welcome_text = UIMessages.welcome_referral_new_user_message(days)
-                else:
-                    # Пользователь уже участвовал в реферальной системе — показываем общее сообщение как для не нового пользователя
-                    welcome_text = UIMessages.welcome_referral_existing_user_message()
-        else:
-            logger.info(f"START_DEBUG: Invalid referral - referrer_id={referrer_id}, user_id={user_id}")
-            welcome_text = UIMessages.welcome_message()
-    else:
-        logger.info(f"START_DEBUG: No referral code found - context.args={context.args}, message_text={update.message.text if update.message else 'None'}")
-        # Используем единый стиль для приветственного сообщения (только если не было реферальной ссылки)
-        welcome_text = UIMessages.welcome_message()
-    
-    # Очищаем навигационный стек и добавляем главное меню
-    context.user_data['nav_stack'] = ['main_menu']
-    logger.info(f"START: Initialized stack: {context.user_data['nav_stack']}")
-    
-    # Создаем кнопки главного меню используя единый стиль
-    is_admin = update.effective_user.id in ADMIN_IDS
-    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
-    keyboard = InlineKeyboardMarkup(buttons)
-    
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("main_menu: message is None")
-        return
-    
-    # Дополнительное логирование для отладки
-    logger.info(f"START_MESSAGE: message={message}, welcome_text_length={len(welcome_text) if welcome_text else 0}")
-    
-    # Автовыдача обычного ключа на 14 дней новому клиенту (по БД реф. системы)
-    try:
-        user_id_str = str(update.effective_user.id)
-        is_new = not await is_known_user(user_id_str)
-        
-        # Проверяем, есть ли у пользователя существующие ключи на серверах (если еще не проверяли)
-        if not referral_code:
-            has_existing_keys = await check_user_has_existing_keys(user_id_str, new_client_manager)
-        # Если была реферальная ссылка, has_existing_keys уже проверен выше
-        
-        if is_new and not has_existing_keys:
-            xui, server_name = new_client_manager.get_best_location_server()
-            unique_email = f"{user_id_str}_{uuid.uuid4()}"
-            response = xui.addClient(day=14, tg_id=user_id_str, user_email=unique_email, timeout=15)
-            if response and getattr(response, 'status_code', None) == 200:
-                link = xui.link(unique_email)
-                expiry_time = datetime.datetime.now() + datetime.timedelta(days=14)
-                expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
-                expiry_ts = int(expiry_time.timestamp())
-                welcome_text += "\n\n" + UIStyles.info_message("Вам выдан бесплатный ключ на 14 дней") + "\n\n"
-                welcome_text += format_vpn_key_message(
-                    email=unique_email,
-                    status='Активен',
-                    server=server_name,
-                    expiry=expiry_str,
-                    key=link,
-                    expiry_timestamp=expiry_ts
-                )
-        elif is_new and has_existing_keys:
-            logger.info(f"Пользователь {user_id_str} новый в БД, но уже имеет ключи на серверах - пропускаем выдачу")
-        elif not is_new:
-            logger.info(f"Пользователь {user_id_str} уже известен в БД - пропускаем выдачу")
-    except Exception as e:
-        logger.error(f"START free key issue error: {e}")
-
-    # Теперь, когда все проверки выполнены, регистрируем пользователя
-    try:
-        await register_simple_user(user_id)
-    except Exception as e:
-        logger.error(f"Register user failed: {e}")
-    # Отправляем меню с фото
-    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
-
-async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Редактирует существующее сообщение на главное меню"""
-    # Создаем кнопки главного меню используя единый стиль
-    is_admin = update.effective_user.id in ADMIN_IDS
-    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
-    keyboard = InlineKeyboardMarkup(buttons)
-    
-    # Используем единый стиль для приветственного сообщения
-    welcome_text = UIMessages.welcome_message()
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("edit_main_menu: message is None")
-        return
-    
-    logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
-    try:
-        # Отправляем меню с фото
-        await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
-        logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано")
-    except Exception as e:
-        logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования сообщения: {e}")
-        # Если не удалось отредактировать, отправляем новое
-        logger.info("EDIT_MAIN_MENU: Вызываем start() как fallback")
-        await start(update, context)
-
-# Новая команда /instruction — с кнопками выбора платформы
-async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_private_chat(update):
-        return
-    
-    # Добавляем текущее состояние в навигационный стек
-    if not context.user_data.get('nav_stack'):
-        context.user_data['nav_stack'] = ['main_menu']
-    stack = context.user_data['nav_stack']
-    if not stack or stack[-1] != 'instruction_menu':
-        push_nav(context, 'instruction_menu')
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
-        [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
-        [InlineKeyboardButton("Linux", callback_data="instr_linux"), InlineKeyboardButton("Android TV", callback_data="instr_tv")],
-        [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
-        [UIButtons.back_button()],
-    ])
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("instruction_menu: message is None")
-        return
-    
-    # Используем единый стиль для сообщения
-    instruction_text = UIMessages.instruction_menu_message()
-    await safe_edit_or_reply_universal(message, instruction_text, reply_markup=keyboard, parse_mode="HTML", menu_type='instruction_menu')
-
-# Обработка кнопок инструкции
-async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    texts = {
-        "instr_android": (
-            "<b>Android (v2RayTun, Hiddify)</b>\n"
-            "1. Выберите приложение:\n"
-            "   • <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">v2RayTun из Google Play</a>\n"
-            "   • <a href=\"https://play.google.com/store/apps/details?id=app.hiddify.com\">Hiddify из Google Play</a>\n"
-            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В приложении нажмите + → Добавить из буфера обмена.\n"
-            "4. Подключитесь к VPN.\n"
-            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
-        ),
-        "instr_ios": (
-            "<b>iPhone (v2RayTun, Hiddify)</b>\n"
-            "1. Выберите приложение:\n"
-            "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone\">v2RayTun из App Store</a>\n"
-            "   • <a href=\"https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone\">Hiddify из App Store</a>\n"
-            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. Откройте выбранное приложение.\n"
-            "4. Нажмите + → Добавить из буфера обмена.\n"
-            "5. Выберите добавленный профиль и подключитесь.\n"
-            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
-        ),
-        "instr_windows": (
-            "<b>Windows (v2RayTun, Hiddify)</b>\n"
-            "1. Выберите приложение:\n"
-            "   • <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">v2RayTun для Windows</a>\n"
-            "   • <a href=\"https://app.hiddify.com/windows\">Hiddify для Windows</a>\n"
-            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
-            "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
-            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
-        ),
-        "instr_macos": (
-            "<b>Mac (v2RayTun, Hiddify)</b>\n"
-            "1. Выберите приложение:\n"
-            "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac\">v2RayTun для Mac</a>\n"
-            "   • <a href=\"https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone\">Hiddify для Mac</a>\n"
-            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
-            "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
-            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Mac.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
-        ),
-        "instr_tv": (
-            "<b>Android TV (v2RayTun)</b>\n"
-            "1. <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">Скачайте v2RayTun для Android TV</a>.\n"
-            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В v2RayTun нажмите + → Добавить из буфера обмена.\n"
-            "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
-            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Android TV.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
-        ),
-        "instr_linux": (
-            "<b>Linux (Hiddify)</b>\n"
-            "1. <a href=\"https://app.hiddify.com/linux\">Скачайте Hiddify для Linux</a>.\n"
-            "2. В боте нажмите 'Мои ключи' и скопируйте VLESS-ссылку.\n"
-            "3. В Hiddify нажмите + → Добавить из буфера обмена.\n"
-            "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
-            "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своим VPN-ключом с другими!"
-        ),
-
-        "instr_faq": (
-            "<b>FAQ - Частые вопросы</b>\n\n"
-            "<b>VPN не подключается:</b>\n"
-            "• Проверьте интернет\n"
-            "• Перезапустите v2RayTun\n"
-            "• Скопируйте ссылку полностью\n"
-            "• Отключите другие VPN\n\n"
-            "<b>Не импортируется ключ:</b>\n"
-            "• Скопируйте ссылку заново\n"
-            "• Проверьте 'vless://' в начале\n"
-            "• Обновите приложение\n\n"
-            "<b>Один ключ = одно устройство</b>\n"
-            "<b>Продление:</b> Купите новый ключ или продлите\n\n"
-            "<b>Нужна помощь?</b> Обратитесь в поддержку"
-        )
-    }
-    if data == "back":
-        await universal_back_callback(update, context)
-        return
-    elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_linux", "instr_tv", "instr_faq"]:
-        stack = context.user_data.setdefault('nav_stack', [])
-        if not stack or stack[-1] != 'instruction_platform':
-            push_nav(context, 'instruction_platform')
-        
-        # Определяем menu_type для каждой платформы
-        menu_type_map = {
-            "instr_android": "instruction_android",
-            "instr_ios": "instruction_ios", 
-            "instr_windows": "instruction_windows",
-            "instr_macos": "instruction_macos",
-            "instr_linux": "instruction_linux",
-            "instr_tv": "instruction_tv",
-            "instr_faq": "instruction_faq"
-        }
-        
-        menu_type = menu_type_map.get(data, 'instruction_platform')
-        
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-    ])
-    await safe_edit_or_reply_universal(query.message, texts.get(data, "Инструкция не найдена."), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type=menu_type)
-
-async def update_payment_activation(payment_id: str, activated: int):
-    import aiosqlite
-    from .keys_db import DB_PATH
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (activated, payment_id))
-        await db.commit()
-    logger.info(f"Обновлен статус активации: payment_id={payment_id}, activated={activated}")
-
-
-# === Обработка платежей ===
-
-async def handle_payment(update, context, price, period):
-    logger.info(f"handle_payment вызвана: price={price}, period={period}")
-    stack = context.user_data.setdefault('nav_stack', [])
-    if not stack or stack[-1] != 'payment':
-        push_nav(context, 'payment')
-    user = update.effective_user if hasattr(update, 'effective_user') else update.from_user
-    user_id = str(user.id)
-    logger.info(f"handle_payment: user_id={user_id}")
-    
-    # Получаем правильный объект сообщения
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    logger.info(f"handle_payment: message={message}, message_id={getattr(message, 'message_id', 'None')}")
-    try:
-        # Проверка на существующий pending-платёж по user_id и period
-        payment_info = await get_pending_payment(user_id, period)
-        logger.info(f"Проверка существующих платежей: user_id={user_id}, period={period}, found={payment_info is not None}")
-        
-        # Проверяем pending платежи пользователя и отменяем только неоплаченные
-        import aiosqlite
-        from .keys_db import DB_PATH
-        logger.info(f"HANDLE_PAYMENT: Подключаемся к базе данных по пути: {DB_PATH}")
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Проверяем существование таблицы payments
-            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments'") as cursor:
-                table_exists = await cursor.fetchone()
-                logger.info(f"HANDLE_PAYMENT: Таблица payments существует: {table_exists is not None}")
-                if not table_exists:
-                    logger.error("HANDLE_PAYMENT: Таблица payments не найдена! Создаем её...")
-                    await db.execute('''
-                        CREATE TABLE IF NOT EXISTS payments (
-                            user_id TEXT,
-                            payment_id TEXT PRIMARY KEY,
-                            status TEXT,
-                            created_at INTEGER,
-                            meta TEXT,
-                            activated INTEGER DEFAULT 0
-                        )
-                    ''')
-                    await db.commit()
-                    logger.info("HANDLE_PAYMENT: Таблица payments создана")
-            
-            # Получаем все pending платежи пользователя
-            async with db.execute('''
-                SELECT payment_id, status FROM payments WHERE user_id = ? AND status = ?
-            ''', (user_id, 'pending')) as cursor:
-                pending_payments = await cursor.fetchall()
-                logger.info(f"Найдено {len(pending_payments)} pending платежей для user_id={user_id}")
-            
-            # Просто помечаем все pending платежи как отмененные в БД
-            # YooKassa автоматически отменит их через 15 минут
-            canceled_count = len(pending_payments)
-            if canceled_count > 0:
-                logger.info(f"Помечаем {canceled_count} pending платежей как отмененные (YooKassa отменит их автоматически через 15 минут)")
-            
-            # Обновляем статус в БД для отмененных платежей
-            if canceled_count > 0:
-                await db.execute('UPDATE payments SET status = ? WHERE user_id = ? AND status = ?', ('canceled', user_id, 'pending'))
-                await db.commit()
-                logger.info(f"Отменено {canceled_count} pending платежей для user_id={user_id}")
-        
-        # 2. Создаём новый платёж или обрабатываем покупку за баллы
-        now = int(datetime.datetime.now().timestamp())
-        key_id = str(uuid.uuid4())
-        unique_email = f'{user_id}_{key_id}'
-        
-        # Проверяем, это покупка за баллы
-        if period == "points_month":
-            # Покупка за баллы - сначала создаем ключ, потом списываем баллы
-            try:
-                # Проверяем баллы
-                points_info = await get_user_points(user_id)
-                if points_info['points'] < 1:
-                    await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Недостаточно баллов!")
-                    return
-                
-                # Создаем VPN ключ СНАЧАЛА
-                selected_location = context.user_data.get("selected_location", "auto")
-                if selected_location == "auto":
-                    # Для автовыбора выбираем лучшую локацию
-                    xui, server_name = new_client_manager.get_best_location_server()
-                else:
-                    xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
-                points_days = int(await get_config('points_days_per_point', '14'))
-                response = xui.addClient(day=points_days, tg_id=user.id, user_email=unique_email, timeout=15)
-                
-                if response and getattr(response, 'status_code', None) == 200:
-                    # Ключ создан успешно - ТЕПЕРЬ списываем баллы
-                    success = await spend_points(user_id, 1, "Покупка VPN за баллы", bot=context.bot)
-                    if not success:
-                        # Если не удалось списать баллы, удаляем созданный ключ
-                        try:
-                            xui.removeClient(unique_email)
-                            logger.warning(f"Removed key {unique_email} due to points spending failure")
-                        except Exception as e:
-                            logger.error(f"Failed to remove key {unique_email} after points failure: {e}")
-                            # Уведомляем админа о критической ошибке
-                            await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось удалить ключ после неудачного списания баллов:\nКлюч: {unique_email}\nПользователь: {user_id}\nОшибка: {str(e)}")
-                        await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
-                        return
-                    expiry_time = datetime.datetime.now() + datetime.timedelta(days=points_days)
-                    expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
-                    expiry_timestamp = int(expiry_time.timestamp())
-                    
-                    msg = format_vpn_key_message(
-                        email=unique_email,
-                        status='Активен',
-                        server=server_name,
-                        expiry=expiry_str,
-                        key=xui.link(unique_email),
-                        expiry_timestamp=expiry_timestamp
-                    )
-                    
-                    keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
-                    ])
-                    await safe_edit_or_reply(message, msg, reply_markup=keyboard, parse_mode="HTML")
-                    
-                    # Логика учёта покупок перенесена; агрегаты в users не ведём
-                    
-                    # Проверяем реферальную связь и выдаем баллы атомарно
-                    try:
-                        referrer_id = await get_pending_referral(user_id)
-                        if referrer_id:
-                            # Атомарно выдаем награду
-                            reward_success = await atomic_referral_reward(referrer_id, user_id, f"points_{key_id}", server_manager)
-                            
-                            if reward_success:
-                                # Уведомляем реферера
-                                try:
-                                    await context.bot.send_message(
-                                        chat_id=referrer_id,
-                                        text="Поздравляем! Ваш реферал купил VPN и вы получили 1 балл!"
-                                    )
-                                except Exception as e:
-                                    logger.error(f"Ошибка отправки уведомления рефереру {referrer_id}: {e}")
-                            else:
-                                logger.error(f"Ошибка выдачи реферальной награды для {referrer_id}")
-                                # Уведомляем админа о критической ошибке реферальной системы
-                                await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось выдать реферальную награду:\nРеферер: {referrer_id}\nРеферал: {user_id}\nПлатеж: points_{key_id}")
-                    except Exception as e:
-                        logger.error(f"Ошибка обработки реферальной награды: {e}")
-                        # Уведомляем админа о критической ошибке реферальной системы
-                        await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Ошибка обработки реферальной награды:\nРеферер: {referrer_id}\nРеферал: {user_id}\nОшибка: {str(e)}")
-                    
-                    return
-                else:
-                    # Ключ не создан - баллы не списывались, просто сообщаем об ошибке
-                    await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при создании ключа.")
-                    return
-                    
-            except Exception as e:
-                logger.error(f"Ошибка покупки за баллы: {e}")
-                # Баллы не списывались, просто сообщаем об ошибке
-                await safe_edit_or_reply(message, f"{UIEmojis.ERROR} Ошибка при покупке.")
-                return
-        
-        # Обычная покупка за деньги
-        try:
-            payment = Payment.create({
-                "amount": {"value": price, "currency": "RUB"},
-                "confirmation": {"type": "redirect", "return_url": f"https://t.me/{user.id}"},
-                "capture": True,
-                "description": f"VPN {period} для {user_id}",
-                "metadata": {
-                    "user_id": user_id, 
-                    "key_id": key_id, 
-                    "type": period,
-                    "selected_location": context.user_data.get("selected_location", "auto")
-                },
-                "receipt": {
-                    "customer": {"email": f"{user_id}@vpn-x3.ru"},
-                    "items": [{
-                        "description": f"VPN {period} для {user_id}",
-                        "quantity": "1.00",
-                        "amount": {"value": price, "currency": "RUB"},
-                        "vat_code": 1
-                    }]
-                }
-            })
-            payment_id = payment.id
-        except Exception as e:
-            logger.exception(f"Ошибка создания платежа для user_id={user_id}")
-            # Уведомляем админа о критической ошибке создания платежа
-            await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать платеж:\nПользователь: {user_id}\nПериод: {period}\nЦена: {price}\nОшибка: {str(e)}")
-            await safe_edit_or_reply(message, 'Ошибка при создании платежа. Попробуйте позже.')
-            return
-        
-        # Показываем ссылку на оплату
-        try:
-            # Определяем переменные для текста
-            if period.startswith('extend_'):
-                # Для продления убираем префикс extend_
-                actual_period = period.replace('extend_', '')
-                period_text = "1 месяц" if actual_period == "month" else "3 месяца"
-            else:
-                # Для обычной покупки
-                period_text = "1 месяц" if period == "month" else "3 месяца"
-            payment_url = payment.confirmation.confirmation_url
-            
-            # Сохраняем message_id для отслеживания платежа
-            payment_message_ids[payment.id] = message.message_id
-            logger.info(f"Сохранен message_id {message.message_id} для payment_id {payment.id}")
-            logger.info(f"Текущее состояние payment_message_ids: {payment_message_ids}")
-            
-            # Для продления сохраняем информацию о сообщении для последующего редактирования
-            if period.startswith('extend_'):
-                extension_messages[payment.id] = (message.chat_id, message.message_id)
-                logger.info(f"Сохранена информация о сообщении продления: payment_id={payment.id}, chat_id={message.chat_id}, message_id={message.message_id}")
-            
-            # Редактируем сообщение с меню выбора периода на информацию об оплате
-            try:
-                # Получаем текст сообщения об оплате
-                payment_text = (
-                    f"<b>Оплата подписки на {period_text}</b>\n\n"
-                    f"Сумма: <b>{price}₽</b>\n"
-                    f"Период: <b>{period_text}</b>\n\n"
-                    f"<a href='{payment_url}'>Перейти к оплате</a>\n\n"
-                    f"{UIEmojis.WARNING} <i>Ссылка действительна 15 минут</i>\n\n"
-                    f"После оплаты ключ будет активирован автоматически."
-                )
-                
-                # Создаем кнопку "Назад"
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-                ])
-                
-                await safe_edit_or_reply_universal(message, payment_text, reply_markup=keyboard, parse_mode="HTML", menu_type='payment')
-                logger.info(f"Отредактировано сообщение с меню выбора периода на информацию об оплате: message_id={message.message_id}")
-            except Exception as e:
-                logger.error(f"Не удалось отредактировать сообщение с меню выбора периода: {e}")
-                # Если не удалось отредактировать, удаляем и отправляем новое
-                try:
-                    await message.delete()
-                    logger.info(f"Удалено сообщение с меню выбора периода: message_id={message.message_id}")
-                except Exception as delete_error:
-                    logger.error(f"Не удалось удалить сообщение с меню выбора периода: {delete_error}")
-            
-            # Подготавливаем метаданные платежа
-            payment_meta = {"price": price, "type": period, "key_id": key_id, "unique_email": unique_email}
-            
-            # Добавляем информацию о продлении, если это продление ключа
-            if period.startswith('extend_') and context.user_data.get('extension_key_email'):
-                payment_meta['extension_key_email'] = context.user_data['extension_key_email']
-                logger.info(f"Добавлена информация о продлении в метаданные: {context.user_data['extension_key_email']}")
-            
-            await add_payment(user_id, payment.id, 'pending', now, payment_meta)
-        except Exception as e:
-            logger.exception(f"Ошибка отправки сообщения об оплате для user_id={user_id}")
-            await safe_edit_or_reply(message, 'Ошибка при отправке информации об оплате.')
-    except Exception as e:
-        logger.exception(f"Ошибка в handle_payment для user_id={user_id}")
-        await safe_edit_or_reply(message, 'Произошла внутренняя ошибка. Администратор уже уведомлён.')
-        await notify_admin(context.bot, f"Ошибка в handle_payment для user_id={user_id}: {e}\n{traceback.format_exc()}")
-
-
-
-async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_private_chat(update):
-        return
-    
-    if not context.user_data.get('nav_stack'):
-        context.user_data['nav_stack'] = ['main_menu']
-    stack = context.user_data['nav_stack']
-    if not stack or stack[-1] != 'mykeys_menu':
-        push_nav(context, 'mykeys_menu')
-    user = update.effective_user
-    user_id = str(user.id)
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("mykeys_menu: message is None")
-        return
-    
-    # Получаем текущую страницу из callback_data или устанавливаем 0
-    current_page = 0
-    if update.callback_query and update.callback_query.data.startswith('keys_page_'):
-        try:
-            current_page = int(update.callback_query.data.split('_')[2])
-            logger.info(f"Переход на страницу {current_page} для user_id={user_id}")
-        except (ValueError, IndexError):
-            current_page = 0
-            logger.error(f"Ошибка парсинга номера страницы: {update.callback_query.data}")
-    
-    try:
-        # Ищем клиентов на всех серверах
-        all_clients = []
-        unique_clients = {} # Словарь для хранения уникальных клиентов по email
-        for server in server_manager.servers:
-            try:
-                xui = server["x3"]
-                inbounds = xui.list()['obj']
-                for inbound in inbounds:
-                    settings = json.loads(inbound['settings'])
-                    clients = settings.get("clients", [])
-                    for client in clients:
-                        if client['email'].startswith(user_id) or client['email'].startswith(f'trial_{user_id}'):
-                            client['server_name'] = server['name']  # Добавляем имя сервера
-                            if client['email'] not in unique_clients:
-                                unique_clients[client['email']] = client
-                                all_clients.append(client)
-            except Exception as e:
-                logger.error(f"Ошибка при получении клиентов с сервера {server['name']}: {e}")
-
-        if not all_clients:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
-            ])
-            await safe_edit_or_reply_universal(message, 'У вас нет активных ключей.', reply_markup=keyboard, menu_type='mykeys_menu')
-            return
-
-        # Настройки пагинации
-        keys_per_page = 1  # Показываем по 1 ключу на страницу
-        total_pages = (len(all_clients) + keys_per_page - 1) // keys_per_page
-        
-        # Ограничиваем текущую страницу
-        current_page = max(0, min(current_page, total_pages - 1))
-        
-        # Получаем ключи для текущей страницы
-        start_idx = current_page * keys_per_page
-        end_idx = start_idx + keys_per_page
-        page_clients = all_clients[start_idx:end_idx]
-        
-        # Формируем сообщение для текущей страницы
-        now = int(datetime.datetime.now().timestamp())
-        page_text = f"{UIStyles.header(f'Ваши ключи (стр. {current_page + 1}/{total_pages})')}\n\n"
-        
-        for i, client in enumerate(page_clients, start_idx + 1):
-            expiry = int(client.get('expiryTime', 0) / 1000)
-            is_active = client.get('enable', False) and expiry > now
-            expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%d.%m.%Y %H:%M') if expiry else '—'
-            status = 'Активен' if is_active else 'Неактивен'
-            server_name = client.get('server_name', 'Неизвестный сервер')
-            
-            xui = None
-            for server in server_manager.servers:
-                if server['name'] == server_name:
-                    xui = server['x3']
-                    break
-            
-            if xui:
-                link = xui.link(client["email"])
-                
-                # Добавляем информацию о ключе
-                status_icon = UIEmojis.SUCCESS if status == "Активен" else UIEmojis.ERROR
-                
-                # Вычисляем оставшееся время
-                time_remaining = calculate_time_remaining(expiry)
-                
-                # Получаем имя ключа из поля subId
-                key_name = client.get('subId', '').strip()
-                if key_name:
-                    page_text += f"{UIStyles.subheader(f'{i}. {key_name}')}\n"
-                else:
-                    page_text += f"{UIStyles.subheader(f'{i}. Ключ #{i}')}\n"
-                
-                page_text += f"<b>Email:</b> <code>{client['email']}</code>\n"
-                page_text += f"<b>Статус:</b> {status_icon} {status}\n"
-                page_text += f"<b>Сервер:</b> {server_name}\n"
-                page_text += f"<b>Осталось:</b> {time_remaining}\n\n"
-                page_text += f"<code>{link}</code>\n\n"
-                page_text += f"{UIStyles.description('Нажмите на ключ выше, чтобы скопировать')}\n\n"
-        
-        
-        # Создаем клавиатуру с навигацией
-        keyboard_buttons = []
-        
-        # Кнопка "Продлить" для текущего ключа (если ключ не истек)
-        current_client = page_clients[0] if page_clients else None
-        if current_client:
-            expiry = int(current_client.get('expiryTime', 0) / 1000)
-            now = int(datetime.datetime.now().timestamp())
-            # Показываем кнопку продления если ключ активен или истек менее чем 30 дней назад
-            if expiry > now - (30 * 24 * 3600):  # Можно продлить в течение 30 дней после истечения
-                # Создаем короткий идентификатор для ключа
-                import hashlib
-                short_id = hashlib.md5(f"{user_id}:{current_client['email']}".encode()).hexdigest()[:8]
-                extension_keys_cache[short_id] = current_client['email']
-                keyboard_buttons.append([InlineKeyboardButton("Продлить ключ", callback_data=f"ext_key:{short_id}")])
-            
-            # Кнопка для переименования ключа
-            rename_short_id = hashlib.md5(f"rename:{current_client['email']}".encode()).hexdigest()[:8]
-            keyboard_buttons.append([InlineKeyboardButton("Переименовать ключ", callback_data=f"rename_key:{rename_short_id}")])
-        
-        # Кнопки навигации по страницам
-        nav_buttons = []
-        if current_page > 0:
-            nav_buttons.append(InlineKeyboardButton(f"Пред. {UIEmojis.PREV}", callback_data=f"keys_page_{current_page - 1}"))
-        if current_page < total_pages - 1:
-            nav_buttons.append(InlineKeyboardButton(f"След. {UIEmojis.NEXT}", callback_data=f"keys_page_{current_page + 1}"))
-        
-        if nav_buttons:
-            keyboard_buttons.append(nav_buttons)
-        
-        # Кнопка "Назад"
-        keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")])
-        
-        keyboard = InlineKeyboardMarkup(keyboard_buttons)
-        
-        # Отправляем сообщение с пагинацией
-        await safe_edit_or_reply_universal(message, page_text, reply_markup=keyboard, parse_mode="HTML", menu_type='mykeys_menu')
-        
-    except Exception as e:
-        logger.exception(f"Ошибка в mykey для user_id={user_id}: {e}")
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-        ])
-        await safe_edit_or_reply(message, f'{UIEmojis.ERROR} Ошибка: {e}', reply_markup=keyboard)
-
-
-
-
-async def init_all_db():
-    from .keys_db import init_payments_db, DB_PATH, REFERRAL_DB_PATH, DATA_DIR
-    from .notifications_db import init_notifications_db, NOTIFICATIONS_DB_PATH
-    
-    # Создаем папку data если её нет
-    import os
-    os.makedirs(DATA_DIR, exist_ok=True)
-    logger.info(f"Создана/проверена папка для баз данных: {DATA_DIR}")
-    
-    logger.info("Инициализация баз данных...")
-    logger.info(f"Путь к базе платежей: {DB_PATH}")
-    logger.info(f"Путь к реферальной базе: {REFERRAL_DB_PATH}")
-    logger.info(f"Путь к базе уведомлений: {NOTIFICATIONS_DB_PATH}")
-    
-    logger.info("Вызываем init_payments_db()...")
-    await init_payments_db()
-    logger.info("init_payments_db() завершена")
-    logger.info("База данных платежей инициализирована")
-    
-    await init_referral_db()  # Инициализируем реферальную систему и конфиг
-    logger.info("Реферальная база данных инициализирована")
-    
-    await init_notifications_db()  # Инициализируем базу данных уведомлений
-    logger.info("База данных уведомлений инициализирована")
-    
-    logger.info("Все базы данных успешно инициализированы")
-
-
-
-
 # Webhook для получения уведомлений от YooKassa
 def create_webhook_app(bot_app):
     """Создает Flask приложение для обработки webhook'ов от YooKassa"""
@@ -2220,114 +185,114 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         menu_type='extend_key'
                     )
                 return
-            
-            # Продлеваем ключ
-            response = xui.extendClient(extension_email, days)
-            if response and response.status_code == 200:
-                await update_payment_status(payment_id, 'succeeded')
-                await update_payment_activation(payment_id, 1)
-                
-                # Проверяем реферальную связь и выдаем баллы
-                try:
-                    referrer_id = await get_pending_referral(user_id)
-                    if referrer_id:
+                            
+                            # Продлеваем ключ
+                            response = xui.extendClient(extension_email, days)
+                            if response and response.status_code == 200:
+                                await update_payment_status(payment_id, 'succeeded')
+                                await update_payment_activation(payment_id, 1)
+                                
+                                # Проверяем реферальную связь и выдаем баллы
+                                try:
+                                    referrer_id = await get_pending_referral(user_id)
+                                    if referrer_id:
                         # Выдаем 1 балл рефереру
-                        await add_points(
-                            referrer_id, 
-                            1, 
-                            f"Реферал: {user_id} продлил VPN",
-                            payment_id
-                        )
-                        
-                        # Отмечаем награду как выданную
-                        await mark_referral_reward_given(referrer_id, user_id, payment_id)
-                        
-                        # Уведомляем реферера
-                        try:
-                            points_days = await get_config('points_days_per_point', '14')
+                                        await add_points(
+                                            referrer_id, 
+                                            1, 
+                                            f"Реферал: {user_id} продлил VPN",
+                                            payment_id
+                                        )
+                                        
+                                        # Отмечаем награду как выданную
+                                        await mark_referral_reward_given(referrer_id, user_id, payment_id)
+                                        
+                                        # Уведомляем реферера
+                                        try:
+                                            points_days = await get_config('points_days_per_point', '14')
                             await bot_app.bot.send_message(
-                                chat_id=referrer_id,
-                                text=(
-                                    f"Поздравляем!\n\n"
-                                    "Ваш друг продлил VPN по вашей реферальной ссылке!\n"
-                                    f"Вы получили 1 балл!\n"
-                                    f"1 балл = {points_days} дней VPN бесплатно!\n\n"
-                                    "Используйте баллы для покупки или продления VPN!"
-                                )
-                            )
-                        except:
-                            pass
-                except Exception as e:
+                                                chat_id=referrer_id,
+                                                text=(
+                                                    f"Поздравляем!\n\n"
+                                                    "Ваш друг продлил VPN по вашей реферальной ссылке!\n"
+                                                    f"Вы получили 1 балл!\n"
+                                                    f"1 балл = {points_days} дней VPN бесплатно!\n\n"
+                                                    "Используйте баллы для покупки или продления VPN!"
+                                                )
+                                            )
+                                        except:
+                                            pass
+                                except Exception as e:
                     logger.error(f"Ошибка выдачи реферальных баллов при продлении: {e}")
-                
-                # Отправляем уведомление о продлении
-                try:
-                    # Получаем новое время истечения
-                    clients_response = xui.list()
-                    expiry_str = "—"
-                    if clients_response.get('success', False):
-                        for inbound in clients_response.get('obj', []):
-                            settings = json.loads(inbound.get('settings', '{}'))
-                            for client in settings.get('clients', []):
-                                if client.get('email') == extension_email:
-                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
-                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
-                                    break
-                    
-                    # Очищаем старые уведомления об истечении для продленного ключа
-                    if notification_manager:
-                        await notification_manager.clear_key_notifications(user_id, extension_email)
-                        await notification_manager.record_key_extension(user_id, extension_email)
-                    
-                    extension_message = UIMessages.key_extended_message(
-                        email=extension_email,
-                        server_name=server_name,
-                        days=days,
-                        expiry_str=expiry_str,
-                        period=actual_period
-                    )
-                    
+                                
+                                # Отправляем уведомление о продлении
+                                try:
+                                    # Получаем новое время истечения
+                                    clients_response = xui.list()
+                                    expiry_str = "—"
+                                    if clients_response.get('success', False):
+                                        for inbound in clients_response.get('obj', []):
+                                            settings = json.loads(inbound.get('settings', '{}'))
+                                            for client in settings.get('clients', []):
+                                                if client.get('email') == extension_email:
+                                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
+                                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
+                                                    break
+                                    
+                                    # Очищаем старые уведомления об истечении для продленного ключа
+                                    if notification_manager:
+                                        await notification_manager.clear_key_notifications(user_id, extension_email)
+                                        await notification_manager.record_key_extension(user_id, extension_email)
+                                    
+                                    extension_message = UIMessages.key_extended_message(
+                                        email=extension_email,
+                                        server_name=server_name,
+                                        days=days,
+                                        expiry_str=expiry_str,
+                                        period=actual_period
+                                    )
+                                    
                     if message_id:
-                        keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
-                            [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
-                        ])
+                                            keyboard = InlineKeyboardMarkup([
+                                                [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
+                                                [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                                            ])
                         
                         await safe_edit_message_with_photo(
                             bot_app.bot,
                             chat_id=int(user_id),
-                            message_id=message_id,
-                            text=extension_message,
+                                                message_id=message_id,
+                                                text=extension_message,
                             reply_markup=keyboard,
-                            parse_mode="HTML",
+                                                parse_mode="HTML",
                             menu_type='extend_key'
-                        )
-                        logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
+                                            )
+                                            logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
                         
                         # Удаляем message_id из отслеживания
                         payment_message_ids.pop(payment_id, None)
                     else:
-                        # Fallback: отправляем новое сообщение
+                                            # Fallback: отправляем новое сообщение
                         await safe_send_message_with_photo(
-                            bot_app.bot,
+                            bot_app,
                             chat_id=int(user_id),
-                            text=extension_message,
+                                                    text=extension_message,
                             reply_markup=keyboard,
                             parse_mode="HTML",
                             menu_type='extend_key'
-                        )
-                        logger.info(f"Отправлено новое сообщение о продлении ключа {extension_email} пользователю {user_id}")
-                    
-                except Exception as e:
-                    logger.error(f"Ошибка отправки уведомления о продлении: {e}")
-            else:
+                                            )
+                                            logger.info(f"Отправлено новое сообщение о продлении ключа {extension_email} пользователю {user_id}")
+                                    
+                                except Exception as e:
+                                    logger.error(f"Ошибка отправки уведомления о продлении: {e}")
+                            else:
                 logger.error(f"Ошибка продления ключа {extension_email}: {response}")
-                await update_payment_status(payment_id, 'failed')
-                
-        except Exception as e:
-            logger.error(f"Ошибка при продлении ключа {extension_email}: {e}")
-            await update_payment_status(payment_id, 'failed')
-                    
+                                await update_payment_status(payment_id, 'failed')
+                                
+                        except Exception as e:
+                            logger.error(f"Ошибка при продлении ключа {extension_email}: {e}")
+                            await update_payment_status(payment_id, 'failed')
+                        
     except Exception as e:
         logger.error(f"Ошибка обработки продления ключа {payment_id}: {e}")
 
@@ -2336,7 +301,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
     """Обрабатывает новую покупку"""
     try:
         period = meta.get('type', 'month')
-        days = 90 if period == '3month' else 30
+                    days = 90 if period == '3month' else 30
         unique_email = meta.get('unique_email')
         selected_location = meta.get('selected_location', 'auto')
         
@@ -2346,138 +311,138 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             logger.error(f"Не найден unique_email в meta: {meta}")
             await update_payment_status(payment_id, 'failed')
             return
-        
-        # Создание ключа
-        try:
-            if selected_location == "auto":
-                # Для автовыбора выбираем лучшую локацию
-                xui, server_name = new_client_manager.get_best_location_server()
-            else:
-                xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
+                    
+                    # Создание ключа
+                    try:
+                        if selected_location == "auto":
+                            # Для автовыбора выбираем лучшую локацию
+                            xui, server_name = new_client_manager.get_best_location_server()
+                        else:
+                            xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
             
-            response = xui.addClient(day=days, tg_id=user_id, user_email=unique_email, timeout=15)
-            
-            if response.status_code == 200:
-                await update_payment_status(payment_id, 'succeeded')
-                await update_payment_activation(payment_id, 1)
-                
-                # Проверяем реферальную связь и выдаем баллы
-                try:
-                    referrer_id = await get_pending_referral(user_id)
-                    if referrer_id:
+                        response = xui.addClient(day=days, tg_id=user_id, user_email=unique_email, timeout=15)
+                        
+                        if response.status_code == 200:
+                            await update_payment_status(payment_id, 'succeeded')
+                            await update_payment_activation(payment_id, 1)
+                            
+                            # Проверяем реферальную связь и выдаем баллы
+                            try:
+                                referrer_id = await get_pending_referral(user_id)
+                                if referrer_id:
                         # Выдаем 1 балл рефереру
-                        await add_points(
-                            referrer_id, 
-                            1, 
-                            f"Реферал: {user_id} купил VPN",
-                            payment_id
-                        )
-                        
-                        # Отмечаем награду как выданную
-                        await mark_referral_reward_given(referrer_id, user_id, payment_id)
-                        
-                        # Уведомляем реферера
-                        try:
-                            points_days = await get_config('points_days_per_point', '14')
+                                    await add_points(
+                                        referrer_id, 
+                                        1, 
+                                        f"Реферал: {user_id} купил VPN",
+                                        payment_id
+                                    )
+                                    
+                                    # Отмечаем награду как выданную
+                                    await mark_referral_reward_given(referrer_id, user_id, payment_id)
+                                    
+                                    # Уведомляем реферера
+                                    try:
+                                        points_days = await get_config('points_days_per_point', '14')
                             await bot_app.bot.send_message(
-                                chat_id=referrer_id,
-                                text=(
-                                    f"Поздравляем!\n\n"
-                                    "Ваш друг купил VPN по вашей реферальной ссылке!\n"
-                                    f"Вы получили 1 балл!\n"
-                                    f"1 балл = {points_days} дней VPN бесплатно!\n\n"
-                                    "Используйте баллы для покупки или продления VPN!"
-                                )
-                            )
-                        except:
-                            pass
-                except Exception as e:
+                                            chat_id=referrer_id,
+                                            text=(
+                                                f"Поздравляем!\n\n"
+                                                "Ваш друг купил VPN по вашей реферальной ссылке!\n"
+                                                f"Вы получили 1 балл!\n"
+                                                f"1 балл = {points_days} дней VPN бесплатно!\n\n"
+                                                "Используйте баллы для покупки или продления VPN!"
+                                            )
+                                        )
+                                    except:
+                                        pass
+                            except Exception as e:
                     logger.error(f"Ошибка выдачи реферальных баллов при покупке: {e}")
-                
+                            
                 # Отправка ключа пользователю
-                try:
+                            try:
                     # Получаем реальное время истечения из XUI API
-                    clients_response = xui.list()
+                                clients_response = xui.list()
                     expiry_str = "—"
                     expiry_timestamp = 0
                     
-                    if clients_response.get('success', False):
-                        clients = clients_response.get('obj', [])
-                        for inbound in clients:
-                            settings = json.loads(inbound.get('settings', '{}'))
-                            for client in settings.get('clients', []):
-                                if client.get('email') == unique_email:
-                                    # Получаем точное время истечения из API
-                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
-                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
-                                    break
-                            else:
-                                continue
-                            break
-                    else:
-                        # Fallback: вычисляем время истечения
-                        expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
-                        expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
-                        expiry_timestamp = int(expiry_time.timestamp())
-                    
-                    msg = format_vpn_key_message(
-                        email=unique_email,
-                        status='Активен',
-                        server=server_name,
-                        expiry=expiry_str,
-                        key=xui.link(unique_email),
-                        expiry_timestamp=expiry_timestamp
-                    )
-                    
-                    keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-                    ])
-                    
+                                if clients_response.get('success', False):
+                                    clients = clients_response.get('obj', [])
+                                    for inbound in clients:
+                                        settings = json.loads(inbound.get('settings', '{}'))
+                                        for client in settings.get('clients', []):
+                                            if client.get('email') == unique_email:
+                                                # Получаем точное время истечения из API
+                                                expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
+                                                expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
+                                                break
+                                        else:
+                                            continue
+                                        break
+                                else:
+                                # Fallback: вычисляем время истечения
+                                expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
+                                expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
+                                expiry_timestamp = int(expiry_time.timestamp())
+                            
+                            msg = format_vpn_key_message(
+                                email=unique_email,
+                                status='Активен',
+                                server=server_name,
+                                expiry=expiry_str,
+                                key=xui.link(unique_email),
+                                expiry_timestamp=expiry_timestamp
+                            )
+                            
+                            keyboard = InlineKeyboardMarkup([
+                                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+                            ])
+                            
                     # Формируем полное сообщение о покупке
-                    success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
-                    full_message = success_text + msg
-                    
-                    # Если есть сообщение с оплатой, редактируем его
-                    if message_id:
-                        try:
+                            success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
+                            full_message = success_text + msg
+                            
+                            # Если есть сообщение с оплатой, редактируем его
+                            if message_id:
+                                try:
                             await safe_edit_message_with_photo(
                                 bot_app.bot,
-                                chat_id=int(user_id),
-                                message_id=message_id,
-                                text=full_message,
-                                reply_markup=keyboard,
+                                        chat_id=int(user_id),
+                                        message_id=message_id,
+                                        text=full_message,
+                                        reply_markup=keyboard,
                                 parse_mode="HTML",
                                 menu_type='key_success'
-                            )
-                            logger.info(f"Отредактировано сообщение с оплатой {message_id} на информацию о ключе")
-                        except Exception as edit_error:
-                            logger.error(f"Ошибка редактирования сообщения {message_id}: {edit_error}")
+                                    )
+                                    logger.info(f"Отредактировано сообщение с оплатой {message_id} на информацию о ключе")
+                                except Exception as edit_error:
+                                    logger.error(f"Ошибка редактирования сообщения {message_id}: {edit_error}")
                             # Fallback: отправляем новое сообщение
                             await safe_send_message_with_photo(
                                 bot_app.bot,
-                                chat_id=int(user_id),
-                                text=full_message,
-                                reply_markup=keyboard,
+                                            chat_id=int(user_id),
+                                            text=full_message,
+                                            reply_markup=keyboard,
                                 parse_mode="HTML",
                                 menu_type='key_success'
-                            )
-                            logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
-                    else:
-                        # Если нет сообщения с оплатой, отправляем новое
+                                        )
+                                        logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
+                            else:
+                                # Если нет сообщения с оплатой, отправляем новое
                         await safe_send_message_with_photo(
                             bot_app.bot,
-                            chat_id=int(user_id),
-                            text=full_message,
-                            reply_markup=keyboard,
+                                        chat_id=int(user_id),
+                                        text=full_message,
+                                        reply_markup=keyboard,
                             parse_mode="HTML",
                             menu_type='key_success'
-                        )
-                        logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
-                    
-                    # Удаляем message_id из отслеживания
-                    payment_message_ids.pop(payment_id, None)
+                                    )
+                                    logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                             
-                except Exception as e:
+                            # Удаляем message_id из отслеживания
+                            payment_message_ids.pop(payment_id, None)
+                            
+                    except Exception as e:
                     logger.error(f"Ошибка отправки ключа пользователю: {e}")
             else:
                 logger.error(f"Ошибка создания ключа: {response}")
@@ -2495,7 +460,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
     """Обрабатывает отмененный платеж"""
     try:
         await update_payment_status(payment_id, 'failed')
-        await update_payment_activation(payment_id, 0)
+                    await update_payment_activation(payment_id, 0)
         
         # Отправляем сообщение пользователю об ошибке оплаты
         message_id = payment_message_ids.get(payment_id)
@@ -2527,7 +492,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
             # Удаляем message_id из отслеживания
             payment_message_ids.pop(payment_id, None)
                     
-    except Exception as e:
+        except Exception as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
 
 
