@@ -4131,97 +4131,6 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 
-# === Навигационный стек и универсальный обработчик "Назад" ===
-# === СТАРЫЕ ФУНКЦИИ НАВИГАЦИИ (ЗАМЕНЕНЫ НОВОЙ СИСТЕМОЙ) ===
-# def push_nav(context, state, max_size=10):
-#     stack = context.user_data.setdefault('nav_stack', [])
-#     
-#     # Ограничиваем размер стека
-#     if len(stack) >= max_size:
-#         stack.pop(0)  # Удаляем самый старый элемент
-#     
-#     stack.append(state)
-#     logger.info(f"PUSH: {state} -> Stack: {stack}")
-
-# def pop_nav(context):
-#     stack = context.user_data.get('nav_stack', [])
-#     if stack:
-#         popped = stack.pop()
-#         logger.info(f"POP: {popped} -> Stack: {stack}")
-#         return stack[-1] if stack else None
-#     logger.info(f"POP: empty stack")
-#     return None
-
-
-# === СТАРАЯ ФУНКЦИЯ НАВИГАЦИИ (ЗАМЕНЕНА НОВОЙ СИСТЕМОЙ) ===
-# async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     query = update.callback_query
-#     await query.answer()
-#     
-#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
-#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
-#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
-#     
-#     # Обычная логика навигации
-#     prev_state = pop_nav(context)
-#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Previous state: {prev_state}")
-#     
-#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Navigating to {prev_state}")
-#     
-#     # Если стек пустой — возвращаемся в главное меню
-#     if prev_state is None:
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, calling start()")
-#         await start(update, context)
-#     elif prev_state == 'main_menu':
-#         # Если возвращаемся в main_menu, редактируем существующее сообщение
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'main_menu', calling edit_main_menu")
-#         await edit_main_menu(update, context)
-#     elif prev_state == 'instruction_menu':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_menu', calling instruction()")
-#         await instruction(update, context)
-#     elif prev_state == 'instruction_platform':
-#         # Возвращаемся к выбору платформы
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_platform', calling instruction()")
-#         await instruction(update, context)
-# 
-#     elif prev_state == 'payment':
-#         # После активации ключа возвращаемся в меню "Мои ключи"
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'payment', calling mykey()")
-#         await mykey(update, context)
-#     elif prev_state == 'mykeys_menu':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'mykeys_menu', calling mykey()")
-#         await mykey(update, context)
-#     elif prev_state == 'admin_menu':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_menu', calling admin_menu()")
-#         await admin_menu(update, context)
-#     elif prev_state == 'admin_errors':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_errors', calling admin_menu()")
-#         await admin_menu(update, context)
-#     elif prev_state == 'admin_check_servers':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_check_servers', calling admin_menu()")
-#         await admin_menu(update, context)
-#     elif prev_state == 'admin_notifications':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_notifications', calling admin_menu()")
-#         await admin_menu(update, context)
-#     elif prev_state == 'buy_menu':
-#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'buy_menu', calling buy_menu_handler()")
-#         await buy_menu_handler(update, context)
-#     elif prev_state == 'server_selection':
-#         # Если предыдущее состояние server_selection, проверяем, находимся ли мы в сообщении с успешной оплатой
-#         message = query.message
-#         if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
-#             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling start()")
-#             # Очищаем навигационный стек и переходим в главное меню
-#             context.user_data['nav_stack'] = []
-#             await start(update, context)
-#         else:
-#             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection', calling buy_menu_handler()")
-#             await buy_menu_handler(update, context)
-#     else:
-#         logger.warning(f"🔙 UNIVERSAL_BACK_CALLBACK: Unknown state {prev_state}, returning to main menu")
-#         await start(update, context)
-
-
 
 async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Принудительная проверка всех серверов"""
@@ -5433,15 +5342,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_notifications', admin_notifications))
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
-    # Обработчик кнопки "Назад" - должен быть первым для приоритета
-    # === СТАРЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ (ЗАМЕНЕНЫ НОВОЙ СИСТЕМОЙ) ===
-    # app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
-    # # Обработчик кнопки "Назад" после успешной оплаты
-    # app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
+
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
-    # === СТАРЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ (ЗАМЕНЕНЫ НОВОЙ СИСТЕМОЙ) ===
-    # app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
+ 
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
@@ -5461,7 +5365,7 @@ if __name__ == '__main__':
                 MessageHandler(filters.Document.ALL, admin_broadcast_input),
                 MessageHandler(filters.AUDIO, admin_broadcast_input),
                 MessageHandler(filters.VOICE, admin_broadcast_input),
-                MessageHandler(filters.STICKER, admin_broadcast_input),
+                MessageHandler(filters.Sticker.ALL, admin_broadcast_input),
             ],
             BROADCAST_CONFIRM: [
                 CallbackQueryHandler(admin_broadcast_send, pattern="^admin_broadcast_send$"),
