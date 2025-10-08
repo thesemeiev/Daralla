@@ -325,7 +325,14 @@ IMAGE_PATHS = {
     'broadcast': 'images/broadcast.jpg',
     'payment': 'images/payment.jpg',
     'payment_success': 'images/payment_success.jpg',
-    'payment_failed': 'images/payment_failed.jpg'
+    'payment_failed': 'images/payment_failed.jpg',
+    'instruction_android': 'images/instruction_android.jpg',
+    'instruction_ios': 'images/instruction_ios.jpg',
+    'instruction_windows': 'images/instruction_windows.jpg',
+    'instruction_macos': 'images/instruction_macos.jpg',
+    'instruction_linux': 'images/instruction_linux.jpg',
+    'instruction_tv': 'images/instruction_tv.jpg',
+    'instruction_faq': 'images/instruction_faq.jpg'
 }
 
 # Проверяем наличие обязательных переменных
@@ -1502,10 +1509,24 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         stack = context.user_data.setdefault('nav_stack', [])
         if not stack or stack[-1] != 'instruction_platform':
             push_nav(context, 'instruction_platform')
+        
+        # Определяем menu_type для каждой платформы
+        menu_type_map = {
+            "instr_android": "instruction_android",
+            "instr_ios": "instruction_ios", 
+            "instr_windows": "instruction_windows",
+            "instr_macos": "instruction_macos",
+            "instr_linux": "instruction_linux",
+            "instr_tv": "instruction_tv",
+            "instr_faq": "instruction_faq"
+        }
+        
+        menu_type = menu_type_map.get(data, 'instruction_platform')
+        
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
     ])
-    await safe_edit_or_reply_universal(query.message, texts.get(data, "Инструкция не найдена."), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='instruction_platform')
+    await safe_edit_or_reply_universal(query.message, texts.get(data, "Инструкция не найдена."), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type=menu_type)
 
 async def update_payment_activation(payment_id: str, activated: int):
     import aiosqlite
@@ -1824,7 +1845,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
             ])
-            await safe_edit_or_reply(message, 'У вас нет активных ключей.', reply_markup=keyboard)
+            await safe_edit_or_reply_universal(message, 'У вас нет активных ключей.', reply_markup=keyboard, menu_type='mykeys_menu')
             return
 
         # Настройки пагинации
