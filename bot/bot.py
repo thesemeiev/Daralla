@@ -4168,8 +4168,8 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
         # Если предыдущее состояние server_selection, проверяем, находимся ли мы в сообщении с успешной оплатой
         message = query.message
         if message and message.caption and "Покупка прошла успешно" in message.caption:
-            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling mykey()")
-            await mykey(update, context)
+            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling start()")
+            await start(update, context)
         else:
             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection', calling buy_menu_handler()")
             await buy_menu_handler(update, context)
@@ -5183,6 +5183,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
     # Обработчик кнопки "Назад" - должен быть первым для приоритета
     app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
+    # Обработчик кнопки "Назад" после успешной оплаты
+    app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
     app.add_handler(CallbackQueryHandler(start, pattern="^main_menu$"))
