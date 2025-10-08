@@ -56,17 +56,13 @@ class MenuHandlers:
     
     async def instruction_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню инструкций"""
-        if 'instruction' in self.handlers:
-            await self.handlers['instruction'](update, context)
-        else:
-            logger.error("instruction handler not found")
+        from .bot import instruction
+        await instruction(update, context)
     
     async def instruction_platform(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Платформы инструкций"""
-        if 'instruction_callback' in self.handlers:
-            await self.handlers['instruction_callback'](update, context)
-        else:
-            logger.error("instruction_callback handler not found")
+        from .bot import instruction_callback
+        await instruction_callback(update, context)
     
     async def buy_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню покупки"""
@@ -190,47 +186,35 @@ class MenuHandlers:
     
     async def payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Обработка платежа"""
-        if 'handle_payment' in self.handlers:
-            price = kwargs.get('price')
-            period = kwargs.get('period')
-            await self.handlers['handle_payment'](update, context, price, period)
-        else:
-            logger.error("handle_payment handler not found")
+        from .bot import handle_payment
+        price = kwargs.get('price')
+        period = kwargs.get('period')
+        await handle_payment(update, context, price, period)
     
     async def mykeys_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню моих ключей"""
-        if 'mykey' in self.handlers:
-            await self.handlers['mykey'](update, context)
-        else:
-            logger.error("mykey handler not found")
+        from .bot import mykey
+        await mykey(update, context)
     
     async def points_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню баллов"""
-        if 'points_callback' in self.handlers:
-            await self.handlers['points_callback'](update, context)
-        else:
-            logger.error("points_callback handler not found")
+        from .bot import points_callback
+        await points_callback(update, context)
     
     async def referral_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню рефералов"""
-        if 'referral_callback' in self.handlers:
-            await self.handlers['referral_callback'](update, context)
-        else:
-            logger.error("referral_callback handler not found")
+        from .bot import referral_callback
+        await referral_callback(update, context)
     
     async def extend_key(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Продление ключа"""
-        if 'extend_key_callback' in self.handlers:
-            await self.handlers['extend_key_callback'](update, context)
-        else:
-            logger.error("extend_key_callback handler not found")
+        from .bot import extend_key_callback
+        await extend_key_callback(update, context)
     
     async def rename_key(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Переименование ключа"""
-        if 'rename_key_callback' in self.handlers:
-            await self.handlers['rename_key_callback'](update, context)
-        else:
-            logger.error("rename_key_callback handler not found")
+        from .bot import rename_key_callback
+        await rename_key_callback(update, context)
     
     async def admin_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ меню"""
@@ -276,38 +260,28 @@ class MenuHandlers:
     
     async def admin_errors(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ логи"""
-        if 'admin_errors' in self.handlers:
-            await self.handlers['admin_errors'](update, context)
-        else:
-            logger.error("admin_errors handler not found")
+        from .bot import admin_errors
+        await admin_errors(update, context)
     
     async def admin_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ уведомления"""
-        if 'admin_notifications' in self.handlers:
-            await self.handlers['admin_notifications'](update, context)
-        else:
-            logger.error("admin_notifications handler not found")
+        from .bot import admin_notifications
+        await admin_notifications(update, context)
     
     async def admin_check_servers(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ проверка серверов"""
-        if 'admin_check_servers' in self.handlers:
-            await self.handlers['admin_check_servers'](update, context)
-        else:
-            logger.error("admin_check_servers handler not found")
+        from .bot import admin_check_servers
+        await admin_check_servers(update, context)
     
     async def admin_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ рассылка"""
-        if 'admin_broadcast_start' in self.handlers:
-            await self.handlers['admin_broadcast_start'](update, context)
-        else:
-            logger.error("admin_broadcast_start handler not found")
+        from .bot import admin_broadcast_start
+        await admin_broadcast_start(update, context)
     
     async def admin_set_days(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ настройка дней"""
-        if 'admin_set_days_start' in self.handlers:
-            await self.handlers['admin_set_days_start'](update, context)
-        else:
-            logger.error("admin_set_days_start handler not found")
+        from .bot import admin_set_days_start
+        await admin_set_days_start(update, context)
 
 class NavigationCallbacks:
     """Обработчики навигационных callback'ов"""
