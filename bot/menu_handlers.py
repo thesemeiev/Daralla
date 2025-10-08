@@ -50,11 +50,9 @@ class MenuHandlers:
     
     async def main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Главное меню"""
-        # Используем существующий обработчик из bot.py
-        if 'edit_main_menu' in self.handlers:
-            await self.handlers['edit_main_menu'](update, context)
-        else:
-            logger.error("edit_main_menu handler not found")
+        # Импортируем и вызываем edit_main_menu из bot.py
+        from .bot import edit_main_menu
+        await edit_main_menu(update, context)
     
     async def instruction_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню инструкций"""
