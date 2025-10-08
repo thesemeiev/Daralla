@@ -1546,8 +1546,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "• Проверьте 'vless://' в начале\n"
             "• Обновите приложение\n\n"
             "<b>Один ключ = одно устройство</b>\n"
-            "<b>Продление:</b> Купите новый ключ или используйте баллы\n"
-            "<b>Баллы:</b> Приглашайте друзей (1 балл = 14 дней)\n\n"
+            "<b>Продление:</b> Купите новый ключ или продлите\n\n"
             "<b>Нужна помощь?</b> Обратитесь в поддержку"
         )
     }
@@ -4531,16 +4530,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error("Не найдены message_id или chat_id в контексте")
         return
     
-    # Создаем объект сообщения для редактирования
-    from telegram import Message, Chat, User
-    mock_chat = Chat(id=chat_id, type="private")
-    mock_user = User(id=int(user_id), is_bot=False, first_name="User")
-    mock_message = Message(
-        message_id=message_id,
-        date=datetime.datetime.now(),
-        chat=mock_chat,
-        from_user=mock_user
-    )
+    # Данные для редактирования сообщения получены из контекста
     
     # Валидация имени
     if len(new_name) > 50:
@@ -4555,17 +4545,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            # Создаем объект сообщения для редактирования
-            from telegram import Message, Chat, User
-            mock_chat = Chat(id=chat_id, type="private")
-            mock_user = User(id=int(user_id), is_bot=False, first_name="User")
-            mock_message = Message(
+            # Редактируем сообщение через бота
+            await safe_edit_message_with_photo(
+                context.bot,
+                chat_id=chat_id,
                 message_id=message_id,
-                date=datetime.datetime.now(),
-                chat=mock_chat,
-                from_user=mock_user
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type='rename_key'
             )
-            await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='rename_key')
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
         return
@@ -4582,17 +4571,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            # Создаем объект сообщения для редактирования
-            from telegram import Message, Chat, User
-            mock_chat = Chat(id=chat_id, type="private")
-            mock_user = User(id=int(user_id), is_bot=False, first_name="User")
-            mock_message = Message(
+            # Редактируем сообщение через бота
+            await safe_edit_message_with_photo(
+                context.bot,
+                chat_id=chat_id,
                 message_id=message_id,
-                date=datetime.datetime.now(),
-                chat=mock_chat,
-                from_user=mock_user
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type='rename_key'
             )
-            await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='rename_key')
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
         return
@@ -4610,7 +4598,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type='extend_key'
+                )
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
             return
@@ -4628,7 +4624,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type='extend_key'
+                )
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
             return
@@ -4658,7 +4662,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(mock_message, success_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=success_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type='extend_key'
+                )
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
         else:
@@ -4672,7 +4684,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type='extend_key'
+                )
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
     
@@ -4688,7 +4708,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+            await safe_edit_message_with_photo(
+                context.bot,
+                chat_id=chat_id,
+                message_id=message_id,
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type='extend_key'
+            )
         except Exception as edit_e:
             logger.error(f"Ошибка редактирования сообщения: {edit_e}")
 
