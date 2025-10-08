@@ -215,9 +215,14 @@ jobs:
             echo "Updating webhook URL in .env..."
             WEBHOOK_URL="${NGROK_URL}/webhook/yookassa"
             echo "WEBHOOK_URL=$WEBHOOK_URL" | sudo tee -a .env
+            echo "NGROK_AUTH_TOKEN=${{ secrets.NGROK_AUTH_TOKEN }}" | sudo tee -a .env
             echo "Webhook URL set to: $WEBHOOK_URL"
+            echo "NGROK_AUTH_TOKEN added to .env"
           else
             echo "Failed to get ngrok URL"
+            # Still add NGROK_AUTH_TOKEN even if ngrok failed
+            echo "NGROK_AUTH_TOKEN=${{ secrets.NGROK_AUTH_TOKEN }}" | sudo tee -a .env
+            echo "NGROK_AUTH_TOKEN added to .env (ngrok failed)"
           fi
           
           # Return to project directory
