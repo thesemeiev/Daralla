@@ -112,7 +112,7 @@ jobs:
           
           # Download code directly to working directory
           echo "Downloading code..."
-          sudo apt-get update -qq && sudo apt-get install -y -qq git
+          sudo apt-get update -qq && sudo apt-get install -y -qq git sqlite3
           
           # Backup .env before removing directory
           if [ -f "/root/Daralla/.env" ]; then
