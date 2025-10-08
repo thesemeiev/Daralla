@@ -3243,9 +3243,9 @@ extension_messages = {}
 
 # Импорт нового модуля уведомлений
 try:
-    from notifications import NotificationManager
+    from .notifications import NotificationManager
 except ImportError:
-    from notifications import NotificationManager
+    from .notifications import NotificationManager
 
 import traceback
 
