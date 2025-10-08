@@ -251,34 +251,53 @@ async def safe_send_message_with_photo(bot, chat_id, text, reply_markup=None, pa
 
 async def safe_edit_message_with_photo(bot, chat_id, message_id, text, reply_markup=None, parse_mode=None, menu_type=None):
     """Безопасное редактирование сообщения с фото через бота"""
+    max_retries = 3
+    retry_delay = 2
+    
     if menu_type and menu_type in IMAGE_PATHS:
         photo_path = IMAGE_PATHS[menu_type]
         if os.path.exists(photo_path):
-            try:
-                with open(photo_path, 'rb') as photo_file:
-                    from telegram import InputMediaPhoto
-                    await bot.edit_message_media(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        media=InputMediaPhoto(
-                            media=photo_file,
-                            caption=text,
-                            parse_mode=parse_mode
-                        ),
-                        reply_markup=reply_markup
-                    )
-                return
-            except Exception as e:
-                logger.warning(f"Failed to edit message with photo for menu_type {menu_type}: {e}")
+            for attempt in range(max_retries):
+                try:
+                    with open(photo_path, 'rb') as photo_file:
+                        from telegram import InputMediaPhoto
+                        await bot.edit_message_media(
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            media=InputMediaPhoto(
+                                media=photo_file,
+                                caption=text,
+                                parse_mode=parse_mode
+                            ),
+                            reply_markup=reply_markup
+                        )
+                    return
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Failed to edit message with photo (attempt {attempt + 1}/{max_retries}): {e}")
+                        await asyncio.sleep(retry_delay * (attempt + 1))
+                    else:
+                        logger.error(f"Failed to edit message with photo after {max_retries} attempts: {e}")
+                        break
     
     # Fallback to text message
-    await bot.edit_message_text(
-        chat_id=chat_id,
-        message_id=message_id,
-        text=text,
-        reply_markup=reply_markup,
-        parse_mode=parse_mode
-    )
+    for attempt in range(max_retries):
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Failed to edit message text (attempt {attempt + 1}/{max_retries}): {e}")
+                await asyncio.sleep(retry_delay * (attempt + 1))
+            else:
+                logger.error(f"Failed to edit message text after {max_retries} attempts: {e}")
+                raise
 
 
 # Определяем путь к файлу .env
@@ -2103,18 +2122,26 @@ def create_webhook_app(bot_app):
                 cleanup_thread = threading.Thread(target=cleanup_data, daemon=True)
                 cleanup_thread.start()
             
-            # Запускаем обработку платежа в отдельном потоке
-            def process_payment():
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
-                finally:
-                    loop.close()
-            
-            thread = threading.Thread(target=process_payment)
-            thread.start()
+            # Запускаем обработку платежа в основном event loop
+            import asyncio
+            try:
+                # Получаем текущий event loop
+                loop = asyncio.get_event_loop()
+                # Создаем задачу для обработки платежа
+                asyncio.create_task(process_payment_webhook(bot_app, payment_id, status))
+            except RuntimeError:
+                # Если нет активного event loop, создаем новый в отдельном потоке
+                def process_payment():
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
+                    finally:
+                        loop.close()
+                
+                thread = threading.Thread(target=process_payment)
+                thread.start()
             
             return jsonify({'status': 'ok'})
             
