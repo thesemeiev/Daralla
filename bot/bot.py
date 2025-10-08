@@ -1478,6 +1478,10 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Сразу отвечаем на callback query
     await query.answer()
     
+    # Небольшая задержка для стабилизации после webhook'а
+    import asyncio
+    await asyncio.sleep(0.1)
+    
     # Простая блокировка повторных нажатий
     user_id = query.from_user.id
     message_id = query.message.message_id
@@ -1494,20 +1498,8 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     logger.info(f"MAIN_MENU_CALLBACK: User ID: {query.from_user.id}")
     logger.info(f"MAIN_MENU_CALLBACK: Message ID: {query.message.message_id}")
     
-    # Проверяем, не является ли сообщение уже главным меню
-    message_text = query.message.text or query.message.caption or ""
-    logger.info(f"MAIN_MENU_CALLBACK: Message text preview: {message_text[:100]}...")
-    
-    if "Добро пожаловать" in message_text or "Главное меню" in message_text:
-        logger.info("MAIN_MENU_CALLBACK: Message is already main menu, skipping edit")
-        # Разблокируем
-        context.user_data.pop(lock_key, None)
-        return
-    
-    # Если это сообщение о успешной покупке, переходим к главному меню
-    if "Покупка прошла успешно" in message_text or "активирован" in message_text.lower():
-        logger.info("MAIN_MENU_CALLBACK: Success message detected, transitioning to main menu")
-        # Не возвращаемся, продолжаем редактирование
+    # Простая обработка - всегда редактируем сообщение
+    logger.info("MAIN_MENU_CALLBACK: Processing main menu callback")
     
     # Очищаем навигационный стек и добавляем главное меню
     context.user_data['nav_stack'] = ['main_menu']
@@ -5277,13 +5269,14 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_notifications', admin_notifications))
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
-    # Обработчик кнопки "Назад" - должен быть первым для приоритета
+    # Обработчик главного меню - должен быть первым для приоритета
+    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
+    # Обработчик кнопки "Назад" - должен быть вторым для приоритета
     app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
     # Обработчик кнопки "Назад" после успешной оплаты
     app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
-    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
