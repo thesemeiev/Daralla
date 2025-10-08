@@ -28,5 +28,8 @@ USER app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
+# Открываем порт для webhook'ов
+EXPOSE 5000
+
 # Запускаем бота
 CMD ["python", "-m", "bot.bot"]
