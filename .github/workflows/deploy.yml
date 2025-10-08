@@ -169,6 +169,53 @@ jobs:
           sudo chmod -R 666 data/*.db
           sudo chmod 755 data/
           
+          # Install and configure ngrok
+          echo "Installing ngrok..."
+          sudo mkdir -p /opt/ngrok
+          cd /opt/ngrok
+          sudo wget -q https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+          sudo tar -xzf ngrok-v3-stable-linux-amd64.tgz
+          sudo rm ngrok-v3-stable-linux-amd64.tgz
+          sudo chmod +x ngrok
+          sudo ln -sf /opt/ngrok/ngrok /usr/local/bin/ngrok
+          
+          # Create ngrok config
+          echo "Configuring ngrok..."
+          sudo mkdir -p /home/app/.config/ngrok
+          sudo tee /home/app/.config/ngrok/ngrok.yml > /dev/null << EOF
+          version: "2"
+          authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
+          tunnels:
+            webhook:
+              proto: http
+              addr: 5000
+              bind_tls: true
+          EOF
+          sudo chown -R app:app /home/app/.config/ngrok
+          
+          # Start ngrok in background
+          echo "Starting ngrok tunnel..."
+          sudo -u app ngrok start webhook --config=/home/app/.config/ngrok/ngrok.yml &
+          sleep 10
+          
+          # Get ngrok URL
+          echo "Getting ngrok URL..."
+          NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+          echo "Ngrok URL: $NGROK_URL"
+          
+          # Update webhook URL in environment
+          if [ -n "$NGROK_URL" ]; then
+            echo "Updating webhook URL in .env..."
+            WEBHOOK_URL="${NGROK_URL}/webhook/yookassa"
+            echo "WEBHOOK_URL=$WEBHOOK_URL" | sudo tee -a .env
+            echo "Webhook URL set to: $WEBHOOK_URL"
+          else
+            echo "Failed to get ngrok URL"
+          fi
+          
+          # Return to project directory
+          cd /root/Daralla
+          
           # Start bot
           echo "Starting bot..."
           # Build containers on server
@@ -181,6 +228,7 @@ jobs:
           sudo docker-compose ps
           
           echo "Deployment completed!"
+          echo "Webhook URL: $WEBHOOK_URL"
 
     - name: Notify deployment
       if: always()

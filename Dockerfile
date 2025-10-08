@@ -7,6 +7,8 @@ WORKDIR /app
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем requirements.txt и устанавливаем зависимости
@@ -18,6 +20,10 @@ COPY bot/ ./bot/
 
 # Копируем изображения для меню
 COPY images/ ./images/
+
+# Копируем скрипты
+COPY start_with_ngrok.sh setup_webhook.py ./
+RUN chmod +x start_with_ngrok.sh
 
 # Создаем пользователя для безопасности
 RUN useradd --create-home --shell /bin/bash app && \
