@@ -1620,6 +1620,13 @@ async def update_payment_activation(payment_id: str, activated: int):
 
 async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment вызвана: price={price}, period={period}")
+    
+    # Проверяем, что price и period не None
+    if price is None or period is None:
+        logger.error(f"❌ ОШИБКА: price={price}, period={period} - не могут быть None")
+        await safe_edit_or_reply(update.message, "❌ Ошибка: не выбран период или цена. Попробуйте снова.")
+        return
+    
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     if nav_system:
         await nav_system.navigate_to_state(update, context, NavStates.PAYMENT)
@@ -3945,9 +3952,6 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["pending_price"] = "250.00"
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-    if nav_system:
-        await nav_system.navigate_to_state(update, context, NavStates.BUY_MENU)
-    
     # Переходим к выбору сервера через навигационную систему
     if nav_system:
         await nav_system.navigate_to_state(update, context, NavStates.SERVER_SELECTION)
