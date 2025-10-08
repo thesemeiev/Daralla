@@ -223,6 +223,32 @@ async def safe_edit_or_reply_universal(message, text, reply_markup=None, parse_m
     # Иначе используем обычное текстовое сообщение
     await safe_edit_or_reply(message, text, reply_markup, parse_mode, disable_web_page_preview)
 
+async def safe_send_message_with_photo(bot, chat_id, text, reply_markup=None, parse_mode=None, menu_type=None):
+    """Безопасная отправка сообщения с фото через бота"""
+    if menu_type and menu_type in IMAGE_PATHS:
+        photo_path = IMAGE_PATHS[menu_type]
+        if os.path.exists(photo_path):
+            try:
+                with open(photo_path, 'rb') as photo_file:
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        photo=photo_file,
+                        caption=text,
+                        reply_markup=reply_markup,
+                        parse_mode=parse_mode
+                    )
+                return
+            except Exception as e:
+                logger.warning(f"Failed to send photo for menu_type {menu_type}: {e}")
+    
+    # Fallback to text message
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
+
 
 # Определяем путь к файлу .env
 current_dir = pathlib.Path(__file__).parent
@@ -2218,10 +2244,12 @@ async def auto_activate_keys(app):
                                             logger.error(f"Ошибка редактирования сообщения продления: {edit_error}")
                                             # Fallback: отправляем новое сообщение
                                             try:
-                                                await app.bot.send_message(
+                                                await safe_send_message_with_photo(
+                                                    app.bot,
                                                     chat_id=user_id,
                                                     text=extension_message,
-                                                    parse_mode="HTML"
+                                                    parse_mode="HTML",
+                                                    menu_type='extend_key'
                                                 )
                                             except telegram.error.Forbidden:
                                                 logger.warning(f"Пользователь {user_id} заблокировал бота (продление ключа)")
@@ -2235,10 +2263,12 @@ async def auto_activate_keys(app):
                                     else:
                                         # Fallback: отправляем новое сообщение, если нет сохраненной информации
                                         try:
-                                            await app.bot.send_message(
+                                            await safe_send_message_with_photo(
+                                                app.bot,
                                                 chat_id=user_id,
                                                 text=extension_message,
-                                                parse_mode="HTML"
+                                                parse_mode="HTML",
+                                                menu_type='extend_key'
                                             )
                                             logger.info(f"Отправлено новое сообщение о продлении ключа {extension_email} пользователю {user_id}")
                                         except telegram.error.Forbidden:
@@ -2393,11 +2423,13 @@ async def auto_activate_keys(app):
                                     logger.error(f"Ошибка редактирования сообщения {message_id}: {edit_error}")
                                     # Если редактирование не удалось, отправляем новое сообщение
                                     try:
-                                        await app.bot.send_message(
+                                        await safe_send_message_with_photo(
+                                            app.bot,
                                             chat_id=int(user_id),
                                             text=full_message,
                                             reply_markup=keyboard,
-                                            parse_mode="HTML"
+                                            parse_mode="HTML",
+                                            menu_type='mykeys_menu'
                                         )
                                         logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                                     except telegram.error.Forbidden:
@@ -2412,11 +2444,13 @@ async def auto_activate_keys(app):
                             else:
                                 # Если нет сообщения с оплатой, отправляем новое
                                 try:
-                                    await app.bot.send_message(
+                                    await safe_send_message_with_photo(
+                                        app.bot,
                                         chat_id=int(user_id),
                                         text=full_message,
                                         reply_markup=keyboard,
-                                        parse_mode="HTML"
+                                        parse_mode="HTML",
+                                        menu_type='mykeys_menu'
                                     )
                                     logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                                 except telegram.error.Forbidden:
