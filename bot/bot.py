@@ -2135,7 +2135,7 @@ async def process_payment_webhook(bot_app, payment_id, status):
             return
         
         user_id = payment_info['user_id']
-        meta = json.loads(payment_info['meta'])
+        meta = payment_info['meta'] if isinstance(payment_info['meta'], dict) else json.loads(payment_info['meta'])
         
         logger.info(f"Обработка webhook платежа: payment_id={payment_id}, user_id={user_id}, status={status}")
         
