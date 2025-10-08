@@ -3341,10 +3341,10 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
+        global notification_manager
         if notification_manager is None:
             # Попробуем инициализировать менеджер уведомлений
             try:
-                global notification_manager
                 notification_manager = NotificationManager(app.bot, server_manager, ADMIN_IDS)
                 await notification_manager.initialize()
                 await notification_manager.start()
