@@ -5702,7 +5702,7 @@ async def admin_broadcast_export(update: Update, context: ContextTypes.DEFAULT_T
 # Регистрируем команды
 if __name__ == '__main__':
     # Создаем HTTPXRequest с увеличенными таймаутами для стабильной работы
-    request = HTTPXRequest(
+    http_request = HTTPXRequest(
         connection_pool_size=8,  # Размер пула соединений
         connect_timeout=30.0,    # Таймаут на установку соединения (увеличен с дефолтных 5)
         read_timeout=30.0,       # Таймаут на чтение ответа (увеличен с дефолтных 5)
@@ -5710,7 +5710,7 @@ if __name__ == '__main__':
         pool_timeout=30.0        # Таймаут ожидания свободного соединения в пуле
     )
     
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(request).post_init(on_startup).build()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
     
     # Создаем Flask приложение для webhook'ов
     webhook_app = create_webhook_app(app)
