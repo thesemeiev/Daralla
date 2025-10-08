@@ -2636,22 +2636,48 @@ async def auto_activate_keys(app):
                     await update_payment_status(payment_id, 'failed')
                     await update_payment_activation(payment_id, 0)
                     
+                    # Определяем тип платежа для правильного сообщения
+                    period = meta.get('type', 'month')
+                    is_extension = period.startswith('extend_')
+                    
                     # Редактируем существующее сообщение с оплатой на сообщение об ошибке
                     try:
                         message_id = payment_message_ids.get(payment_id)
                         if message_id:
-                            error_message = (
-                                f"{UIStyles.header('Ошибка оплаты')}\n\n"
-                                f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
-                                f"<b>Причина:</b> Платеж был отклонен\n"
-                                f"<b>Статус:</b> {pay.status}\n\n"
-                                f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
-                            )
-                            
-                            keyboard = InlineKeyboardMarkup([
-                                [InlineKeyboardButton("Попробовать снова", callback_data="buy_menu")],
-                                [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
-                            ])
+                            if is_extension:
+                                # Ошибка продления
+                                extension_email = meta.get('extension_key_email', 'Неизвестно')
+                                error_message = (
+                                    f"{UIStyles.header('Ошибка продления')}\n\n"
+                                    f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
+                                    f"<b>Ключ:</b> {extension_email}\n"
+                                    f"<b>Причина:</b> Платеж был отклонен\n"
+                                    f"<b>Статус:</b> {pay.status}\n\n"
+                                    f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
+                                )
+                                
+                                keyboard = InlineKeyboardMarkup([
+                                    [InlineKeyboardButton("Попробовать снова", callback_data="mykey")],
+                                    [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                                ])
+                                
+                                menu_type = 'extend_key'
+                            else:
+                                # Ошибка обычной покупки
+                                error_message = (
+                                    f"{UIStyles.header('Ошибка оплаты')}\n\n"
+                                    f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
+                                    f"<b>Причина:</b> Платеж был отклонен\n"
+                                    f"<b>Статус:</b> {pay.status}\n\n"
+                                    f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
+                                )
+                                
+                                keyboard = InlineKeyboardMarkup([
+                                    [InlineKeyboardButton("Попробовать снова", callback_data="buy_menu")],
+                                    [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                                ])
+                                
+                                menu_type = 'payment_failed'
                             
                             await safe_edit_message_with_photo(
                                 app.bot,
@@ -2660,9 +2686,9 @@ async def auto_activate_keys(app):
                                 text=error_message,
                                 reply_markup=keyboard,
                                 parse_mode="HTML",
-                                menu_type='payment_failed'
+                                menu_type=menu_type
                             )
-                            logger.info(f"Отредактировано сообщение с оплатой {message_id} на ошибку оплаты для пользователя {user_id}")
+                            logger.info(f"Отредактировано сообщение с оплатой {message_id} на ошибку для пользователя {user_id}")
                             
                             # Удаляем message_id из отслеживания
                             payment_message_ids.pop(payment_id, None)
