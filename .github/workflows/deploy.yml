@@ -94,10 +94,12 @@ jobs:
             echo "Found databases for backup:"
             ls -l data/*.db
             sudo tar -czf "backups/data/backup_${timestamp}.tar.gz" data/*.db
-            echo "Database backup created"
+            echo "Database backup created: backups/data/backup_${timestamp}.tar.gz"
             
             # Keep only 5 latest backups
             ls -t backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
+          else
+            echo "No databases found to backup"
           fi
 
           # .env backup
@@ -148,9 +150,12 @@ jobs:
             echo "Restoring databases from $latest_db_backup..."
             sudo mkdir -p data
             sudo tar -xzf "$latest_db_backup" -C .
-            echo "Databases restored"
+            echo "Databases restored from $latest_db_backup"
           else
-            echo "Database backups not found"
+            echo "Database backups not found - creating empty databases"
+            sudo mkdir -p data
+            sudo touch data/vpn_keys.db data/referral_system.db data/notifications.db
+            echo "Empty databases created"
           fi
 
           # Restore .env
@@ -173,9 +178,8 @@ jobs:
           sudo chmod -R 666 data/*.db 2>/dev/null || true
           sudo chmod 755 data/ 2>/dev/null || true
           
-          # Create data directory and database files
+          # Ensure data directory exists
           sudo mkdir -p data
-          sudo touch data/vpn_keys.db data/referral_system.db data/notifications.db
           
           # Set permissions
           sudo chmod +x *.sh
