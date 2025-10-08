@@ -1474,32 +1474,7 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик для callback_data='main_menu' - всегда редактирует существующее сообщение"""
     query = update.callback_query
-    
-    # Сразу отвечаем на callback query
     await query.answer()
-    
-    # Небольшая задержка для стабилизации после webhook'а
-    import asyncio
-    await asyncio.sleep(0.1)
-    
-    # Простая блокировка повторных нажатий
-    user_id = query.from_user.id
-    message_id = query.message.message_id
-    lock_key = f"main_menu_lock_{user_id}_{message_id}"
-    
-    if context.user_data.get(lock_key):
-        logger.info(f"MAIN_MENU_CALLBACK: Callback заблокирован для user {user_id}, message {message_id}")
-        return
-    
-    # Устанавливаем блокировку на 3 секунды
-    context.user_data[lock_key] = True
-    
-    logger.info(f"MAIN_MENU_CALLBACK: Called with callback_data='{query.data}'")
-    logger.info(f"MAIN_MENU_CALLBACK: User ID: {query.from_user.id}")
-    logger.info(f"MAIN_MENU_CALLBACK: Message ID: {query.message.message_id}")
-    
-    # Простая обработка - всегда редактируем сообщение
-    logger.info("MAIN_MENU_CALLBACK: Processing main menu callback")
     
     # Очищаем навигационный стек и добавляем главное меню
     context.user_data['nav_stack'] = ['main_menu']
@@ -1513,40 +1488,14 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Используем единый стиль для приветственного сообщения
     welcome_text = UIMessages.welcome_message()
     
-    # Прямое редактирование сообщения с фото для надежности
     try:
-        photo_path = IMAGE_PATHS.get('main_menu')
-        if photo_path and os.path.exists(photo_path):
-            # Редактируем с фото
-            with open(photo_path, 'rb') as photo_file:
-                await query.message.edit_media(
-                    media=InputMediaPhoto(
-                        media=photo_file,
-                        caption=welcome_text,
-                        parse_mode="HTML"
-                    ),
-                    reply_markup=keyboard
-                )
-            logger.info("MAIN_MENU_CALLBACK: Successfully edited message with photo")
-        else:
-            # Редактируем только текст
-            await query.message.edit_text(
-                text=welcome_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-            logger.info("MAIN_MENU_CALLBACK: Successfully edited message text")
+        # ВСЕГДА редактируем существующее сообщение, не отправляем новое
+        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+        logger.info("MAIN_MENU_CALLBACK: Successfully edited message to main menu")
     except Exception as e:
-        logger.error(f"main_menu_callback direct edit failed: {e}")
-        # Fallback: используем универсальную функцию
-        try:
-            await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
-            logger.info("MAIN_MENU_CALLBACK: Fallback successful")
-        except Exception as fallback_error:
-            logger.error(f"main_menu_callback fallback failed: {fallback_error}")
-        finally:
-            # Разблокируем callback
-            context.user_data.pop(lock_key, None)
+        logger.error(f"main_menu_callback failed: {e}")
+        # Fallback: если не удалось отредактировать, отправляем новое сообщение
+        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
 
 
 # Новая команда /instruction — с кнопками выбора платформы
@@ -2175,36 +2124,38 @@ def create_webhook_app(bot_app):
             
             # Очистка данных теперь выполняется отдельной задачей cleanup_old_payments_task()
             
-            # Запускаем обработку платежа в основном event loop бота
-            try:
-                # Получаем основной event loop бота
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Если event loop уже запущен, создаем задачу
-                    asyncio.create_task(process_payment_webhook(bot_app, payment_id, status))
-                    logger.info("🔔 WEBHOOK: Задача обработки платежа добавлена в основной event loop")
-                else:
-                    # Если event loop не запущен, запускаем его
+            # Запускаем обработку платежа в отдельном потоке с изолированным event loop
+            def process_payment():
+                import asyncio
+                # Создаем новый event loop для этого потока
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # Запускаем обработку платежа
                     loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
-                    logger.info("🔔 WEBHOOK: Платеж обработан в основном event loop")
-            except Exception as e:
-                logger.error(f"Ошибка обработки платежа в webhook: {e}")
-                # Fallback: используем отдельный поток только в случае ошибки
-                def process_payment_fallback():
-                    import asyncio
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                except Exception as e:
+                    logger.error(f"Ошибка обработки платежа в webhook: {e}")
+                finally:
+                    # Закрываем event loop
                     try:
-                        loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
-                    except Exception as fallback_error:
-                        logger.error(f"Ошибка fallback обработки платежа: {fallback_error}")
+                        # Даем время на завершение всех операций
+                        import time
+                        time.sleep(1)
+                        
+                        # Отменяем все pending задачи
+                        pending = asyncio.all_tasks(loop)
+                        for task in pending:
+                            task.cancel()
+                        # Ждем завершения отмененных задач
+                        if pending:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception as e:
+                        logger.warning(f"Ошибка при закрытии event loop: {e}")
                     finally:
                         loop.close()
-                
-                import threading
-                thread = threading.Thread(target=process_payment_fallback, daemon=True)
-                thread.start()
-                logger.info("🔔 WEBHOOK: Использован fallback поток для обработки платежа")
+            
+            thread = threading.Thread(target=process_payment, daemon=True)
+            thread.start()
             
             return jsonify({'status': 'ok'})
             
@@ -4204,7 +4155,6 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Message ID: {query.message.message_id}")
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
     
     # Обычная логика навигации
@@ -5269,14 +5219,13 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_notifications', admin_notifications))
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
-    # Обработчик главного меню - должен быть первым для приоритета
-    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
-    # Обработчик кнопки "Назад" - должен быть вторым для приоритета
+    # Обработчик кнопки "Назад" - должен быть первым для приоритета
     app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
     # Обработчик кнопки "Назад" после успешной оплаты
     app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
+    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
