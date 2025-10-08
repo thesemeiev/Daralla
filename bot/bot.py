@@ -2725,7 +2725,11 @@ def create_webhook_app(bot_app):
         try:
             # Получаем данные от YooKassa
             data = request.get_json()
-            logger.info(f"Получен webhook от YooKassa: {data}")
+            logger.info(f"🔔 WEBHOOK: Получен webhook от YooKassa")
+            logger.info(f"🔔 WEBHOOK: Данные: {data}")
+            
+            # Логируем заголовки для отладки
+            logger.info(f"🔔 WEBHOOK: Заголовки: {dict(request.headers)}")
             
             if not data or 'object' not in data:
                 logger.error("Неверный формат webhook от YooKassa")
