@@ -331,9 +331,10 @@ class NavigationSystem:
         self.menu_handlers = MenuHandlers(bot_handlers)
         self.nav_callbacks = NavigationCallbacks(self.menu_handlers)
     
-    def navigate_to_state(self, context: ContextTypes.DEFAULT_TYPE, state: str):
+    async def navigate_to_state(self, update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
         """Переходит к указанному состоянию"""
         nav_manager.push_state(context, state)
+        return await nav_manager.navigate_to_state(update, context, state)
     
     def handle_back_navigation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает навигацию назад"""

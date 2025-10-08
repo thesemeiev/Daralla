@@ -1483,7 +1483,7 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.INSTRUCTION_MENU)
+        await nav_system.navigate_to_state(update, context, NavStates.INSTRUCTION_MENU)
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     keyboard = NavigationBuilder.create_keyboard_with_back([
         [InlineKeyboardButton("Android", callback_data=CallbackData.INSTR_ANDROID), InlineKeyboardButton("iOS", callback_data=CallbackData.INSTR_IOS)],
@@ -1587,7 +1587,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_linux", "instr_tv", "instr_faq"]:
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         if nav_system:
-            nav_system.navigate_to_state(context, NavStates.INSTRUCTION_PLATFORM)
+            await nav_system.navigate_to_state(update, context, NavStates.INSTRUCTION_PLATFORM)
         
         # Определяем menu_type для каждой платформы
         menu_type_map = {
@@ -1622,7 +1622,7 @@ async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment вызвана: price={price}, period={period}")
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.PAYMENT)
+        await nav_system.navigate_to_state(update, context, NavStates.PAYMENT)
     user = update.effective_user if hasattr(update, 'effective_user') else update.from_user
     user_id = str(user.id)
     logger.info(f"handle_payment: user_id={user_id}")
@@ -1880,7 +1880,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.MYKEYS_MENU)
+        await nav_system.navigate_to_state(update, context, NavStates.MYKEYS_MENU)
     user = update.effective_user
     user_id = str(user.id)
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3273,7 +3273,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.answer()
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         if nav_system:
-            nav_system.navigate_to_state(context, NavStates.ADMIN_ERRORS)
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_ERRORS)
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
@@ -3333,7 +3333,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.callback_query.answer()
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         if nav_system:
-            nav_system.navigate_to_state(context, NavStates.ADMIN_NOTIFICATIONS)
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_NOTIFICATIONS)
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3389,7 +3389,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.callback_query.answer()
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         if nav_system:
-            nav_system.navigate_to_state(context, NavStates.ADMIN_CHECK_SERVERS)
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_CHECK_SERVERS)
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
@@ -3878,8 +3878,8 @@ async def admin_set_days_cancel(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data.pop('config_chat_id', None)
     
     # Возвращаемся в админ меню через навигационную систему
-    if nav_system:
-        nav_system.navigate_to_state(context, NavStates.ADMIN_MENU)
+        if nav_system:
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_MENU)
     from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.admin_menu(update, context)
@@ -3894,7 +3894,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     if query.data == "buy_menu":
         # Вызываем обработчик из menu_handlers
         if nav_system:
-            nav_system.navigate_to_state(context, NavStates.BUY_MENU)
+            await nav_system.navigate_to_state(update, context, NavStates.BUY_MENU)
         from .menu_handlers import MenuHandlers
         menu_handlers = MenuHandlers({})
         await menu_handlers.buy_menu(update, context)
@@ -3912,7 +3912,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     elif query.data == "admin_notifications_refresh":
         # Обновляем админ уведомления
         if nav_system:
-            nav_system.navigate_to_state(context, NavStates.ADMIN_NOTIFICATIONS)
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_NOTIFICATIONS)
         from .menu_handlers import MenuHandlers
         menu_handlers = MenuHandlers({})
         await menu_handlers.admin_notifications(update, context)
@@ -5124,8 +5124,8 @@ async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.pop('broadcast_details', None)
     
     # Вызываем обработчик из menu_handlers
-    if nav_system:
-        nav_system.navigate_to_state(context, NavStates.ADMIN_MENU)
+        if nav_system:
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_MENU)
     from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
     await menu_handlers.admin_menu(update, context)
