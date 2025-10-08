@@ -232,7 +232,10 @@ jobs:
           echo "Starting bot..."
           # Build containers on server
           sudo docker-compose build --no-cache
-          sudo docker-compose up -d
+          
+          # Start with environment variables
+          echo "Starting bot with environment variables..."
+          NGROK_AUTH_TOKEN="${{ secrets.NGROK_AUTH_TOKEN }}" WEBHOOK_URL="$WEBHOOK_URL" sudo docker-compose up -d
           
           # Check status
           echo "Checking status..."
