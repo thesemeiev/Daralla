@@ -2743,7 +2743,17 @@ def create_webhook_app(bot_app):
                 logger.error("Отсутствуют обязательные поля в webhook")
                 return jsonify({'status': 'error'}), 400
             
-            logger.info(f"Обработка webhook: payment_id={payment_id}, status={status}")
+            logger.info(f"🔔 WEBHOOK: Обработка webhook: payment_id={payment_id}, status={status}")
+            
+            # Логируем все возможные статусы
+            if status == 'succeeded':
+                logger.info(f"🔔 WEBHOOK: ✅ Платеж успешен - активируем ключ")
+            elif status == 'canceled':
+                logger.info(f"🔔 WEBHOOK: ❌ Платеж отменен - показываем ошибку")
+            elif status == 'refunded':
+                logger.info(f"🔔 WEBHOOK: 💰 Платеж возвращен - показываем ошибку")
+            else:
+                logger.info(f"🔔 WEBHOOK: ⚠️ Неизвестный статус: {status}")
             
             # Запускаем обработку платежа в отдельном потоке
             def process_payment():
