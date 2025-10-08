@@ -3345,7 +3345,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         if notification_manager is None:
             # Попробуем инициализировать менеджер уведомлений
             try:
-                notification_manager = NotificationManager(app.bot, server_manager, ADMIN_IDS)
+                notification_manager = NotificationManager(context.bot, server_manager, ADMIN_IDS)
                 await notification_manager.initialize()
                 await notification_manager.start()
                 logger.info("Менеджер уведомлений инициализирован в admin_notifications")
