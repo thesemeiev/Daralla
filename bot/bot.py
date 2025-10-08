@@ -1474,7 +1474,21 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик для callback_data='main_menu' - всегда редактирует существующее сообщение"""
     query = update.callback_query
+    
+    # Сразу отвечаем на callback query
     await query.answer()
+    
+    # Простая блокировка повторных нажатий
+    user_id = query.from_user.id
+    message_id = query.message.message_id
+    lock_key = f"main_menu_lock_{user_id}_{message_id}"
+    
+    if context.user_data.get(lock_key):
+        logger.info(f"MAIN_MENU_CALLBACK: Callback заблокирован для user {user_id}, message {message_id}")
+        return
+    
+    # Устанавливаем блокировку на 3 секунды
+    context.user_data[lock_key] = True
     
     logger.info(f"MAIN_MENU_CALLBACK: Called with callback_data='{query.data}'")
     logger.info(f"MAIN_MENU_CALLBACK: User ID: {query.from_user.id}")
@@ -1486,6 +1500,8 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if "Добро пожаловать" in message_text or "Главное меню" in message_text:
         logger.info("MAIN_MENU_CALLBACK: Message is already main menu, skipping edit")
+        # Разблокируем
+        context.user_data.pop(lock_key, None)
         return
     
     # Если это сообщение о успешной покупке, переходим к главному меню
@@ -1536,6 +1552,9 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             logger.info("MAIN_MENU_CALLBACK: Fallback successful")
         except Exception as fallback_error:
             logger.error(f"main_menu_callback fallback failed: {fallback_error}")
+        finally:
+            # Разблокируем callback
+            context.user_data.pop(lock_key, None)
 
 
 # Новая команда /instruction — с кнопками выбора платформы
@@ -2164,24 +2183,36 @@ def create_webhook_app(bot_app):
             
             # Очистка данных теперь выполняется отдельной задачей cleanup_old_payments_task()
             
-            # Запускаем обработку платежа в отдельном потоке с изолированным event loop
-            def process_payment():
-                import asyncio
-                # Создаем новый event loop для этого потока
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    # Запускаем обработку платежа
+            # Запускаем обработку платежа в основном event loop бота
+            try:
+                # Получаем основной event loop бота
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Если event loop уже запущен, создаем задачу
+                    asyncio.create_task(process_payment_webhook(bot_app, payment_id, status))
+                    logger.info("🔔 WEBHOOK: Задача обработки платежа добавлена в основной event loop")
+                else:
+                    # Если event loop не запущен, запускаем его
                     loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
-                except Exception as e:
-                    logger.error(f"Ошибка обработки платежа в webhook: {e}")
-                finally:
-                    # НЕ закрываем event loop - оставляем его работать
-                    # Это предотвращает ошибку "Event loop is closed"
-                    logger.info("🔔 WEBHOOK: Event loop оставлен работать")
-            
-            thread = threading.Thread(target=process_payment, daemon=True)
-            thread.start()
+                    logger.info("🔔 WEBHOOK: Платеж обработан в основном event loop")
+            except Exception as e:
+                logger.error(f"Ошибка обработки платежа в webhook: {e}")
+                # Fallback: используем отдельный поток только в случае ошибки
+                def process_payment_fallback():
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
+                    except Exception as fallback_error:
+                        logger.error(f"Ошибка fallback обработки платежа: {fallback_error}")
+                    finally:
+                        loop.close()
+                
+                import threading
+                thread = threading.Thread(target=process_payment_fallback, daemon=True)
+                thread.start()
+                logger.info("🔔 WEBHOOK: Использован fallback поток для обработки платежа")
             
             return jsonify({'status': 'ok'})
             
