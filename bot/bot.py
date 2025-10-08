@@ -2222,7 +2222,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MY_KEYS)],
+                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MYKEYS_MENU)],
                         [NavigationBuilder.create_main_menu_button()]
                     ])
                     
@@ -2305,7 +2305,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     
                     if message_id:
                         keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MY_KEYS)],
+                            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MYKEYS_MENU)],
                             [NavigationBuilder.create_main_menu_button()]
                         ])
                         
@@ -2443,14 +2443,14 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [NavigationBuilder.create_back_button()]
+                        [NavigationBuilder.create_main_menu_button()]
                     ])
                     
                     # Формируем полное сообщение о покупке
                     success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
                     full_message = success_text + msg
                     
-                    # Кнопка "Назад" ведет прямо в главное меню (callback_data="main_menu")
+                    # Кнопка "Главное меню" ведет прямо в главное меню без использования навигационного стека
                     # Это простое решение для webhook'ов, которые не имеют доступа к навигационному стеку
                     
                     # Получаем message_id из мета-данных платежа
@@ -3040,7 +3040,7 @@ class UIButtons:
         """Кнопки главного меню"""
         buttons = [
             [InlineKeyboardButton("Купить", callback_data=CallbackData.BUY_VPN)],
-            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MY_KEYS), 
+            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MYKEYS_MENU), 
              InlineKeyboardButton("Инструкция", callback_data=CallbackData.INSTRUCTION)],
             [InlineKeyboardButton("Рефералы", callback_data=CallbackData.REFERRAL), 
              InlineKeyboardButton("Мои баллы", callback_data=CallbackData.POINTS)],
@@ -3561,7 +3561,7 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("1 месяц - 100₽", callback_data=f"ext_per:month:{short_id}")],
         [InlineKeyboardButton("3 месяца - 250₽", callback_data=f"ext_per:3month:{short_id}")],
-        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MY_KEYS)]
+        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MYKEYS_MENU)]
     ])
     
     message_text = (
@@ -3614,7 +3614,7 @@ async def extend_period_callback(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.error(f"Ошибка создания платежа для продления: {e}")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MY_KEYS)]
+            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MYKEYS_MENU)]
         ])
         await safe_edit_or_reply(query.message, "❌ Ошибка при создании платежа. Попробуйте позже.", reply_markup=keyboard)
 
