@@ -111,7 +111,7 @@ class NavigationManager:
                 return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
         # Обычная навигация
-        logger.info(f"🔙 BACK_NAVIGATION: Navigating to {prev_state}")
+        logger.info(f" BACK_NAVIGATION: Navigating to {prev_state}")
         return await self.navigate_to_state(update, context, prev_state)
 
 class NavigationBuilder:
@@ -120,12 +120,12 @@ class NavigationBuilder:
     @staticmethod
     def create_back_button(text: str = "Назад", callback_data: str = CallbackData.BACK) -> InlineKeyboardButton:
         """Создает кнопку 'Назад'"""
-        return InlineKeyboardButton(f"🔙 {text}", callback_data=callback_data)
+        return InlineKeyboardButton(f" {text}", callback_data=callback_data)
     
     @staticmethod
     def create_main_menu_button(text: str = "Главное меню", callback_data: str = CallbackData.MAIN_MENU) -> InlineKeyboardButton:
         """Создает кнопку 'Главное меню'"""
-        return InlineKeyboardButton(f"🏠 {text}", callback_data=callback_data)
+        return InlineKeyboardButton(f" {text}", callback_data=callback_data)
     
     @staticmethod
     def create_keyboard_with_back(buttons: List[List[InlineKeyboardButton]], 

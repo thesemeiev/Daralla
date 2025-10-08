@@ -2968,7 +2968,7 @@ class UIEmojis:
     # Навигация
     BACK = "←"
     NEXT = "→"
-    PREV = "←"
+    PREV = "⬅️"
     CLOSE = "✕"
     REFRESH = "↻"
     
