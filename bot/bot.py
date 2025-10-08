@@ -4761,15 +4761,15 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     if not await check_private_chat(update):
         return
     if update.effective_user.id not in ADMIN_IDS:
-        await safe_edit_or_reply(mock_message, 'Нет доступа.')
+        await safe_edit_or_reply(update.callback_query.message, 'Нет доступа.')
         return
     await update.callback_query.answer()
     # Сохраняем исходное сообщение для дальнейших редактирований
     context.user_data['broadcast_text'] = None
-    context.user_data['broadcast_msg_chat_id'] = mock_message.chat_id
-    context.user_data['broadcast_msg_id'] = mock_message.message_id
+    context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
+    context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]])
-    await safe_edit_or_reply_universal(mock_message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
+    await safe_edit_or_reply_universal(update.callback_query.message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
     return BROADCAST_WAITING_TEXT
 
 async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4790,16 +4790,26 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = context.user_data.get('broadcast_msg_chat_id')
     msg_id = context.user_data.get('broadcast_msg_id')
     try:
-        # Получаем сообщение для редактирования
-        message = await context.bot.get_chat(chat_id).get_member(update.effective_user.id)
-        # Используем универсальную функцию для редактирования
-        await safe_edit_or_reply_universal(update.effective_message, UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
-        context.user_data['broadcast_msg_chat_id'] = update.effective_message.chat_id
-        context.user_data['broadcast_msg_id'] = update.effective_message.message_id
-    except Exception:
-        await safe_edit_or_reply_universal(update.effective_message, UIMessages.broadcast_preview_message(text), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
-        context.user_data['broadcast_msg_chat_id'] = update.effective_message.chat_id
-        context.user_data['broadcast_msg_id'] = update.effective_message.message_id
+        await safe_edit_message_with_photo(
+            context.bot,
+            chat_id=chat_id,
+            message_id=msg_id,
+            text=UIMessages.broadcast_preview_message(text),
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type='broadcast'
+        )
+    except Exception as e:
+        logger.error(f"Ошибка редактирования сообщения рассылки: {e}")
+        # Fallback: отправляем новое сообщение
+        await safe_send_message_with_photo(
+            context.bot,
+            chat_id=chat_id,
+            text=UIMessages.broadcast_preview_message(text),
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type='broadcast'
+        )
     return BROADCAST_CONFIRM
 
 async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4808,7 +4818,13 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.callback_query.answer()
     text = context.user_data.get('broadcast_text')
     if not text:
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Текст рассылки пуст.")
+        await safe_edit_message_with_photo(
+            context.bot,
+            chat_id=context.user_data.get('broadcast_msg_chat_id'),
+            message_id=context.user_data.get('broadcast_msg_id'),
+            text=f"{UIEmojis.ERROR} Текст рассылки пуст.",
+            menu_type='broadcast'
+        )
         return ConversationHandler.END
 
     # Получаем список получателей и исключаем админов
@@ -4826,7 +4842,14 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     chat_id = context.user_data.get('broadcast_msg_chat_id')
     msg_id = context.user_data.get('broadcast_msg_id')
     try:
-        await safe_edit_or_reply_universal(mock_message, f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.", parse_mode="HTML", menu_type='broadcast')
+        await safe_edit_message_with_photo(
+            context.bot,
+            chat_id=chat_id,
+            message_id=msg_id,
+            text=f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.",
+            parse_mode="HTML",
+            menu_type='broadcast'
+        )
     except Exception:
         pass
     for i in range(0, total, batch):
@@ -4865,7 +4888,14 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         # пауза между батчами
         await asyncio.sleep(1.0)
         try:
-            await safe_edit_or_reply_universal(mock_message, f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.", parse_mode="HTML", menu_type='broadcast')
+            await safe_edit_message_with_photo(
+                context.bot,
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.",
+                parse_mode="HTML",
+                menu_type='broadcast'
+            )
         except Exception:
             pass
 
@@ -4876,9 +4906,25 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
     ])
     try:
-        await safe_edit_or_reply_universal(mock_message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML", menu_type='broadcast')
-    except Exception:
-        await safe_edit_or_reply(mock_message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_message_with_photo(
+            context.bot,
+            chat_id=chat_id,
+            message_id=msg_id,
+            text=f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.",
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type='broadcast'
+        )
+    except Exception as e:
+        logger.error(f"Ошибка редактирования финального сообщения рассылки: {e}")
+        await safe_send_message_with_photo(
+            context.bot,
+            chat_id=chat_id,
+            text=f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.",
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type='broadcast'
+        )
     return ConversationHandler.END
 
 async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
