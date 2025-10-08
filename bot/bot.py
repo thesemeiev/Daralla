@@ -3342,9 +3342,18 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     try:
         if notification_manager is None:
-            await safe_edit_or_reply(update.callback_query.message, 
-                                   f"{UIEmojis.ERROR} Менеджер уведомлений не инициализирован")
-            return
+            # Попробуем инициализировать менеджер уведомлений
+            try:
+                global notification_manager
+                notification_manager = NotificationManager(app.bot, server_manager, ADMIN_IDS)
+                await notification_manager.initialize()
+                await notification_manager.start()
+                logger.info("Менеджер уведомлений инициализирован в admin_notifications")
+            except Exception as e:
+                logger.error(f"Ошибка инициализации менеджера уведомлений: {e}")
+                await safe_edit_or_reply(update.callback_query.message, 
+                                       f"{UIEmojis.ERROR} Менеджер уведомлений не инициализирован")
+                return
         
         # Получаем дашборд
         dashboard_text = await notification_manager.get_notification_dashboard()

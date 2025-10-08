@@ -59,6 +59,7 @@ class CallbackData:
     INSTRUCTION = 'instruction'
     BUY_VPN = 'buy_vpn'
     MY_KEYS = 'mykey'
+    MYKEYS_MENU = 'mykeys_menu'
     POINTS = 'points'
     REFERRAL = 'referral'
     ADMIN_MENU = 'admin_menu'
