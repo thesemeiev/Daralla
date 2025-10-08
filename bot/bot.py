@@ -12,6 +12,11 @@ import pathlib
 import telegram
 from telegram.helpers import escape_markdown
 
+# === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+from .navigation_integration import NavigationIntegration
+from .menu_states import NavStates, CallbackData
+from .navigation import nav_manager, NavigationBuilder
+
 async def safe_edit_or_reply(message, text, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
     if message is None:
         logger.error("safe_edit_or_reply: message is None")
@@ -1503,18 +1508,14 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_private_chat(update):
         return
     
-    # Добавляем текущее состояние в навигационный стек
-    if not context.user_data.get('nav_stack'):
-        context.user_data['nav_stack'] = ['main_menu']
-    stack = context.user_data['nav_stack']
-    if not stack or stack[-1] != 'instruction_menu':
-        push_nav(context, 'instruction_menu')
-    keyboard = InlineKeyboardMarkup([
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.INSTRUCTION_MENU)
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    keyboard = NavigationBuilder.create_keyboard_with_back([
         [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
         [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
         [InlineKeyboardButton("Linux", callback_data="instr_linux"), InlineKeyboardButton("Android TV", callback_data="instr_tv")],
         [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
-        [UIButtons.back_button()],
     ])
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
@@ -1606,12 +1607,12 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         )
     }
     if data == "back":
-        await universal_back_callback(update, context)
+        # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+        await nav_manager.handle_back_navigation(update, context)
         return
     elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_linux", "instr_tv", "instr_faq"]:
-        stack = context.user_data.setdefault('nav_stack', [])
-        if not stack or stack[-1] != 'instruction_platform':
-            push_nav(context, 'instruction_platform')
+        # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+        nav_manager.push_state(context, NavStates.INSTRUCTION_PLATFORM)
         
         # Определяем menu_type для каждой платформы
         menu_type_map = {
@@ -1644,9 +1645,8 @@ async def update_payment_activation(payment_id: str, activated: int):
 
 async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment вызвана: price={price}, period={period}")
-    stack = context.user_data.setdefault('nav_stack', [])
-    if not stack or stack[-1] != 'payment':
-        push_nav(context, 'payment')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.PAYMENT)
     user = update.effective_user if hasattr(update, 'effective_user') else update.from_user
     user_id = str(user.id)
     logger.info(f"handle_payment: user_id={user_id}")
@@ -1904,9 +1904,8 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not context.user_data.get('nav_stack'):
         context.user_data['nav_stack'] = ['main_menu']
-    stack = context.user_data['nav_stack']
-    if not stack or stack[-1] != 'mykeys_menu':
-        push_nav(context, 'mykeys_menu')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.MYKEYS_MENU)
     user = update.effective_user
     user_id = str(user.id)
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3298,8 +3297,8 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.answer()
         stack = context.user_data.setdefault('nav_stack', [])
-        if not stack or stack[-1] != 'admin_errors':
-            push_nav(context, 'admin_errors')
+        # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+        nav_manager.push_state(context, NavStates.ADMIN_ERRORS)
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
@@ -3358,8 +3357,8 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.callback_query:
         await update.callback_query.answer()
         stack = context.user_data.setdefault('nav_stack', [])
-        if not stack or stack[-1] != 'admin_notifications':
-            push_nav(context, 'admin_notifications')
+        # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+        nav_manager.push_state(context, NavStates.ADMIN_NOTIFICATIONS)
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -3405,8 +3404,8 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.callback_query:
         await update.callback_query.answer()
         stack = context.user_data.setdefault('nav_stack', [])
-        if not stack or stack[-1] != 'admin_check_servers':
-            push_nav(context, 'admin_check_servers')
+        # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+        nav_manager.push_state(context, NavStates.ADMIN_CHECK_SERVERS)
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
@@ -3921,17 +3920,16 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 # Обработчик для кнопки "Купить" в меню покупки
 async def buy_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    stack = context.user_data.setdefault('nav_stack', [])
-    if not stack or stack[-1] != 'buy_menu':
-        push_nav(context, 'buy_menu')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.BUY_MENU)
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("buy_menu_handler: message is None")
         return
-    keyboard = InlineKeyboardMarkup([
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    keyboard = NavigationBuilder.create_keyboard_with_back([
         [InlineKeyboardButton("1 месяц — 100₽", callback_data="select_period_month")],
         [InlineKeyboardButton("3 месяца — 250₽", callback_data="select_period_3month")],
-        [UIButtons.back_button()],
     ])
     
     # Используем единый стиль для сообщения меню покупки
@@ -3951,17 +3949,16 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["pending_period"] = "3month"
         context.user_data["pending_price"] = "250.00"
     
-    # Обновляем навигационный стек
-    push_nav(context, 'buy_menu')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.BUY_MENU)
     
     # Переходим к выбору сервера
     await server_selection_menu(update, context)
 
 # Меню выбора сервера
 async def server_selection_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    stack = context.user_data.setdefault('nav_stack', [])
-    if not stack or stack[-1] != 'server_selection':
-        push_nav(context, 'server_selection')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.SERVER_SELECTION)
     
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
@@ -4122,8 +4119,8 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
     # Сохраняем выбранную локацию
     context.user_data["selected_location"] = selected_location
     
-    # Обновляем навигационный стек
-    push_nav(context, 'server_selection')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.SERVER_SELECTION)
     
     # Получаем сохраненные данные
     period = context.user_data.get("pending_period")
@@ -4135,92 +4132,94 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # === Навигационный стек и универсальный обработчик "Назад" ===
-def push_nav(context, state, max_size=10):
-    stack = context.user_data.setdefault('nav_stack', [])
-    
-    # Ограничиваем размер стека
-    if len(stack) >= max_size:
-        stack.pop(0)  # Удаляем самый старый элемент
-    
-    stack.append(state)
-    logger.info(f"PUSH: {state} -> Stack: {stack}")
+# === СТАРЫЕ ФУНКЦИИ НАВИГАЦИИ (ЗАМЕНЕНЫ НОВОЙ СИСТЕМОЙ) ===
+# def push_nav(context, state, max_size=10):
+#     stack = context.user_data.setdefault('nav_stack', [])
+#     
+#     # Ограничиваем размер стека
+#     if len(stack) >= max_size:
+#         stack.pop(0)  # Удаляем самый старый элемент
+#     
+#     stack.append(state)
+#     logger.info(f"PUSH: {state} -> Stack: {stack}")
 
-def pop_nav(context):
-    stack = context.user_data.get('nav_stack', [])
-    if stack:
-        popped = stack.pop()
-        logger.info(f"POP: {popped} -> Stack: {stack}")
-        return stack[-1] if stack else None
-    logger.info(f"POP: empty stack")
-    return None
+# def pop_nav(context):
+#     stack = context.user_data.get('nav_stack', [])
+#     if stack:
+#         popped = stack.pop()
+#         logger.info(f"POP: {popped} -> Stack: {stack}")
+#         return stack[-1] if stack else None
+#     logger.info(f"POP: empty stack")
+#     return None
 
 
-async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
-    
-    # Обычная логика навигации
-    prev_state = pop_nav(context)
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Previous state: {prev_state}")
-    
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Navigating to {prev_state}")
-    
-    # Если стек пустой — возвращаемся в главное меню
-    if prev_state is None:
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, calling start()")
-        await start(update, context)
-    elif prev_state == 'main_menu':
-        # Если возвращаемся в main_menu, редактируем существующее сообщение
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'main_menu', calling edit_main_menu")
-        await edit_main_menu(update, context)
-    elif prev_state == 'instruction_menu':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_menu', calling instruction()")
-        await instruction(update, context)
-    elif prev_state == 'instruction_platform':
-        # Возвращаемся к выбору платформы
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_platform', calling instruction()")
-        await instruction(update, context)
-
-    elif prev_state == 'payment':
-        # После активации ключа возвращаемся в меню "Мои ключи"
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'payment', calling mykey()")
-        await mykey(update, context)
-    elif prev_state == 'mykeys_menu':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'mykeys_menu', calling mykey()")
-        await mykey(update, context)
-    elif prev_state == 'admin_menu':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_menu', calling admin_menu()")
-        await admin_menu(update, context)
-    elif prev_state == 'admin_errors':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_errors', calling admin_menu()")
-        await admin_menu(update, context)
-    elif prev_state == 'admin_check_servers':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_check_servers', calling admin_menu()")
-        await admin_menu(update, context)
-    elif prev_state == 'admin_notifications':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_notifications', calling admin_menu()")
-        await admin_menu(update, context)
-    elif prev_state == 'buy_menu':
-        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'buy_menu', calling buy_menu_handler()")
-        await buy_menu_handler(update, context)
-    elif prev_state == 'server_selection':
-        # Если предыдущее состояние server_selection, проверяем, находимся ли мы в сообщении с успешной оплатой
-        message = query.message
-        if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
-            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling start()")
-            # Очищаем навигационный стек и переходим в главное меню
-            context.user_data['nav_stack'] = []
-            await start(update, context)
-        else:
-            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection', calling buy_menu_handler()")
-            await buy_menu_handler(update, context)
-    else:
-        logger.warning(f"🔙 UNIVERSAL_BACK_CALLBACK: Unknown state {prev_state}, returning to main menu")
-        await start(update, context)
+# === СТАРАЯ ФУНКЦИЯ НАВИГАЦИИ (ЗАМЕНЕНА НОВОЙ СИСТЕМОЙ) ===
+# async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     query = update.callback_query
+#     await query.answer()
+#     
+#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
+#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
+#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
+#     
+#     # Обычная логика навигации
+#     prev_state = pop_nav(context)
+#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Previous state: {prev_state}")
+#     
+#     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Navigating to {prev_state}")
+#     
+#     # Если стек пустой — возвращаемся в главное меню
+#     if prev_state is None:
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state is None, calling start()")
+#         await start(update, context)
+#     elif prev_state == 'main_menu':
+#         # Если возвращаемся в main_menu, редактируем существующее сообщение
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'main_menu', calling edit_main_menu")
+#         await edit_main_menu(update, context)
+#     elif prev_state == 'instruction_menu':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_menu', calling instruction()")
+#         await instruction(update, context)
+#     elif prev_state == 'instruction_platform':
+#         # Возвращаемся к выбору платформы
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'instruction_platform', calling instruction()")
+#         await instruction(update, context)
+# 
+#     elif prev_state == 'payment':
+#         # После активации ключа возвращаемся в меню "Мои ключи"
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'payment', calling mykey()")
+#         await mykey(update, context)
+#     elif prev_state == 'mykeys_menu':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'mykeys_menu', calling mykey()")
+#         await mykey(update, context)
+#     elif prev_state == 'admin_menu':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_menu', calling admin_menu()")
+#         await admin_menu(update, context)
+#     elif prev_state == 'admin_errors':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_errors', calling admin_menu()")
+#         await admin_menu(update, context)
+#     elif prev_state == 'admin_check_servers':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_check_servers', calling admin_menu()")
+#         await admin_menu(update, context)
+#     elif prev_state == 'admin_notifications':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'admin_notifications', calling admin_menu()")
+#         await admin_menu(update, context)
+#     elif prev_state == 'buy_menu':
+#         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'buy_menu', calling buy_menu_handler()")
+#         await buy_menu_handler(update, context)
+#     elif prev_state == 'server_selection':
+#         # Если предыдущее состояние server_selection, проверяем, находимся ли мы в сообщении с успешной оплатой
+#         message = query.message
+#         if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
+#             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling start()")
+#             # Очищаем навигационный стек и переходим в главное меню
+#             context.user_data['nav_stack'] = []
+#             await start(update, context)
+#         else:
+#             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection', calling buy_menu_handler()")
+#             await buy_menu_handler(update, context)
+#     else:
+#         logger.warning(f"🔙 UNIVERSAL_BACK_CALLBACK: Unknown state {prev_state}, returning to main menu")
+#         await start(update, context)
 
 
 
@@ -4946,8 +4945,8 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('config_chat_id', None)
     
     stack = context.user_data.setdefault('nav_stack', [])
-    if not stack or stack[-1] != 'admin_menu':
-        push_nav(context, 'admin_menu')
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    nav_manager.push_state(context, NavStates.ADMIN_MENU)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Логи", callback_data="admin_errors")],
         [InlineKeyboardButton("Проверка серверов", callback_data="admin_check_servers")],
@@ -5371,6 +5370,33 @@ if __name__ == '__main__':
     webhook_thread.start()
     logger.info("Webhook сервер запущен на порту 5000")
     
+    # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+    def setup_navigation():
+        """Настройка системы навигации"""
+        bot_handlers = {
+            'edit_main_menu': edit_main_menu,
+            'instruction': instruction,
+            'instruction_callback': instruction_callback,
+            'buy_menu_handler': buy_menu_handler,
+            'server_selection_menu': server_selection_menu,
+            'handle_payment': handle_payment,
+            'mykey': mykey,
+            'points_callback': points_callback,
+            'referral_callback': referral_callback,
+            'extend_key_callback': extend_key_callback,
+            'rename_key_callback': rename_key_callback,
+            'admin_menu': admin_menu,
+            'admin_errors': admin_errors,
+            'admin_notifications': admin_notifications,
+            'admin_check_servers': admin_check_servers,
+            'admin_broadcast_start': admin_broadcast_start,
+            'admin_set_days_start': admin_set_days_start,
+        }
+        return NavigationIntegration(bot_handlers)
+    
+    # Создаем интеграцию навигации
+    nav_integration = setup_navigation()
+    
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler('start', start))
@@ -5393,7 +5419,8 @@ if __name__ == '__main__':
         },
         fallbacks=[
             CallbackQueryHandler(admin_set_days_cancel, pattern="^admin_set_days_cancel$"),
-            CallbackQueryHandler(universal_back_callback, pattern="^back$")
+            # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+            # CallbackQueryHandler(universal_back_callback, pattern="^back$")
         ],
         per_user=True,
         per_chat=True,
@@ -5407,12 +5434,14 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
     # Обработчик кнопки "Назад" - должен быть первым для приоритета
-    app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
-    # Обработчик кнопки "Назад" после успешной оплаты
-    app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
+    # === СТАРЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ (ЗАМЕНЕНЫ НОВОЙ СИСТЕМОЙ) ===
+    # app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
+    # # Обработчик кнопки "Назад" после успешной оплаты
+    # app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
-    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
+    # === СТАРЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ (ЗАМЕНЕНЫ НОВОЙ СИСТЕМОЙ) ===
+    # app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
@@ -5441,7 +5470,8 @@ if __name__ == '__main__':
         },
         fallbacks=[
             CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"),
-            CallbackQueryHandler(universal_back_callback, pattern="^back$")
+            # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
+            # CallbackQueryHandler(universal_back_callback, pattern="^back$")
         ],
         per_user=True,
         per_chat=True,
@@ -5469,5 +5499,8 @@ if __name__ == '__main__':
     
     # Обработчик текстовых сообщений для переименования ключей
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    # === НОВЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ ===
+    app.add_handlers(nav_integration.get_handlers())
     
     app.run_polling()
