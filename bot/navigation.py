@@ -30,12 +30,13 @@ class NavigationManager:
         if len(stack) >= self.max_stack_size:
             stack.pop(0)  # Удаляем самый старый элемент
         
-        # Не добавляем дубликаты подряд
-        if not stack or stack[-1] != state:
-            stack.append(state)
-            logger.info(f"PUSH: {state} -> Stack: {stack}")
-        else:
-            logger.info(f"PUSH: {state} (duplicate, skipped) -> Stack: {stack}")
+        # Удаляем все существующие вхождения состояния, чтобы избежать дубликатов
+        while state in stack:
+            stack.remove(state)
+        
+        # Добавляем состояние в конец
+        stack.append(state)
+        logger.info(f"PUSH: {state} -> Stack: {stack}")
     
     def pop_state(self, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         """Удаляет последнее состояние из стека и возвращает предыдущее"""
