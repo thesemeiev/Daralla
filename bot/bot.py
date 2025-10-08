@@ -3904,6 +3904,8 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await select_server_callback(update, context)
     elif query.data == "mykey":
         await mykey(update, context)
+    elif query.data == "mykeys_menu":
+        await mykey(update, context)
     elif query.data.startswith("keys_page_"):
         logger.info(f"Переход на страницу ключей: {query.data}")
         await mykey(update, context)
@@ -3944,11 +3946,11 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.BUY_MENU)
+        await nav_system.navigate_to_state(update, context, NavStates.BUY_MENU)
     
     # Переходим к выбору сервера через навигационную систему
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
+        await nav_system.navigate_to_state(update, context, NavStates.SERVER_SELECTION)
     # Вызываем обработчик из menu_handlers
     from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
@@ -4036,7 +4038,7 @@ async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
+        await nav_system.navigate_to_state(update, context, NavStates.SERVER_SELECTION)
     
     # Получаем сохраненные данные
     period = context.user_data.get("pending_period")
@@ -4231,7 +4233,7 @@ async def buy_with_points_callback(update: Update, context: ContextTypes.DEFAULT
     
     # Переходим к выбору сервера через навигационную систему
     if nav_system:
-        nav_system.navigate_to_state(context, NavStates.SERVER_SELECTION)
+        await nav_system.navigate_to_state(update, context, NavStates.SERVER_SELECTION)
     # Вызываем обработчик из menu_handlers
     from .menu_handlers import MenuHandlers
     menu_handlers = MenuHandlers({})
@@ -5254,7 +5256,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
 
     # Этот обработчик покрывается навигационной системой - убираем дублирование
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*|admin_notifications_refresh|back)$"))
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|mykeys_menu|instruction|keys_page_.*|admin_notifications_refresh|back)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
  
     # Эти обработчики покрываются навигационной системой - убираем дублирование
