@@ -4164,6 +4164,15 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     elif prev_state == 'buy_menu':
         logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'buy_menu', calling buy_menu_handler()")
         await buy_menu_handler(update, context)
+    elif prev_state == 'server_selection':
+        # Если предыдущее состояние server_selection, проверяем, находимся ли мы в сообщении с успешной оплатой
+        message = query.message
+        if message and message.caption and "Покупка прошла успешно" in message.caption:
+            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling mykey()")
+            await mykey(update, context)
+        else:
+            logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection', calling buy_menu_handler()")
+            await buy_menu_handler(update, context)
     else:
         logger.warning(f"🔙 UNIVERSAL_BACK_CALLBACK: Unknown state {prev_state}, returning to main menu")
         await start(update, context)
