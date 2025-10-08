@@ -389,7 +389,9 @@ IMAGE_PATHS = {
     'instruction_macos': 'images/instruction_macos.jpg',
     'instruction_linux': 'images/instruction_linux.jpg',
     'instruction_tv': 'images/instruction_tv.jpg',
-    'instruction_faq': 'images/instruction_faq.jpg'
+    'instruction_faq': 'images/instruction_faq.jpg',
+    'key_success': 'images/key_success.jpg',
+    'payment_success_key': 'images/payment_success_key.jpg'
 }
 
 # Проверяем наличие обязательных переменных
@@ -2447,7 +2449,7 @@ async def auto_activate_keys(app):
                                         full_message, 
                                         reply_markup=keyboard, 
                                         parse_mode="HTML", 
-                                        menu_type='mykeys_menu'
+                                        menu_type='key_success'
                                     )
                                     logger.info(f"Отредактировано сообщение с оплатой {message_id} на информацию о ключе")
                                 except Exception as edit_error:
@@ -2460,7 +2462,7 @@ async def auto_activate_keys(app):
                                             text=full_message,
                                             reply_markup=keyboard,
                                             parse_mode="HTML",
-                                            menu_type='mykeys_menu'
+                                            menu_type='key_success'
                                         )
                                         logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                                     except telegram.error.Forbidden:
@@ -2481,7 +2483,7 @@ async def auto_activate_keys(app):
                                         text=full_message,
                                         reply_markup=keyboard,
                                         parse_mode="HTML",
-                                        menu_type='mykeys_menu'
+                                        menu_type='key_success'
                                     )
                                     logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                                 except telegram.error.Forbidden:
@@ -3608,6 +3610,39 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_user.id not in ADMIN_IDS:
         return ConversationHandler.END
     
+    async def edit_config_message(message, reply_markup=None):
+        """Вспомогательная функция для редактирования сообщения настройки"""
+        message_id = context.user_data.get('config_message_id')
+        chat_id = context.user_data.get('config_chat_id')
+        
+        if message_id and chat_id:
+            try:
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                    menu_type='admin_menu'
+                )
+                return
+            except Exception as e:
+                logger.error(f"Ошибка редактирования сообщения настройки: {e}")
+                # Fallback: отправляем новое сообщение
+                await safe_send_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                    menu_type='admin_menu'
+                )
+                return
+        
+        # Fallback: используем обычное редактирование
+        await safe_edit_or_reply_universal(update.message, message, reply_markup=reply_markup, parse_mode="HTML", menu_type='admin_menu')
+    
     try:
         # Удаляем сообщение пользователя
         await update.message.delete()
@@ -3658,7 +3693,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_set_days_cancel")]
         ])
         
-        await safe_edit_or_reply_universal(update.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
+        await edit_config_message(message, keyboard)
         
         return WAITING_FOR_DAYS
         
@@ -3680,7 +3715,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
             [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data="admin_set_days_cancel")]
         ])
         
-        await safe_edit_or_reply_universal(update.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
+        await edit_config_message(message, keyboard)
         
         return WAITING_FOR_DAYS
         
@@ -3693,7 +3728,7 @@ async def admin_set_days_input(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
         
-        await safe_edit_or_reply_universal(update.message, f'{UIEmojis.ERROR} Ошибка: {e}', parse_mode="HTML", menu_type='broadcast')
+        await edit_config_message(f'{UIEmojis.ERROR} Ошибка: {e}')
         
         return ConversationHandler.END
 
