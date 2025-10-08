@@ -1852,7 +1852,7 @@ async def handle_payment(update, context, price, period):
                     logger.error(f"Не удалось удалить сообщение с меню выбора периода: {delete_error}")
             
             # Подготавливаем метаданные платежа
-            payment_meta = {"price": price, "type": period, "key_id": key_id, "unique_email": unique_email}
+            payment_meta = {"price": price, "type": period, "key_id": key_id, "unique_email": unique_email, "message_id": message.message_id}
             
             # Добавляем информацию о продлении, если это продление ключа
             if period.startswith('extend_') and context.user_data.get('extension_key_email'):
@@ -2478,21 +2478,29 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
                     full_message = success_text + msg
                     
-                    # Если есть сообщение с оплатой, редактируем его
-                    if message_id:
+                    # Получаем message_id из мета-данных платежа
+                    payment_info = await get_payment_by_id(payment_id)
+                    stored_message_id = None
+                    if payment_info and payment_info.get('meta'):
+                        stored_message_id = payment_info['meta'].get('message_id')
+                    
+                    # Используем message_id из webhook или из базы данных
+                    actual_message_id = message_id or stored_message_id
+                    
+                    if actual_message_id:
                         try:
                             await safe_edit_message_with_photo(
                                 bot_app.bot,
                                 chat_id=int(user_id),
-                                message_id=message_id,
+                                message_id=actual_message_id,
                                 text=full_message,
                                 reply_markup=keyboard,
                                 parse_mode="HTML",
                                 menu_type='key_success'
                             )
-                            logger.info(f"Отредактировано сообщение с оплатой {message_id} на информацию о ключе")
+                            logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о ключе")
                         except Exception as edit_error:
-                            logger.error(f"Ошибка редактирования сообщения {message_id}: {edit_error}")
+                            logger.error(f"Ошибка редактирования сообщения {actual_message_id}: {edit_error}")
                             # Fallback: отправляем новое сообщение
                             await safe_send_message_with_photo(
                                 bot_app.bot,
@@ -2504,7 +2512,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                             )
                             logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                     else:
-                        # Если нет сообщения с оплатой, отправляем новое
+                        # Если нет message_id, отправляем новое сообщение
                         await safe_send_message_with_photo(
                             bot_app.bot,
                             chat_id=int(user_id),
