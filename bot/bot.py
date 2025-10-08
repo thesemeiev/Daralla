@@ -2160,6 +2160,42 @@ async def auto_activate_keys(app):
                             if not xui or not server_name:
                                 logger.error(f"Ключ для продления не найден: {extension_email}")
                                 await update_payment_status(payment_id, 'failed')
+                                
+                                # Отправляем сообщение пользователю об ошибке продления
+                                try:
+                                    message_id = payment_message_ids.get(payment_id)
+                                    if message_id:
+                                        error_message = (
+                                            f"{UIStyles.header('Ошибка продления')}\n\n"
+                                            f"{UIEmojis.ERROR} <b>Не удалось продлить ключ!</b>\n\n"
+                                            f"<b>Ключ:</b> {extension_email}\n"
+                                            f"<b>Причина:</b> Ключ не найден на сервере\n\n"
+                                            f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
+                                        )
+                                        
+                                        keyboard = InlineKeyboardMarkup([
+                                            [InlineKeyboardButton("Попробовать снова", callback_data="mykey")],
+                                            [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                                        ])
+                                        
+                                        await safe_edit_message_with_photo(
+                                            app.bot,
+                                            chat_id=int(user_id),
+                                            message_id=message_id,
+                                            text=error_message,
+                                            reply_markup=keyboard,
+                                            parse_mode="HTML",
+                                            menu_type='extend_key'
+                                        )
+                                        logger.info(f"Отредактировано сообщение с продлением {message_id} на ошибку продления для пользователя {user_id}")
+                                        
+                                        # Удаляем message_id из отслеживания
+                                        payment_message_ids.pop(payment_id, None)
+                                    else:
+                                        logger.warning(f"Не найден message_id для payment_id {payment_id} (продление)")
+                                except Exception as e:
+                                    logger.error(f"Ошибка отправки сообщения об ошибке продления: {e}")
+                                
                                 continue
                             
                             # Продлеваем ключ
@@ -2303,9 +2339,81 @@ async def auto_activate_keys(app):
                                 logger.error(f"Ошибка продления ключа {extension_email}: статус {response.status_code if response else 'None'}")
                                 await update_payment_status(payment_id, 'failed')
                                 
+                                # Отправляем сообщение пользователю об ошибке продления
+                                try:
+                                    message_id = payment_message_ids.get(payment_id)
+                                    if message_id:
+                                        error_message = (
+                                            f"{UIStyles.header('Ошибка продления')}\n\n"
+                                            f"{UIEmojis.ERROR} <b>Не удалось продлить ключ!</b>\n\n"
+                                            f"<b>Ключ:</b> {extension_email}\n"
+                                            f"<b>Причина:</b> Ошибка сервера при продлении\n"
+                                            f"<b>Статус:</b> {response.status_code if response else 'Неизвестно'}\n\n"
+                                            f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
+                                        )
+                                        
+                                        keyboard = InlineKeyboardMarkup([
+                                            [InlineKeyboardButton("Попробовать снова", callback_data="mykey")],
+                                            [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                                        ])
+                                        
+                                        await safe_edit_message_with_photo(
+                                            app.bot,
+                                            chat_id=int(user_id),
+                                            message_id=message_id,
+                                            text=error_message,
+                                            reply_markup=keyboard,
+                                            parse_mode="HTML",
+                                            menu_type='extend_key'
+                                        )
+                                        logger.info(f"Отредактировано сообщение с продлением {message_id} на ошибку продления для пользователя {user_id}")
+                                        
+                                        # Удаляем message_id из отслеживания
+                                        payment_message_ids.pop(payment_id, None)
+                                    else:
+                                        logger.warning(f"Не найден message_id для payment_id {payment_id} (продление)")
+                                except Exception as e:
+                                    logger.error(f"Ошибка отправки сообщения об ошибке продления: {e}")
+                                
                         except Exception as e:
                             logger.error(f"Ошибка при продлении ключа {extension_email}: {e}")
                             await update_payment_status(payment_id, 'failed')
+                            
+                            # Отправляем сообщение пользователю об ошибке продления
+                            try:
+                                message_id = payment_message_ids.get(payment_id)
+                                if message_id:
+                                    error_message = (
+                                        f"{UIStyles.header('Ошибка продления')}\n\n"
+                                        f"{UIEmojis.ERROR} <b>Не удалось продлить ключ!</b>\n\n"
+                                        f"<b>Ключ:</b> {extension_email}\n"
+                                        f"<b>Причина:</b> Техническая ошибка\n"
+                                        f"<b>Ошибка:</b> {str(e)[:100]}...\n\n"
+                                        f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
+                                    )
+                                    
+                                    keyboard = InlineKeyboardMarkup([
+                                        [InlineKeyboardButton("Попробовать снова", callback_data="mykey")],
+                                        [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                                    ])
+                                    
+                                    await safe_edit_message_with_photo(
+                                        app.bot,
+                                        chat_id=int(user_id),
+                                        message_id=message_id,
+                                        text=error_message,
+                                        reply_markup=keyboard,
+                                        parse_mode="HTML",
+                                        menu_type='extend_key'
+                                    )
+                                    logger.info(f"Отредактировано сообщение с продлением {message_id} на ошибку продления для пользователя {user_id}")
+                                    
+                                    # Удаляем message_id из отслеживания
+                                    payment_message_ids.pop(payment_id, None)
+                                else:
+                                    logger.warning(f"Не найден message_id для payment_id {payment_id} (продление)")
+                            except Exception as e:
+                                logger.error(f"Ошибка отправки сообщения об ошибке продления: {e}")
                         
                         continue  # Переходим к следующему платежу
                     
