@@ -246,11 +246,14 @@ jobs:
           echo "Current commit: $(sudo git log --oneline -1)"
           echo "Bot.py last modified: $(sudo stat -c %y bot/bot.py)"
           
-          # Clean up old logs and containers
+          # Clean up old logs and containers (safe approach)
           echo "Cleaning up old logs and containers..."
-          sudo docker system prune -f
-          sudo docker volume prune -f
-          sudo docker image prune -f
+          # Stop and remove old containers
+          sudo docker-compose down || true
+          # Remove only dangling images (safer)
+          timeout 30 sudo docker image prune -f || echo "Image prune timed out, continuing..."
+          # Clean up build cache
+          timeout 30 sudo docker builder prune -f || echo "Builder prune timed out, continuing..."
           
           # Start bot
           echo "Starting bot..."
