@@ -74,7 +74,7 @@ class MenuHandlers:
         """Меню покупки"""
         # Создаем меню покупки напрямую
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-        from menu_states import CallbackData
+        from .menu_states import CallbackData
         
         keyboard = NavigationBuilder.create_keyboard_with_back([
             [InlineKeyboardButton("1 месяц — 100₽", callback_data=CallbackData.SELECT_PERIOD_MONTH)],
@@ -91,7 +91,7 @@ class MenuHandlers:
         import sys
         import os
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from bot import UIMessages, safe_edit_or_reply_universal
+        from .bot import UIMessages, safe_edit_or_reply_universal
         
         buy_menu_text = UIMessages.buy_menu_message()
         await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
@@ -102,8 +102,8 @@ class MenuHandlers:
         import sys
         import os
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from bot import SERVERS_BY_LOCATION, UIEmojis, UIStyles, UIMessages, safe_edit_or_reply_universal, UIButtons
-        from menu_states import CallbackData
+        from .bot import SERVERS_BY_LOCATION, UIEmojis, UIStyles, UIMessages, safe_edit_or_reply_universal, UIButtons
+        from .menu_states import CallbackData
         
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         if message is None:
@@ -111,7 +111,7 @@ class MenuHandlers:
             return
         
         # Получаем менеджер серверов из bot.py
-        from bot import new_client_manager
+        from .bot import new_client_manager
         health_results = new_client_manager.check_all_servers_health()
         
         # Создаем кнопки для локаций с флагами и статусом
@@ -240,8 +240,8 @@ class MenuHandlers:
         import sys
         import os
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from bot import ADMIN_IDS, safe_edit_or_reply, UIMessages, safe_edit_or_reply_universal, UIButtons, check_private_chat
-        from menu_states import CallbackData
+        from .bot import ADMIN_IDS, safe_edit_or_reply, UIMessages, safe_edit_or_reply_universal, UIButtons, check_private_chat
+        from .menu_states import CallbackData
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         
         if not await check_private_chat(update):
