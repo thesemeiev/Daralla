@@ -5119,9 +5119,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_notifications', admin_notifications))
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
+    # Обработчик кнопки "Назад" - должен быть первым для приоритета
+    app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
-    app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
     app.add_handler(CallbackQueryHandler(start, pattern="^main_menu$"))
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
@@ -5140,7 +5141,7 @@ if __name__ == '__main__':
             ],
             BROADCAST_CONFIRM: [
                 CallbackQueryHandler(admin_broadcast_send, pattern="^admin_broadcast_send$"),
-                CallbackQueryHandler(admin_broadcast_cancel, pattern="^back$")
+                CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$")
             ]
         },
         fallbacks=[CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$")],
