@@ -4098,8 +4098,8 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
         await instruction(update, context)
 
     elif prev_state == 'payment':
-        # После активации ключа возвращаемся в главное меню
-        await start(update, context)
+        # После активации ключа возвращаемся в меню "Мои ключи"
+        await mykey(update, context)
     elif prev_state == 'mykeys_menu':
         await mykey(update, context)
     elif prev_state == 'admin_menu':
