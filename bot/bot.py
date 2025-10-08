@@ -3921,6 +3921,9 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     elif query.data == "admin_notifications_refresh":
         # Обновляем админ уведомления напрямую
         await admin_notifications(update, context)
+    elif query.data == "admin_errors_refresh":
+        # Обновляем админ логи напрямую
+        await admin_errors(update, context)
     elif query.data == "back":
         # Обработка кнопки "Назад" через навигационную систему
         if nav_system:
@@ -5256,7 +5259,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
 
     # Этот обработчик покрывается навигационной системой - убираем дублирование
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|mykeys_menu|instruction|keys_page_.*|admin_notifications_refresh|back)$"))
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|mykeys_menu|instruction|keys_page_.*|admin_notifications_refresh|admin_errors_refresh|back)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
  
     # Эти обработчики покрываются навигационной системой - убираем дублирование
