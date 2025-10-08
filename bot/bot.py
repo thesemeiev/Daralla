@@ -2484,8 +2484,43 @@ async def auto_activate_keys(app):
 
                 # Если платеж отменен
                 elif pay.status in ['canceled', 'refunded']:
-                    await update_payment_status(payment_id, pay.status)
+                    await update_payment_status(payment_id, 'failed')
                     await update_payment_activation(payment_id, 0)
+                    
+                    # Редактируем существующее сообщение с оплатой на сообщение об ошибке
+                    try:
+                        message_id = payment_message_ids.get(payment_id)
+                        if message_id:
+                            error_message = (
+                                f"{UIStyles.header('Ошибка оплаты')}\n\n"
+                                f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
+                                f"<b>Причина:</b> Платеж был отменен или возвращен\n"
+                                f"<b>Статус:</b> {pay.status}\n\n"
+                                f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
+                            )
+                            
+                            keyboard = InlineKeyboardMarkup([
+                                [InlineKeyboardButton("Попробовать снова", callback_data="buy_menu")],
+                                [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                            ])
+                            
+                            await safe_edit_message_with_photo(
+                                app.bot,
+                                chat_id=int(user_id),
+                                message_id=message_id,
+                                text=error_message,
+                                reply_markup=keyboard,
+                                parse_mode="HTML",
+                                menu_type='payment_failed'
+                            )
+                            logger.info(f"Отредактировано сообщение с оплатой {message_id} на ошибку оплаты для пользователя {user_id}")
+                            
+                            # Удаляем message_id из отслеживания
+                            payment_message_ids.pop(payment_id, None)
+                        else:
+                            logger.warning(f"Не найден message_id для payment_id {payment_id}")
+                    except Exception as e:
+                        logger.error(f"Ошибка редактирования сообщения об ошибке оплаты: {e}")
                     
         except Exception as e:
             logger.error(f"Ошибка в auto_activate_keys: {e}")
