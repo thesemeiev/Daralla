@@ -337,7 +337,7 @@ import threading
 import hmac
 import hashlib
 
-from keys_db import (
+from .keys_db import (
     init_payments_db, add_payment, get_payment, get_payment_by_id, update_payment_status, get_all_pending_payments,
     get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
     init_referral_db, save_referral_connection, get_pending_referral, mark_referral_reward_given,
@@ -490,7 +490,7 @@ for i, server in enumerate(SERVERS):
 
 # Настраиваем файловый лог с ротацией в папке data/logs
 try:
-    from keys_db import DATA_DIR
+    from .keys_db import DATA_DIR
 except Exception:
     DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 
@@ -1609,7 +1609,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def update_payment_activation(payment_id: str, activated: int):
     import aiosqlite
-    from keys_db import DB_PATH
+    from .keys_db import DB_PATH
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (activated, payment_id))
         await db.commit()
@@ -1637,7 +1637,7 @@ async def handle_payment(update, context, price, period):
         
         # Проверяем pending платежи пользователя и отменяем только неоплаченные
         import aiosqlite
-        from keys_db import DB_PATH
+        from .keys_db import DB_PATH
         logger.info(f"HANDLE_PAYMENT: Подключаемся к базе данных по пути: {DB_PATH}")
         async with aiosqlite.connect(DB_PATH) as db:
             # Проверяем существование таблицы payments
@@ -2027,8 +2027,8 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def init_all_db():
-    from keys_db import init_payments_db, DB_PATH, REFERRAL_DB_PATH, DATA_DIR
-    from notifications_db import init_notifications_db, NOTIFICATIONS_DB_PATH
+    from .keys_db import init_payments_db, DB_PATH, REFERRAL_DB_PATH, DATA_DIR
+    from .notifications_db import init_notifications_db, NOTIFICATIONS_DB_PATH
     
     # Создаем папку data если её нет
     import os
@@ -3280,7 +3280,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Читаем ротационный файл логов приложения
-        from keys_db import DATA_DIR
+        from .keys_db import DATA_DIR
         import os
         logs_path = os.path.join(DATA_DIR, 'logs', 'bot.log')
         logs = ''
