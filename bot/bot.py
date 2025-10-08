@@ -1815,10 +1815,8 @@ async def handle_payment(update, context, price, period):
                 period_text = "1 месяц" if period == "month" else "3 месяца"
             payment_url = payment.confirmation.confirmation_url
             
-            # Сохраняем message_id для отслеживания платежа
-            payment_message_ids[payment.id] = message.message_id
-            logger.info(f"Сохранен message_id {message.message_id} для payment_id {payment.id}")
-            logger.info(f"Текущее состояние payment_message_ids: {payment_message_ids}")
+            # message_id уже сохранен в мета-данных платежа в БД
+            logger.info(f"Создан платеж {payment.id} с message_id {message.message_id}")
             
             # Для продления сохраняем информацию о сообщении для последующего редактирования
             if period.startswith('extend_'):
@@ -2096,35 +2094,7 @@ def create_webhook_app(bot_app):
             else:
                 logger.info(f"🔔 WEBHOOK: ⚠️ Неизвестный статус: {status}")
             
-            # Периодическая очистка данных (каждый 100-й webhook)
-            import random
-            if random.randint(1, 100) == 1:
-                # Запускаем очистку в отдельном потоке
-                def cleanup_data():
-                    import asyncio
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        async def cleanup():
-                            try:
-                                # Очищаем просроченные pending платежи
-                                expired_count = await cleanup_expired_pending_payments(minutes_old=20)
-                                if expired_count > 0:
-                                    logger.info(f"🧹 WEBHOOK: Удалено {expired_count} просроченных pending платежей")
-                                
-                                # Очищаем старые записи
-                                old_count = await cleanup_old_payments(days_old=7)
-                                if old_count > 0:
-                                    logger.info(f"🧹 WEBHOOK: Удалено {old_count} старых записей платежей")
-                            except Exception as e:
-                                logger.error(f"Ошибка очистки данных в webhook: {e}")
-                        
-                        loop.run_until_complete(cleanup())
-                    finally:
-                        loop.close()
-                
-                cleanup_thread = threading.Thread(target=cleanup_data, daemon=True)
-                cleanup_thread.start()
+            # Очистка данных теперь выполняется отдельной задачей cleanup_old_payments_task()
             
             # Запускаем обработку платежа в отдельном потоке с изолированным event loop
             def process_payment():
@@ -2201,7 +2171,8 @@ async def process_successful_payment(bot_app, payment_id, user_id, meta):
     """Обрабатывает успешный платеж"""
     try:
         period = meta.get('type', 'month')
-        message_id = payment_message_ids.get(payment_id)
+        # Получаем message_id из мета-данных платежа
+        message_id = meta.get('message_id')
         
         # Проверяем, это продление или новая покупка
         is_extension = period.startswith('extend_')
@@ -2346,9 +2317,6 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                             menu_type='extend_key'
                         )
                         logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
-                        
-                        # Удаляем message_id из отслеживания
-                        payment_message_ids.pop(payment_id, None)
                     else:
                         # Fallback: отправляем новое сообщение
                         await safe_send_message_with_photo(
@@ -2529,8 +2497,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         )
                         logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                     
-                    # Удаляем message_id из отслеживания
-                    payment_message_ids.pop(payment_id, None)
+                    # message_id больше не отслеживается в памяти
                             
                 except Exception as e:
                     logger.error(f"Ошибка отправки ключа пользователю: {e}")
@@ -2553,7 +2520,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
         await update_payment_activation(payment_id, 0)
         
         # Отправляем сообщение пользователю об ошибке оплаты
-        message_id = payment_message_ids.get(payment_id)
+        message_id = meta.get('message_id')
         if message_id:
             error_message = (
                 f"{UIStyles.header('Ошибка оплаты')}\n\n"
@@ -2578,9 +2545,6 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
                 menu_type='payment_failed'
             )
             logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {user_id}")
-            
-            # Удаляем message_id из отслеживания
-            payment_message_ids.pop(payment_id, None)
                     
     except Exception as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
@@ -2596,7 +2560,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
         period = meta.get('type', 'month')
         is_extension = period.startswith('extend_')
         
-        message_id = payment_message_ids.get(payment_id)
+        message_id = meta.get('message_id')
         if message_id:
             if is_extension:
                 # Ошибка продления
@@ -2644,11 +2608,47 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
             )
             logger.info(f"Отправлено сообщение об ошибке пользователю {user_id}")
             
-            # Удаляем message_id из отслеживания
-            payment_message_ids.pop(payment_id, None)
-            
     except Exception as e:
         logger.error(f"Ошибка обработки неудачного платежа {payment_id}: {e}")
+
+
+async def cleanup_old_payments_task():
+    """Периодическая очистка старых платежей и данных"""
+    while True:
+        try:
+            logger.info("🧹 Запуск периодической очистки данных")
+            
+            # Очищаем просроченные pending платежи
+            expired_count = await cleanup_expired_pending_payments(minutes_old=20)
+            if expired_count > 0:
+                logger.info(f"🧹 Очистка: Удалено {expired_count} просроченных pending платежей")
+            
+            # Очищаем старые записи платежей
+            old_count = await cleanup_old_payments(days_old=7)
+            if old_count > 0:
+                logger.info(f"🧹 Очистка: Удалено {old_count} старых записей платежей")
+            
+            # Очищаем кэш extension_keys_cache от старых записей
+            current_time = datetime.datetime.now().timestamp()
+            keys_to_remove = []
+            for short_id, key_info in extension_keys_cache.items():
+                # Если запись старше 1 часа, удаляем её
+                if current_time - key_info.get('created_at', 0) > 3600:
+                    keys_to_remove.append(short_id)
+            
+            for short_id in keys_to_remove:
+                extension_keys_cache.pop(short_id, None)
+            
+            if keys_to_remove:
+                logger.info(f"🧹 Очистка: Удалено {len(keys_to_remove)} старых записей из extension_keys_cache")
+            
+            logger.info("🧹 Периодическая очистка завершена")
+            
+        except Exception as e:
+            logger.error(f"Ошибка в периодической очистке: {e}")
+        
+        # Ждем 1 час до следующей очистки
+        await asyncio.sleep(3600)
 
 
 async def auto_cleanup_expired_keys():
@@ -2727,28 +2727,23 @@ async def auto_cleanup_expired_keys():
                                     if keys_to_remove:
                                         logger.info(f"Очищено {len(keys_to_remove)} записей из extension_keys_cache для удаленного ключа {email}")
                                     
-                                    # Очищаем payment_message_ids (платежи для этого ключа)
-                                    payments_to_remove = []
-                                    for payment_id in list(payment_message_ids.keys()):
-                                        # Проверяем, связан ли платеж с этим ключом
+                                    # Очищаем extension_messages для удаленного ключа
+                                    extension_keys_to_remove = []
+                                    for payment_id, (chat_id, msg_id) in list(extension_messages.items()):
                                         try:
-                                            from .keys_db import get_all_pending_payments
-                                            pending_payments = await get_all_pending_payments()
-                                            for payment in pending_payments:
-                                                if payment['payment_id'] == payment_id:
-                                                    meta = payment.get('meta', {})
-                                                    if meta.get('key_email') == email:
-                                                        payments_to_remove.append(payment_id)
-                                                    break
-                                        except:
-                                            pass
+                                            payment_info = await get_payment_by_id(payment_id)
+                                            if payment_info and payment_info.get('meta'):
+                                                meta = payment_info['meta'] if isinstance(payment_info['meta'], dict) else json.loads(payment_info['meta'])
+                                                if meta.get('extension_key_email') == email:
+                                                    extension_keys_to_remove.append(payment_id)
+                                        except Exception as e:
+                                            logger.warning(f"Ошибка при проверке связи платежа {payment_id} с ключом {email}: {e}")
                                     
-                                    for payment_id in payments_to_remove:
-                                        payment_message_ids.pop(payment_id, None)
+                                    for payment_id in extension_keys_to_remove:
                                         extension_messages.pop(payment_id, None)
                                     
-                                    if payments_to_remove:
-                                        logger.info(f"Очищено {len(payments_to_remove)} записей из payment_message_ids и extension_messages для удаленного ключа {email}")
+                                    if extension_keys_to_remove:
+                                        logger.info(f"Очищено {len(extension_keys_to_remove)} записей из extension_messages для удаленного ключа {email}")
                                     
                                     # Очищаем уведомления для удаленного ключа
                                     if user_id:
@@ -2968,6 +2963,7 @@ async def on_startup(app):
     # Запускаем остальные задачи
     # auto_activate_keys больше не нужна - webhook'и обрабатывают платежи мгновенно
     asyncio.create_task(server_health_monitor(app))
+    asyncio.create_task(cleanup_old_payments_task())
 
 
 # ==================== СТИЛЬ ИНТЕРФЕЙСА ====================
@@ -3235,9 +3231,7 @@ class UIMessages:
             
         )
 
-# Глобальный словарь для хранения message_id платежей
-# Ключ: payment_id, Значение: message_id
-payment_message_ids = {}
+# payment_message_ids удален - теперь используем БД как единый источник истины
 
 # Глобальный словарь для хранения коротких идентификаторов ключей для продления
 # Ключ: короткий_id, Значение: key_email
@@ -4443,7 +4437,8 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
                 'email': email,
                 'xui': client['xui'],
                 'server_name': server_name,
-                'user_id': user_id
+                'user_id': user_id,
+                'created_at': datetime.datetime.now().timestamp()
             }
             
             button_text = f"Ключ #{i} ({server_name}) - {expiry_str}"
