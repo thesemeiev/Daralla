@@ -2031,17 +2031,7 @@ async def init_all_db():
     logger.info("Все базы данных успешно инициализированы")
 
 
-async def auto_activate_keys(app):
-    logger.info("Запуск auto_activate_keys")
-    cycle_count = 0
-    while True:
-        try:
-            cycle_count += 1
-            
-            # Сначала очищаем просроченные pending платежи (каждый цикл)
-            expired_count = await cleanup_expired_pending_payments(minutes_old=20)
-            if expired_count > 0:
-                logger.info(f"Удалено {expired_count} просроченных pending платежей")
+# auto_activate_keys удалена - теперь webhook'и обрабатывают платежи мгновенно
                 
                 # Упрощенная очистка кэша сообщений продления
                 # Очищаем записи старше 1 часа (платежи YooKassa истекают через 15 минут)
@@ -3563,7 +3553,7 @@ async def on_startup(app):
     logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
     
     # Запускаем остальные задачи
-    asyncio.create_task(auto_activate_keys(app))
+    # auto_activate_keys больше не нужна - webhook'и обрабатывают платежи мгновенно
     asyncio.create_task(server_health_monitor(app))
 
 
