@@ -4211,7 +4211,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")]
         ])
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard)
+        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard, menu_type='extend_key')
         return
     
     # Ищем активные ключи пользователя
@@ -4243,7 +4243,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="spend_points")]
             ])
-            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard)
+            await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard, menu_type='extend_key')
             return
         
         # Если только один ключ - продлеваем сразу
@@ -4287,7 +4287,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             
     except Exception as e:
         logger.error(f"Ошибка при получении списка ключей: {e}")
-        await safe_edit_or_reply(update.callback_query.message, "❌ Ошибка при получении списка ключей.")
+        await safe_edit_or_reply_universal(update.callback_query.message, "❌ Ошибка при получении списка ключей.", menu_type='extend_key')
 
 async def extend_selected_key_with_points(update: Update, context: ContextTypes.DEFAULT_TYPE, client: dict, user_id: str):
     """Продлевает выбранный ключ за баллы"""
@@ -4312,7 +4312,7 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                     logger.error(f"Failed to rollback extension for key {email} after points failure: {e}")
                     # Уведомляем админа о критической ошибке
                     await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось откатить продление ключа после неудачного списания баллов:\nКлюч: {email}\nПользователь: {user_id}\nОшибка: {str(e)}")
-                await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
+                await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!", menu_type='extend_key')
                 return
             # Очищаем старые уведомления об истечении для продленного ключа
             if notification_manager:
@@ -4342,15 +4342,15 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
             ])
             
-            await safe_edit_or_reply(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML")
+            await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
         else:
             # Ключ не продлен - баллы не списывались, просто сообщаем об ошибке
-            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.")
+            await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.", menu_type='extend_key')
             
     except Exception as e:
         logger.error(f"Ошибка продления выбранного ключа за баллы: {e}")
         # Баллы не списывались, просто сообщаем об ошибке
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении.")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении.", menu_type='extend_key')
 
 async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора ключа для продления за баллы"""
@@ -4361,21 +4361,21 @@ async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAU
     
     # Извлекаем short_id из callback_data
     if not callback_data.startswith("extend_points_key:"):
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Неверный запрос!")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Неверный запрос!", menu_type='extend_key')
         return
     
     short_id = callback_data.split(":", 1)[1]
     
     # Получаем информацию о ключе из кэша
     if short_id not in extension_keys_cache:
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ключ не найден или устарел!")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ключ не найден или устарел!", menu_type='extend_key')
         return
     
     key_info = extension_keys_cache[short_id]
     
     # Проверяем, что ключ принадлежит пользователю
     if key_info['user_id'] != user_id:
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Доступ запрещен!")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Доступ запрещен!", menu_type='extend_key')
         return
     
     # Создаем объект client для совместимости
