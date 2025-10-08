@@ -2,9 +2,105 @@
 Пример миграции существующего бота на новую систему навигации
 """
 
+# Импорты для примера (в реальном коде эти импорты уже есть в bot.py)
+import logging
+from telegram import Update, InlineKeyboardButton
+from telegram.ext import ContextTypes
+
+# Заглушки для примера
+logger = logging.getLogger(__name__)
+
+
+# Заглушки функций для примера
+async def check_private_chat(update):
+    return True
+
+
+async def start(update, context):
+    pass
+
+
+async def edit_main_menu(update, context):
+    pass
+
+
+async def instruction(update, context):
+    pass
+
+
+async def instruction_callback(update, context):
+    pass
+
+
+async def buy_menu_handler(update, context):
+    pass
+
+
+async def server_selection_menu(update, context):
+    pass
+
+
+async def handle_payment(update, context, price, period):
+    pass
+
+
+async def mykey(update, context):
+    pass
+
+
+async def points_callback(update, context):
+    pass
+
+
+async def referral_callback(update, context):
+    pass
+
+
+async def extend_key_callback(update, context):
+    pass
+
+
+async def rename_key_callback(update, context):
+    pass
+
+
+async def admin_menu(update, context):
+    pass
+
+
+async def admin_errors(update, context):
+    pass
+
+
+async def admin_notifications(update, context):
+    pass
+
+
+async def admin_check_servers(update, context):
+    pass
+
+
+async def admin_broadcast_start(update, context):
+    pass
+
+
+async def admin_set_days_start(update, context):
+    pass
+
+
+# Заглушка для app
+class MockApp:
+    def add_handlers(self, handlers):
+        pass
+
+
+app = MockApp()
+
 # ===== ДО (старый код в bot.py) =====
 
 # Старые функции навигации
+
+
 def push_nav(context, state, max_size=10):
     stack = context.user_data.setdefault('nav_stack', [])
     if len(stack) >= max_size:
@@ -12,21 +108,24 @@ def push_nav(context, state, max_size=10):
     stack.append(state)
     logger.info(f"PUSH: {state} -> Stack: {stack}")
 
+
 def pop_nav(context):
     stack = context.user_data.get('nav_stack', [])
     if stack:
         popped = stack.pop()
         logger.info(f"POP: {popped} -> Stack: {stack}")
         return stack[-1] if stack else None
-    logger.info(f"POP: empty stack")
+    logger.info("POP: empty stack")
     return None
 
-async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def universal_back_callback(update: Update,
+                                  context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     prev_state = pop_nav(context)
-    
+
     if prev_state is None:
         await start(update, context)
     elif prev_state == 'main_menu':
@@ -40,101 +139,125 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
 # ===== ПОСЛЕ (новый код) =====
 
 # 1. Импорты в начале bot.py
-from .navigation_integration import NavigationIntegration
-from .menu_states import NavStates, CallbackData
+# from .navigation_integration import NavigationIntegration
+# from .menu_states import NavStates
 
 # 2. Создание интеграции после определения всех обработчиков
+
+
 def setup_navigation():
     """Настройка системы навигации"""
-    bot_handlers = {
-        'edit_main_menu': edit_main_menu,
-        'instruction': instruction,
-        'instruction_callback': instruction_callback,
-        'buy_menu_handler': buy_menu_handler,
-        'server_selection_menu': server_selection_menu,
-        'handle_payment': handle_payment,
-        'mykey': mykey,
-        'points_callback': points_callback,
-        'referral_callback': referral_callback,
-        'extend_key_callback': extend_key_callback,
-        'rename_key_callback': rename_key_callback,
-        'admin_menu': admin_menu,
-        'admin_errors': admin_errors,
-        'admin_notifications': admin_notifications,
-        'admin_check_servers': admin_check_servers,
-        'admin_broadcast_start': admin_broadcast_start,
-        'admin_set_days_start': admin_set_days_start,
-    }
-    
-    return NavigationIntegration(bot_handlers)
+    # bot_handlers = {
+    #     'edit_main_menu': edit_main_menu,
+    #     'instruction': instruction,
+    #     'instruction_callback': instruction_callback,
+    #     'buy_menu_handler': buy_menu_handler,
+    #     'server_selection_menu': server_selection_menu,
+    #     'handle_payment': handle_payment,
+    #     'mykey': mykey,
+    #     'points_callback': points_callback,
+    #     'referral_callback': referral_callback,
+    #     'extend_key_callback': extend_key_callback,
+    #     'rename_key_callback': rename_key_callback,
+    #     'admin_menu': admin_menu,
+    #     'admin_errors': admin_errors,
+    #     'admin_notifications': admin_notifications,
+    #     'admin_check_servers': admin_check_servers,
+    #     'admin_broadcast_start': admin_broadcast_start,
+    #     'admin_set_days_start': admin_set_days_start,
+    # }
+
+    # return NavigationIntegration(bot_handlers)
+    return None
+
 
 # 3. В main() функции
+
+
 def main():
     # ... существующий код ...
-    
+
     # Создаем интеграцию навигации
     nav_integration = setup_navigation()
-    
+
     # Добавляем новые обработчики
     app.add_handlers(nav_integration.get_handlers())
-    
+
     # ... остальной код ...
 
+
 # 4. Обновление существующих функций
-async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+
+async def instruction_new(update: Update,
+                          context: ContextTypes.DEFAULT_TYPE):
     if not await check_private_chat(update):
         return
-    
+
     # ЗАМЕНИТЬ:
     # if not context.user_data.get('nav_stack'):
     #     context.user_data['nav_stack'] = ['main_menu']
     # stack = context.user_data['nav_stack']
     # if not stack or stack[-1] != 'instruction_menu':
     #     push_nav(context, 'instruction_menu')
-    
+
     # НА:
-    from .navigation import nav_manager
-    nav_manager.push_state(context, NavStates.INSTRUCTION_MENU)
-    
+    # from .navigation import nav_manager
+    # nav_manager.push_state(context, NavStates.INSTRUCTION_MENU)
+
     # ... остальной код ...
 
+
 # 5. Обновление кнопок
+
+
 def create_instruction_keyboard():
     # ЗАМЕНИТЬ:
     # keyboard = InlineKeyboardMarkup([
-    #     [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
-    #     [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
-    #     [InlineKeyboardButton("Linux", callback_data="instr_linux"), InlineKeyboardButton("Android TV", callback_data="instr_tv")],
+    #     [InlineKeyboardButton("Android", callback_data="instr_android"),
+    #      InlineKeyboardButton("iOS", callback_data="instr_ios")],
+    #     [InlineKeyboardButton("Windows", callback_data="instr_windows"),
+    #      InlineKeyboardButton("macOS", callback_data="instr_macos")],
+    #     [InlineKeyboardButton("Linux", callback_data="instr_linux"),
+    #      InlineKeyboardButton("Android TV", callback_data="instr_tv")],
     #     [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
     #     [UIButtons.back_button()],
     # ])
-    
+
     # НА:
-    from .navigation import NavigationBuilder
+    # from .navigation import NavigationBuilder
     buttons = [
-        [InlineKeyboardButton("Android", callback_data="instr_android"), InlineKeyboardButton("iOS", callback_data="instr_ios")],
-        [InlineKeyboardButton("Windows", callback_data="instr_windows"), InlineKeyboardButton("macOS", callback_data="instr_macos")],
-        [InlineKeyboardButton("Linux", callback_data="instr_linux"), InlineKeyboardButton("Android TV", callback_data="instr_tv")],
+        [InlineKeyboardButton("Android", callback_data="instr_android"),
+         InlineKeyboardButton("iOS", callback_data="instr_ios")],
+        [InlineKeyboardButton("Windows", callback_data="instr_windows"),
+         InlineKeyboardButton("macOS", callback_data="instr_macos")],
+        [InlineKeyboardButton("Linux", callback_data="instr_linux"),
+         InlineKeyboardButton("Android TV", callback_data="instr_tv")],
         [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
     ]
-    return NavigationBuilder.create_keyboard_with_back(buttons)
+    # return NavigationBuilder.create_keyboard_with_back(buttons)
+    return buttons
+
 
 # 6. Удаление старых функций
 # УДАЛИТЬ:
 # - push_nav()
-# - pop_nav() 
+# - pop_nav()
 # - universal_back_callback()
 # - Все старые CallbackQueryHandler для навигации
 
 # 7. Обновление регистрации обработчиков
 def register_handlers(app):
     # УДАЛИТЬ старые обработчики:
-    # app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back$"))
-    # app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
-    
+    # app.add_handler(CallbackQueryHandler(universal_back_callback,
+    #                                     pattern="^back$"))
+    # app.add_handler(CallbackQueryHandler(main_menu_callback,
+    #                                     pattern="^main_menu$"))
+
     # ДОБАВИТЬ новые:
     nav_integration = setup_navigation()
     app.add_handlers(nav_integration.get_handlers())
+
 
 # ===== ПРЕИМУЩЕСТВА НОВОЙ СИСТЕМЫ =====
 
