@@ -1470,6 +1470,34 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("EDIT_MAIN_MENU: Вызываем start() как fallback")
         await start(update, context)
 
+
+async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик для callback_data='main_menu' - всегда редактирует существующее сообщение"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Очищаем навигационный стек и добавляем главное меню
+    context.user_data['nav_stack'] = ['main_menu']
+    logger.info(f"MAIN_MENU_CALLBACK: Initialized stack: {context.user_data['nav_stack']}")
+    
+    # Создаем кнопки главного меню используя единый стиль
+    is_admin = update.effective_user.id in ADMIN_IDS
+    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
+    keyboard = InlineKeyboardMarkup(buttons)
+    
+    # Используем единый стиль для приветственного сообщения
+    welcome_text = UIMessages.welcome_message()
+    
+    try:
+        # ВСЕГДА редактируем существующее сообщение, не отправляем новое
+        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+        logger.info("MAIN_MENU_CALLBACK: Successfully edited message to main menu")
+    except Exception as e:
+        logger.error(f"main_menu_callback failed: {e}")
+        # Fallback: если не удалось отредактировать, отправляем новое сообщение
+        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+
+
 # Новая команда /instruction — с кнопками выбора платформы
 async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_private_chat(update):
@@ -5197,7 +5225,7 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(universal_back_callback, pattern="^back_success$"))
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|instruction|keys_page_.*)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
-    app.add_handler(CallbackQueryHandler(start, pattern="^main_menu$"))
+    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
     app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     # Добавляем обработчики для админ-меню
     app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
