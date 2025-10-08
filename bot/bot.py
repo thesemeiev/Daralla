@@ -1390,9 +1390,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Используем единый стиль для приветственного сообщения (только если не было реферальной ссылки)
         welcome_text = UIMessages.welcome_message()
     
-    # Очищаем навигационный стек и добавляем главное меню
-    context.user_data['nav_stack'] = ['main_menu']
-    logger.info(f"START: Initialized stack: {context.user_data['nav_stack']}")
     
     # Создаем кнопки главного меню используя единый стиль
     is_admin = update.effective_user.id in ADMIN_IDS
@@ -1474,33 +1471,6 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Если не удалось отредактировать, отправляем новое
         logger.info("EDIT_MAIN_MENU: Вызываем start() как fallback")
         await start(update, context)
-
-
-async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик для callback_data='main_menu' - всегда редактирует существующее сообщение"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Очищаем навигационный стек и добавляем главное меню
-    context.user_data['nav_stack'] = ['main_menu']
-    logger.info(f"MAIN_MENU_CALLBACK: Initialized stack: {context.user_data['nav_stack']}")
-    
-    # Создаем кнопки главного меню используя единый стиль
-    is_admin = update.effective_user.id in ADMIN_IDS
-    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
-    keyboard = InlineKeyboardMarkup(buttons)
-    
-    # Используем единый стиль для приветственного сообщения
-    welcome_text = UIMessages.welcome_message()
-    
-    try:
-        # ВСЕГДА редактируем существующее сообщение, не отправляем новое
-        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
-        logger.info("MAIN_MENU_CALLBACK: Successfully edited message to main menu")
-    except Exception as e:
-        logger.error(f"main_menu_callback failed: {e}")
-        # Fallback: если не удалось отредактировать, отправляем новое сообщение
-        await safe_edit_or_reply_universal(query.message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
 
 
 # Новая команда /instruction — с кнопками выбора платформы
@@ -1902,8 +1872,6 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_private_chat(update):
         return
     
-    if not context.user_data.get('nav_stack'):
-        context.user_data['nav_stack'] = ['main_menu']
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     nav_manager.push_state(context, NavStates.MYKEYS_MENU)
     user = update.effective_user
@@ -3296,7 +3264,6 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.callback_query:
         await update.callback_query.answer()
-        stack = context.user_data.setdefault('nav_stack', [])
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         nav_manager.push_state(context, NavStates.ADMIN_ERRORS)
     if update.effective_user.id not in ADMIN_IDS:
@@ -3356,7 +3323,6 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if update.callback_query:
         await update.callback_query.answer()
-        stack = context.user_data.setdefault('nav_stack', [])
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         nav_manager.push_state(context, NavStates.ADMIN_NOTIFICATIONS)
     
@@ -3403,7 +3369,6 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if update.callback_query:
         await update.callback_query.answer()
-        stack = context.user_data.setdefault('nav_stack', [])
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         nav_manager.push_state(context, NavStates.ADMIN_CHECK_SERVERS)
     if update.effective_user.id not in ADMIN_IDS:
@@ -4853,7 +4818,6 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('config_message_id', None)
     context.user_data.pop('config_chat_id', None)
     
-    stack = context.user_data.setdefault('nav_stack', [])
     # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
     nav_manager.push_state(context, NavStates.ADMIN_MENU)
     keyboard = InlineKeyboardMarkup([
@@ -5328,8 +5292,6 @@ if __name__ == '__main__':
         },
         fallbacks=[
             CallbackQueryHandler(admin_set_days_cancel, pattern="^admin_set_days_cancel$"),
-            # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-            # CallbackQueryHandler(universal_back_callback, pattern="^back$")
         ],
         per_user=True,
         per_chat=True,
@@ -5374,8 +5336,6 @@ if __name__ == '__main__':
         },
         fallbacks=[
             CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"),
-            # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-            # CallbackQueryHandler(universal_back_callback, pattern="^back$")
         ],
         per_user=True,
         per_chat=True,
