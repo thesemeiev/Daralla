@@ -2630,8 +2630,8 @@ async def auto_activate_keys(app):
                     except Exception as e:
                         logger.error(f"Ошибка редактирования сообщения об ошибке оплаты: {e}")
                 
-                # Если платеж в любом другом неуспешном статусе
-                else:
+                # Если платеж в любом другом неуспешном статусе (исключая pending)
+                elif pay.status not in ['succeeded', 'pending']:
                     logger.info(f"Платеж {payment_id} имеет неуспешный статус: {pay.status}")
                     await update_payment_status(payment_id, 'failed')
                     await update_payment_activation(payment_id, 0)
@@ -2696,6 +2696,11 @@ async def auto_activate_keys(app):
                             logger.warning(f"Не найден message_id для payment_id {payment_id}")
                     except Exception as e:
                         logger.error(f"Ошибка редактирования сообщения об ошибке оплаты: {e}")
+                
+                # Если платеж в статусе pending - пропускаем (это нормально)
+                elif pay.status == 'pending':
+                    logger.info(f"Платеж {payment_id} в статусе pending - ожидание оплаты")
+                    # Не делаем ничего, просто ждем изменения статуса
                     
         except Exception as e:
             logger.error(f"Ошибка в auto_activate_keys: {e}")
