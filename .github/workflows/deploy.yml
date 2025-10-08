@@ -198,7 +198,6 @@ jobs:
             webhook:
               proto: http
               addr: 5000
-              bind_tls: true
           EOF
           
           # Start ngrok in background
