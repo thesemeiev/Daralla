@@ -105,6 +105,26 @@ async def get_payment(user_id: str) -> dict | None:
                 }
             return None
 
+async def get_payment_by_id(payment_id: str) -> dict | None:
+    """Получает платеж по payment_id (для webhook'ов)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute('''
+            SELECT user_id, payment_id, status, created_at, meta, activated
+            FROM payments
+            WHERE payment_id = ?
+        ''', (payment_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return {
+                    'user_id': row[0],
+                    'payment_id': row[1],
+                    'status': row[2],
+                    'created_at': row[3],
+                    'meta': json.loads(row[4]) if row[4] else {},
+                    'activated': bool(row[5])
+                }
+            return None
+
 async def update_payment_status(payment_id: str, status: str):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('UPDATE payments SET status = ? WHERE payment_id = ?', (status, payment_id))

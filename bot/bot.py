@@ -309,7 +309,7 @@ import hmac
 import hashlib
 
 from .keys_db import (
-    init_payments_db, add_payment, get_payment, update_payment_status, get_all_pending_payments,
+    init_payments_db, add_payment, get_payment, get_payment_by_id, update_payment_status, get_all_pending_payments,
     get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
     init_referral_db, save_referral_connection, get_pending_referral, mark_referral_reward_given,
     add_points, spend_points, get_user_points, get_points_history, get_referral_stats,
@@ -2129,7 +2129,7 @@ async def process_payment_webhook(bot_app, payment_id, status):
     """Обрабатывает платеж из webhook'а"""
     try:
         # Получаем информацию о платеже из базы данных
-        payment_info = await get_payment(payment_id)
+        payment_info = await get_payment_by_id(payment_id)
         if not payment_info:
             logger.warning(f"Платеж {payment_id} не найден в базе данных")
             return
