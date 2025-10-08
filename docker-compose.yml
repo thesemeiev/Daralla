@@ -6,8 +6,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "5m"
+        max-file: "2"
     environment:
       # Переменные окружения загружаются из .env файла
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}

@@ -246,6 +246,12 @@ jobs:
           echo "Current commit: $(sudo git log --oneline -1)"
           echo "Bot.py last modified: $(sudo stat -c %y bot/bot.py)"
           
+          # Clean up old logs and containers
+          echo "Cleaning up old logs and containers..."
+          sudo docker system prune -f
+          sudo docker volume prune -f
+          sudo docker image prune -f
+          
           # Start bot
           echo "Starting bot..."
           # Build containers on server
