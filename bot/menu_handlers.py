@@ -387,6 +387,10 @@ class NavigationIntegration:
                 pattern=f"^{CallbackData.MY_KEYS}$"
             ),
             CallbackQueryHandler(
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.MYKEYS_MENU),
+                pattern=f"^{CallbackData.MYKEYS_MENU}$"
+            ),
+            CallbackQueryHandler(
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.POINTS_MENU),
                 pattern=f"^{CallbackData.POINTS}$"
             ),

@@ -110,6 +110,7 @@ CALLBACK_TO_STATE = {
     CallbackData.INSTRUCTION: NavStates.INSTRUCTION_MENU,
     CallbackData.BUY_VPN: NavStates.BUY_MENU,
     CallbackData.MY_KEYS: NavStates.MYKEYS_MENU,
+    CallbackData.MYKEYS_MENU: NavStates.MYKEYS_MENU,
     CallbackData.POINTS: NavStates.POINTS_MENU,
     CallbackData.REFERRAL: NavStates.REFERRAL_MENU,
     CallbackData.ADMIN_MENU: NavStates.ADMIN_MENU,
