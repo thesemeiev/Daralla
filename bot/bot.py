@@ -2469,7 +2469,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="main_menu")]
+                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
                     ])
                     
                     # Формируем полное сообщение о покупке
@@ -4204,8 +4204,10 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     elif prev_state == 'server_selection':
         # Если предыдущее состояние server_selection, проверяем, находимся ли мы в сообщении с успешной оплатой
         message = query.message
-        if message and message.caption and "Покупка прошла успешно" in message.caption:
+        if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection' but in success message, calling start()")
+            # Очищаем навигационный стек и переходим в главное меню
+            context.user_data['nav_stack'] = []
             await start(update, context)
         else:
             logger.info("🔙 UNIVERSAL_BACK_CALLBACK: prev_state == 'server_selection', calling buy_menu_handler()")
@@ -4980,17 +4982,92 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
 async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         return ConversationHandler.END
-    text = update.message.text
-    context.user_data['broadcast_text'] = text
-    # Удаляем сообщение админа с текстом
+    
+    # Определяем тип медиа и сохраняем данные
+    message = update.message
+    media_data = {}
+    preview_text = ""
+    
+    if message.text:
+        # Текстовое сообщение
+        media_data = {
+            'type': 'text',
+            'content': message.text
+        }
+        context.user_data['broadcast_text'] = message.text
+        preview_text = UIMessages.broadcast_preview_message(message.text)
+        
+    elif message.photo:
+        # Изображение
+        photo = message.photo[-1]  # Берем самое большое изображение
+        media_data = {
+            'type': 'photo',
+            'file_id': photo.file_id,
+            'caption': message.caption or ''
+        }
+        context.user_data['broadcast_media'] = media_data
+        preview_text = f"<b>📷 Предпросмотр рассылки (1 фото):</b>\n\n{message.caption or 'Без подписи'}"
+        
+    elif message.video:
+        # Видео
+        media_data = {
+            'type': 'video',
+            'file_id': message.video.file_id,
+            'caption': message.caption or ''
+        }
+        context.user_data['broadcast_media'] = media_data
+        preview_text = f"<b>🎥 Предпросмотр рассылки (1 видео):</b>\n\n{message.caption or 'Без подписи'}"
+        
+    elif message.document:
+        # Документ
+        media_data = {
+            'type': 'document',
+            'file_id': message.document.file_id,
+            'caption': message.caption or ''
+        }
+        context.user_data['broadcast_media'] = media_data
+        preview_text = f"<b>📄 Предпросмотр рассылки (1 документ):</b>\n\n{message.caption or 'Без подписи'}"
+        
+    elif message.audio:
+        # Аудио
+        media_data = {
+            'type': 'audio',
+            'file_id': message.audio.file_id,
+            'caption': message.caption or ''
+        }
+        context.user_data['broadcast_media'] = media_data
+        preview_text = f"<b>🎵 Предпросмотр рассылки (1 аудио):</b>\n\n{message.caption or 'Без подписи'}"
+        
+    elif message.voice:
+        # Голосовое сообщение
+        media_data = {
+            'type': 'voice',
+            'file_id': message.voice.file_id,
+            'caption': message.caption or ''
+        }
+        context.user_data['broadcast_media'] = media_data
+        preview_text = f"<b>🎤 Предпросмотр рассылки (1 голосовое):</b>\n\n{message.caption or 'Без подписи'}"
+        
+    elif message.sticker:
+        # Стикер
+        media_data = {
+            'type': 'sticker',
+            'file_id': message.sticker.file_id
+        }
+        context.user_data['broadcast_media'] = media_data
+        preview_text = f"<b>😀 Предпросмотр рассылки (1 стикер):</b>\n\nСтикер будет отправлен"
+    
+    # Удаляем сообщение админа
     try:
-        await update.message.delete()
+        await message.delete()
     except Exception:
         pass
+    
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Отправить", callback_data="admin_broadcast_send")],
         [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
     ])
+    
     # Редактируем исходное сообщение на предпросмотр
     chat_id = context.user_data.get('broadcast_msg_chat_id')
     msg_id = context.user_data.get('broadcast_msg_id')
@@ -4999,7 +5076,7 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
             context.bot,
             chat_id=chat_id,
             message_id=msg_id,
-            text=UIMessages.broadcast_preview_message(text),
+            text=preview_text,
             reply_markup=keyboard,
             parse_mode="HTML",
             menu_type='broadcast'
@@ -5010,7 +5087,7 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_send_message_with_photo(
             context.bot,
             chat_id=chat_id,
-            text=UIMessages.broadcast_preview_message(text),
+            text=preview_text,
             reply_markup=keyboard,
             parse_mode="HTML",
             menu_type='broadcast'
@@ -5021,13 +5098,17 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_user.id not in ADMIN_IDS:
         return ConversationHandler.END
     await update.callback_query.answer()
+    
+    # Проверяем, есть ли текст или медиа для рассылки
     text = context.user_data.get('broadcast_text')
-    if not text:
+    media = context.user_data.get('broadcast_media')
+    
+    if not text and not media:
         await safe_edit_message_with_photo(
             context.bot,
             chat_id=context.user_data.get('broadcast_msg_chat_id'),
             message_id=context.user_data.get('broadcast_msg_id'),
-            text=f"{UIEmojis.ERROR} Текст рассылки пуст.",
+            text=f"{UIEmojis.ERROR} Контент рассылки пуст.",
             menu_type='broadcast'
         )
         return ConversationHandler.END
@@ -5061,10 +5142,61 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         chunk = recipients[i:i+batch]
         for user_id in chunk:
             try:
-                await context.bot.send_message(chat_id=int(user_id), text=text, parse_mode="HTML", disable_web_page_preview=True)
+                # Отправляем медиа или текст в зависимости от типа
+                if media:
+                    if media['type'] == 'photo':
+                        await context.bot.send_photo(
+                            chat_id=int(user_id), 
+                            photo=media['file_id'], 
+                            caption=media.get('caption', ''), 
+                            parse_mode="HTML"
+                        )
+                    elif media['type'] == 'video':
+                        await context.bot.send_video(
+                            chat_id=int(user_id), 
+                            video=media['file_id'], 
+                            caption=media.get('caption', ''), 
+                            parse_mode="HTML"
+                        )
+                    elif media['type'] == 'document':
+                        await context.bot.send_document(
+                            chat_id=int(user_id), 
+                            document=media['file_id'], 
+                            caption=media.get('caption', ''), 
+                            parse_mode="HTML"
+                        )
+                    elif media['type'] == 'audio':
+                        await context.bot.send_audio(
+                            chat_id=int(user_id), 
+                            audio=media['file_id'], 
+                            caption=media.get('caption', ''), 
+                            parse_mode="HTML"
+                        )
+                    elif media['type'] == 'voice':
+                        await context.bot.send_voice(
+                            chat_id=int(user_id), 
+                            voice=media['file_id'], 
+                            caption=media.get('caption', ''), 
+                            parse_mode="HTML"
+                        )
+                    elif media['type'] == 'sticker':
+                        await context.bot.send_sticker(
+                            chat_id=int(user_id), 
+                            sticker=media['file_id']
+                        )
+                else:
+                    # Отправляем текстовое сообщение
+                    await context.bot.send_message(
+                        chat_id=int(user_id), 
+                        text=text, 
+                        parse_mode="HTML", 
+                        disable_web_page_preview=True
+                    )
+                
                 sent += 1
                 if len(details) < 10000:
                     details.append({'user_id': str(user_id), 'status': 'ok'})
+                    
             except telegram.error.Forbidden:
                 failed += 1
                 if len(details) < 10000:
@@ -5076,7 +5208,55 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
             except telegram.error.RetryAfter as e:
                 await asyncio.sleep(int(getattr(e, 'retry_after', 1)))
                 try:
-                    await context.bot.send_message(chat_id=int(user_id), text=text, parse_mode="HTML", disable_web_page_preview=True)
+                    # Повторная попытка отправки
+                    if media:
+                        if media['type'] == 'photo':
+                            await context.bot.send_photo(
+                                chat_id=int(user_id), 
+                                photo=media['file_id'], 
+                                caption=media.get('caption', ''), 
+                                parse_mode="HTML"
+                            )
+                        elif media['type'] == 'video':
+                            await context.bot.send_video(
+                                chat_id=int(user_id), 
+                                video=media['file_id'], 
+                                caption=media.get('caption', ''), 
+                                parse_mode="HTML"
+                            )
+                        elif media['type'] == 'document':
+                            await context.bot.send_document(
+                                chat_id=int(user_id), 
+                                document=media['file_id'], 
+                                caption=media.get('caption', ''), 
+                                parse_mode="HTML"
+                            )
+                        elif media['type'] == 'audio':
+                            await context.bot.send_audio(
+                                chat_id=int(user_id), 
+                                audio=media['file_id'], 
+                                caption=media.get('caption', ''), 
+                                parse_mode="HTML"
+                            )
+                        elif media['type'] == 'voice':
+                            await context.bot.send_voice(
+                                chat_id=int(user_id), 
+                                voice=media['file_id'], 
+                                caption=media.get('caption', ''), 
+                                parse_mode="HTML"
+                            )
+                        elif media['type'] == 'sticker':
+                            await context.bot.send_sticker(
+                                chat_id=int(user_id), 
+                                sticker=media['file_id']
+                            )
+                    else:
+                        await context.bot.send_message(
+                            chat_id=int(user_id), 
+                            text=text, 
+                            parse_mode="HTML", 
+                            disable_web_page_preview=True
+                        )
                     sent += 1
                     if len(details) < 10000:
                         details.append({'user_id': str(user_id), 'status': 'ok'})
@@ -5137,6 +5317,7 @@ async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_T
     
     # Очищаем состояние рассылки
     context.user_data.pop('broadcast_text', None)
+    context.user_data.pop('broadcast_media', None)
     context.user_data.pop('broadcast_msg_chat_id', None)
     context.user_data.pop('broadcast_msg_id', None)
     context.user_data.pop('broadcast_details', None)
@@ -5240,6 +5421,12 @@ if __name__ == '__main__':
         states={
             BROADCAST_WAITING_TEXT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_input),
+                MessageHandler(filters.PHOTO, admin_broadcast_input),
+                MessageHandler(filters.VIDEO, admin_broadcast_input),
+                MessageHandler(filters.Document.ALL, admin_broadcast_input),
+                MessageHandler(filters.AUDIO, admin_broadcast_input),
+                MessageHandler(filters.VOICE, admin_broadcast_input),
+                MessageHandler(filters.STICKER, admin_broadcast_input),
             ],
             BROADCAST_CONFIRM: [
                 CallbackQueryHandler(admin_broadcast_send, pattern="^admin_broadcast_send$"),
