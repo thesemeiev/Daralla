@@ -112,6 +112,12 @@ jobs:
           echo "Downloading code..."
           sudo apt-get update -qq && sudo apt-get install -y -qq git
           
+          # Backup .env before removing directory
+          if [ -f "/root/Daralla/.env" ]; then
+            echo "Backing up .env before directory removal..."
+            sudo cp /root/Daralla/.env /tmp/.env.backup
+          fi
+          
           # Clone directly to working directory
           sudo rm -rf /root/Daralla
           sudo mkdir -p /root/Daralla
@@ -122,6 +128,13 @@ jobs:
           echo "After clone, directory contents: $(ls -la)"
           cd /root/Daralla
           echo "In Daralla directory: $(pwd)"
+          
+          # Restore .env if it was backed up
+          if [ -f "/tmp/.env.backup" ]; then
+            echo "Restoring .env from backup..."
+            sudo cp /tmp/.env.backup /root/Daralla/.env
+            sudo rm /tmp/.env.backup
+          fi
           sudo git checkout main
           sudo git pull origin main
           echo "Current commit: $(sudo git log --oneline -1)"
