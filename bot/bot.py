@@ -2257,21 +2257,14 @@ async def auto_activate_keys(app):
                                                 [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
                                                 [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
                                             ])
-                                            # Создаем объект сообщения для safe_edit_or_reply_universal
-                                            from telegram import Message, Chat, User
-                                            mock_chat = Chat(id=chat_id, type="private")
-                                            mock_user = User(id=int(user_id), is_bot=False, first_name="User")
-                                            mock_message = Message(
+                                            # Редактируем существующее сообщение о продлении
+                                            await safe_edit_message_with_photo(
+                                                app.bot,
+                                                chat_id=chat_id,
                                                 message_id=message_id,
-                                                date=datetime.datetime.now(),
-                                                chat=mock_chat,
-                                                from_user=mock_user
-                                            )
-                                            await safe_edit_or_reply_universal(
-                                                mock_message, 
-                                                extension_message, 
-                                                reply_markup=keyboard, 
-                                                parse_mode="HTML", 
+                                                text=extension_message,
+                                                reply_markup=keyboard,
+                                                parse_mode="HTML",
                                                 menu_type='extend_key'
                                             )
                                             logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
@@ -2438,21 +2431,14 @@ async def auto_activate_keys(app):
                             # Если есть сообщение с оплатой, редактируем его
                             if message_id:
                                 try:
-                                    # Создаем объект сообщения для safe_edit_or_reply_universal
-                                    from telegram import Message, Chat, User
-                                    mock_chat = Chat(id=int(user_id), type="private")
-                                    mock_user = User(id=int(user_id), is_bot=False, first_name="User")
-                                    mock_message = Message(
+                                    # Редактируем существующее сообщение с оплатой
+                                    await safe_edit_message_with_photo(
+                                        app.bot,
+                                        chat_id=int(user_id),
                                         message_id=message_id,
-                                        date=datetime.datetime.now(),
-                                        chat=mock_chat,
-                                        from_user=mock_user
-                                    )
-                                    await safe_edit_or_reply_universal(
-                                        mock_message, 
-                                        full_message, 
-                                        reply_markup=keyboard, 
-                                        parse_mode="HTML", 
+                                        text=full_message,
+                                        reply_markup=keyboard,
+                                        parse_mode="HTML",
                                         menu_type='key_success'
                                     )
                                     logger.info(f"Отредактировано сообщение с оплатой {message_id} на информацию о ключе")
@@ -3183,7 +3169,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         
         # Используем фото для логов, ограничиваем длину для caption
-        max_length = 3500  # Ограничиваем длину для избежания ошибки caption too long
+        max_length = 800  # Telegram caption limit is 1024, but we use 800 to be safe
         if len(escaped) > max_length:
             escaped = escaped[:max_length] + "\n\n... (логи обрезаны)"
         
