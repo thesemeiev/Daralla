@@ -2471,57 +2471,24 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="mykey")]
                     ])
                     
                     # Формируем полное сообщение о покупке
                     success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
                     full_message = success_text + msg
                     
-                    # Получаем message_id из мета-данных платежа
-                    payment_info = await get_payment_by_id(payment_id)
-                    stored_message_id = None
-                    if payment_info and payment_info.get('meta'):
-                        stored_message_id = payment_info['meta'].get('message_id')
-                    
-                    # Используем message_id из webhook или из базы данных
-                    actual_message_id = message_id or stored_message_id
-                    
-                    if actual_message_id:
-                        try:
-                            await safe_edit_message_with_photo(
-                                bot_app.bot,
-                                chat_id=int(user_id),
-                                message_id=actual_message_id,
-                                text=full_message,
-                                reply_markup=keyboard,
-                                parse_mode="HTML",
-                                menu_type='key_success'
-                            )
-                            logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о ключе")
-                        except Exception as edit_error:
-                            logger.error(f"Ошибка редактирования сообщения {actual_message_id}: {edit_error}")
-                            # Fallback: отправляем новое сообщение
-                            await safe_send_message_with_photo(
-                                bot_app.bot,
-                                chat_id=int(user_id),
-                                text=full_message,
-                                reply_markup=keyboard,
-                                parse_mode="HTML",
-                                menu_type='key_success'
-                            )
-                            logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
-                    else:
-                        # Если нет message_id, отправляем новое сообщение
-                        await safe_send_message_with_photo(
-                            bot_app.bot,
-                            chat_id=int(user_id),
-                            text=full_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type='key_success'
-                        )
-                        logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
+                    # Webhook всегда отправляет новое сообщение об успешной оплате
+                    # Не пытаемся редактировать старое сообщение с оплатой
+                    await safe_send_message_with_photo(
+                        bot_app.bot,
+                        chat_id=int(user_id),
+                        text=full_message,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        menu_type='key_success'
+                    )
+                    logger.info(f"Отправлено новое сообщение об успешной оплате для user_id={user_id}")
                     
                     # Удаляем message_id из отслеживания
                     payment_message_ids.pop(payment_id, None)
