@@ -249,6 +249,37 @@ async def safe_send_message_with_photo(bot, chat_id, text, reply_markup=None, pa
         parse_mode=parse_mode
     )
 
+async def safe_edit_message_with_photo(bot, chat_id, message_id, text, reply_markup=None, parse_mode=None, menu_type=None):
+    """Безопасное редактирование сообщения с фото через бота"""
+    if menu_type and menu_type in IMAGE_PATHS:
+        photo_path = IMAGE_PATHS[menu_type]
+        if os.path.exists(photo_path):
+            try:
+                with open(photo_path, 'rb') as photo_file:
+                    from telegram import InputMediaPhoto
+                    await bot.edit_message_media(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        media=InputMediaPhoto(
+                            media=photo_file,
+                            caption=text,
+                            parse_mode=parse_mode
+                        ),
+                        reply_markup=reply_markup
+                    )
+                return
+            except Exception as e:
+                logger.warning(f"Failed to edit message with photo for menu_type {menu_type}: {e}")
+    
+    # Fallback to text message
+    await bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=message_id,
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
+
 
 # Определяем путь к файлу .env
 current_dir = pathlib.Path(__file__).parent
@@ -1334,7 +1365,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
     keyboard = InlineKeyboardMarkup(buttons)
     
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     if message is None:
         logger.error("main_menu: message is None")
         return
@@ -1394,7 +1425,7 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для приветственного сообщения
     welcome_text = UIMessages.welcome_message()
-    message = update.callback_query.message
+    message = mock_message
     logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
     try:
         # Отправляем меню с фото
@@ -1424,7 +1455,7 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
         [UIButtons.back_button()],
     ])
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     if message is None:
         logger.error("instruction_menu: message is None")
         return
@@ -1575,7 +1606,7 @@ async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment: user_id={user_id}")
     
     # Получаем правильный объект сообщения
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     logger.info(f"handle_payment: message={message}, message_id={getattr(message, 'message_id', 'None')}")
     try:
         # Проверка на существующий pending-платёж по user_id и period
@@ -1832,7 +1863,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         push_nav(context, 'mykeys_menu')
     user = update.effective_user
     user_id = str(user.id)
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     if message is None:
         logger.error("mykeys_menu: message is None")
         return
@@ -3115,7 +3146,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not stack or stack[-1] != 'admin_errors':
             push_nav(context, 'admin_errors')
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3143,9 +3174,13 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors_refresh")],
             [UIButtons.back_button()]
         ])
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         
-        # Используем фото для логов
+        # Используем фото для логов, ограничиваем длину для caption
+        max_length = 3500  # Ограничиваем длину для избежания ошибки caption too long
+        if len(escaped) > max_length:
+            escaped = escaped[:max_length] + "\n\n... (логи обрезаны)"
+        
         logs_text = f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>"
         await safe_edit_or_reply_universal(message_obj, logs_text, reply_markup=keyboard, parse_mode='HTML', menu_type='admin_errors')
             
@@ -3154,7 +3189,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup([
             [UIButtons.back_button()]
         ])
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         
         # Используем фото для ошибки логов
         error_text = f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}'
@@ -3172,13 +3207,13 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             push_nav(context, 'admin_notifications')
     
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
     try:
         if notification_manager is None:
-            await safe_edit_or_reply(update.callback_query.message, 
+            await safe_edit_or_reply(mock_message, 
                                    f"{UIEmojis.ERROR} Менеджер уведомлений не инициализирован")
             return
         
@@ -3190,7 +3225,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         
         # Используем фото для уведомлений
         await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_notifications')
@@ -3200,7 +3235,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         keyboard = InlineKeyboardMarkup([
             [UIButtons.back_button()]
         ])
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         
         # Используем фото для ошибки уведомлений
         error_text = f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}"
@@ -3218,7 +3253,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not stack or stack[-1] != 'admin_check_servers':
             push_nav(context, 'admin_check_servers')
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3290,14 +3325,14 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_check_servers")],
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_check_servers')
     except Exception as e:
         logger.exception("Ошибка в admin_check_servers")
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type='admin_check_servers')
 
 
@@ -3462,7 +3497,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3486,7 +3521,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
         ])
         
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply(message_obj, message, reply_markup=keyboard, parse_mode="Markdown")
         
     except Exception as e:
@@ -3499,7 +3534,7 @@ async def admin_set_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else update.callback_query.message
+        message_obj = update.message if update.message else mock_message
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3701,7 +3736,7 @@ async def buy_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stack = context.user_data.setdefault('nav_stack', [])
     if not stack or stack[-1] != 'buy_menu':
         push_nav(context, 'buy_menu')
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     if message is None:
         logger.error("buy_menu_handler: message is None")
         return
@@ -3737,7 +3772,7 @@ async def server_selection_menu(update: Update, context: ContextTypes.DEFAULT_TY
     if not stack or stack[-1] != 'server_selection':
         push_nav(context, 'server_selection')
     
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     if message is None:
         logger.error("server_selection_menu: message is None")
         return
@@ -4094,7 +4129,7 @@ async def points_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     
     try:
-        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
+        await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
     except Exception as e:
         logger.exception(f"points_callback: failed to edit message: {e}")
 
@@ -4133,7 +4168,7 @@ async def spend_points_callback(update: Update, context: ContextTypes.DEFAULT_TY
         ])
     
     try:
-        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
+        await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
     except Exception as e:
         logger.exception(f"spend_points_callback: failed to edit message: {e}")
 
@@ -4145,7 +4180,7 @@ async def buy_with_points_callback(update: Update, context: ContextTypes.DEFAULT
     points_info = await get_user_points(user_id)
     
     if points_info['points'] < 1:
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!")
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Недостаточно баллов!")
         return
     
     # Сохраняем информацию о покупке за баллы
@@ -4166,7 +4201,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")]
         ])
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard)
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard)
         return
     
     # Ищем активные ключи пользователя
@@ -4198,7 +4233,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="spend_points")]
             ])
-            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard)
+            await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard)
             return
         
         # Если только один ключ - продлеваем сразу
@@ -4238,11 +4273,11 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             f"{UIStyles.description('Выберите ключ для продления:')}"
         )
         
-        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='extend_key')
+        await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='extend_key')
             
     except Exception as e:
         logger.error(f"Ошибка при получении списка ключей: {e}")
-        await safe_edit_or_reply(update.callback_query.message, "❌ Ошибка при получении списка ключей.")
+        await safe_edit_or_reply(mock_message, "❌ Ошибка при получении списка ключей.")
 
 async def extend_selected_key_with_points(update: Update, context: ContextTypes.DEFAULT_TYPE, client: dict, user_id: str):
     """Продлевает выбранный ключ за баллы"""
@@ -4267,7 +4302,7 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                     logger.error(f"Failed to rollback extension for key {email} after points failure: {e}")
                     # Уведомляем админа о критической ошибке
                     await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось откатить продление ключа после неудачного списания баллов:\nКлюч: {email}\nПользователь: {user_id}\nОшибка: {str(e)}")
-                await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
+                await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
                 return
             # Очищаем старые уведомления об истечении для продленного ключа
             if notification_manager:
@@ -4297,15 +4332,15 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
             ])
             
-            await safe_edit_or_reply(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML")
+            await safe_edit_or_reply(mock_message, message, reply_markup=keyboard, parse_mode="HTML")
         else:
             # Ключ не продлен - баллы не списывались, просто сообщаем об ошибке
-            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.")
+            await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.")
             
     except Exception as e:
         logger.error(f"Ошибка продления выбранного ключа за баллы: {e}")
         # Баллы не списывались, просто сообщаем об ошибке
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении.")
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ошибка при продлении.")
 
 async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора ключа для продления за баллы"""
@@ -4316,21 +4351,21 @@ async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAU
     
     # Извлекаем short_id из callback_data
     if not callback_data.startswith("extend_points_key:"):
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Неверный запрос!")
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Неверный запрос!")
         return
     
     short_id = callback_data.split(":", 1)[1]
     
     # Получаем информацию о ключе из кэша
     if short_id not in extension_keys_cache:
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ключ не найден или устарел!")
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ключ не найден или устарел!")
         return
     
     key_info = extension_keys_cache[short_id]
     
     # Проверяем, что ключ принадлежит пользователю
     if key_info['user_id'] != user_id:
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Доступ запрещен!")
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Доступ запрещен!")
         return
     
     # Создаем объект client для совместимости
@@ -4391,7 +4426,7 @@ async def referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [UIButtons.back_button()]
     ])
     
-    await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='referral_menu')
+    await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='referral_menu')
 
 async def rename_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик переименования ключа"""
@@ -4485,6 +4520,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error("Не найдены message_id или chat_id в контексте")
         return
     
+    # Создаем объект сообщения для редактирования
+    from telegram import Message, Chat, User
+    mock_chat = Chat(id=chat_id, type="private")
+    mock_user = User(id=int(user_id), is_bot=False, first_name="User")
+    mock_message = Message(
+        message_id=message_id,
+        date=datetime.datetime.now(),
+        chat=mock_chat,
+        from_user=mock_user
+    )
+    
     # Валидация имени
     if len(new_name) > 50:
         error_message = (
@@ -4498,7 +4544,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+            # Создаем объект сообщения для редактирования
+            from telegram import Message, Chat, User
+            mock_chat = Chat(id=chat_id, type="private")
+            mock_user = User(id=int(user_id), is_bot=False, first_name="User")
+            mock_message = Message(
+                message_id=message_id,
+                date=datetime.datetime.now(),
+                chat=mock_chat,
+                from_user=mock_user
+            )
+            await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='rename_key')
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
         return
@@ -4515,7 +4571,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+            # Создаем объект сообщения для редактирования
+            from telegram import Message, Chat, User
+            mock_chat = Chat(id=chat_id, type="private")
+            mock_user = User(id=int(user_id), is_bot=False, first_name="User")
+            mock_message = Message(
+                message_id=message_id,
+                date=datetime.datetime.now(),
+                chat=mock_chat,
+                from_user=mock_user
+            )
+            await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='rename_key')
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
         return
@@ -4533,7 +4599,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
             return
@@ -4551,7 +4617,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
             return
@@ -4581,7 +4647,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(update.callback_query.message, success_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_or_reply_universal(mock_message, success_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
         else:
@@ -4595,7 +4661,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             ])
             
             try:
-                await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+                await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
             except Exception as e:
                 logger.error(f"Ошибка редактирования сообщения: {e}")
     
@@ -4611,7 +4677,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         ])
         
         try:
-            await safe_edit_or_reply_universal(update.callback_query.message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
+            await safe_edit_or_reply_universal(mock_message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
         except Exception as edit_e:
             logger.error(f"Ошибка редактирования сообщения: {edit_e}")
 
@@ -4642,7 +4708,7 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Изменить дни за балл", callback_data="admin_set_days_start")],
         [UIButtons.back_button()],
     ])
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    message = update.message if update.message else (mock_message if update.callback_query else None)
     if message is None:
         logger.error("admin_menu: message is None")
         return
@@ -4660,15 +4726,15 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     if not await check_private_chat(update):
         return
     if update.effective_user.id not in ADMIN_IDS:
-        await safe_edit_or_reply(update.callback_query.message, 'Нет доступа.')
+        await safe_edit_or_reply(mock_message, 'Нет доступа.')
         return
     await update.callback_query.answer()
     # Сохраняем исходное сообщение для дальнейших редактирований
     context.user_data['broadcast_text'] = None
-    context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
-    context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
+    context.user_data['broadcast_msg_chat_id'] = mock_message.chat_id
+    context.user_data['broadcast_msg_id'] = mock_message.message_id
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]])
-    await safe_edit_or_reply_universal(update.callback_query.message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
+    await safe_edit_or_reply_universal(mock_message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
     return BROADCAST_WAITING_TEXT
 
 async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4707,7 +4773,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.callback_query.answer()
     text = context.user_data.get('broadcast_text')
     if not text:
-        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Текст рассылки пуст.")
+        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Текст рассылки пуст.")
         return ConversationHandler.END
 
     # Получаем список получателей и исключаем админов
@@ -4725,7 +4791,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     chat_id = context.user_data.get('broadcast_msg_chat_id')
     msg_id = context.user_data.get('broadcast_msg_id')
     try:
-        await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.", parse_mode="HTML", menu_type='broadcast')
+        await safe_edit_or_reply_universal(mock_message, f"<b>Отправка рассылки</b>\n\nОтправлено: 0/{total}. Ошибок: 0.", parse_mode="HTML", menu_type='broadcast')
     except Exception:
         pass
     for i in range(0, total, batch):
@@ -4764,7 +4830,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         # пауза между батчами
         await asyncio.sleep(1.0)
         try:
-            await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.", parse_mode="HTML", menu_type='broadcast')
+            await safe_edit_or_reply_universal(mock_message, f"<b>Отправка рассылки</b>\n\nОтправлено: {sent}/{total}. Ошибок: {failed}.", parse_mode="HTML", menu_type='broadcast')
         except Exception:
             pass
 
@@ -4775,9 +4841,9 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
     ])
     try:
-        await safe_edit_or_reply_universal(update.callback_query.message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML", menu_type='broadcast')
+        await safe_edit_or_reply_universal(mock_message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML", menu_type='broadcast')
     except Exception:
-        await safe_edit_or_reply(update.callback_query.message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit_or_reply(mock_message, f"<b>Рассылка завершена</b>\n\nУспешно: {sent}, ошибок: {failed} из {total}.", reply_markup=keyboard, parse_mode="HTML")
     return ConversationHandler.END
 
 async def admin_broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
