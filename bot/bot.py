@@ -2954,6 +2954,7 @@ async def on_startup(app):
     
     # Инициализируем менеджер уведомлений
     logger.info("Инициализация менеджера уведомлений...")
+    global notification_manager
     notification_manager = NotificationManager(app.bot, server_manager, ADMIN_IDS)
     await notification_manager.initialize()
     await notification_manager.start()
