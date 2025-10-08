@@ -2452,6 +2452,34 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     # Это нужно для webhook'ов, так как они не имеют доступа к context
                     # Состояние будет добавлено при следующем взаимодействии пользователя с ботом
                     
+                    # Сохраняем информацию о том, что пользователь находится в состоянии успешной оплаты
+                    # Это поможет universal_back_callback правильно определить навигацию
+                    try:
+                        # Получаем пользователя из БД и добавляем состояние
+                        from .keys_db import DB_PATH
+                        import aiosqlite
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            # Создаем таблицу для хранения состояний пользователей, если её нет
+                            await db.execute('''
+                                CREATE TABLE IF NOT EXISTS user_states (
+                                    user_id TEXT PRIMARY KEY,
+                                    current_state TEXT,
+                                    nav_stack TEXT,
+                                    updated_at INTEGER
+                                )
+                            ''')
+                            
+                            # Сохраняем состояние пользователя
+                            nav_stack = json.dumps(['payment'])
+                            await db.execute('''
+                                INSERT OR REPLACE INTO user_states (user_id, current_state, nav_stack, updated_at)
+                                VALUES (?, ?, ?, ?)
+                            ''', (user_id, 'payment_success', nav_stack, int(datetime.datetime.now().timestamp())))
+                            await db.commit()
+                            logger.info(f"Сохранено состояние пользователя {user_id}: payment_success")
+                    except Exception as e:
+                        logger.warning(f"Не удалось сохранить состояние пользователя {user_id}: {e}")
+                    
                     # Получаем message_id из мета-данных платежа
                     payment_info = await get_payment_by_id(payment_id)
                     stored_message_id = None
@@ -4126,9 +4154,37 @@ async def universal_back_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
     
+    user_id = str(query.from_user.id)
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Called with callback_data='{query.data}'")
-    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {query.from_user.id}")
+    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: User ID: {user_id}")
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Current stack before pop: {context.user_data.get('nav_stack', [])}")
+    
+    # Сначала проверяем состояние пользователя в БД (для webhook'ов)
+    try:
+        from .keys_db import DB_PATH
+        import aiosqlite
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute('''
+                SELECT current_state, nav_stack FROM user_states WHERE user_id = ?
+            ''', (user_id,)) as cursor:
+                db_state = await cursor.fetchone()
+                if db_state:
+                    current_state, nav_stack_json = db_state
+                    nav_stack = json.loads(nav_stack_json) if nav_stack_json else []
+                    logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: DB state found: {current_state}, nav_stack: {nav_stack}")
+                    
+                    # Если пользователь в состоянии успешной оплаты, ведем в главное меню
+                    if current_state == 'payment_success':
+                        logger.info("🔙 UNIVERSAL_BACK_CALLBACK: User in payment_success state, going to main menu")
+                        # Очищаем состояние из БД
+                        await db.execute('DELETE FROM user_states WHERE user_id = ?', (user_id,))
+                        await db.commit()
+                        await start(update, context)
+                        return
+    except Exception as e:
+        logger.warning(f"Ошибка при проверке состояния пользователя в БД: {e}")
+    
+    # Обычная логика навигации
     prev_state = pop_nav(context)
     logger.info(f"🔙 UNIVERSAL_BACK_CALLBACK: Previous state: {prev_state}")
     
