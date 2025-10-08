@@ -115,8 +115,13 @@ jobs:
           # Clone directly to working directory
           sudo rm -rf /root/Daralla
           sudo mkdir -p /root/Daralla
-          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /root/Daralla
+          cd /root
+          echo "Current directory: $(pwd)"
+          echo "Directory contents: $(ls -la)"
+          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
+          echo "After clone, directory contents: $(ls -la)"
           cd /root/Daralla
+          echo "In Daralla directory: $(pwd)"
           sudo git checkout main
           sudo git pull origin main
           echo "Current commit: $(sudo git log --oneline -1)"
