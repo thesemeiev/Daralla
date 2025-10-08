@@ -2158,20 +2158,20 @@ async def process_payment_webhook(bot_app, payment_id, status):
             # Любой другой неуспешный статус
             await process_failed_payment(bot_app, payment_id, user_id, meta, status)
         
-                except Exception as e:
+    except Exception as e:
         logger.error(f"Ошибка обработки webhook платежа {payment_id}: {e}")
 
 
 async def process_successful_payment(bot_app, payment_id, user_id, meta):
     """Обрабатывает успешный платеж"""
     try:
-                    period = meta.get('type', 'month')
+        period = meta.get('type', 'month')
         # Получаем message_id из мета-данных платежа
         message_id = meta.get('message_id')
-                    
-                    # Проверяем, это продление или новая покупка
-                    is_extension = period.startswith('extend_')
-                    if is_extension:
+        
+        # Проверяем, это продление или новая покупка
+        is_extension = period.startswith('extend_')
+        if is_extension:
             # Обработка продления (код из auto_activate_keys)
             await process_extension_payment(bot_app, payment_id, user_id, meta, message_id)
         else:
@@ -2186,23 +2186,23 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
     """Обрабатывает продление ключа"""
     try:
         period = meta.get('type', 'month')
-                        actual_period = period.replace('extend_', '')  # убираем префикс extend_
-                        days = 90 if actual_period == '3month' else 30
-                        extension_email = meta.get('extension_key_email')
-                        
-                        logger.info(f"Обработка продления ключа: email={extension_email}, period={actual_period}, days={days}")
-                        
-                        if not extension_email:
-                            logger.error(f"Не найден email ключа для продления в meta: {meta}")
+        actual_period = period.replace('extend_', '')  # убираем префикс extend_
+        days = 90 if actual_period == '3month' else 30
+        extension_email = meta.get('extension_key_email')
+        
+        logger.info(f"Обработка продления ключа: email={extension_email}, period={actual_period}, days={days}")
+        
+        if not extension_email:
+            logger.error(f"Не найден email ключа для продления в meta: {meta}")
             await update_payment_status(payment_id, 'failed')
             return
-                        
-                        # Ищем сервер с ключом для продления
-                        try:
-                            xui, server_name = server_manager.find_client_on_any_server(extension_email)
-                            if not xui or not server_name:
-                                logger.error(f"Ключ для продления не найден: {extension_email}")
-                                await update_payment_status(payment_id, 'failed')
+        
+        # Ищем сервер с ключом для продления
+        try:
+            xui, server_name = server_manager.find_client_on_any_server(extension_email)
+            if not xui or not server_name:
+                logger.error(f"Ключ для продления не найден: {extension_email}")
+                await update_payment_status(payment_id, 'failed')
                 
                 # Отправляем сообщение пользователю об ошибке продления
                 if message_id:
@@ -2229,111 +2229,111 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         menu_type='extend_key'
                     )
                 return
-                            
-                            # Продлеваем ключ
-                            response = xui.extendClient(extension_email, days)
-                            if response and response.status_code == 200:
-                                await update_payment_status(payment_id, 'succeeded')
-                                await update_payment_activation(payment_id, 1)
-                                
-                                # Проверяем реферальную связь и выдаем баллы
-                                try:
-                                    referrer_id = await get_pending_referral(user_id)
-                                    if referrer_id:
+            
+            # Продлеваем ключ
+            response = xui.extendClient(extension_email, days)
+            if response and response.status_code == 200:
+                await update_payment_status(payment_id, 'succeeded')
+                await update_payment_activation(payment_id, 1)
+                
+                # Проверяем реферальную связь и выдаем баллы
+                try:
+                    referrer_id = await get_pending_referral(user_id)
+                    if referrer_id:
                         # Выдаем 1 балл рефереру
-                                        await add_points(
-                                            referrer_id, 
-                                            1, 
-                                            f"Реферал: {user_id} продлил VPN",
-                                            payment_id
-                                        )
-                                        
-                                        # Отмечаем награду как выданную
-                                        await mark_referral_reward_given(referrer_id, user_id, payment_id)
-                                        
-                                        # Уведомляем реферера
-                                        try:
-                                            points_days = await get_config('points_days_per_point', '14')
+                        await add_points(
+                            referrer_id, 
+                            1, 
+                            f"Реферал: {user_id} продлил VPN",
+                            payment_id
+                        )
+                        
+                        # Отмечаем награду как выданную
+                        await mark_referral_reward_given(referrer_id, user_id, payment_id)
+                        
+                        # Уведомляем реферера
+                        try:
+                            points_days = await get_config('points_days_per_point', '14')
                             await bot_app.bot.send_message(
-                                                chat_id=referrer_id,
-                                                text=(
-                                                    f"Поздравляем!\n\n"
-                                                    "Ваш друг продлил VPN по вашей реферальной ссылке!\n"
-                                                    f"Вы получили 1 балл!\n"
-                                                    f"1 балл = {points_days} дней VPN бесплатно!\n\n"
-                                                    "Используйте баллы для покупки или продления VPN!"
-                                                )
-                                            )
-                                        except:
-                                            pass
-                                except Exception as e:
+                                chat_id=referrer_id,
+                                text=(
+                                    f"Поздравляем!\n\n"
+                                    "Ваш друг продлил VPN по вашей реферальной ссылке!\n"
+                                    f"Вы получили 1 балл!\n"
+                                    f"1 балл = {points_days} дней VPN бесплатно!\n\n"
+                                    "Используйте баллы для покупки или продления VPN!"
+                                )
+                            )
+                        except:
+                            pass
+                except Exception as e:
                     logger.error(f"Ошибка выдачи реферальных баллов при продлении: {e}")
-                                
-                                # Отправляем уведомление о продлении
-                                try:
-                                    # Получаем новое время истечения
-                                    clients_response = xui.list()
-                                    expiry_str = "—"
-                                    if clients_response.get('success', False):
-                                        for inbound in clients_response.get('obj', []):
-                                            settings = json.loads(inbound.get('settings', '{}'))
-                                            for client in settings.get('clients', []):
-                                                if client.get('email') == extension_email:
-                                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
-                                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
-                                                    break
-                                    
-                                    # Очищаем старые уведомления об истечении для продленного ключа
-                                    if notification_manager:
-                                        await notification_manager.clear_key_notifications(user_id, extension_email)
-                                        await notification_manager.record_key_extension(user_id, extension_email)
-                                    
-                                    extension_message = UIMessages.key_extended_message(
-                                        email=extension_email,
-                                        server_name=server_name,
-                                        days=days,
-                                        expiry_str=expiry_str,
-                                        period=actual_period
-                                    )
-                                    
+                
+                # Отправляем уведомление о продлении
+                try:
+                    # Получаем новое время истечения
+                    clients_response = xui.list()
+                    expiry_str = "—"
+                    if clients_response.get('success', False):
+                        for inbound in clients_response.get('obj', []):
+                            settings = json.loads(inbound.get('settings', '{}'))
+                            for client in settings.get('clients', []):
+                                if client.get('email') == extension_email:
+                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
+                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
+                                    break
+                    
+                    # Очищаем старые уведомления об истечении для продленного ключа
+                    if notification_manager:
+                        await notification_manager.clear_key_notifications(user_id, extension_email)
+                        await notification_manager.record_key_extension(user_id, extension_email)
+                    
+                    extension_message = UIMessages.key_extended_message(
+                        email=extension_email,
+                        server_name=server_name,
+                        days=days,
+                        expiry_str=expiry_str,
+                        period=actual_period
+                    )
+                    
                     if message_id:
-                                            keyboard = InlineKeyboardMarkup([
-                                                [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
-                                                [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
-                                            ])
+                        keyboard = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("Мои ключи", callback_data="mykey")],
+                            [InlineKeyboardButton("Главное меню", callback_data="main_menu")]
+                        ])
                         
                         await safe_edit_message_with_photo(
                             bot_app.bot,
                             chat_id=int(user_id),
-                                                message_id=message_id,
-                                                text=extension_message,
-                            reply_markup=keyboard,
-                                                parse_mode="HTML",
-                            menu_type='extend_key'
-                                            )
-                                            logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
-                    else:
-                                            # Fallback: отправляем новое сообщение
-                        await safe_send_message_with_photo(
-                            bot_app.bot,
-                            chat_id=int(user_id),
-                                                    text=extension_message,
+                            message_id=message_id,
+                            text=extension_message,
                             reply_markup=keyboard,
                             parse_mode="HTML",
                             menu_type='extend_key'
-                                            )
-                                            logger.info(f"Отправлено новое сообщение о продлении ключа {extension_email} пользователю {user_id}")
-                                    
-                                except Exception as e:
-                                    logger.error(f"Ошибка отправки уведомления о продлении: {e}")
-                            else:
+                        )
+                        logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
+                    else:
+                        # Fallback: отправляем новое сообщение
+                        await safe_send_message_with_photo(
+                            bot_app.bot,
+                            chat_id=int(user_id),
+                            text=extension_message,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                            menu_type='extend_key'
+                        )
+                        logger.info(f"Отправлено новое сообщение о продлении ключа {extension_email} пользователю {user_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Ошибка отправки уведомления о продлении: {e}")
+            else:
                 logger.error(f"Ошибка продления ключа {extension_email}: {response}")
-                                await update_payment_status(payment_id, 'failed')
-                                
-                        except Exception as e:
-                            logger.error(f"Ошибка при продлении ключа {extension_email}: {e}")
-                            await update_payment_status(payment_id, 'failed')
-                        
+                await update_payment_status(payment_id, 'failed')
+                
+        except Exception as e:
+            logger.error(f"Ошибка при продлении ключа {extension_email}: {e}")
+            await update_payment_status(payment_id, 'failed')
+                    
     except Exception as e:
         logger.error(f"Ошибка обработки продления ключа {payment_id}: {e}")
 
@@ -2342,7 +2342,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
     """Обрабатывает новую покупку"""
     try:
         period = meta.get('type', 'month')
-                    days = 90 if period == '3month' else 30
+        days = 90 if period == '3month' else 30
         unique_email = meta.get('unique_email')
         selected_location = meta.get('selected_location', 'auto')
         
@@ -2352,97 +2352,97 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             logger.error(f"Не найден unique_email в meta: {meta}")
             await update_payment_status(payment_id, 'failed')
             return
-                    
-                    # Создание ключа
-                    try:
-                        if selected_location == "auto":
-                            # Для автовыбора выбираем лучшую локацию
-                            xui, server_name = new_client_manager.get_best_location_server()
-                        else:
-                            xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
+        
+        # Создание ключа
+        try:
+            if selected_location == "auto":
+                # Для автовыбора выбираем лучшую локацию
+                xui, server_name = new_client_manager.get_best_location_server()
+            else:
+                xui, server_name = new_client_manager.get_server_by_user_choice(selected_location, "auto")
             
-                        response = xui.addClient(day=days, tg_id=user_id, user_email=unique_email, timeout=15)
-                        
-                        if response.status_code == 200:
-                            await update_payment_status(payment_id, 'succeeded')
-                            await update_payment_activation(payment_id, 1)
-                            
-                            # Проверяем реферальную связь и выдаем баллы
-                            try:
-                                referrer_id = await get_pending_referral(user_id)
-                                if referrer_id:
+            response = xui.addClient(day=days, tg_id=user_id, user_email=unique_email, timeout=15)
+            
+            if response.status_code == 200:
+                await update_payment_status(payment_id, 'succeeded')
+                await update_payment_activation(payment_id, 1)
+                
+                # Проверяем реферальную связь и выдаем баллы
+                try:
+                    referrer_id = await get_pending_referral(user_id)
+                    if referrer_id:
                         # Выдаем 1 балл рефереру
-                                    await add_points(
-                                        referrer_id, 
-                                        1, 
-                                        f"Реферал: {user_id} купил VPN",
-                                        payment_id
-                                    )
-                                    
-                                    # Отмечаем награду как выданную
-                                    await mark_referral_reward_given(referrer_id, user_id, payment_id)
-                                    
-                                    # Уведомляем реферера
-                                    try:
-                                        points_days = await get_config('points_days_per_point', '14')
+                        await add_points(
+                            referrer_id, 
+                            1, 
+                            f"Реферал: {user_id} купил VPN",
+                            payment_id
+                        )
+                        
+                        # Отмечаем награду как выданную
+                        await mark_referral_reward_given(referrer_id, user_id, payment_id)
+                        
+                        # Уведомляем реферера
+                        try:
+                            points_days = await get_config('points_days_per_point', '14')
                             await bot_app.bot.send_message(
-                                            chat_id=referrer_id,
-                                            text=(
-                                                f"Поздравляем!\n\n"
-                                                "Ваш друг купил VPN по вашей реферальной ссылке!\n"
-                                                f"Вы получили 1 балл!\n"
-                                                f"1 балл = {points_days} дней VPN бесплатно!\n\n"
-                                                "Используйте баллы для покупки или продления VPN!"
-                                            )
-                                        )
-                                    except:
-                                        pass
-                            except Exception as e:
+                                chat_id=referrer_id,
+                                text=(
+                                    f"Поздравляем!\n\n"
+                                    "Ваш друг купил VPN по вашей реферальной ссылке!\n"
+                                    f"Вы получили 1 балл!\n"
+                                    f"1 балл = {points_days} дней VPN бесплатно!\n\n"
+                                    "Используйте баллы для покупки или продления VPN!"
+                                )
+                            )
+                        except:
+                            pass
+                except Exception as e:
                     logger.error(f"Ошибка выдачи реферальных баллов при покупке: {e}")
-                            
+                
                 # Отправка ключа пользователю
-                            try:
+                try:
                     # Получаем реальное время истечения из XUI API
-                                clients_response = xui.list()
+                    clients_response = xui.list()
                     expiry_str = "—"
                     expiry_timestamp = 0
                     
-                                if clients_response.get('success', False):
-                                    clients = clients_response.get('obj', [])
-                                    for inbound in clients:
-                                        settings = json.loads(inbound.get('settings', '{}'))
-                                        for client in settings.get('clients', []):
-                                            if client.get('email') == unique_email:
-                                                # Получаем точное время истечения из API
-                                                expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
-                                                expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
-                                                break
-                                        else:
-                                            continue
-                                        break
-                                else:
-                                # Fallback: вычисляем время истечения
-                                expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
-                                expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
-                                expiry_timestamp = int(expiry_time.timestamp())
-                            
-                            msg = format_vpn_key_message(
-                                email=unique_email,
-                                status='Активен',
-                                server=server_name,
-                                expiry=expiry_str,
-                                key=xui.link(unique_email),
-                                expiry_timestamp=expiry_timestamp
-                            )
-                            
-                            keyboard = InlineKeyboardMarkup([
-                                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
-                            ])
-                            
+                    if clients_response.get('success', False):
+                        clients = clients_response.get('obj', [])
+                        for inbound in clients:
+                            settings = json.loads(inbound.get('settings', '{}'))
+                            for client in settings.get('clients', []):
+                                if client.get('email') == unique_email:
+                                    # Получаем точное время истечения из API
+                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
+                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
+                                    break
+                            else:
+                                continue
+                            break
+                    else:
+                        # Fallback: вычисляем время истечения
+                        expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
+                        expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
+                        expiry_timestamp = int(expiry_time.timestamp())
+                    
+                    msg = format_vpn_key_message(
+                        email=unique_email,
+                        status='Активен',
+                        server=server_name,
+                        expiry=expiry_str,
+                        key=xui.link(unique_email),
+                        expiry_timestamp=expiry_timestamp
+                    )
+                    
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
+                    ])
+                    
                     # Формируем полное сообщение о покупке
-                            success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
-                            full_message = success_text + msg
-                            
+                    success_text = UIMessages.success_purchase_message(period, meta.get('price', '100'))
+                    full_message = success_text + msg
+                    
                     # Кнопка "Назад" ведет прямо в главное меню (callback_data="main_menu")
                     # Это простое решение для webhook'ов, которые не имеют доступа к навигационному стеку
                     
@@ -2459,51 +2459,51 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         try:
                             await safe_edit_message_with_photo(
                                 bot_app.bot,
-                                        chat_id=int(user_id),
+                                chat_id=int(user_id),
                                 message_id=actual_message_id,
-                                        text=full_message,
-                                        reply_markup=keyboard,
+                                text=full_message,
+                                reply_markup=keyboard,
                                 parse_mode="HTML",
                                 menu_type='key_success'
-                                    )
+                            )
                             logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о ключе")
-                                except Exception as edit_error:
+                        except Exception as edit_error:
                             logger.error(f"Ошибка редактирования сообщения {actual_message_id}: {edit_error}")
                             # Fallback: отправляем новое сообщение
                             await safe_send_message_with_photo(
                                 bot_app.bot,
-                                            chat_id=int(user_id),
-                                            text=full_message,
-                                            reply_markup=keyboard,
+                                chat_id=int(user_id),
+                                text=full_message,
+                                reply_markup=keyboard,
                                 parse_mode="HTML",
                                 menu_type='key_success'
-                                        )
-                                        logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
-                                        else:
+                            )
+                            logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
+                    else:
                         # Если нет message_id, отправляем новое сообщение
                         await safe_send_message_with_photo(
                             bot_app.bot,
-                                        chat_id=int(user_id),
-                                        text=full_message,
-                                        reply_markup=keyboard,
+                            chat_id=int(user_id),
+                            text=full_message,
+                            reply_markup=keyboard,
                             parse_mode="HTML",
                             menu_type='key_success'
-                                    )
-                                    logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
+                        )
+                        logger.info(f"Отправлено новое сообщение с ключом для user_id={user_id}")
                     
                     # message_id больше не отслеживается в памяти
                             
                 except Exception as e:
                     logger.error(f"Ошибка отправки ключа пользователю: {e}")
-                                    else:
+            else:
                 logger.error(f"Ошибка создания ключа: {response}")
                 await update_payment_status(payment_id, 'failed')
-                            
+                
         except Exception as e:
             logger.error(f"Ошибка при создании ключа: {e}")
             await update_payment_status(payment_id, 'failed')
-                            
-                    except Exception as e:
+            
+    except Exception as e:
         logger.error(f"Ошибка обработки новой покупки {payment_id}: {e}")
 
 
@@ -2511,7 +2511,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
     """Обрабатывает отмененный платеж"""
     try:
         await update_payment_status(payment_id, 'failed')
-                    await update_payment_activation(payment_id, 0)
+        await update_payment_activation(payment_id, 0)
         
         # Отправляем сообщение пользователю об ошибке оплаты
         message_id = meta.get('message_id')
@@ -2540,7 +2540,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
             )
             logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {user_id}")
                     
-        except Exception as e:
+    except Exception as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
 
 
@@ -3225,7 +3225,7 @@ class UIMessages:
             
         )
 
-# payment_message_ids удален - теперь используем БД как единый источник истины
+# payment_message_ids удален - теперь используем БД как единый источник истин
 
 # Глобальный словарь для хранения коротких идентификаторов ключей для продления
 # Ключ: короткий_id, Значение: key_email
@@ -4853,7 +4853,7 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['broadcast_text'] = None
     context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
     context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]])
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_broadcast_back")]])
     await safe_edit_or_reply_universal(update.callback_query.message, UIMessages.broadcast_intro_message(), reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='broadcast')
     return BROADCAST_WAITING_TEXT
 
@@ -4943,7 +4943,7 @@ async def admin_broadcast_input(update: Update, context: ContextTypes.DEFAULT_TY
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Отправить", callback_data="admin_broadcast_send")],
-        [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
+        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_broadcast_back")]
     ])
     
     # Редактируем исходное сообщение на предпросмотр
@@ -5166,7 +5166,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data['broadcast_details'] = details
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Экспорт CSV", callback_data="admin_broadcast_export")],
-        [InlineKeyboardButton("← Назад", callback_data="admin_broadcast_back")]
+        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="admin_broadcast_back")]
     ])
     try:
         await safe_edit_message_with_photo(
