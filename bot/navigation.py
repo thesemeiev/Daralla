@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from menu_states import NavStates, CallbackData, STATE_TO_HANDLER
+from .menu_states import NavStates, CallbackData, STATE_TO_HANDLER
 
 logger = logging.getLogger(__name__)
 

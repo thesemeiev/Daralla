@@ -7,8 +7,8 @@ from typing import Optional, List, Dict, Any
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from navigation import nav_manager, NavigationBuilder
-from menu_states import NavStates, CallbackData, MenuTypes
+from .navigation import nav_manager, NavigationBuilder
+from .menu_states import NavStates, CallbackData, MenuTypes
 
 logger = logging.getLogger(__name__)
 

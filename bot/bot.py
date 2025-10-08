@@ -13,9 +13,9 @@ import telegram
 from telegram.helpers import escape_markdown
 
 # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-from menu_handlers import NavigationIntegration, NavigationSystem
-from menu_states import NavStates, CallbackData
-from navigation import nav_manager, NavigationBuilder
+from .menu_handlers import NavigationIntegration, NavigationSystem
+from .menu_states import NavStates, CallbackData
+from .navigation import nav_manager, NavigationBuilder
 
 # Глобальная навигационная система (будет инициализирована в main())
 nav_system = None
