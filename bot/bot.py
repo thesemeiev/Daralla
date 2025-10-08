@@ -1367,7 +1367,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
     keyboard = InlineKeyboardMarkup(buttons)
     
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("main_menu: message is None")
         return
@@ -1427,7 +1427,11 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для приветственного сообщения
     welcome_text = UIMessages.welcome_message()
-    message = mock_message
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    if message is None:
+        logger.error("edit_main_menu: message is None")
+        return
+    
     logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
     try:
         # Отправляем меню с фото
@@ -1457,7 +1461,7 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("FAQ", callback_data="instr_faq")],
         [UIButtons.back_button()],
     ])
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("instruction_menu: message is None")
         return
@@ -1608,7 +1612,7 @@ async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment: user_id={user_id}")
     
     # Получаем правильный объект сообщения
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     logger.info(f"handle_payment: message={message}, message_id={getattr(message, 'message_id', 'None')}")
     try:
         # Проверка на существующий pending-платёж по user_id и period
@@ -1865,7 +1869,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         push_nav(context, 'mykeys_menu')
     user = update.effective_user
     user_id = str(user.id)
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("mykeys_menu: message is None")
         return
@@ -3148,7 +3152,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not stack or stack[-1] != 'admin_errors':
             push_nav(context, 'admin_errors')
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3176,7 +3180,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_errors_refresh")],
             [UIButtons.back_button()]
         ])
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         
         # Используем фото для логов, ограничиваем длину для caption
         max_length = 3500  # Ограничиваем длину для избежания ошибки caption too long
@@ -3191,7 +3195,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup([
             [UIButtons.back_button()]
         ])
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         
         # Используем фото для ошибки логов
         error_text = f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}'
@@ -3209,13 +3213,13 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             push_nav(context, 'admin_notifications')
     
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
     try:
         if notification_manager is None:
-            await safe_edit_or_reply(mock_message, 
+            await safe_edit_or_reply(update.callback_query.message, 
                                    f"{UIEmojis.ERROR} Менеджер уведомлений не инициализирован")
             return
         
@@ -3227,7 +3231,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
             [UIButtons.back_button()]
         ])
         
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         
         # Используем фото для уведомлений
         await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_notifications')
@@ -3237,7 +3241,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         keyboard = InlineKeyboardMarkup([
             [UIButtons.back_button()]
         ])
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         
         # Используем фото для ошибки уведомлений
         error_text = f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}"
@@ -3255,7 +3259,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not stack or stack[-1] != 'admin_check_servers':
             push_nav(context, 'admin_check_servers')
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3327,14 +3331,14 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data="admin_check_servers")],
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_check_servers')
     except Exception as e:
         logger.exception("Ошибка в admin_check_servers")
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
         ])
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type='admin_check_servers')
 
 
@@ -3499,7 +3503,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3523,7 +3527,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="back")]
         ])
         
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, message, reply_markup=keyboard, parse_mode="Markdown")
         
     except Exception as e:
@@ -3536,7 +3540,7 @@ async def admin_set_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if update.effective_user.id not in ADMIN_IDS:
-        message_obj = update.message if update.message else mock_message
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply(message_obj, 'Нет доступа.')
         return
     
@@ -3771,7 +3775,7 @@ async def buy_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stack = context.user_data.setdefault('nav_stack', [])
     if not stack or stack[-1] != 'buy_menu':
         push_nav(context, 'buy_menu')
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("buy_menu_handler: message is None")
         return
@@ -3807,7 +3811,7 @@ async def server_selection_menu(update: Update, context: ContextTypes.DEFAULT_TY
     if not stack or stack[-1] != 'server_selection':
         push_nav(context, 'server_selection')
     
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("server_selection_menu: message is None")
         return
@@ -4164,7 +4168,7 @@ async def points_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     
     try:
-        await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
+        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
     except Exception as e:
         logger.exception(f"points_callback: failed to edit message: {e}")
 
@@ -4203,7 +4207,7 @@ async def spend_points_callback(update: Update, context: ContextTypes.DEFAULT_TY
         ])
     
     try:
-        await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
+        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="MarkdownV2", menu_type='points_menu')
     except Exception as e:
         logger.exception(f"spend_points_callback: failed to edit message: {e}")
 
@@ -4215,7 +4219,7 @@ async def buy_with_points_callback(update: Update, context: ContextTypes.DEFAULT
     points_info = await get_user_points(user_id)
     
     if points_info['points'] < 1:
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Недостаточно баллов!")
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!")
         return
     
     # Сохраняем информацию о покупке за баллы
@@ -4236,7 +4240,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="spend_points")]
         ])
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard)
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов!", reply_markup=keyboard)
         return
     
     # Ищем активные ключи пользователя
@@ -4268,7 +4272,7 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="spend_points")]
             ])
-            await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard)
+            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} У вас нет активных ключей для продления!", reply_markup=keyboard)
             return
         
         # Если только один ключ - продлеваем сразу
@@ -4308,11 +4312,11 @@ async def extend_with_points_callback(update: Update, context: ContextTypes.DEFA
             f"{UIStyles.description('Выберите ключ для продления:')}"
         )
         
-        await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='extend_key')
+        await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True, menu_type='extend_key')
             
     except Exception as e:
         logger.error(f"Ошибка при получении списка ключей: {e}")
-        await safe_edit_or_reply(mock_message, "❌ Ошибка при получении списка ключей.")
+        await safe_edit_or_reply(update.callback_query.message, "❌ Ошибка при получении списка ключей.")
 
 async def extend_selected_key_with_points(update: Update, context: ContextTypes.DEFAULT_TYPE, client: dict, user_id: str):
     """Продлевает выбранный ключ за баллы"""
@@ -4337,7 +4341,7 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                     logger.error(f"Failed to rollback extension for key {email} after points failure: {e}")
                     # Уведомляем админа о критической ошибке
                     await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось откатить продление ключа после неудачного списания баллов:\nКлюч: {email}\nПользователь: {user_id}\nОшибка: {str(e)}")
-                await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
+                await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!")
                 return
             # Очищаем старые уведомления об истечении для продленного ключа
             if notification_manager:
@@ -4367,15 +4371,15 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data="back")]
             ])
             
-            await safe_edit_or_reply(mock_message, message, reply_markup=keyboard, parse_mode="HTML")
+            await safe_edit_or_reply(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML")
         else:
             # Ключ не продлен - баллы не списывались, просто сообщаем об ошибке
-            await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.")
+            await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.")
             
     except Exception as e:
         logger.error(f"Ошибка продления выбранного ключа за баллы: {e}")
         # Баллы не списывались, просто сообщаем об ошибке
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ошибка при продлении.")
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении.")
 
 async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора ключа для продления за баллы"""
@@ -4386,21 +4390,21 @@ async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAU
     
     # Извлекаем short_id из callback_data
     if not callback_data.startswith("extend_points_key:"):
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Неверный запрос!")
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Неверный запрос!")
         return
     
     short_id = callback_data.split(":", 1)[1]
     
     # Получаем информацию о ключе из кэша
     if short_id not in extension_keys_cache:
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Ключ не найден или устарел!")
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Ключ не найден или устарел!")
         return
     
     key_info = extension_keys_cache[short_id]
     
     # Проверяем, что ключ принадлежит пользователю
     if key_info['user_id'] != user_id:
-        await safe_edit_or_reply(mock_message, f"{UIEmojis.ERROR} Доступ запрещен!")
+        await safe_edit_or_reply(update.callback_query.message, f"{UIEmojis.ERROR} Доступ запрещен!")
         return
     
     # Создаем объект client для совместимости
@@ -4461,7 +4465,7 @@ async def referral_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [UIButtons.back_button()]
     ])
     
-    await safe_edit_or_reply_universal(mock_message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='referral_menu')
+    await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='referral_menu')
 
 async def rename_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик переименования ключа"""
@@ -4743,7 +4747,7 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Изменить дни за балл", callback_data="admin_set_days_start")],
         [UIButtons.back_button()],
     ])
-    message = update.message if update.message else (mock_message if update.callback_query else None)
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("admin_menu: message is None")
         return
