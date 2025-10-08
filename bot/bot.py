@@ -3919,12 +3919,8 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     elif query.data == "instruction":
         await instruction(update, context)
     elif query.data == "admin_notifications_refresh":
-        # Обновляем админ уведомления
-        if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_NOTIFICATIONS)
-        from .menu_handlers import MenuHandlers
-        menu_handlers = MenuHandlers({})
-        await menu_handlers.admin_notifications(update, context)
+        # Обновляем админ уведомления напрямую
+        await admin_notifications(update, context)
     elif query.data == "back":
         # Обработка кнопки "Назад" через навигационную систему
         if nav_system:
