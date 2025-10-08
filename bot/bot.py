@@ -271,6 +271,8 @@ async def safe_edit_message_with_photo(bot, chat_id, message_id, text, reply_mar
                             ),
                             reply_markup=reply_markup
                         )
+                    # Небольшая задержка для стабилизации
+                    await asyncio.sleep(0.5)
                     return
                 except Exception as e:
                     if attempt < max_retries - 1:
@@ -2122,26 +2124,38 @@ def create_webhook_app(bot_app):
                 cleanup_thread = threading.Thread(target=cleanup_data, daemon=True)
                 cleanup_thread.start()
             
-            # Запускаем обработку платежа в основном event loop
-            import asyncio
-            try:
-                # Получаем текущий event loop
-                loop = asyncio.get_event_loop()
-                # Создаем задачу для обработки платежа
-                asyncio.create_task(process_payment_webhook(bot_app, payment_id, status))
-            except RuntimeError:
-                # Если нет активного event loop, создаем новый в отдельном потоке
-                def process_payment():
-                    import asyncio
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+            # Запускаем обработку платежа в отдельном потоке с изолированным event loop
+            def process_payment():
+                import asyncio
+                # Создаем новый event loop для этого потока
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # Запускаем обработку платежа
+                    loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
+                except Exception as e:
+                    logger.error(f"Ошибка обработки платежа в webhook: {e}")
+                finally:
+                    # Закрываем event loop
                     try:
-                        loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
+                        # Даем время на завершение всех операций
+                        import time
+                        time.sleep(1)
+                        
+                        # Отменяем все pending задачи
+                        pending = asyncio.all_tasks(loop)
+                        for task in pending:
+                            task.cancel()
+                        # Ждем завершения отмененных задач
+                        if pending:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception as e:
+                        logger.warning(f"Ошибка при закрытии event loop: {e}")
                     finally:
                         loop.close()
-                
-                thread = threading.Thread(target=process_payment)
-                thread.start()
+            
+            thread = threading.Thread(target=process_payment, daemon=True)
+            thread.start()
             
             return jsonify({'status': 'ok'})
             
