@@ -108,23 +108,17 @@ jobs:
             ls -t backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
           fi
           
-          # Download code
+          # Download code directly to working directory
           echo "Downloading code..."
           sudo apt-get update -qq && sudo apt-get install -y -qq git
-          sudo rm -rf /tmp/Daralla
-          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /tmp/Daralla
-          cd /tmp/Daralla
+          
+          # Clone directly to working directory
+          sudo rm -rf /root/Daralla
+          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git /root/Daralla
+          cd /root/Daralla
           sudo git checkout main
           sudo git pull origin main
           echo "Current commit: $(sudo git log --oneline -1)"
-          
-          # Return to working directory
-          cd /root/Daralla
-          
-          # Copy files
-          echo "Copying files..."
-          sudo cp -r /tmp/Daralla/* .
-          sudo rm -rf /tmp/Daralla
           
           # Restore data
           echo "Restoring data..."
@@ -227,6 +221,11 @@ jobs:
           
           # Return to project directory
           cd /root/Daralla
+          
+          # Verify code update
+          echo "Verifying code update..."
+          echo "Current commit: $(sudo git log --oneline -1)"
+          echo "Bot.py last modified: $(sudo stat -c %y bot/bot.py)"
           
           # Start bot
           echo "Starting bot..."
