@@ -284,18 +284,51 @@ async def init_referral_db():
             )
         ''')
         
+        # Создаем индексы для производительности
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_referrals_referred_id 
+            ON referrals(referred_id)
+        ''')
+        
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id 
+            ON referrals(referrer_id)
+        ''')
+        
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_referrals_reward_given 
+            ON referrals(reward_given)
+        ''')
+        
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_points_transactions_user_id 
+            ON points_transactions(user_id)
+        ''')
+        
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_points_transactions_created_at 
+            ON points_transactions(created_at)
+        ''')
+        
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_points_transactions_user_created 
+            ON points_transactions(user_id, created_at)
+        ''')
+        
         await db.commit()
         
         # Инициализируем дефолтные настройки
         await init_default_config()
 
-async def prune_points_history(user_id: str, keep: int = 5):
+async def prune_points_history(user_id: str, keep: int = 5, db_connection=None):
     """Удаляет старые транзакции баллов, оставляя только последние `keep` записей для пользователя."""
     try:
         if not user_id or not isinstance(keep, int) or keep <= 0:
             return
-        async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
-            await db.execute('''
+        
+        if db_connection:
+            # Используем переданное подключение (внутри транзакции)
+            await db_connection.execute('''
                 DELETE FROM points_transactions
                 WHERE user_id = ?
                   AND id NOT IN (
@@ -305,7 +338,20 @@ async def prune_points_history(user_id: str, keep: int = 5):
                     LIMIT ?
                   )
             ''', (user_id, user_id, keep))
-            await db.commit()
+        else:
+            # Используем отдельное подключение (для обратной совместимости)
+            async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
+                await db.execute('''
+                    DELETE FROM points_transactions
+                    WHERE user_id = ?
+                      AND id NOT IN (
+                        SELECT id FROM points_transactions
+                        WHERE user_id = ?
+                        ORDER BY created_at DESC, id DESC
+                        LIMIT ?
+                      )
+                ''', (user_id, user_id, keep))
+                await db.commit()
     except Exception as e:
         logger.error(f"PRUNE_POINTS_HISTORY: error for user_id={user_id}, keep={keep}: {e}")
 
@@ -391,16 +437,10 @@ async def save_referral_connection(referrer_id: str, referred_id: str, server_ma
             ''', (referred_id,)) as cursor:
                 existing_referrals = (await cursor.fetchone())[0]
             
-            # Проверяем, был ли этот пользователь уже реферером
-            async with db.execute('''
-                SELECT COUNT(*) FROM referrals WHERE referrer_id = ?
-            ''', (referred_id,)) as cursor:
-                existing_referrers = (await cursor.fetchone())[0]
+            logger.info(f"SAVE_REFERRAL_CONNECTION: existing_referrals={existing_referrals}")
             
-            logger.info(f"SAVE_REFERRAL_CONNECTION: existing_referrals={existing_referrals}, existing_referrers={existing_referrers}")
-            
-            # Если пользователь еще не участвовал в реферальной системе, создаем связь
-            if existing_referrals == 0 and existing_referrers == 0:
+            # Если пользователь еще не был чьим-то рефералом, создаем связь
+            if existing_referrals == 0:
                 await db.execute('''
                     INSERT INTO referrals (referrer_id, referred_id, created_at)
                     VALUES (?, ?, ?)
@@ -409,8 +449,8 @@ async def save_referral_connection(referrer_id: str, referred_id: str, server_ma
                 logger.info(f"SAVE_REFERRAL_CONNECTION: connection created successfully")
                 return True
             else:
-                # Пользователь уже участвовал в реферальной системе
-                logger.info(f"SAVE_REFERRAL_CONNECTION: user already participated in referral system")
+                # Пользователь уже был чьим-то рефералом
+                logger.info(f"SAVE_REFERRAL_CONNECTION: user already was someone's referral")
                 return False
                 
     except Exception as e:
@@ -487,9 +527,9 @@ async def add_points(user_id: str, points: int, description: str, source_id: str
                 VALUES (?, ?, 'earned', ?, ?, ?)
             ''', (user_id, points, description, source_id, int(datetime.datetime.now().timestamp())))
             
-            await db.commit()
             # Оставляем только последние 5 транзакций пользователя
-            await prune_points_history(user_id, keep=5)
+            await prune_points_history(user_id, keep=5, db_connection=db)
+            await db.commit()
             logger.info(f"ADD_POINTS: Added {points} points to user {user_id}")
             return True
             
@@ -539,9 +579,9 @@ async def spend_points(user_id: str, points: int, description: str, source_id: s
                 VALUES (?, ?, 'spent', ?, ?, ?)
             ''', (user_id, points, description, source_id, int(datetime.datetime.now().timestamp())))
             
-            await db.commit()
             # Оставляем только последние 5 транзакций пользователя
-            await prune_points_history(user_id, keep=5)
+            await prune_points_history(user_id, keep=5, db_connection=db)
+            await db.commit()
             logger.info(f"SPEND_POINTS: Spent {points} points from user {user_id}")
             return True
             
@@ -692,10 +732,10 @@ async def atomic_referral_reward(referrer_id: str, referred_id: str, payment_id:
                     WHERE referrer_id = ? AND referred_id = ?
                 ''', (payment_id, referrer_id, referred_id))
                 
+                # Оставляем только последние 5 транзакций для реферера
+                await prune_points_history(referrer_id, keep=5, db_connection=db)
                 # Подтверждаем транзакцию
                 await db.commit()
-                # Оставляем только последние 5 транзакций для реферера
-                await prune_points_history(referrer_id, keep=5)
                 logger.info(f"ATOMIC_REFERRAL_REWARD: Successfully awarded reward to {referrer_id} for {referred_id}")
                 return True
                 
@@ -736,10 +776,10 @@ async def atomic_refund_points(user_id: str, points: int, description: str) -> b
                     VALUES (?, ?, 'refund', ?, ?, ?)
                 ''', (user_id, points, description, None, int(datetime.datetime.now().timestamp())))
                 
+                # Оставляем только последние 5 транзакций пользователя
+                await prune_points_history(user_id, keep=5, db_connection=db)
                 # Подтверждаем транзакцию
                 await db.commit()
-                # Оставляем только последние 5 транзакций пользователя
-                await prune_points_history(user_id, keep=5)
                 logger.info(f"ATOMIC_REFUND_POINTS: Successfully refunded {points} points to user {user_id}")
                 return True
                 

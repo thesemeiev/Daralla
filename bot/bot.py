@@ -4339,24 +4339,16 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
         email = client['email']
         server_name = client.get('server_name', 'Неизвестно')
         
-        # Продлеваем ключ СНАЧАЛА
+        # СНАЧАЛА проверяем и списываем баллы
         points_days = int(await get_config('points_days_per_point', '14'))
+        success = await spend_points(user_id, 1, f"Продление ключа {email} за баллы", bot=context.bot)
+        if not success:
+            await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Недостаточно баллов для продления!", menu_type='extend_key')
+            return
+        
+        # Баллы списаны успешно - ТЕПЕРЬ продлеваем ключ
         response = xui.extendClient(email, points_days)
         if response and response.status_code == 200:
-            # Ключ продлен успешно - ТЕПЕРЬ списываем баллы
-            success = await spend_points(user_id, 1, f"Продление ключа {email} за баллы", bot=context.bot)
-            if not success:
-                # Если не удалось списать баллы, откатываем продление
-                try:
-                    # Откатываем продление (уменьшаем на те же дни)
-                    xui.extendClient(email, -points_days)
-                    logger.warning(f"Rolled back extension for key {email} due to points spending failure")
-                except Exception as e:
-                    logger.error(f"Failed to rollback extension for key {email} after points failure: {e}")
-                    # Уведомляем админа о критической ошибке
-                    await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось откатить продление ключа после неудачного списания баллов:\nКлюч: {email}\nПользователь: {user_id}\nОшибка: {str(e)}")
-                await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при списании баллов!", menu_type='extend_key')
-                return
             # Очищаем старые уведомления об истечении для продленного ключа
             if notification_manager:
                 await notification_manager.clear_key_notifications(user_id, email)
@@ -4387,13 +4379,18 @@ async def extend_selected_key_with_points(update: Update, context: ContextTypes.
             
             await safe_edit_or_reply_universal(update.callback_query.message, message, reply_markup=keyboard, parse_mode="HTML", menu_type='extend_key')
         else:
-            # Ключ не продлен - баллы не списывались, просто сообщаем об ошибке
-            await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа.", menu_type='extend_key')
+            # Ключ не продлен - возвращаем баллы
+            await atomic_refund_points(user_id, 1, f"Возврат балла за неудачное продление ключа {email}")
+            await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении ключа. Балл возвращен.", menu_type='extend_key')
             
     except Exception as e:
         logger.error(f"Ошибка продления выбранного ключа за баллы: {e}")
-        # Баллы не списывались, просто сообщаем об ошибке
-        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении.", menu_type='extend_key')
+        # Возвращаем баллы при любой ошибке
+        try:
+            await atomic_refund_points(user_id, 1, f"Возврат балла за ошибку продления ключа {email}")
+        except Exception as refund_error:
+            logger.error(f"Ошибка при возврате баллов: {refund_error}")
+        await safe_edit_or_reply_universal(update.callback_query.message, f"{UIEmojis.ERROR} Ошибка при продлении. Балл возвращен.", menu_type='extend_key')
 
 async def extend_points_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора ключа для продления за баллы"""

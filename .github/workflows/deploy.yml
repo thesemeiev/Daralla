@@ -88,7 +88,7 @@ jobs:
           sudo mkdir -p /root/backups/data /root/backups/env
           timestamp=$(date +'%Y%m%d_%H%M%S')
 
-          # Database backup
+          # Database backup - ПЕРЕД удалением папки!
           echo "Creating database backup..."
           if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
             echo "Found databases for backup:"
@@ -102,7 +102,7 @@ jobs:
             echo "No databases found to backup"
           fi
 
-          # .env backup
+          # .env backup - ПЕРЕД удалением папки!
           if [ -f ".env" ]; then
             echo "Creating .env backup..."
             sudo cp .env "/root/backups/env/env_${timestamp}"
@@ -113,12 +113,6 @@ jobs:
           # Download code directly to working directory
           echo "Downloading code..."
           sudo apt-get update -qq && sudo apt-get install -y -qq git sqlite3
-          
-          # Backup .env before removing directory
-          if [ -f "/root/Daralla/.env" ]; then
-            echo "Backing up .env before directory removal..."
-            sudo cp /root/Daralla/.env /tmp/.env.backup
-          fi
           
           # Clone directly to working directory
           sudo rm -rf /root/Daralla
@@ -131,12 +125,6 @@ jobs:
           cd /root/Daralla
           echo "In Daralla directory: $(pwd)"
           
-          # Restore .env if it was backed up
-          if [ -f "/tmp/.env.backup" ]; then
-            echo "Restoring .env from backup..."
-            sudo cp /tmp/.env.backup /root/Daralla/.env
-            sudo rm /tmp/.env.backup
-          fi
           sudo git checkout main
           sudo git pull origin main
           echo "Current commit: $(sudo git log --oneline -1)"
@@ -151,6 +139,14 @@ jobs:
             sudo mkdir -p data
             sudo tar -xzf "$latest_db_backup" -C .
             echo "Databases restored from $latest_db_backup"
+            
+            # Verify restoration
+            echo "Verifying database restoration..."
+            if [ -f "data/referral_system.db" ]; then
+              echo "Checking referral_system.db content..."
+              sudo sqlite3 data/referral_system.db "SELECT COUNT(*) as total_referrals FROM referrals;" || echo "Cannot read referral_system.db"
+              sudo sqlite3 data/referral_system.db "SELECT COUNT(*) as user_points FROM user_points;" || echo "Cannot read user_points table"
+            fi
           else
             echo "Database backups not found - creating empty databases"
             sudo mkdir -p data
@@ -278,6 +274,14 @@ jobs:
           echo "Checking status..."
           sleep 5
           sudo docker-compose ps
+          
+          # Final verification of data
+          echo "Final data verification..."
+          if [ -f "data/referral_system.db" ]; then
+            echo "Final referral_system.db check:"
+            sudo sqlite3 data/referral_system.db "SELECT COUNT(*) as total_referrals FROM referrals;" || echo "Cannot read referrals table"
+            sudo sqlite3 data/referral_system.db "SELECT COUNT(*) as user_points FROM user_points;" || echo "Cannot read user_points table"
+          fi
           
           echo "Deployment completed!"
           echo "Webhook URL: $WEBHOOK_URL"
