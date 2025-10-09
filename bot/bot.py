@@ -498,22 +498,13 @@ logs_dir = os.path.join(DATA_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 app_log_path = os.path.join(logs_dir, 'bot.log')
 
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-
-file_handler = RotatingFileHandler(
-    app_log_path,
-    maxBytes=1_048_576,
-    backupCount=3,
-    encoding='utf-8',
-    delay=True
-)
-file_handler.setLevel(logging.WARNING)
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[console_handler, file_handler]
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(app_log_path, maxBytes=1_048_576, backupCount=3, encoding='utf-8')
+    ]
 )
 logger = logging.getLogger(__name__)
 
