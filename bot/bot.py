@@ -2100,17 +2100,17 @@ def create_webhook_app(bot_app):
                 logger.error("Отсутствуют обязательные поля в webhook")
                 return jsonify({'status': 'error'}), 400
             
-            logger.info(f"🔔 WEBHOOK: Обработка webhook: payment_id={payment_id}, status={status}")
+            logger.info(f" WEBHOOK: Обработка webhook: payment_id={payment_id}, status={status}")
             
             # Логируем все возможные статусы
             if status == 'succeeded':
-                logger.info(f"🔔 WEBHOOK: ✅ Платеж успешен - активируем ключ")
+                logger.info(f" WEBHOOK:  Платеж успешен - активируем ключ")
             elif status == 'canceled':
-                logger.info(f"🔔 WEBHOOK: ❌ Платеж отменен - показываем ошибку")
+                logger.info(f" WEBHOOK:  Платеж отменен - показываем ошибку")
             elif status == 'refunded':
-                logger.info(f"🔔 WEBHOOK: 💰 Платеж возвращен - показываем ошибку")
+                logger.info(f" WEBHOOK:  Платеж возвращен - показываем ошибку")
             else:
-                logger.info(f"🔔 WEBHOOK: ⚠️ Неизвестный статус: {status}")
+                logger.info(f" WEBHOOK:  Неизвестный статус: {status}")
             
             # Очистка данных теперь выполняется отдельной задачей cleanup_old_payments_task()
             
@@ -2812,7 +2812,6 @@ async def auto_cleanup_expired_keys():
         return 0
 
 
-# Старые функции уведомлений удалены - теперь используется NotificationManager
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2979,7 +2978,6 @@ async def on_startup(app):
     logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
     
     # Запускаем остальные задачи
-    # auto_activate_keys больше не нужна - webhook'и обрабатывают платежи мгновенно
     asyncio.create_task(server_health_monitor(app))
     asyncio.create_task(cleanup_old_payments_task())
 
