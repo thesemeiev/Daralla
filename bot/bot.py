@@ -3944,7 +3944,6 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             await menu_handlers.main_menu(update, context)
 
 
-# Функция buy_menu_handler удалена - дублирует функциональность из menu_handlers.py
 
 # Новый обработчик выбора периода, который переводит к выбору сервера
 async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3968,7 +3967,6 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
     menu_handlers = MenuHandlers({})
     await menu_handlers.server_selection(update, context)
 
-# Функция server_selection_menu удалена - дублирует функциональность из menu_handlers.py
 
 # Обработчик выбора сервера
 async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -5213,14 +5211,12 @@ if __name__ == '__main__':
         'edit_main_menu': edit_main_menu,
         'instruction': instruction,
         'instruction_callback': instruction_callback,
-        # 'buy_menu_handler' и 'server_selection_menu' удалены - дублируют функциональность из menu_handlers.py
         'handle_payment': handle_payment,
         'mykey': mykey,
         'points_callback': points_callback,
         'referral_callback': referral_callback,
         'extend_key_callback': extend_key_callback,
         'rename_key_callback': rename_key_callback,
-        # 'admin_menu' удален - дублирует функциональность из menu_handlers.py
         'admin_errors': admin_errors,
         'admin_notifications': admin_notifications,
         'admin_check_servers': admin_check_servers,
@@ -5268,15 +5264,6 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|mykeys_menu|instruction|keys_page_.*|admin_notifications_refresh|admin_errors_refresh|back)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
  
-    # Эти обработчики покрываются навигационной системой - убираем дублирование
-    # app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
-    # Добавляем обработчики для админ-меню
-    # Эти обработчики покрываются навигационной системой
-    # app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors$"))
-    # app.add_handler(CallbackQueryHandler(admin_errors, pattern="^admin_errors_refresh$"))
-    # app.add_handler(CallbackQueryHandler(admin_check_servers, pattern="^admin_check_servers$"))
-    # app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications$"))
-    # app.add_handler(CallbackQueryHandler(admin_notifications, pattern="^admin_notifications_refresh$"))
     
     # Рассылка
     admin_broadcast_conv = ConversationHandler(
@@ -5315,12 +5302,10 @@ if __name__ == '__main__':
 
     
     # Обработчики для реферальной системы - некоторые покрываются навигационной системой
-    # app.add_handler(CallbackQueryHandler(points_callback, pattern="^points$"))  # Покрывается навигацией
     app.add_handler(CallbackQueryHandler(spend_points_callback, pattern="^spend_points$"))
     app.add_handler(CallbackQueryHandler(buy_with_points_callback, pattern="^buy_with_points$"))
     app.add_handler(CallbackQueryHandler(extend_with_points_callback, pattern="^extend_with_points$"))
     app.add_handler(CallbackQueryHandler(extend_points_key_callback, pattern="^extend_points_key:"))
-    # app.add_handler(CallbackQueryHandler(referral_callback, pattern="^referral$"))  # Покрывается навигацией
     app.add_handler(CallbackQueryHandler(rename_key_callback, pattern="^rename_key:"))
     
     # Обработчик текстовых сообщений для переименования ключей
