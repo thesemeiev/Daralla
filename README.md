@@ -1,49 +1,53 @@
 <div align="center">
 
-# 🛡️ Daralla VPN Bot
+# Daralla VPN Bot
 
-**Профессиональный Telegram-бот для управления VPN-сервисом с реферальной системой**
+**Enterprise-grade Telegram bot for VPN service management with referral system**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![Telegram Bot API](https://img.shields.io/badge/Telegram%20Bot%20API-20.7-blue.svg)](https://core.telegram.org/bots/api)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-*Безопасный • Быстрый • Надежный*
+*Secure • Fast • Reliable*
 
 </div>
 
 ---
 
-## ✨ Особенности
+## Overview
 
-### 🔐 **Безопасность**
-- **YooKassa интеграция** - надежная российская платежная система
-- **Webhook защита** - проверка подписи всех входящих запросов
-- **Валидация данных** - строгая проверка всех входных параметров
-- **Логирование** - детальное отслеживание всех операций
+Daralla VPN Bot is a professional Telegram bot solution for managing VPN services with integrated payment processing, referral system, and multi-server support. Built with modern Python technologies and designed for enterprise deployment.
 
-### 🌍 **Мультисерверность**
-- **6 серверов** в разных странах (Финляндия, Латвия, Эстония)
-- **X-UI API** - автоматическое управление VPN ключами
-- **Автоматическая настройка** - пользователь получает готовый конфиг
-- **Мониторинг** - уведомления о скором истечении ключей
+### Key Features
 
-### 💰 **Монетизация**
-- **Реферальная система** - баллы за приглашения друзей
-- **Система баллов** - продление VPN за накопленные баллы
-- **Гибкие тарифы** - от 1 дня до 1 года
-- **Автоматические платежи** - через YooKassa
+**Security & Compliance**
+- YooKassa payment integration with webhook verification
+- Comprehensive input validation and data sanitization
+- Detailed audit logging for all operations
+- Secure database transactions with rollback support
 
-### 🚀 **Технологии**
-- **Асинхронная архитектура** - `aiosqlite`, `python-telegram-bot`
-- **Docker контейнеризация** - легкий деплой и масштабирование
-- **GitHub Actions** - автоматический деплой с бэкапом данных
-- **SQLite** - быстрая и надежная база данных
+**Multi-Server Architecture**
+- Support for 6+ VPN servers across multiple regions
+- X-UI API integration for automated key management
+- Automatic server load balancing and failover
+- Real-time server monitoring and health checks
+
+**Monetization & Business Logic**
+- Advanced referral system with point-based rewards
+- Flexible subscription tiers (1 day to 1 year)
+- Automated payment processing via YooKassa
+- Comprehensive analytics and reporting
+
+**Technical Excellence**
+- Asynchronous architecture using aiosqlite and python-telegram-bot
+- Docker containerization for easy deployment and scaling
+- GitHub Actions CI/CD with automated data backup
+- SQLite database with optimized indexes and transactions
 
 ---
 
-## 🏗️ Архитектура
+## System Architecture
 
 ```mermaid
 graph TB
@@ -65,49 +69,49 @@ graph TB
     F --> N[Status Updates]
 ```
 
-## 🧭 Схема навигации бота
+## Navigation Structure
 
 ```mermaid
 graph TD
-    A[🏠 Главное меню] --> B[📖 Инструкции]
-    A --> C[💳 Купить VPN]
-    A --> D[🔑 Мои ключи]
-    A --> E[⭐ Баллы]
-    A --> F[👥 Рефералы]
-    A --> G[⚙️ Админ панель]
+    A[Main Menu] --> B[Instructions]
+    A --> C[Buy VPN]
+    A --> D[My Keys]
+    A --> E[Points]
+    A --> F[Referrals]
+    A --> G[Admin Panel]
     
-    B --> B1[📱 Android]
-    B --> B2[🍎 iOS]
-    B --> B3[🪟 Windows]
-    B --> B4[💻 macOS]
-    B --> B5[🐧 Linux]
-    B --> B6[📺 Android TV]
-    B --> B7[❓ FAQ]
+    B --> B1[Android]
+    B --> B2[iOS]
+    B --> B3[Windows]
+    B --> B4[macOS]
+    B --> B5[Linux]
+    B --> B6[Android TV]
+    B --> B7[FAQ]
     
-    C --> C1[📅 Выбор периода]
-    C1 --> C2[🌍 Выбор сервера]
-    C2 --> C3[💳 Оплата]
-    C3 --> C4[✅ Успешная оплата]
-    C3 --> C5[❌ Ошибка оплаты]
+    C --> C1[Select Period]
+    C1 --> C2[Select Server]
+    C2 --> C3[Payment]
+    C3 --> C4[Success]
+    C3 --> C5[Error]
     
-    D --> D1[🔑 Список ключей]
-    D1 --> D2[⏰ Продлить ключ]
-    D1 --> D3[✏️ Переименовать]
-    D1 --> D4[🗑️ Удалить ключ]
+    D --> D1[Key List]
+    D1 --> D2[Extend Key]
+    D1 --> D3[Rename Key]
+    D1 --> D4[Delete Key]
     
-    E --> E1[⭐ Баланс баллов]
-    E1 --> E2[💳 Потратить баллы]
-    E2 --> E3[⏰ Продлить за баллы]
+    E --> E1[Points Balance]
+    E1 --> E2[Spend Points]
+    E2 --> E3[Extend with Points]
     
-    F --> F1[👥 Статистика рефералов]
-    F1 --> F2[🔗 Реферальная ссылка]
-    F1 --> F3[📊 История наград]
+    F --> F1[Referral Stats]
+    F1 --> F2[Referral Link]
+    F1 --> F3[Reward History]
     
-    G --> G1[🚨 Ошибки системы]
-    G --> G2[📢 Уведомления]
-    G --> G3[🖥️ Проверка серверов]
-    G --> G4[📡 Рассылка]
-    G --> G5[⚙️ Настройки дней]
+    G --> G1[System Errors]
+    G --> G2[Notifications]
+    G --> G3[Server Check]
+    G --> G4[Broadcast]
+    G --> G5[Settings]
     
     style A fill:#e1f5fe
     style B fill:#f3e5f5
@@ -118,185 +122,185 @@ graph TD
     style G fill:#fce4ec
 ```
 
-### 📋 Пользовательские сценарии
+### User Interaction Flows
 
 ```mermaid
 sequenceDiagram
-    participant U as 👤 Пользователь
-    participant B as 🤖 Daralla Bot
-    participant Y as 💳 YooKassa
-    participant X as 🖥️ X-UI API
-    participant D as 🗄️ База данных
+    participant U as User
+    participant B as Daralla Bot
+    participant Y as YooKassa
+    participant X as X-UI API
+    participant D as Database
     
-    Note over U,D: Сценарий 1: Покупка VPN
+    Note over U,D: VPN Purchase Flow
     U->>B: /start
-    B->>U: Главное меню
-    U->>B: Купить VPN
-    B->>U: Выбор периода
-    U->>B: 1 месяц
-    B->>U: Выбор сервера
-    U->>B: Автоматически
-    B->>Y: Создание платежа
-    Y->>B: Ссылка на оплату
-    B->>U: Кнопка оплаты
-    U->>Y: Оплата
-    Y->>B: Webhook успеха
-    B->>X: Создание VPN ключа
-    X->>B: Конфиг ключа
-    B->>D: Сохранение данных
-    B->>U: Готовый конфиг
+    B->>U: Main Menu
+    U->>B: Buy VPN
+    B->>U: Select Period
+    U->>B: 1 Month
+    B->>U: Select Server
+    U->>B: Auto Select
+    B->>Y: Create Payment
+    Y->>B: Payment Link
+    B->>U: Payment Button
+    U->>Y: Process Payment
+    Y->>B: Success Webhook
+    B->>X: Create VPN Key
+    X->>B: Key Configuration
+    B->>D: Save Data
+    B->>U: Ready Configuration
     
-    Note over U,D: Сценарий 2: Реферальная система
-    U->>B: Рефералы
-    B->>D: Получение статистики
-    D->>B: Данные рефералов
-    B->>U: Статистика + ссылка
-    U->>U: Отправка ссылки другу
+    Note over U,D: Referral System Flow
+    U->>B: Referrals
+    B->>D: Get Statistics
+    D->>B: Referral Data
+    B->>U: Statistics + Link
+    U->>U: Share Link
     U->>B: /start?ref=user123
-    B->>D: Проверка реферала
-    D->>B: Новый пользователь
-    B->>D: Сохранение связи
-    B->>U: Добро пожаловать!
+    B->>D: Check Referral
+    D->>B: New User
+    B->>D: Save Connection
+    B->>U: Welcome Message
     
-    Note over U,D: Сценарий 3: Продление за баллы
-    U->>B: Мои ключи
-    B->>D: Получение ключей
-    D->>B: Список ключей
-    B->>U: Список с кнопками
-    U->>B: Продлить ключ
-    B->>D: Проверка баллов
-    D->>B: Достаточно баллов
-    B->>X: Продление ключа
-    X->>B: Успех
-    B->>D: Списание баллов
-    B->>U: Ключ продлен!
+    Note over U,D: Points Extension Flow
+    U->>B: My Keys
+    B->>D: Get Keys
+    D->>B: Key List
+    B->>U: List with Actions
+    U->>B: Extend Key
+    B->>D: Check Points
+    D->>B: Sufficient Points
+    B->>X: Extend Key
+    X->>B: Success
+    B->>D: Deduct Points
+    B->>U: Key Extended
 ```
 
-### 🔄 Схема состояний навигации
+### State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> MAIN_MENU : /start
     
-    MAIN_MENU --> INSTRUCTION_MENU : Инструкции
-    MAIN_MENU --> BUY_MENU : Купить VPN
-    MAIN_MENU --> MYKEYS_MENU : Мои ключи
-    MAIN_MENU --> POINTS_MENU : Баллы
-    MAIN_MENU --> REFERRAL_MENU : Рефералы
-    MAIN_MENU --> ADMIN_MENU : Админ панель
+    MAIN_MENU --> INSTRUCTION_MENU : Instructions
+    MAIN_MENU --> BUY_MENU : Buy VPN
+    MAIN_MENU --> MYKEYS_MENU : My Keys
+    MAIN_MENU --> POINTS_MENU : Points
+    MAIN_MENU --> REFERRAL_MENU : Referrals
+    MAIN_MENU --> ADMIN_MENU : Admin Panel
     
-    INSTRUCTION_MENU --> INSTRUCTION_PLATFORM : Выбор платформы
-    INSTRUCTION_PLATFORM --> INSTRUCTION_MENU : Назад
+    INSTRUCTION_MENU --> INSTRUCTION_PLATFORM : Select Platform
+    INSTRUCTION_PLATFORM --> INSTRUCTION_MENU : Back
     
-    BUY_MENU --> SERVER_SELECTION : Выбор периода
-    SERVER_SELECTION --> PAYMENT : Выбор сервера
-    PAYMENT --> MYKEYS_MENU : Успешная оплата
-    PAYMENT --> BUY_MENU : Ошибка оплаты
+    BUY_MENU --> SERVER_SELECTION : Select Period
+    SERVER_SELECTION --> PAYMENT : Select Server
+    PAYMENT --> MYKEYS_MENU : Successful Payment
+    PAYMENT --> BUY_MENU : Payment Error
     
-    MYKEYS_MENU --> EXTEND_KEY : Продлить ключ
-    MYKEYS_MENU --> RENAME_KEY : Переименовать
-    EXTEND_KEY --> MYKEYS_MENU : Назад
-    RENAME_KEY --> MYKEYS_MENU : Назад
+    MYKEYS_MENU --> EXTEND_KEY : Extend Key
+    MYKEYS_MENU --> RENAME_KEY : Rename Key
+    EXTEND_KEY --> MYKEYS_MENU : Back
+    RENAME_KEY --> MYKEYS_MENU : Back
     
-    POINTS_MENU --> EXTEND_KEY : Потратить баллы
+    POINTS_MENU --> EXTEND_KEY : Spend Points
     
-    REFERRAL_MENU --> MAIN_MENU : Назад
+    REFERRAL_MENU --> MAIN_MENU : Back
     
-    ADMIN_MENU --> ADMIN_ERRORS : Ошибки
-    ADMIN_MENU --> ADMIN_NOTIFICATIONS : Уведомления
-    ADMIN_MENU --> ADMIN_CHECK_SERVERS : Серверы
-    ADMIN_MENU --> ADMIN_BROADCAST : Рассылка
-    ADMIN_MENU --> ADMIN_SET_DAYS : Настройки
+    ADMIN_MENU --> ADMIN_ERRORS : System Errors
+    ADMIN_MENU --> ADMIN_NOTIFICATIONS : Notifications
+    ADMIN_MENU --> ADMIN_CHECK_SERVERS : Server Check
+    ADMIN_MENU --> ADMIN_BROADCAST : Broadcast
+    ADMIN_MENU --> ADMIN_SET_DAYS : Settings
     
-    ADMIN_ERRORS --> ADMIN_MENU : Назад
-    ADMIN_NOTIFICATIONS --> ADMIN_MENU : Назад
-    ADMIN_CHECK_SERVERS --> ADMIN_MENU : Назад
-    ADMIN_BROADCAST --> ADMIN_MENU : Назад
-    ADMIN_SET_DAYS --> ADMIN_MENU : Назад
+    ADMIN_ERRORS --> ADMIN_MENU : Back
+    ADMIN_NOTIFICATIONS --> ADMIN_MENU : Back
+    ADMIN_CHECK_SERVERS --> ADMIN_MENU : Back
+    ADMIN_BROADCAST --> ADMIN_MENU : Back
+    ADMIN_SET_DAYS --> ADMIN_MENU : Back
     
     note right of MAIN_MENU
-        Центральная точка навигации
-        Все пути ведут сюда
+        Central navigation point
+        All paths lead here
     end note
     
     note right of PAYMENT
-        Критическая точка
-        После оплаты нельзя вернуться
-        к выбору сервера
+        Critical point
+        Cannot return to server
+        selection after payment
     end note
 ```
 
-### 📊 Таблица состояний навигации
+### Navigation States
 
-| Состояние | Описание | Доступные действия | Ограничения |
-|-----------|----------|-------------------|-------------|
-| **🏠 MAIN_MENU** | Главное меню | Все основные функции | Точка входа для всех пользователей |
-| **📖 INSTRUCTION_MENU** | Меню инструкций | Выбор платформы | Только просмотр |
-| **📱 INSTRUCTION_PLATFORM** | Инструкция по платформе | Назад к инструкциям | Статичный контент |
-| **💳 BUY_MENU** | Покупка VPN | Выбор периода | Требует настройки серверов |
-| **🌍 SERVER_SELECTION** | Выбор сервера | Выбор сервера, оплата | Нельзя вернуться после оплаты |
-| **💳 PAYMENT** | Процесс оплаты | Ожидание оплаты | Критическая точка |
-| **🔑 MYKEYS_MENU** | Мои ключи | Управление ключами | Требует активных ключей |
-| **⏰ EXTEND_KEY** | Продление ключа | Продление за деньги/баллы | Требует выбора ключа |
-| **✏️ RENAME_KEY** | Переименование ключа | Изменение имени | Требует выбора ключа |
-| **⭐ POINTS_MENU** | Баллы | Просмотр баланса, трата | Требует накопленных баллов |
-| **👥 REFERRAL_MENU** | Рефералы | Статистика, ссылка | Доступно всем пользователям |
-| **⚙️ ADMIN_MENU** | Админ панель | Управление системой | Только для администраторов |
-| **🚨 ADMIN_ERRORS** | Ошибки системы | Просмотр логов | Только для администраторов |
-| **📢 ADMIN_NOTIFICATIONS** | Уведомления | Управление уведомлениями | Только для администраторов |
-| **🖥️ ADMIN_CHECK_SERVERS** | Проверка серверов | Мониторинг серверов | Только для администраторов |
-| **📡 ADMIN_BROADCAST** | Рассылка | Массовые уведомления | Только для администраторов |
-| **⚙️ ADMIN_SET_DAYS** | Настройки дней | Конфигурация системы | Только для администраторов |
+| State | Description | Available Actions | Restrictions |
+|-------|-------------|-------------------|--------------|
+| **MAIN_MENU** | Main menu | All core functions | Entry point for all users |
+| **INSTRUCTION_MENU** | Instructions menu | Platform selection | Read-only |
+| **INSTRUCTION_PLATFORM** | Platform instruction | Back to instructions | Static content |
+| **BUY_MENU** | VPN purchase | Period selection | Requires server configuration |
+| **SERVER_SELECTION** | Server selection | Server choice, payment | Cannot return after payment |
+| **PAYMENT** | Payment process | Payment waiting | Critical point |
+| **MYKEYS_MENU** | My keys | Key management | Requires active keys |
+| **EXTEND_KEY** | Key extension | Extend with money/points | Requires key selection |
+| **RENAME_KEY** | Key renaming | Name change | Requires key selection |
+| **POINTS_MENU** | Points | Balance view, spending | Requires accumulated points |
+| **REFERRAL_MENU** | Referrals | Statistics, link | Available to all users |
+| **ADMIN_MENU** | Admin panel | System management | Administrators only |
+| **ADMIN_ERRORS** | System errors | Log viewing | Administrators only |
+| **ADMIN_NOTIFICATIONS** | Notifications | Notification management | Administrators only |
+| **ADMIN_CHECK_SERVERS** | Server check | Server monitoring | Administrators only |
+| **ADMIN_BROADCAST** | Broadcast | Mass notifications | Administrators only |
+| **ADMIN_SET_DAYS** | Settings | System configuration | Administrators only |
 
 ---
 
-## 🚀 Быстрый старт
+## Quick Start
 
-### Предварительные требования
+### Prerequisites
 
-- **ОС**: Ubuntu 20.04+ / Debian 11+
-- **RAM**: Минимум 1GB
+- **OS**: Ubuntu 20.04+ / Debian 11+
+- **RAM**: Minimum 1GB
 - **Docker**: 20.10+
 - **Docker Compose**: 2.0+
 - **Git**: 2.25+
 
-### 1️⃣ Установка Docker
+### 1. Docker Installation
 
 ```bash
-# Обновляем систему
+# Update system
 sudo apt update && sudo apt upgrade -y
 
-# Устанавливаем Docker
+# Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 
-# Устанавливаем Docker Compose
+# Install Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
 
-# Перезагружаемся
+# Reboot
 sudo reboot
 ```
 
-### 2️⃣ Клонирование проекта
+### 2. Project Setup
 
 ```bash
 git clone https://github.com/thesemeiev/Daralla.git
 cd Daralla
 ```
 
-### 3️⃣ Настройка переменных окружения
+### 3. Environment Configuration
 
 ```bash
-# Копируем пример конфигурации
+# Copy configuration template
 cp env.example .env
 
-# Редактируем конфигурацию
+# Edit configuration
 nano .env
 ```
 
-**Обязательные параметры:**
+**Required parameters:**
 ```env
 # Telegram Bot
 TELEGRAM_TOKEN=your_bot_token_here
@@ -306,202 +310,203 @@ ADMIN_ID=your_telegram_id
 YOOKASSA_SHOP_ID=your_shop_id
 YOOKASSA_SECRET_KEY=your_secret_key
 
-# X-UI Servers (минимум один)
+# X-UI Servers (minimum one)
 XUI_HOST_FINLAND_1=your_server_ip
 XUI_LOGIN_FINLAND_1=your_login
 XUI_PASSWORD_FINLAND_1=your_password
 ```
 
-### 4️⃣ Запуск бота
+### 4. Bot Launch
 
 ```bash
-# Запускаем бота
+# Start bot
 docker-compose up -d
 
-# Проверяем статус
+# Check status
 docker-compose ps
 ```
 
 ---
 
-## 🔧 Управление
+## Management
 
-### Основные команды
+### Basic Commands
 
 ```bash
-# Просмотр логов
+# View logs
 docker-compose logs -f
 
-# Остановка бота
+# Stop bot
 docker-compose down
 
-# Перезапуск бота
+# Restart bot
 docker-compose restart
 
-# Обновление бота
+# Update bot
 git pull && docker-compose up -d --build
 
-# Просмотр статуса
+# Check status
 docker-compose ps
 ```
 
-### Резервное копирование
+### Backup & Recovery
 
 ```bash
-# Создание бэкапа данных
+# Create data backup
 ./backup_data.sh
 
-# Восстановление из бэкапа
+# Restore from backup
 tar -xzf backup_*.tar.gz -C ./
 ```
 
 ---
 
-## 📊 Мониторинг
+## Monitoring
 
-### Логи
+### Logs
 ```bash
-# Все логи
+# All logs
 docker-compose logs -f
 
-# Только ошибки
+# Errors only
 docker-compose logs -f | grep ERROR
 
-# Последние 100 строк
+# Last 100 lines
 docker-compose logs --tail=100
 ```
 
-### Статистика
+### Statistics
 ```bash
-# Использование ресурсов
+# Resource usage
 docker stats daralla-bot
 
-# Размер базы данных
+# Database size
 du -sh data/*.db
 ```
 
 ---
 
-## 🔐 Получение токенов
+## Token Configuration
 
 ### Telegram Bot Token
-1. Напишите [@BotFather](https://t.me/BotFather) в Telegram
-2. Отправьте `/newbot`
-3. Придумайте имя и username для бота
-4. Скопируйте полученный токен
+1. Contact [@BotFather](https://t.me/BotFather) in Telegram
+2. Send `/newbot`
+3. Create bot name and username
+4. Copy the provided token
 
 ### Telegram ID
-1. Напишите [@userinfobot](https://t.me/userinfobot) в Telegram
-2. Скопируйте ваш ID
+1. Contact [@userinfobot](https://t.me/userinfobot) in Telegram
+2. Copy your user ID
 
 ### YooKassa
-1. Зарегистрируйтесь на [yookassa.ru](https://yookassa.ru)
-2. Создайте магазин
-3. Получите Shop ID и Secret Key
+1. Register at [yookassa.ru](https://yookassa.ru)
+2. Create a store
+3. Obtain Shop ID and Secret Key
 
 ---
 
-## 🛠️ Разработка
+## Development
 
-### Структура проекта
+### Project Structure
 
 ```
 Daralla/
-├── bot/                   # Основной код бота
-│   ├── bot.py             # Главный файл бота
-│   ├── keys_db.py         # Работа с базой данных
-│   └── navigation.py      # Навигация и меню
+├── bot/                    # Core bot code
+│   ├── bot.py             # Main bot file
+│   ├── keys_db.py         # Database operations
+│   ├── navigation.py      # Navigation system
+│   └── menu_states.py     # State definitions
 ├── .github/workflows/     # GitHub Actions
-├── data/                  # Базы данных
-├── docker-compose.yml     # Docker конфигурация
-├── Dockerfile             # Docker образ
-└── requirements.txt       # Python зависимости
+├── data/                  # Database files
+├── docker-compose.yml     # Docker configuration
+├── Dockerfile            # Docker image
+└── requirements.txt      # Python dependencies
 ```
 
-### Локальная разработка
+### Local Development
 
 ```bash
-# Установка зависимостей
+# Install dependencies
 pip install -r requirements.txt
 
-# Запуск в режиме разработки
+# Run in development mode
 python -m bot.bot
 ```
 
 ---
 
-## 📈 Производительность
+## Performance
 
-### Рекомендуемые характеристики сервера
+### Recommended Server Specifications
 
-| Пользователи | CPU | RAM | Диск | Сеть |
-|-------------|-----|-----|------|------|
+| Users | CPU | RAM | Disk | Network |
+|-------|-----|-----|------|---------|
 | 100-500     | 1 vCPU | 1GB | 10GB | 100 Mbps |
 | 500-2000    | 2 vCPU | 2GB | 20GB | 1 Gbps |
 | 2000+       | 4 vCPU | 4GB | 50GB | 1 Gbps |
 
-### Оптимизация
+### Optimization Features
 
-- **Индексы БД** - автоматически создаются при запуске
-- **Очистка логов** - автоматическая ротация
-- **Кэширование** - встроенное кэширование запросов
-- **Мониторинг** - отслеживание производительности
+- **Database Indexes** - Automatically created on startup
+- **Log Rotation** - Automatic log cleanup
+- **Caching** - Built-in query caching
+- **Monitoring** - Performance tracking
 
 ---
 
-## 🔒 Безопасность
+## Security
 
-### Рекомендации
+### Recommendations
 
-1. **Регулярно обновляйте** Docker образы
-2. **Используйте сильные пароли** для X-UI серверов
-3. **Ограничьте доступ** к серверу по SSH
-4. **Настройте firewall** для защиты портов
-5. **Мониторьте логи** на предмет подозрительной активности
+1. **Regular Updates** - Keep Docker images updated
+2. **Strong Passwords** - Use secure passwords for X-UI servers
+3. **Access Control** - Restrict SSH access to server
+4. **Firewall** - Configure firewall for port protection
+5. **Log Monitoring** - Monitor logs for suspicious activity
 
-### Аудит безопасности
+### Security Audit
 
 ```bash
-# Проверка уязвимостей в Docker образе
+# Check Docker image vulnerabilities
 docker scout cves daralla-telegram-bot
 
-# Анализ логов безопасности
+# Analyze security logs
 docker-compose logs | grep -i "security\|error\|fail"
 ```
 
 ---
 
-## 🤝 Поддержка
+## Support
 
-### Документация
+### Documentation
 - [Telegram Bot API](https://core.telegram.org/bots/api)
 - [YooKassa API](https://yookassa.ru/developers/api)
 - [X-UI Documentation](https://github.com/vaxilu/x-ui)
 
-### Сообщество
+### Community
 - [GitHub Issues](https://github.com/thesemeiev/Daralla/issues)
 - [Telegram Support](https://t.me/your_support_channel)
 
 ---
 
-## 📄 Лицензия
+## License
 
-Этот проект распространяется под лицензией MIT. См. файл [LICENSE](LICENSE) для подробностей.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Благодарности
+## Acknowledgments
 
 - [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) - Telegram Bot API
-- [YooKassa](https://yookassa.ru) - Платежная система
-- [X-UI](https://github.com/vaxilu/x-ui) - Панель управления VPN
+- [YooKassa](https://yookassa.ru) - Payment system
+- [X-UI](https://github.com/vaxilu/x-ui) - VPN management panel
 
 ---
 
 <div align="center">
 
-**Сделано с ❤️ для безопасного интернета**
+**Built with precision for secure internet access**
 
-[⭐ Поставить звезду](https://github.com/thesemeiev/Daralla) • [🐛 Сообщить об ошибке](https://github.com/thesemeiev/Daralla/issues) • [💡 Предложить улучшение](https://github.com/thesemeiev/Daralla/issues)
+[⭐ Star this project](https://github.com/thesemeiev/Daralla) • [🐛 Report bug](https://github.com/thesemeiev/Daralla/issues) • [💡 Suggest improvement](https://github.com/thesemeiev/Daralla/issues)
 
 </div>
