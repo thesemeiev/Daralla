@@ -96,6 +96,7 @@ class CallbackData:
     
     # Баллы
     SPEND_POINTS = 'spend_points'
+    BUY_WITH_POINTS = 'buy_with_points'
     EXTEND_WITH_POINTS = 'extend_with_points'
     
     # Админ

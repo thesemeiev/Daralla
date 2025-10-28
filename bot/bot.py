@@ -2668,11 +2668,21 @@ async def cleanup_old_payments_task():
         await asyncio.sleep(3600)
 
 
+async def expired_keys_cleanup_task():
+    """Периодическая задача для очистки просроченных ключей"""
+    logger.info("Запуск периодической задачи очистки просроченных ключей")
+    while True:
+        try:
+            await auto_cleanup_expired_keys()
+            # Ждем 12 часов перед следующей проверкой
+            await asyncio.sleep(12 * 60 * 60)
+        except Exception as e:
+            logger.error(f"Ошибка в периодической задаче очистки ключей: {e}")
+            # В случае ошибки ждем 1 час перед повторной попыткой
+            await asyncio.sleep(60 * 60)
+
 async def auto_cleanup_expired_keys():
-    """
-    Автоматически удаляет просроченные ключи со всех серверов
-    Удаляет ключи, которые истекли более 3 дней назад
-    """
+    """Автоматически удаляет просроченные ключи со всех серверов"""
     logger.info("Запуск автоматической очистки просроченных ключей...")
     
     try:
@@ -2778,12 +2788,17 @@ async def auto_cleanup_expired_keys():
                                 if user_id:
                                     try:
                                         if notification_manager:
-                                            await notification_manager._send_deletion_notification(
-                                                user_id=user_id,
-                                                email=email,
-                                                server_name=server["name"],
-                                                days_expired=days_expired
-                                            )
+                                            # Используем асинхронный таймаут
+                                            async with asyncio.timeout(30):  # 30 секунд таймаут
+                                                await notification_manager.send_key_deletion_notification(
+                                                    user_id=user_id,
+                                                    email=email,
+                                                    server_name=server["name"],
+                                                    days_expired=days_expired
+                                                )
+                                                logger.info(f"Отправлено уведомление об удалении ключа пользователю {user_id}")
+                                    except asyncio.TimeoutError:
+                                        logger.error(f"Таймаут при отправке уведомления об удалении пользователю {user_id}")
                                     except Exception as e:
                                         logger.error(f"Ошибка отправки уведомления об удалении пользователю {user_id}: {e}")
                             else:
@@ -2799,7 +2814,7 @@ async def auto_cleanup_expired_keys():
             except Exception as e:
                 logger.error(f"Ошибка при автоочистке сервера {server['name']}: {e}")
                 # Уведомляем админа о критической ошибке автоочистки
-                await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Ошибка при автоочистке сервера:\nСервер: {server['name']}\nОшибка: {str(e)}")
+                await notify_admin(app.bot, f"КРИТИЧЕСКАЯ ОШИБКА: Ошибка при автоочистке сервера:\nСервер: {server['name']}\nОшибка: {str(e)}")
                 continue
         
         logger.info(f"Автоочистка завершена. Всего удалено просроченных ключей: {total_deleted_count}")
@@ -2808,7 +2823,7 @@ async def auto_cleanup_expired_keys():
     except Exception as e:
         logger.error(f"Критическая ошибка в auto_cleanup_expired_keys: {e}")
         # Уведомляем админа о критической ошибке автоочистки
-        await notify_admin(app.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Критическая ошибка в auto_cleanup_expired_keys:\nОшибка: {str(e)}")
+        await notify_admin(app.bot, f"КРИТИЧЕСКАЯ ОШИБКА: Критическая ошибка в auto_cleanup_expired_keys:\nОшибка: {str(e)}")
         return 0
 
 
@@ -2980,6 +2995,8 @@ async def on_startup(app):
     # Запускаем остальные задачи
     asyncio.create_task(server_health_monitor(app))
     asyncio.create_task(cleanup_old_payments_task())
+    # Запускаем задачу очистки просроченных ключей
+    asyncio.create_task(expired_keys_cleanup_task())
 
 
 # ==================== СТИЛЬ ИНТЕРФЕЙСА ====================
@@ -3265,18 +3282,32 @@ except ImportError:
 import traceback
 
 async def notify_admin(bot, text):
+    """Отправляет уведомление всем администраторам с обработкой ошибок и таймаутов"""
+    if not ADMIN_IDS:
+        logger.warning("Список администраторов пуст")
+        return
+        
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(chat_id=admin_id, text=f"❗️[VPNBot ERROR]\n{text}")
+            # Используем таймаут для каждой отправки
+            async with asyncio.timeout(10):  # 10 секунд на отправку каждому админу
+                await bot.send_message(
+                    chat_id=admin_id,
+                    text=f"❗️[VPNBot ERROR]\n{text}",
+                    disable_web_page_preview=True  # Отключаем превью ссылок для ускорения
+                )
+                logger.info(f"Успешно отправлено уведомление админу {admin_id}")
+        except asyncio.TimeoutError:
+            logger.error(f"Таймаут при отправке уведомления админу {admin_id}")
         except telegram.error.Forbidden:
             logger.warning(f"Админ {admin_id} заблокировал бота")
         except telegram.error.BadRequest as e:
             if "Chat not found" in str(e):
-                logger.warning(f"Админ {admin_id} заблокировал бота: {e}")
+                logger.warning(f"Админ {admin_id} недоступен: {e}")
             else:
-                logger.error(f'BadRequest ошибка отправки уведомления админу: {e}')
+                logger.error(f'BadRequest ошибка отправки уведомления админу {admin_id}: {e}')
         except Exception as e:
-            logger.error(f'Ошибка при отправке уведомления админу: {e}')
+            logger.error(f'Ошибка при отправке уведомления админу {admin_id}: {e}')
 
 
 async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -5300,6 +5331,7 @@ if __name__ == '__main__':
 
     
     # Обработчики для реферальной системы - некоторые покрываются навигационной системой
+    app.add_handler(CallbackQueryHandler(points_callback, pattern="^points$"))
     app.add_handler(CallbackQueryHandler(spend_points_callback, pattern="^spend_points$"))
     app.add_handler(CallbackQueryHandler(buy_with_points_callback, pattern="^buy_with_points$"))
     app.add_handler(CallbackQueryHandler(extend_with_points_callback, pattern="^extend_with_points$"))
