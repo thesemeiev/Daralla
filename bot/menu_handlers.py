@@ -247,6 +247,7 @@ class MenuHandlers:
             [InlineKeyboardButton("Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
             [InlineKeyboardButton("Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
             [InlineKeyboardButton("Изменить дни за балл", callback_data=CallbackData.ADMIN_SET_DAYS_START)],
+            [InlineKeyboardButton("Баллы: дашборд", callback_data="points_admin:range=7d;type=all;top=earned;user=")],
             [UIButtons.back_button()],
         ])
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
