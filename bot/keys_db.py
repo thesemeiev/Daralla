@@ -793,3 +793,131 @@ async def atomic_refund_points(user_id: str, points: int, description: str) -> b
         logger.error(f"ATOMIC_REFUND_POINTS: Critical error - {e}")
         return False
 
+
+# ===== ОТЧЕТЫ ПО БАЛЛАМ / АДМИН ДАШБОРД =====
+
+async def get_points_stats(start_ts: int = None, end_ts: int = None, txn_type: str = None, user_id: str = None) -> dict:
+    """Возвращает агрегированную статистику по баллам за период и с фильтрами."""
+    try:
+        conditions = []
+        params = []
+        if start_ts is not None:
+            conditions.append("created_at >= ?")
+            params.append(start_ts)
+        if end_ts is not None:
+            conditions.append("created_at <= ?")
+            params.append(end_ts)
+        if txn_type:
+            conditions.append("type = ?")
+            params.append(txn_type)
+        if user_id:
+            conditions.append("user_id = ?")
+            params.append(user_id)
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
+            # total count
+            async with db.execute(f"SELECT COUNT(*) FROM points_transactions{where}", params) as cur:
+                total_count = (await cur.fetchone())[0]
+            # earned
+            async with db.execute(f"SELECT COALESCE(SUM(amount),0) FROM points_transactions{where + (' AND ' if where else ' WHERE ')} type = 'earned'", params) as cur:
+                sum_earned = (await cur.fetchone())[0]
+            # spent
+            async with db.execute(f"SELECT COALESCE(SUM(amount),0) FROM points_transactions{where + (' AND ' if where else ' WHERE ')} type = 'spent'", params) as cur:
+                sum_spent = (await cur.fetchone())[0]
+            # refund
+            async with db.execute(f"SELECT COALESCE(SUM(amount),0) FROM points_transactions{where + (' AND ' if where else ' WHERE ')} type = 'refund'", params) as cur:
+                sum_refund = (await cur.fetchone())[0]
+
+            return {
+                'total_count': total_count,
+                'sum_earned': int(sum_earned or 0),
+                'sum_spent': int(sum_spent or 0),
+                'sum_refund': int(sum_refund or 0),
+            }
+    except Exception as e:
+        logger.error(f"GET_POINTS_STATS: error - {e}")
+        return {'total_count': 0, 'sum_earned': 0, 'sum_spent': 0, 'sum_refund': 0}
+
+
+async def get_points_top_users(limit: int = 10, start_ts: int = None, end_ts: int = None, by: str = 'earned') -> list:
+    """Возвращает топ пользователей по сумме начислений/списаний за период."""
+    try:
+        if by not in ('earned', 'spent'):
+            by = 'earned'
+        type_filter = 'earned' if by == 'earned' else 'spent'
+
+        conditions = ["type = ?"]
+        params = [type_filter]
+        if start_ts is not None:
+            conditions.append("created_at >= ?")
+            params.append(start_ts)
+        if end_ts is not None:
+            conditions.append("created_at <= ?")
+            params.append(end_ts)
+        where = " WHERE " + " AND ".join(conditions)
+
+        async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
+            async with db.execute(
+                f"""
+                SELECT user_id, COALESCE(SUM(amount),0) as total
+                FROM points_transactions
+                {where}
+                GROUP BY user_id
+                ORDER BY total DESC
+                LIMIT ?
+                """,
+                (*params, limit)
+            ) as cur:
+                rows = await cur.fetchall()
+                return [{'user_id': r[0], 'total': int(r[1] or 0)} for r in rows]
+    except Exception as e:
+        logger.error(f"GET_POINTS_TOP_USERS: error - {e}")
+        return []
+
+
+async def get_points_transactions_filtered(start_ts: int = None, end_ts: int = None, txn_type: str = None, user_id: str = None, limit: int = 1000) -> list:
+    """Возвращает транзакции по фильтрам для экспорта CSV."""
+    try:
+        conditions = []
+        params = []
+        if start_ts is not None:
+            conditions.append("created_at >= ?")
+            params.append(start_ts)
+        if end_ts is not None:
+            conditions.append("created_at <= ?")
+            params.append(end_ts)
+        if txn_type:
+            conditions.append("type = ?")
+            params.append(txn_type)
+        if user_id:
+            conditions.append("user_id = ?")
+            params.append(user_id)
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        async with aiosqlite.connect(REFERRAL_DB_PATH) as db:
+            async with db.execute(
+                f"""
+                SELECT id, user_id, amount, type, description, source_id, created_at
+                FROM points_transactions
+                {where}
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (*params, limit)
+            ) as cur:
+                rows = await cur.fetchall()
+                return [
+                    {
+                        'id': row[0],
+                        'user_id': row[1],
+                        'amount': row[2],
+                        'type': row[3],
+                        'description': row[4],
+                        'source_id': row[5],
+                        'created_at': row[6],
+                    } for row in rows
+                ]
+    except Exception as e:
+        logger.error(f"GET_POINTS_TRANSACTIONS_FILTERED: error - {e}")
+        return []

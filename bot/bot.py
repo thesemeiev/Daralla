@@ -342,6 +342,7 @@ from .keys_db import (
     get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
     init_referral_db, save_referral_connection, get_pending_referral, mark_referral_reward_given,
     add_points, spend_points, get_user_points, get_points_history, get_referral_stats,
+    get_points_stats, get_points_top_users, get_points_transactions_filtered,
     is_known_user, register_simple_user, get_all_user_ids,
     atomic_referral_reward, atomic_refund_points,
     get_config, set_config, get_all_config
@@ -3526,6 +3527,127 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type='admin_check_servers')
 
 
+def _parse_points_filters_from_callback(data: str) -> dict:
+    # data format: points_admin:range=7d;type=all;top=earned;user=
+    try:
+        _, payload = data.split(':', 1)
+        parts = payload.split(';')
+        filt = {'range': '7d', 'type': 'all', 'top': 'earned', 'user': ''}
+        for p in parts:
+            if '=' in p:
+                k, v = p.split('=', 1)
+                if k in filt:
+                    filt[k] = v
+        return filt
+    except Exception:
+        return {'range': '7d', 'type': 'all', 'top': 'earned', 'user': ''}
+
+
+def _range_to_ts(range_key: str) -> tuple[int|None, int|None]:
+    now = int(datetime.datetime.now().timestamp())
+    if range_key == '7d':
+        return now - 7*24*3600, now
+    if range_key == '30d':
+        return now - 30*24*3600, now
+    if range_key == '24h':
+        return now - 24*3600, now
+    if range_key == 'all':
+        return None, None
+    return now - 7*24*3600, now
+
+
+async def admin_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Дашборд баллов: фильтры, топы, экспорт CSV"""
+    if not await check_private_chat(update):
+        return
+    if update.callback_query:
+        await update.callback_query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply(message_obj, 'Нет доступа.')
+        return
+
+    # Defaults
+    filt = {'range': '7d', 'type': 'all', 'top': 'earned', 'user': ''}
+    if update.callback_query and update.callback_query.data.startswith('points_admin:'):
+        filt = _parse_points_filters_from_callback(update.callback_query.data)
+
+    start_ts, end_ts = _range_to_ts(filt['range'])
+    txn_type = None if filt['type'] == 'all' else filt['type']
+    user_filter = filt['user'] if filt['user'] else None
+
+    stats = await get_points_stats(start_ts, end_ts, txn_type, user_filter)
+    top = await get_points_top_users(10, start_ts, end_ts, 'earned' if filt['top'] == 'earned' else 'spent')
+
+    # Build message
+    title = "📊 Дашборд баллов"
+    period_map = {'7d': '7 дней', '30d': '30 дней', '24h': '24 часа', 'all': 'всё время'}
+    msg = [f"{title}\n\n", f"Период: {period_map.get(filt['range'], '7 дней')}\n", f"Тип: {filt['type']}\n"]
+    if user_filter:
+        msg.append(f"Пользователь: {user_filter}\n")
+    msg += [
+        "\nИтоги:\n",
+        f"• Начислено: {stats['sum_earned']}\n",
+        f"• Списано: {stats['sum_spent']}\n",
+        f"• Рефанды: {stats['sum_refund']}\n",
+        f"• Транзакций: {stats['total_count']}\n",
+        "\nТоп по " + ("начислениям" if filt['top']=='earned' else "списаниям") + ":\n"
+    ]
+    for i, row in enumerate(top, 1):
+        msg.append(f"{i}. {row['user_id']}: {row['total']}")
+        msg.append("\n")
+    text = "".join(msg)
+
+    # Keyboard with filters and export
+    kb = [
+        [
+            InlineKeyboardButton("24ч", callback_data=f"points_admin:range=24h;type={filt['type']};top={filt['top']};user={filt['user']}"),
+            InlineKeyboardButton("7д", callback_data=f"points_admin:range=7d;type={filt['type']};top={filt['top']};user={filt['user']}"),
+            InlineKeyboardButton("30д", callback_data=f"points_admin:range=30d;type={filt['type']};top={filt['top']};user={filt['user']}")
+        ],
+        [
+            InlineKeyboardButton("Все", callback_data=f"points_admin:range={filt['range']};type=all;top={filt['top']};user={filt['user']}"),
+            InlineKeyboardButton("Earned", callback_data=f"points_admin:range={filt['range']};type=earned;top={filt['top']};user={filt['user']}"),
+            InlineKeyboardButton("Spent", callback_data=f"points_admin:range={filt['range']};type=spent;top={filt['top']};user={filt['user']}"),
+            InlineKeyboardButton("Refund", callback_data=f"points_admin:range={filt['range']};type=refund;top={filt['top']};user={filt['user']}")
+        ],
+        [
+            InlineKeyboardButton("Топ Earned", callback_data=f"points_admin:range={filt['range']};type={filt['type']};top=earned;user={filt['user']}"),
+            InlineKeyboardButton("Топ Spent", callback_data=f"points_admin:range={filt['range']};type={filt['type']};top=spent;user={filt['user']}")
+        ],
+        [
+            InlineKeyboardButton("Экспорт CSV", callback_data=f"points_export:range={filt['range']};type={filt['type']};user={filt['user']}")
+        ],
+        [UIButtons.back_button()]
+    ]
+    keyboard = InlineKeyboardMarkup(kb)
+    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    await safe_edit_or_reply_universal(message_obj, text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_points')
+
+
+async def admin_points_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    filt = _parse_points_filters_from_callback(query.data.replace('points_export:', 'points_admin:'))
+    start_ts, end_ts = _range_to_ts(filt['range'])
+    txn_type = None if filt['type'] == 'all' else filt['type']
+    user_filter = filt['user'] if filt['user'] else None
+
+    rows = await get_points_transactions_filtered(start_ts, end_ts, txn_type, user_filter, limit=50000)
+    import csv
+    from io import StringIO, BytesIO
+    sio = StringIO()
+    writer = csv.writer(sio)
+    writer.writerow(['id', 'user_id', 'amount', 'type', 'description', 'source_id', 'created_at'])
+    for r in rows:
+        writer.writerow([r['id'], r['user_id'], r['amount'], r['type'], r['description'] or '', r['source_id'] or '', r['created_at']])
+    data = sio.getvalue().encode('utf-8')
+    bio = BytesIO(data)
+    bio.name = 'points_report.csv'
+    await context.bot.send_document(chat_id=update.effective_user.id, document=bio, caption="Отчёт по баллам")
+
 # Callback для продления ключей
 async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -5301,12 +5423,15 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_errors', admin_errors))
     app.add_handler(CommandHandler('admin_check_servers', admin_check_servers))
     app.add_handler(CommandHandler('admin_notifications', admin_notifications))
+    app.add_handler(CommandHandler('admin_points', admin_points))
     app.add_handler(CommandHandler('admin_config', admin_config))
     app.add_handler(CommandHandler('admin_set_days', admin_set_days))
 
     # Этот обработчик покрывается навигационной системой - убираем дублирование
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|select_period_.*|select_server_.*|mykey|mykeys_menu|instruction|keys_page_.*|admin_notifications_refresh|admin_errors_refresh|back)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
+    app.add_handler(CallbackQueryHandler(admin_points, pattern="^points_admin:.*$"))
+    app.add_handler(CallbackQueryHandler(admin_points_export, pattern="^points_export:.*$"))
  
     
     # Рассылка
