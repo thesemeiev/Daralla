@@ -2007,7 +2007,10 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Создаем короткий идентификатор для ключа
                 import hashlib
                 short_id = hashlib.md5(f"{user_id}:{current_client['email']}".encode()).hexdigest()[:8]
-                extension_keys_cache[short_id] = current_client['email']
+                extension_keys_cache[short_id] = {
+                    'email': current_client['email'],
+                    'created_at': datetime.datetime.now().timestamp()
+                }
                 keyboard_buttons.append([InlineKeyboardButton("Продлить ключ", callback_data=f"ext_key:{short_id}")])
             
             # Кнопка для переименования ключа
@@ -2648,7 +2651,11 @@ async def cleanup_old_payments_task():
             # Очищаем кэш extension_keys_cache от старых записей
             current_time = datetime.datetime.now().timestamp()
             keys_to_remove = []
-            for short_id, key_info in extension_keys_cache.items():
+            for short_id, key_info in list(extension_keys_cache.items()):
+                # Приводим к единому формату: если значение не словарь, удаляем как устаревшее
+                if not isinstance(key_info, dict):
+                    keys_to_remove.append(short_id)
+                    continue
                 # Если запись старше 1 часа, удаляем её
                 if current_time - key_info.get('created_at', 0) > 3600:
                     keys_to_remove.append(short_id)
@@ -3534,7 +3541,8 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     short_id = parts[1]
     
     # Получаем email ключа из кэша
-    key_email = extension_keys_cache.get(short_id)
+    cached_value = extension_keys_cache.get(short_id)
+    key_email = cached_value['email'] if isinstance(cached_value, dict) else cached_value
     if not key_email:
         # Пытаемся найти ключ по short_id, созданному из уведомления
         # Проверяем все возможные форматы short_id
@@ -3569,7 +3577,10 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if short_id in possible_short_ids:
                     key_email = email
                     # Добавляем в кэш для будущих использований
-                    extension_keys_cache[short_id] = email
+                    extension_keys_cache[short_id] = {
+                        'email': email,
+                        'created_at': datetime.datetime.now().timestamp()
+                    }
                     logger.info(f"Найден ключ по short_id: {short_id} -> {email}")
                     break
             
@@ -3608,7 +3619,10 @@ async def extend_key_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Создаем короткий идентификатор для ключа
     import hashlib
     short_id = hashlib.md5(f"{user_id}:{key_email}".encode()).hexdigest()[:8]
-    extension_keys_cache[short_id] = key_email
+    extension_keys_cache[short_id] = {
+        'email': key_email,
+        'created_at': datetime.datetime.now().timestamp()
+    }
     logger.info(f"Создан короткий ID для продления: {short_id} -> {key_email}")
     
     # Показываем меню выбора периода продления
@@ -3643,7 +3657,8 @@ async def extend_period_callback(update: Update, context: ContextTypes.DEFAULT_T
     short_id = parts[2]
     
     # Получаем email ключа из кэша
-    key_email = extension_keys_cache.get(short_id)
+    cached_value = extension_keys_cache.get(short_id)
+    key_email = cached_value['email'] if isinstance(cached_value, dict) else cached_value
     if not key_email:
         await query.answer("Ошибка: ключ не найден в кэше")
         logger.error(f"Не найден key_email для short_id: {short_id}")

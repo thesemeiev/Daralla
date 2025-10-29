@@ -414,6 +414,10 @@ class NotificationManager:
         except Exception as e:
             logger.error(f"Ошибка очистки уведомлений: {e}")
     
+    async def send_key_deletion_notification(self, user_id: str, email: str, server_name: str, days_expired: int) -> bool:
+        """Публичный метод для отправки уведомления об удаленном ключе (обертка)."""
+        return await self._send_deletion_notification(user_id, email, server_name, days_expired)
+    
     async def clear_key_notifications(self, user_id: str, email: str) -> bool:
         """Очищает все уведомления для конкретного ключа (при продлении)"""
         try:
