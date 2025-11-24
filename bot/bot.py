@@ -967,18 +967,62 @@ class X3:
             sid = short_ids[0] if short_ids else ''
             network = stream.get('network', 'tcp')
             security = stream.get('security', 'reality')
+            
+            # Получаем дополнительные параметры из tcpSettings (для XHTTP)
+            tcp_settings = stream.get('tcpSettings', {})
+            tcp_header = tcp_settings.get('header', {})
+            tcp_request = tcp_header.get('request', {})
+            tcp_headers = tcp_request.get('headers', {})
+            
+            # Инициализируем переменные
+            path = None
+            xhttp_host = None
+            
+            # Получаем path из tcpSettings
+            if tcp_header.get('type') == 'http':
+                # path может быть в tcp_request
+                if 'path' in tcp_request:
+                    path_value = tcp_request['path']
+                    if isinstance(path_value, list) and path_value:
+                        path = quote(path_value[0])
+                    elif isinstance(path_value, str):
+                        path = quote(path_value)
+                
+                # Получаем host из headers
+                if tcp_headers and 'Host' in tcp_headers:
+                    host_value = tcp_headers['Host']
+                    if isinstance(host_value, list) and host_value:
+                        xhttp_host = host_value[0]
+                    elif isinstance(host_value, str):
+                        xhttp_host = host_value
+            
+            # Логируем полученные параметры для отладки
+            logger.info(f"XHTTP параметры для {user_id}: network={network}, path={path}, host={xhttp_host}")
 
-            # Строго в правильном порядке
+            # Строго в правильном порядке, включая новые параметры
             params = [
                 ("type", network),
+            ]
+            
+            # Добавляем параметры XHTTP если это XHTTP
+            if network == "xhttp":
+                params.append(("encryption", "none"))
+                if path:
+                    params.append(("path", path))
+                if xhttp_host:
+                    params.append(("host", xhttp_host))
+                params.append(("mode", "auto"))
+            
+            # Добавляем остальные параметры
+            params.extend([
                 ("security", security),
-                ("flow", "xtls-rprx-vision"),
                 ("pbk", pbk),
                 ("fp", fingerprint),
                 ("sni", sni),
                 ("sid", sid),
-                ("spx", quote(spx)),
-            ]
+                ("spx", quote(spx) if spx and spx != "/" else quote("/")),
+            ])
+            
             query = "&".join(f"{k}={v}" for k, v in params)
             tag = f"Daralla-{user_id}"
 
