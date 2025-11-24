@@ -956,48 +956,40 @@ class X3:
             host = host_part.split(':')[0] if ':' in host_part else host_part
             port = inbounds.get('port', 443)
             reality = stream.get('realitySettings', {})
-            reality_settings = reality.get('settings', {})
-            pbk = reality_settings.get('publicKey', '')
-            fingerprint = reality_settings.get('fingerprint', 'chrome')
-            spx = reality_settings.get('spiderX', '/')
-            dest = reality.get('dest', '')
-            sni = dest.split(':')[0] if dest else 'google.com'
-            logger.info(f"Reality настройки для {self.host}: dest='{dest}', sni='{sni}'")
+            
+            # В новой версии x-ui структура realitySettings изменилась
+            # Раньше: realitySettings.settings.publicKey
+            # Теперь: realitySettings.publicKey (или settings.publicKey в старых версиях)
+            if 'settings' in reality and isinstance(reality['settings'], dict):
+                reality_settings = reality.get('settings', {})
+                pbk = reality_settings.get('publicKey', '')
+            else:
+                # Новая структура - параметры напрямую в realitySettings
+                pbk = reality.get('publicKey', '')
+            
+            fingerprint = reality.get('fingerprint', 'chrome')
+            spx = reality.get('spiderX', '/')
+            target = reality.get('target', '')
+            sni = target.split(':')[0] if target else 'google.com'
+            logger.info(f"Reality настройки для {self.host}: target='{target}', sni='{sni}', pbk='{pbk[:20]}...'")
             short_ids = reality.get('shortIds', [''])
             sid = short_ids[0] if short_ids else ''
             network = stream.get('network', 'tcp')
             security = stream.get('security', 'reality')
             
-            # Получаем дополнительные параметры из tcpSettings (для XHTTP)
-            tcp_settings = stream.get('tcpSettings', {})
-            tcp_header = tcp_settings.get('header', {})
-            tcp_request = tcp_header.get('request', {})
-            tcp_headers = tcp_request.get('headers', {})
+            # Получаем дополнительные параметры из xhttpSettings (для XHTTP)
+            xhttp_settings = stream.get('xhttpSettings', {})
+            
+            # Логируем всю структуру xhttpSettings для отладки
+            logger.info(f"DEBUG: Full xhttpSettings for {user_id}: {json.dumps(xhttp_settings, indent=2, ensure_ascii=False)}")
             
             # Инициализируем переменные
-            path = None
-            xhttp_host = None
-            
-            # Получаем path из tcpSettings
-            if tcp_header.get('type') == 'http':
-                # path может быть в tcp_request
-                if 'path' in tcp_request:
-                    path_value = tcp_request['path']
-                    if isinstance(path_value, list) and path_value:
-                        path = quote(path_value[0])
-                    elif isinstance(path_value, str):
-                        path = quote(path_value)
-                
-                # Получаем host из headers
-                if tcp_headers and 'Host' in tcp_headers:
-                    host_value = tcp_headers['Host']
-                    if isinstance(host_value, list) and host_value:
-                        xhttp_host = host_value[0]
-                    elif isinstance(host_value, str):
-                        xhttp_host = host_value
+            path = xhttp_settings.get('path', '/update')
+            xhttp_host = xhttp_settings.get('host', '')
+            mode = xhttp_settings.get('mode', 'auto')
             
             # Логируем полученные параметры для отладки
-            logger.info(f"XHTTP параметры для {user_id}: network={network}, path={path}, host={xhttp_host}")
+            logger.info(f"XHTTP параметры для {user_id}: network={network}, path={path}, host={xhttp_host}, mode={mode}")
 
             # Строго в правильном порядке, включая новые параметры
             params = [
@@ -1008,10 +1000,11 @@ class X3:
             if network == "xhttp":
                 params.append(("encryption", "none"))
                 if path:
-                    params.append(("path", path))
+                    params.append(("path", quote(path)))
                 if xhttp_host:
                     params.append(("host", xhttp_host))
-                params.append(("mode", "auto"))
+                if mode:
+                    params.append(("mode", mode))
             
             # Добавляем остальные параметры
             params.extend([
