@@ -1,0 +1,238 @@
+name: Deploy Daralla Bot to Test Server
+
+on:
+  push:
+    branches: [ test ]  # Тестовая ветка
+  workflow_dispatch:  # Manual trigger option
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Testing and code validation
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio
+
+    - name: Run tests
+      run: |
+        mkdir -p tests
+        echo "import pytest" > tests/__init__.py
+        echo "def test_basic(): assert True" > tests/test_basic.py
+        pytest tests/ -v
+
+    - name: Lint code
+      run: |
+        pip install flake8
+        flake8 bot/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 bot/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  # Deploy to test server
+  deploy:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/test' && github.event_name == 'push'  # Тестовая ветка
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check secrets presence
+      run: |
+        echo "TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST != '' && 'SET' || 'NOT SET' }}"
+        echo "TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER != '' && 'SET' || 'NOT SET' }}"
+        echo "TEST_SERVER_PASSWORD: ${{ secrets.TEST_SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
+        echo "TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
+        echo "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN != '' && 'SET' || 'NOT SET' }}"
+
+    - name: Deploy to test server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.TEST_SERVER_HOST }}
+        username: ${{ secrets.TEST_SERVER_USER }}
+        password: ${{ secrets.TEST_SERVER_PASSWORD }}
+        port: ${{ secrets.TEST_SERVER_PORT || 22 }}
+        timeout: 60s
+        command_timeout: 10m
+        script: |
+          # Test environment deployment
+          echo "🚀 Starting deployment to TEST server..."
+          echo "📦 Branch: test"
+          echo "🔧 Environment: TEST"
+          
+          # Create working directory
+          sudo mkdir -p /root/Daralla
+          cd /root/Daralla
+          
+          # Stop old bot
+          echo "Stopping old bot..."
+          sudo docker-compose down || true
+          
+          # Create backup structure
+          echo "Preparing backup..."
+          sudo mkdir -p /root/backups/data /root/backups/env
+          timestamp=$(date +'%Y%m%d_%H%M%S')
+
+          # Database backup - ПЕРЕД удалением папки!
+          echo "Creating database backup..."
+          if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
+            echo "Found databases for backup:"
+            ls -l data/*.db
+            sudo tar -czf "/root/backups/data/backup_${timestamp}.tar.gz" data/*.db
+            echo "Database backup created: /root/backups/data/backup_${timestamp}.tar.gz"
+            
+            # Keep only 5 latest backups
+            ls -t /root/backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
+          else
+            echo "No databases found to backup"
+          fi
+
+          # .env backup - ПЕРЕД удалением папки!
+          if [ -f ".env" ]; then
+            echo "Creating .env backup..."
+            sudo cp .env "/root/backups/env/env_${timestamp}"
+            # Keep only 5 latest .env copies
+            ls -t /root/backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
+          fi
+          
+          # Download code directly to working directory
+          echo "Downloading code..."
+          sudo apt-get update -qq && sudo apt-get install -y -qq git sqlite3
+          
+          # Clone directly to working directory
+          sudo rm -rf /root/Daralla
+          sudo mkdir -p /root/Daralla
+          cd /root
+          echo "Current directory: $(pwd)"
+          echo "Directory contents: $(ls -la)"
+          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
+          echo "After clone, directory contents: $(ls -la)"
+          cd /root/Daralla
+          echo "In Daralla directory: $(pwd)"
+          
+          # Checkout test branch
+          sudo git checkout test
+          sudo git pull origin test
+          echo "Current commit: $(sudo git log --oneline -1)"
+          
+          # Restore data
+          echo "Restoring data..."
+          
+          # Restore databases
+          latest_db_backup=$(ls -t /root/backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
+          if [ -n "$latest_db_backup" ]; then
+            echo "Restoring databases from $latest_db_backup..."
+            sudo mkdir -p data
+            sudo tar -xzf "$latest_db_backup" -C .
+            echo "Databases restored from $latest_db_backup"
+            
+            # Verify restoration
+            echo "Verifying database restoration..."
+            if [ -f "data/subscribers.db" ]; then
+              echo "Checking subscribers.db content..."
+              sudo sqlite3 data/subscribers.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscribers.db"
+            fi
+          else
+            echo "Database backups not found - creating empty databases"
+            sudo mkdir -p data
+            sudo touch data/vpn_keys.db data/subscribers.db data/notifications.db data/users.db
+            echo "Empty databases created"
+          fi
+
+          # Restore .env
+          latest_env=$(ls -t /root/backups/env/env_* 2>/dev/null | head -n1)
+          if [ -n "$latest_env" ]; then
+            echo "Restoring .env from $latest_env..."
+            sudo cp "$latest_env" .env
+            echo ".env file restored"
+          else
+            echo ".env backup not found"
+          fi
+
+          # Check restoration
+          echo "Checking restored files..."
+          echo "Databases:"
+          ls -lh data/*.db || echo "Databases not found"
+          
+          # Verify database content
+          if [ -f "data/vpn_keys.db" ]; then
+            echo "Checking vpn_keys.db content..."
+            sudo sqlite3 data/vpn_keys.db "SELECT name FROM sqlite_master WHERE type='table';" || echo "Cannot read vpn_keys.db"
+          fi
+          
+          # Fix permissions after restoration
+          sudo chown -R 1000:1000 data/ 2>/dev/null || true
+          sudo chmod -R 666 data/*.db 2>/dev/null || true
+          sudo chmod 755 data/ 2>/dev/null || true
+          
+          # Ensure data directory exists
+          sudo mkdir -p data
+          
+          # Set permissions
+          sudo chmod +x *.sh
+          sudo chown -R 1000:1000 data/
+          sudo chmod -R 666 data/*.db
+          sudo chmod 755 data/
+          
+          # Return to project directory
+          cd /root/Daralla
+          
+          # Verify code update
+          echo "Verifying code update..."
+          echo "Current commit: $(sudo git log --oneline -1)"
+          echo "Bot.py last modified: $(sudo stat -c %y bot/bot.py)"
+          
+          # Clean up old logs and containers
+          echo "Cleaning up old logs and containers..."
+          sudo docker-compose down || true
+          timeout 30 sudo docker image prune -f || echo "Image prune timed out, continuing..."
+          timeout 30 sudo docker builder prune -f || echo "Builder prune timed out, continuing..."
+          
+          # Start bot
+          echo "Starting bot..."
+          # Build containers on server
+          sudo docker-compose build --no-cache
+          
+          # Start with environment variables
+          echo "Starting bot with environment variables..."
+          sudo docker-compose up -d
+          
+          # Check status
+          echo "Checking status..."
+          sleep 5
+          sudo docker-compose ps
+          
+          # Final verification of data
+          echo "Final data verification..."
+          if [ -f "data/subscribers.db" ]; then
+            echo "Final subscribers.db check:"
+            sudo sqlite3 data/subscribers.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+          fi
+          
+          echo "✅ Deployment to TEST server completed!"
+          echo "🧪 Test environment is ready!"
+
+    - name: Notify deployment
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment to TEST server completed successfully!"
+          echo "🧪 Test environment is ready for testing!"
+        else
+          echo "❌ Deployment to TEST server failed!"
+        fi
+

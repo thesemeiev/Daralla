@@ -35,10 +35,7 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.SERVER_SELECTION, self.server_selection)
         nav_manager.register_handler(NavStates.PAYMENT, self.payment)
         nav_manager.register_handler(NavStates.MYKEYS_MENU, self.mykeys_menu)
-        nav_manager.register_handler(NavStates.POINTS_MENU, self.points_menu)
-        nav_manager.register_handler(NavStates.REFERRAL_MENU, self.referral_menu)
         nav_manager.register_handler(NavStates.EXTEND_KEY, self.extend_key)
-        nav_manager.register_handler(NavStates.RENAME_KEY, self.rename_key)
         
         # Админ меню
         nav_manager.register_handler(NavStates.ADMIN_MENU, self.admin_menu)
@@ -46,33 +43,38 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.ADMIN_NOTIFICATIONS, self.admin_notifications)
         nav_manager.register_handler(NavStates.ADMIN_CHECK_SERVERS, self.admin_check_servers)
         nav_manager.register_handler(NavStates.ADMIN_BROADCAST, self.admin_broadcast)
-        nav_manager.register_handler(NavStates.ADMIN_SET_DAYS, self.admin_set_days)
     
     async def main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Главное меню"""
-        # Импортируем и вызываем edit_main_menu из bot.py
-        from .bot import edit_main_menu
+        # Импортируем и вызываем edit_main_menu из handlers
+        from ..handlers.commands import edit_main_menu
         await edit_main_menu(update, context)
     
     async def instruction_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню инструкций"""
-        from .bot import instruction
+        from ..handlers.commands import instruction
         await instruction(update, context)
     
     async def instruction_platform(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Платформы инструкций"""
-        from .bot import instruction_callback
-        await instruction_callback(update, context)
+        # Этот handler не должен вызываться напрямую для callback'ов instr_*
+        # Они обрабатываются напрямую через instruction_callback в bot.py
+        # Этот handler используется только если navigate_to_state вызывается явно
+        # В этом случае мы просто возвращаемся, так как instruction_callback уже обработал все
+        logger.debug("instruction_platform called, but instruction_callback should handle instr_* callbacks directly")
+        return
     
     async def buy_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню покупки"""
         # Создаем меню покупки напрямую
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         from .menu_states import CallbackData
+        from ..utils import UIMessages, safe_edit_or_reply_universal
         
+        # Выбираем период (1 или 3 месяца) — 1 подписка = 1 устройство
         keyboard = NavigationBuilder.create_keyboard_with_back([
-            [InlineKeyboardButton("1 месяц — 100₽", callback_data=CallbackData.SELECT_PERIOD_MONTH)],
-            [InlineKeyboardButton("3 месяца — 250₽", callback_data=CallbackData.SELECT_PERIOD_3MONTH)],
+            [InlineKeyboardButton("1 месяц — 150₽", callback_data=CallbackData.SELECT_PERIOD_MONTH)],
+            [InlineKeyboardButton("3 месяца — 350₽", callback_data=CallbackData.SELECT_PERIOD_3MONTH)],
         ])
         
         # Используем существующий стиль сообщения
@@ -80,45 +82,51 @@ class MenuHandlers:
         if message is None:
             logger.error("buy_menu: message is None")
             return
-            
-        # Импортируем UIMessages из bot.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from .bot import UIMessages, safe_edit_or_reply_universal
         
         buy_menu_text = UIMessages.buy_menu_message()
         await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
     
     async def server_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Выбор сервера"""
-        # Импортируем необходимые функции из bot.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from .bot import SERVERS_BY_LOCATION, UIEmojis, UIStyles, UIMessages, safe_edit_or_reply_universal, UIButtons
+        # Импортируем необходимые функции
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         from .menu_states import CallbackData
+        from ..utils import UIEmojis, UIStyles, UIMessages, safe_edit_or_reply_universal, UIButtons
+        from ..bot import SERVERS_BY_LOCATION, new_client_manager
         
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         if message is None:
             logger.error("server_selection: message is None")
             return
         
-        # Получаем менеджер серверов из bot.py
-        from .bot import new_client_manager
-        health_results = new_client_manager.check_all_servers_health()
+        # Используем кэш для быстрого отображения (пользователь может обновить)
+        health_results = new_client_manager.check_all_servers_health(force_check=False)
         
         # Создаем кнопки для локаций с флагами и статусом
         location_buttons = []
+        
+        # Словарь флагов для известных локаций (можно расширять)
+        # Если локация не найдена в словаре, используется флаг по умолчанию
         location_flags = {
             "Finland": "🇫🇮",
             "Latvia": "🇱🇻", 
-            "Estonia": "🇪🇪"
+            "Estonia": "🇪🇪",
+            "Russia": "🇷🇺",
+            "Germany": "🇩🇪",
+            "Netherlands": "🇳🇱",
+            "USA": "🇺🇸",
+            "UK": "🇬🇧",
+            "France": "🇫🇷",
+            "Poland": "🇵🇱",
+            "Sweden": "🇸🇪",
+            "Norway": "🇳🇴",
+            "Denmark": "🇩🇰",
         }
         
         # Формируем текст с информацией о локациях
         location_info_text = ""
         
+        # Проходим по всем локациям из конфига (автоматически добавляются новые)
         for location, servers in SERVERS_BY_LOCATION.items():
             if not servers:
                 continue
@@ -128,27 +136,28 @@ class MenuHandlers:
             total_servers = 0
             
             for server in servers:
-                if server["host"] and server["login"] and server["password"]:
+                if server.get("host") and server.get("login") and server.get("password"):
                     total_servers += 1
-                    if health_results.get(server['name'], False):
+                    if health_results.get(server.get('name', ''), False):
                         available_servers += 1
             
+            # Пропускаем локации без серверов
             if total_servers == 0:
                 continue
-                
-            flag = location_flags.get(location)
             
-            # Определяем статус локации
-            if available_servers > 0:
-                status_icon = UIEmojis.SUCCESS
-                status_text = f"Доступно {available_servers}/{total_servers} серверов"
-                button_text = f"{flag} {location} {status_icon}"
-                callback_data = f"select_server_{location.lower()}"
-            else:
-                status_icon = UIEmojis.ERROR
-                status_text = "Недоступно"
-                button_text = f"{flag} {location} {status_icon}"
-                callback_data = f"server_unavailable_{location.lower()}"
+            # Показываем кнопку ТОЛЬКО если есть хотя бы один доступный сервер
+            if available_servers == 0:
+                # Недоступные локации не показываем в меню
+                continue
+                
+            # Получаем флаг локации (или используем флаг по умолчанию)
+            flag = location_flags.get(location, "🌍")
+            
+            # Формируем кнопку для доступной локации
+            status_icon = UIEmojis.SUCCESS
+            status_text = f"Доступно {available_servers}/{total_servers} серверов"
+            button_text = f"{flag} {location} {status_icon}"
+            callback_data = f"select_server_{location.lower()}"
             
             location_buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
             
@@ -171,60 +180,61 @@ class MenuHandlers:
         elif pending_period == "3month":
             period_text = "3 месяца за 250₽"
             location_buttons.append([UIButtons.back_button()])
-        elif pending_period == "points_month":
-            period_text = "1 месяц за 1 балл"
-            location_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SPEND_POINTS)])
         else:
             period_text = "Неизвестный период"
             location_buttons.append([UIButtons.back_button()])
         
         keyboard = InlineKeyboardMarkup(location_buttons)
         
-        message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{location_info_text}"
+        # Если нет доступных локаций, показываем предупреждение
+        if len(location_buttons) == 0 or available_servers == 0:
+            # Формируем информацию о всех локациях (включая недоступные) для текста
+            all_locations_text = ""
+            for location, servers in SERVERS_BY_LOCATION.items():
+                if not servers:
+                    continue
+                total_servers = sum(1 for s in servers if s.get("host") and s.get("login") and s.get("password"))
+                if total_servers == 0:
+                    continue
+                flag = location_flags.get(location, "🌍")
+                all_locations_text += f"{flag} <b>{location}</b> - Недоступно ({total_servers} серверов)\n"
+            
+            message_text = (
+                f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n"
+                f"{UIEmojis.WARNING} <b>Внимание: Нет доступных локаций</b>\n\n"
+                f"Все серверы временно недоступны. Пожалуйста, попробуйте позже.\n\n"
+                f"{all_locations_text if all_locations_text else 'Нет настроенных локаций.'}\n\n"
+                f"Нажмите кнопку \"{UIEmojis.REFRESH} Обновить\" для проверки статуса серверов."
+            )
+        else:
+            message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{location_info_text}"
         
         await safe_edit_or_reply_universal(message, message_text, reply_markup=keyboard, parse_mode="HTML", menu_type='server_selection')
     
     async def payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Обработка платежа"""
-        from .bot import handle_payment
+        from ..handlers.payments import handle_payment
         price = kwargs.get('price')
         period = kwargs.get('period')
         await handle_payment(update, context, price, period)
     
     async def mykeys_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Меню моих ключей"""
-        from .bot import mykey
+        from ..handlers.commands import mykey
         await mykey(update, context)
-    
-    async def points_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Меню баллов"""
-        from .bot import points_callback
-        await points_callback(update, context)
-    
-    async def referral_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Меню рефералов"""
-        from .bot import referral_callback
-        await referral_callback(update, context)
     
     async def extend_key(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Продление ключа"""
-        from .bot import extend_key_callback
+        from ..handlers.callbacks import extend_key_callback
         await extend_key_callback(update, context)
-    
-    async def rename_key(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Переименование ключа"""
-        from .bot import rename_key_callback
-        await rename_key_callback(update, context)
     
     async def admin_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ меню"""
-        # Импортируем необходимые функции из bot.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from .bot import ADMIN_IDS, safe_edit_or_reply, UIMessages, safe_edit_or_reply_universal, UIButtons, check_private_chat
-        from .menu_states import CallbackData
+        # Импортируем необходимые функции
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        from .menu_states import CallbackData
+        from ..utils import safe_edit_or_reply, UIMessages, safe_edit_or_reply_universal, UIButtons, check_private_chat
+        from ..bot import ADMIN_IDS
         
         if not await check_private_chat(update):
             return
@@ -246,8 +256,6 @@ class MenuHandlers:
             [InlineKeyboardButton("Проверка серверов", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
             [InlineKeyboardButton("Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
             [InlineKeyboardButton("Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
-            [InlineKeyboardButton("Изменить дни за балл", callback_data=CallbackData.ADMIN_SET_DAYS_START)],
-            [InlineKeyboardButton("Баллы: дашборд", callback_data="points_admin:range=7d;type=all;top=earned;user=")],
             [UIButtons.back_button()],
         ])
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -261,28 +269,24 @@ class MenuHandlers:
     
     async def admin_errors(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ логи"""
-        from .bot import admin_errors
+        from ..handlers.admin import admin_errors
         await admin_errors(update, context)
     
     async def admin_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ уведомления"""
-        from .bot import admin_notifications
+        from ..handlers.admin import admin_notifications
         await admin_notifications(update, context)
     
     async def admin_check_servers(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ проверка серверов"""
-        from .bot import admin_check_servers
+        from ..handlers.admin import admin_check_servers
         await admin_check_servers(update, context)
     
     async def admin_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ рассылка"""
-        from .bot import admin_broadcast_start
+        from ..handlers.admin import admin_broadcast_start
         await admin_broadcast_start(update, context)
     
-    async def admin_set_days(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Админ настройка дней"""
-        from .bot import admin_set_days_start
-        await admin_set_days_start(update, context)
 
 class NavigationCallbacks:
     """Обработчики навигационных callback'ов"""
@@ -297,7 +301,8 @@ class NavigationCallbacks:
     async def handle_main_menu_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик кнопки 'Главное меню'"""
         query = update.callback_query
-        await query.answer()
+        # Не отвечаем здесь - handler сам ответит на callback query
+        # await query.answer()  # Убрано, чтобы избежать двойного ответа
         
         # Очищаем навигационный стек и идем в главное меню
         nav_manager.clear_stack(context)
@@ -309,7 +314,8 @@ class NavigationCallbacks:
                                   target_state: str, **kwargs):
         """Универсальный обработчик перехода к состоянию"""
         query = update.callback_query
-        await query.answer()
+        # Не отвечаем здесь - handler сам ответит на callback query
+        # await query.answer()  # Убрано, чтобы избежать двойного ответа
         
         # Добавляем состояние в стек
         nav_manager.push_state(context, target_state)
@@ -332,14 +338,15 @@ class NavigationSystem:
         self.menu_handlers = MenuHandlers(bot_handlers)
         self.nav_callbacks = NavigationCallbacks(self.menu_handlers)
     
-    async def navigate_to_state(self, update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
+    async def navigate_to_state(self, update: Update, context: ContextTypes.DEFAULT_TYPE, state: str, **kwargs):
         """Переходит к указанному состоянию"""
+        # Добавляем состояние в стек перед переходом (если его еще нет)
         nav_manager.push_state(context, state)
-        return await nav_manager.navigate_to_state(update, context, state)
+        return await nav_manager.navigate_to_state(update, context, state, **kwargs)
     
-    def handle_back_navigation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_back_navigation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает навигацию назад"""
-        return nav_manager.handle_back_navigation(update, context)
+        return await nav_manager.handle_back_navigation(update, context)
 
 
 class NavigationIntegration:
@@ -391,14 +398,6 @@ class NavigationIntegration:
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.MYKEYS_MENU),
                 pattern=f"^{CallbackData.MYKEYS_MENU}$"
             ),
-            CallbackQueryHandler(
-                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.POINTS_MENU),
-                pattern=f"^{CallbackData.POINTS}$"
-            ),
-            CallbackQueryHandler(
-                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.REFERRAL_MENU),
-                pattern=f"^{CallbackData.REFERRAL}$"
-            ),
             
             # Админ меню
             CallbackQueryHandler(
@@ -421,8 +420,5 @@ class NavigationIntegration:
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_BROADCAST),
                 pattern=f"^{CallbackData.ADMIN_BROADCAST_START}$"
             ),
-            CallbackQueryHandler(
-                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_SET_DAYS),
-                pattern=f"^{CallbackData.ADMIN_SET_DAYS_START}$"
-            ),
         ]
+

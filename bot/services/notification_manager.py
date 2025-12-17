@@ -7,43 +7,40 @@ import asyncio
 import datetime
 import logging
 import traceback
+import json
+import aiosqlite
 from typing import Dict, List, Optional, Tuple
 
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 
-try:
-    from .notifications_db import (
-        init_notifications_db,
-        is_notification_sent,
-        mark_notification_sent,
-        record_notification_metrics,
-        record_notification_effectiveness,
-        cleanup_old_notifications,
-        get_notification_stats,
-        get_daily_notification_stats,
-        clear_user_notifications,
-        clear_key_notifications,
-        get_notification_settings,
-        set_notification_setting
-    )
-except ImportError:
-    from notifications_db import (
-        init_notifications_db,
-        is_notification_sent,
-        mark_notification_sent,
-        record_notification_metrics,
-        record_notification_effectiveness,
-        cleanup_old_notifications,
-        get_notification_stats,
-        get_daily_notification_stats,
-        clear_user_notifications,
-        clear_key_notifications,
-        get_notification_settings,
-        set_notification_setting
-    )
+from ..db import (
+    init_notifications_db,
+    is_notification_sent,
+    mark_notification_sent,
+    record_notification_metrics,
+    record_notification_effectiveness,
+    cleanup_old_notifications,
+    get_notification_stats,
+    get_daily_notification_stats,
+    clear_user_notifications,
+    clear_key_notifications,
+    get_notification_settings,
+    set_notification_setting
+)
 
 logger = logging.getLogger(__name__)
+
+# Импорты для работы с UI
+try:
+    from ..utils import UIEmojis
+except ImportError:
+    try:
+        from ..bot import UIEmojis
+    except ImportError:
+        # Fallback если импорт не удался
+        class UIEmojis:
+            REFRESH = "↻"
 
 class NotificationManager:
     """Менеджер уведомлений с метриками и мониторингом"""
@@ -156,18 +153,48 @@ class NotificationManager:
                 await asyncio.sleep(3600)  # Ждем час при ошибке
     
     async def check_expiring_keys(self):
-        """Проверяет все ключи пользователей на истечение и отправляет уведомления"""
-        logger.info("Проверка истекающих ключей...")
+        """Проверяет все ключи и подписки пользователей на истечение и отправляет уведомления"""
+        logger.info("Проверка истекающих ключей и подписок...")
         
         try:
+            # Сначала проверяем подписки
+            await self._check_expiring_subscriptions()
+            
+            # Проверяем, есть ли серверы для проверки старых ключей
+            if not self.server_manager or not self.server_manager.servers:
+                logger.warning("Нет серверов для проверки ключей, пропускаем проверку уведомлений")
+                return
+            
             all_users_keys = {}
+            unavailable_servers_count = 0
             
             # Получаем все ключи со всех серверов
             for server in self.server_manager.servers:
                 try:
                     xui = server["x3"]
+                    if xui is None:
+                        logger.warning(f"Сервер {server['name']} недоступен, пропускаем проверку уведомлений")
+                        unavailable_servers_count += 1
+                        continue
+                    
+                    # Дополнительная проверка доступности сервера
+                    try:
+                        if not self.server_manager.check_server_health(server["name"]):
+                            logger.warning(f"Сервер {server['name']} недоступен по проверке здоровья, пропускаем проверку уведомлений")
+                            unavailable_servers_count += 1
+                            continue
+                    except Exception as health_check_error:
+                        logger.warning(f"Ошибка проверки здоровья сервера {server['name']}: {health_check_error}, пропускаем проверку уведомлений")
+                        unavailable_servers_count += 1
+                        continue
+                    
                     server_name = server['name']
-                    inbounds = xui.list()['obj']
+                    try:
+                        inbounds = xui.list()['obj']
+                    except Exception as list_error:
+                        logger.warning(f"Ошибка получения списка клиентов с сервера {server['name']}: {list_error}, пропускаем проверку уведомлений")
+                        unavailable_servers_count += 1
+                        continue
                     
                     for inbound in inbounds:
                         settings = json.loads(inbound['settings'])
@@ -187,7 +214,13 @@ class NotificationManager:
                                 
                 except Exception as e:
                     logger.error(f"Ошибка получения ключей с сервера {server['name']}: {e}")
+                    unavailable_servers_count += 1
                     continue
+            
+            # Если все серверы недоступны, просто логируем и выходим
+            if unavailable_servers_count > 0 and unavailable_servers_count == len(self.server_manager.servers):
+                logger.info("Все серверы недоступны для проверки уведомлений, пропускаем проверку")
+                return
             
             # Проверяем каждого пользователя
             now = datetime.datetime.now()
@@ -220,9 +253,9 @@ class NotificationManager:
                         if notification_type:
                             # Импортируем функцию вычисления времени
                             try:
-                                from .bot import calculate_time_remaining
+                                from ..utils import calculate_time_remaining
                             except ImportError:
-                                from bot import calculate_time_remaining
+                                from ..bot import calculate_time_remaining
                             
                             time_remaining = calculate_time_remaining(expiry_time_ms / 1000)
                             
@@ -247,6 +280,126 @@ class NotificationManager:
         except Exception as e:
             logger.error(f"Ошибка в check_expiring_keys: {e}")
             await self._notify_admin(f"Ошибка в check_expiring_keys: {e}\n{traceback.format_exc()}")
+    
+    async def _check_expiring_subscriptions(self):
+        """Проверяет активные подписки на истечение и отправляет уведомления"""
+        try:
+            from ..db.subscribers_db import get_all_active_subscriptions
+            subscriptions = await get_all_active_subscriptions()
+            
+            if not subscriptions:
+                return
+            
+            now = datetime.datetime.now()
+            notifications_sent = 0
+            
+            for sub in subscriptions:
+                try:
+                    user_id = sub['user_id']
+                    expires_at = sub['expires_at']
+                    subscription_id = sub['id']
+                    
+                    # Конвертируем время истечения
+                    expiry_time = datetime.datetime.fromtimestamp(expires_at)
+                    time_diff = expiry_time - now
+                    
+                    # Определяем тип уведомления (только для активных подписок)
+                    notification_type = None
+                    if time_diff.total_seconds() > 0:  # Подписка еще активна
+                        if time_diff.total_seconds() <= 3600:  # Меньше 1 часа
+                            notification_type = "1hour"
+                        elif time_diff.total_seconds() <= 86400:  # Меньше 1 дня
+                            notification_type = "1day"
+                        elif time_diff.total_seconds() <= 259200:  # Меньше 3 дней
+                            notification_type = "3days"
+                    
+                    # Вычисляем точное оставшееся время
+                    if notification_type:
+                        try:
+                            from ..utils import calculate_time_remaining
+                        except ImportError:
+                            from ..bot import calculate_time_remaining
+                        
+                        time_remaining = calculate_time_remaining(expires_at)
+                        
+                        success = await self._send_subscription_expiry_notification(
+                            user_id, subscription_id, notification_type, time_remaining,
+                            time_diff.days
+                        )
+                        
+                        if success:
+                            notifications_sent += 1
+                            
+                except Exception as e:
+                    logger.error(f"Ошибка обработки подписки {sub.get('id', 'unknown')}: {e}")
+                    continue
+            
+            if notifications_sent > 0:
+                logger.info(f"Отправлено {notifications_sent} уведомлений об истечении подписок")
+                
+        except Exception as e:
+            logger.error(f"Ошибка в _check_expiring_subscriptions: {e}")
+    
+    async def _send_subscription_expiry_notification(
+        self, user_id: str, subscription_id: int, notification_type: str,
+        time_remaining: str, days_until_expiry: int
+    ) -> bool:
+        """Отправляет уведомление об истекающей подписке"""
+        try:
+            # Проверяем, не отправляли ли мы уже уведомление этого типа для этой подписки
+            notification_key = f"subscription_{subscription_id}_{notification_type}"
+            
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    """
+                    SELECT id FROM notifications
+                    WHERE user_id = ? AND notification_type = ? AND key_identifier = ?
+                    AND created_at > datetime('now', '-1 day')
+                    """,
+                    (user_id, notification_type, notification_key)
+                ) as cursor:
+                    existing = await cursor.fetchone()
+                    if existing:
+                        return False  # Уже отправляли недавно
+            
+            # Получаем текст уведомления
+            from ..utils import UIMessages
+            message_text = UIMessages.subscription_expiring_message(
+                time_remaining, days_until_expiry
+            )
+            
+            # Отправляем уведомление
+            if self.app and self.app.bot:
+                try:
+                    await self.app.bot.send_message(
+                        chat_id=int(user_id),
+                        text=message_text,
+                        parse_mode="HTML"
+                    )
+                    
+                    # Сохраняем запись об уведомлении
+                    async with aiosqlite.connect(self.db_path) as db:
+                        await db.execute(
+                            """
+                            INSERT INTO notifications (user_id, notification_type, key_identifier, created_at)
+                            VALUES (?, ?, ?, datetime('now'))
+                            """,
+                            (user_id, notification_type, notification_key)
+                        )
+                        await db.commit()
+                    
+                    logger.info(f"Отправлено уведомление об истечении подписки пользователю {user_id}")
+                    return True
+                except Exception as send_error:
+                    logger.error(f"Ошибка отправки уведомления пользователю {user_id}: {send_error}")
+                    return False
+            else:
+                logger.warning("app или app.bot не доступен для отправки уведомления")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об истечении подписки: {e}")
+            return False
     
     async def _send_expiry_notification(self, user_id: str, email: str, notification_type: str, 
                                       time_remaining: str, server_name: str, days_until_expiry: int) -> bool:
@@ -316,18 +469,18 @@ class NotificationManager:
     def _create_expiry_message(self, email: str, server_name: str, time_remaining: str) -> str:
         """Создает сообщение об истекающем ключе"""
         try:
-            from .bot import UIMessages  # Импортируем здесь, чтобы избежать циклического импорта
+            from ..utils import UIMessages
         except ImportError:
-            from bot import UIMessages
+            from ..bot import UIMessages
         
         return UIMessages.key_expiring_message(email, server_name, time_remaining)
     
     def _create_deletion_message(self, email: str, server_name: str, days_expired: int) -> str:
         """Создает сообщение об удаленном ключе"""
         try:
-            from .bot import UIMessages  # Импортируем здесь, чтобы избежать циклического импорта
+            from ..utils import UIMessages
         except ImportError:
-            from bot import UIMessages
+            from ..bot import UIMessages
         
         return UIMessages.key_deleted_message(email, server_name, days_expired)
     
@@ -421,8 +574,8 @@ class NotificationManager:
     async def clear_key_notifications(self, user_id: str, email: str) -> bool:
         """Очищает все уведомления для конкретного ключа (при продлении)"""
         try:
-            from .notifications_db import clear_key_notifications as clear_key_notifications_db
-            return await clear_key_notifications_db(user_id, email)
+            from ..db import clear_key_notifications
+            return await clear_key_notifications(user_id, email)
         except Exception as e:
             logger.error(f"Ошибка очистки уведомлений для ключа {email}: {e}")
             return False
@@ -516,16 +669,3 @@ class NotificationManager:
         except Exception as e:
             logger.error(f"Ошибка записи продления ключа: {e}")
 
-# Импорты для работы с UI
-try:
-    from .bot import UIEmojis
-except ImportError:
-    try:
-        from bot import UIEmojis
-    except ImportError:
-        # Fallback если импорт не удался
-        class UIEmojis:
-            REFRESH = "↻"
-
-# Импорт json для работы с настройками
-import json

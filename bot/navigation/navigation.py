@@ -26,17 +26,24 @@ class NavigationManager:
         """Добавляет состояние в навигационный стек"""
         stack = context.user_data.setdefault('nav_stack', [])
         
-        # Ограничиваем размер стека
-        if len(stack) >= self.max_stack_size:
-            stack.pop(0)  # Удаляем самый старый элемент
+        # Если стек пустой и добавляем не главное меню, сначала добавляем главное меню
+        if not stack and state != NavStates.MAIN_MENU:
+            stack.append(NavStates.MAIN_MENU)
+            logger.info(f"PUSH: {NavStates.MAIN_MENU} (auto) -> Stack: {stack}")
         
-        # Удаляем все существующие вхождения состояния, чтобы избежать дубликатов
-        while state in stack:
-            stack.remove(state)
-        
-        # Добавляем состояние в конец
-        stack.append(state)
-        logger.info(f"PUSH: {state} -> Stack: {stack}")
+        # Если последнее состояние отличается от нового, добавляем
+        # Это позволяет сохранить историю навигации
+        if not stack or stack[-1] != state:
+            # Ограничиваем размер стека
+            if len(stack) >= self.max_stack_size:
+                stack.pop(0)  # Удаляем самый старый элемент
+            
+            # Добавляем состояние в конец
+            stack.append(state)
+            logger.info(f"PUSH: {state} -> Stack: {stack}")
+        else:
+            # Если пытаемся добавить то же состояние, что и текущее, не добавляем
+            logger.debug(f"PUSH: {state} already on top, skipping")
     
     def pop_state(self, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         """Удаляет последнее состояние из стека и возвращает предыдущее"""
@@ -77,30 +84,60 @@ class NavigationManager:
                               target_state: str, **kwargs) -> bool:
         """Переходит к указанному состоянию"""
         try:
+            # Убеждаемся, что состояние добавлено в стек перед вызовом обработчика
+            self.push_state(context, target_state)
+            
             if target_state in self.handlers:
-                await self.handlers[target_state](update, context, **kwargs)
+                # Устанавливаем флаг, чтобы функции знали, что они вызываются через навигационную систему
+                context.user_data['_nav_called'] = True
+                try:
+                    await self.handlers[target_state](update, context, **kwargs)
+                finally:
+                    # Удаляем флаг после вызова
+                    context.user_data.pop('_nav_called', None)
                 return True
             else:
                 logger.error(f"Handler not found for state: {target_state}")
                 return False
         except Exception as e:
             logger.error(f"Error navigating to {target_state}: {e}")
+            context.user_data.pop('_nav_called', None)
             return False
     
     async def handle_back_navigation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Обрабатывает навигацию назад"""
         query = update.callback_query
-        await query.answer()
+        from ..utils import safe_answer_callback_query
+        await safe_answer_callback_query(query)
         
         logger.info(f"← BACK_NAVIGATION: User {query.from_user.id}")
         logger.info(f"← BACK_NAVIGATION: Current stack: {self.get_stack(context)}")
         
+        stack = self.get_stack(context)
+        
+        # Если стек пустой или содержит только одно состояние - идем в главное меню
+        if len(stack) <= 1:
+            logger.info("← BACK_NAVIGATION: Stack has 0-1 states, going to main menu")
+            self.clear_stack(context)
+            self.push_state(context, NavStates.MAIN_MENU)
+            return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
+        
+        # Удаляем текущее состояние из стека
+        current_state = stack[-1]
+        stack.pop()
+        
         # Получаем предыдущее состояние
-        prev_state = self.pop_state(context)
+        prev_state = stack[-1] if stack else None
+        
+        logger.info(f"← BACK_NAVIGATION: Current={current_state}, Prev={prev_state}, Stack after pop: {stack}")
+        
+        # Обновляем стек в контексте
+        context.user_data['nav_stack'] = stack
         
         if prev_state is None:
-            # Стек пустой - идем в главное меню
-            logger.info("← BACK_NAVIGATION: Empty stack, going to main menu")
+            # Стек пустой после удаления - идем в главное меню
+            logger.info("← BACK_NAVIGATION: No previous state, going to main menu")
+            self.push_state(context, NavStates.MAIN_MENU)
             return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
         # Специальная логика для webhook-сообщений
@@ -109,11 +146,25 @@ class NavigationManager:
             if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
                 logger.info("← BACK_NAVIGATION: Server selection with success message, clearing stack and going to main menu")
                 self.clear_stack(context)
+                self.push_state(context, NavStates.MAIN_MENU)
                 return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
-        # Обычная навигация
-        logger.info(f" BACK_NAVIGATION: Navigating to {prev_state}")
-        return await self.navigate_to_state(update, context, prev_state)
+        # Обычная навигация - возвращаемся к предыдущему состоянию
+        # НЕ добавляем prev_state в стек через push_state, так как он уже там
+        # Но navigate_to_state может попытаться добавить его снова, поэтому проверяем
+        logger.info(f"← BACK_NAVIGATION: Navigating to {prev_state}")
+        # Вызываем обработчик напрямую, чтобы не добавлять состояние в стек повторно
+        # Устанавливаем флаг _nav_called, чтобы функции не вызывали navigate_to_state повторно
+        if prev_state in self.handlers:
+            context.user_data['_nav_called'] = True
+            try:
+                await self.handlers[prev_state](update, context)
+            finally:
+                context.user_data.pop('_nav_called', None)
+            return True
+        else:
+            logger.error(f"Handler not found for state: {prev_state}")
+            return False
 
 class NavigationBuilder:
     """Строитель навигационных элементов"""
@@ -164,26 +215,23 @@ class NavigationValidator:
     def get_allowed_transitions(from_state: str) -> List[str]:
         """Возвращает список разрешенных переходов из состояния"""
         allowed = {
-            NavStates.MAIN_MENU: [NavStates.INSTRUCTION_MENU, NavStates.BUY_MENU, NavStates.MYKEYS_MENU, NavStates.POINTS_MENU, NavStates.REFERRAL_MENU, NavStates.ADMIN_MENU],
+            NavStates.MAIN_MENU: [NavStates.INSTRUCTION_MENU, NavStates.BUY_MENU, NavStates.MYKEYS_MENU, NavStates.ADMIN_MENU],
             NavStates.INSTRUCTION_MENU: [NavStates.INSTRUCTION_PLATFORM, NavStates.MAIN_MENU],
             NavStates.INSTRUCTION_PLATFORM: [NavStates.INSTRUCTION_MENU],
             NavStates.BUY_MENU: [NavStates.SERVER_SELECTION, NavStates.MAIN_MENU],
             NavStates.SERVER_SELECTION: [NavStates.PAYMENT, NavStates.BUY_MENU],
             NavStates.PAYMENT: [NavStates.MYKEYS_MENU, NavStates.MAIN_MENU],
-            NavStates.MYKEYS_MENU: [NavStates.EXTEND_KEY, NavStates.RENAME_KEY, NavStates.MAIN_MENU],
-            NavStates.POINTS_MENU: [NavStates.EXTEND_KEY, NavStates.MAIN_MENU],
-            NavStates.REFERRAL_MENU: [NavStates.MAIN_MENU],
+            NavStates.MYKEYS_MENU: [NavStates.EXTEND_KEY, NavStates.MAIN_MENU],
             NavStates.EXTEND_KEY: [NavStates.MYKEYS_MENU],
-            NavStates.RENAME_KEY: [NavStates.MYKEYS_MENU],
-            NavStates.ADMIN_MENU: [NavStates.ADMIN_ERRORS, NavStates.ADMIN_NOTIFICATIONS, NavStates.ADMIN_CHECK_SERVERS, NavStates.ADMIN_BROADCAST, NavStates.ADMIN_SET_DAYS, NavStates.MAIN_MENU],
+            NavStates.ADMIN_MENU: [NavStates.ADMIN_ERRORS, NavStates.ADMIN_NOTIFICATIONS, NavStates.ADMIN_CHECK_SERVERS, NavStates.ADMIN_BROADCAST, NavStates.MAIN_MENU],
             NavStates.ADMIN_ERRORS: [NavStates.ADMIN_MENU],
             NavStates.ADMIN_NOTIFICATIONS: [NavStates.ADMIN_MENU],
             NavStates.ADMIN_CHECK_SERVERS: [NavStates.ADMIN_MENU],
             NavStates.ADMIN_BROADCAST: [NavStates.ADMIN_MENU],
-            NavStates.ADMIN_SET_DAYS: [NavStates.ADMIN_MENU],
         }
         
         return allowed.get(from_state, [])
 
 # Глобальный экземпляр менеджера навигации
 nav_manager = NavigationManager()
+
