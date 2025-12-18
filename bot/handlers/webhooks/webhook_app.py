@@ -356,24 +356,16 @@ def create_webhook_app(bot_app):
             
             # Добавляем announce и announce-url в комментариях для V2RayTun
             # V2RayTun может читать announce из комментариев в теле ответа
-            if website_url or telegram_url:
-                announce_parts = []
-                if website_url:
-                    announce_parts.append(f"#27e8d5🌐 Сайт")
-                if telegram_url:
-                    announce_parts.append(f"#0088cc📱 Telegram")
-                
-                if announce_parts:
-                    announce_text = " | ".join(announce_parts)
-                    import base64
-                    announce_base64 = base64.b64encode(announce_text.encode('utf-8')).decode('utf-8')
-                    response_lines.append(f"#announce: base64:{announce_base64}")
-                    
-                    # announce-url в комментариях
-                    if telegram_url:
-                        response_lines.append(f"#announce-url: {telegram_url}")
-                    elif website_url:
-                        response_lines.append(f"#announce-url: {website_url}")
+            # Happ не читает announce из комментариев, поэтому оно не будет показываться в Happ
+            # Используем только Telegram (если есть), так как пользователь хочет только Telegram
+            if telegram_url:
+                # Формируем announce текст только с Telegram (без сайта)
+                announce_text = "#0088cc📱 Telegram"  # Цветной текст: #0088cc (синий Telegram)
+                # Кодируем в base64 для V2RayTun (V2RayTun поддерживает base64 с префиксом base64:)
+                import base64
+                announce_base64 = base64.b64encode(announce_text.encode('utf-8')).decode('utf-8')
+                response_lines.append(f"#announce: base64:{announce_base64}")
+                response_lines.append(f"#announce-url: {telegram_url}")
             
             # Добавляем VLESS ссылки
             response_lines.extend(links)
@@ -459,35 +451,9 @@ def create_webhook_app(bot_app):
                 headers["tg"] = telegram_url
             
             # V2RayTun поддерживает announce и announce-url для отображения объявлений со ссылками
-            # Согласно документации V2RayTun, announce может содержать цветной текст (#RRGGBB) и ссылки
-            # announce-url - ссылка, которая откроется при клике на объявление
-            # Используем это для отображения ссылок на сайт и Telegram в V2RayTun
-            if website_url or telegram_url:
-                # Формируем announce текст со ссылками
-                announce_parts = []
-                if website_url:
-                    # Цветной текст: #27e8d5 (бирюзовый) для сайта
-                    announce_parts.append(f"#27e8d5🌐 Сайт")
-                if telegram_url:
-                    # Цветной текст: #0088cc (синий Telegram) для Telegram
-                    announce_parts.append(f"#0088cc📱 Telegram")
-                
-                if announce_parts:
-                    announce_text = " | ".join(announce_parts)
-                    # Кодируем в base64 для V2RayTun (V2RayTun поддерживает base64 с префиксом base64:)
-                    import base64
-                    announce_base64 = base64.b64encode(announce_text.encode('utf-8')).decode('utf-8')
-                    
-                    # Добавляем announce в заголовки (V2RayTun поддерживает base64 формат с префиксом base64:)
-                    headers["announce"] = f"base64:{announce_base64}"
-                    
-                    # announce-url - ссылка, которая откроется при клике на объявление
-                    # Если есть Telegram, используем его как основную ссылку (более важная для поддержки)
-                    # Если нет Telegram, используем сайт
-                    if telegram_url:
-                        headers["announce-url"] = telegram_url
-                    elif website_url:
-                        headers["announce-url"] = website_url
+            # НЕ добавляем announce в HTTP заголовки, чтобы оно не показывалось в Happ
+            # Добавляем announce только в комментарии в теле ответа для V2RayTun
+            # Happ не читает announce из комментариев, поэтому оно не будет показываться в Happ
             
             return (response_text, 200, headers)
             
