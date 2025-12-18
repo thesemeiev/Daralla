@@ -661,7 +661,7 @@ class X3:
             vless_link = f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
             
             # Логируем сгенерированную ссылку для отладки
-            logger.info(f"Сгенерирована VLESS ссылка для {user_id}: {vless_link[:100]}...")
+            logger.info(f"Сгенерирована VLESS ссылка для {user_id}: tag='{tag}', server_name='{server_name}'")
             logger.debug(f"Полная VLESS ссылка: {vless_link}")
             logger.debug(f"Параметры ссылки: host={host}, port={port}, network={network}, security={security}")
             

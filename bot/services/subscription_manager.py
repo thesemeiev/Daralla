@@ -148,7 +148,7 @@ class SubscriptionManager:
                 
                 # Формируем итоговое название: "Главное название - Название сервера"
                 display_name = f"{main_name} - {server_display_name}"
-                logger.debug(f"Формируем название для VPN клиента: '{display_name}' (main_name='{main_name}', server='{server_display_name}')")
+                logger.info(f"Формируем название для VPN клиента: '{display_name}' (main_name='{main_name}', server='{server_display_name}')")
                 
                 # Используем готовый subscription endpoint X-UI вместо ручной генерации
                 # Это более надежно - X-UI сам правильно генерирует ссылки
