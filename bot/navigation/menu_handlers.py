@@ -35,7 +35,6 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.SERVER_SELECTION, self.server_selection)
         nav_manager.register_handler(NavStates.PAYMENT, self.payment)
         nav_manager.register_handler(NavStates.MYKEYS_MENU, self.mykeys_menu)
-        nav_manager.register_handler(NavStates.EXTEND_KEY, self.extend_key)
         
         # Админ меню
         nav_manager.register_handler(NavStates.ADMIN_MENU, self.admin_menu)
@@ -222,12 +221,6 @@ class MenuHandlers:
         """Меню моих ключей"""
         from ..handlers.commands import mykey
         await mykey(update, context)
-    
-    async def extend_key(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Продление ключа"""
-        from ..handlers.callbacks import extend_key_callback
-        await extend_key_callback(update, context)
-    
     async def admin_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ меню"""
         # Импортируем необходимые функции

@@ -241,9 +241,9 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await select_period_callback(update, context)
     elif query.data.startswith("select_server_"):
         await select_server_callback(update, context)
-    elif query.data == "mykey" or query.data.startswith("keys_page_"):
+    elif query.data == "mykey":
         # Используем навигационную систему для перехода к "Мои ключи"
-        # ВАЖНО: "mykeys_menu" обрабатывается через NavigationIntegration, поэтому здесь только "mykey" и "keys_page_*"
+        # ВАЖНО: "mykeys_menu" обрабатывается через NavigationIntegration, поэтому здесь только "mykey"
         if nav_system:
             await nav_system.navigate_to_state(update, context, NavStates.MYKEYS_MENU)
         else:
@@ -260,63 +260,3 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await admin_errors(update, context)
     # Обработка "back" убрана отсюда - она обрабатывается через NavigationIntegration
     # Это позволяет правильно работать навигационному стеку
-
-
-async def extend_period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик выбора периода для продления ключа"""
-    query = update.callback_query
-    
-    # Отвечаем на callback query СРАЗУ, до любых долгих операций
-    from ...utils import safe_answer_callback_query
-    await safe_answer_callback_query(query)
-    
-    user = query.from_user
-    user_id = str(user.id)
-    
-    globals_dict = get_globals()
-    handle_payment = globals_dict['handle_payment']
-    
-    # Получаем extension_keys_cache из bot.py
-    from ...bot import extension_keys_cache
-    
-    # Извлекаем период и short_id из callback_data: ext_per:month:short_id
-    parts = query.data.split(":", 2)
-    if len(parts) < 3:
-        await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Ошибка: неверный формат данных")
-        return
-    
-    period = parts[1]  # month или 3month
-    short_id = parts[2]
-    
-    # Получаем email ключа из кэша
-    cached_value = extension_keys_cache.get(short_id)
-    key_email = cached_value['email'] if isinstance(cached_value, dict) else cached_value
-    if not key_email:
-        await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Ошибка: ключ не найден в кэше")
-        logger.error(f"Не найден key_email для short_id: {short_id}")
-        return
-    
-    from ...utils import safe_answer_callback_query
-    await safe_answer_callback_query(query)
-    
-    logger.info(f"Выбран период продления: user_id={user_id}, period={period}, key_email={key_email}")
-    
-    # Определяем цену (такую же как при покупке)
-    price = "150.00" if period == "month" else "350.00"  # в рублях
-    
-    # Создаем платеж для продления (используем существующую функцию handle_payment)
-    try:
-        # Сохраняем информацию о продлении в контексте
-        context.user_data['extension_key_email'] = key_email
-        context.user_data['extension_period'] = period
-        
-        # Вызываем функцию создания платежа
-        await handle_payment(update, context, price, f"extend_{period}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка создания платежа для продления: {e}")
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад к ключам", callback_data=CallbackData.MYKEYS_MENU)]
-        ])
-        await safe_edit_or_reply(query.message, "❌ Ошибка при создании платежа. Попробуйте позже.", reply_markup=keyboard)
-

@@ -24,7 +24,6 @@ def get_globals():
             bot_module = importlib.import_module('bot.bot')
         
         return {
-            'extension_keys_cache': getattr(bot_module, 'extension_keys_cache', {}),
             'extension_messages': getattr(bot_module, 'extension_messages', {}),
             'server_manager': getattr(bot_module, 'server_manager', None),
             'new_client_manager': getattr(bot_module, 'new_client_manager', None),
@@ -37,7 +36,6 @@ def get_globals():
     except (ImportError, AttributeError) as e:
         logger.warning(f"Не удалось получить глобальные переменные: {e}")
         return {
-            'extension_keys_cache': {},
             'extension_messages': {},
             'server_manager': None,
             'new_client_manager': None,
@@ -64,28 +62,6 @@ async def cleanup_old_payments_task():
             old_count = await cleanup_old_payments(days_old=7)
             if old_count > 0:
                 logger.info(f"🧹 Очистка: Удалено {old_count} старых записей платежей")
-            
-            # Получаем глобальные переменные
-            globals_dict = get_globals()
-            extension_keys_cache = globals_dict['extension_keys_cache']
-            
-            # Очищаем кэш extension_keys_cache от старых записей
-            current_time = datetime.datetime.now().timestamp()
-            keys_to_remove = []
-            for short_id, key_info in list(extension_keys_cache.items()):
-                # Приводим к единому формату: если значение не словарь, удаляем как устаревшее
-                if not isinstance(key_info, dict):
-                    keys_to_remove.append(short_id)
-                    continue
-                # Если запись старше 1 часа, удаляем её
-                if current_time - key_info.get('created_at', 0) > 3600:
-                    keys_to_remove.append(short_id)
-            
-            for short_id in keys_to_remove:
-                extension_keys_cache.pop(short_id, None)
-            
-            if keys_to_remove:
-                logger.info(f"🧹 Очистка: Удалено {len(keys_to_remove)} старых записей из extension_keys_cache")
             
             # Очищаем истекшие подписки
             expired_subscriptions_count = await cleanup_expired_subscriptions()
@@ -126,7 +102,6 @@ async def auto_cleanup_expired_keys():
         notification_manager = globals_dict['notification_manager']
         notify_admin = globals_dict['notify_admin']
         app = globals_dict['app']
-        extension_keys_cache = globals_dict['extension_keys_cache']
         extension_messages = globals_dict['extension_messages']
         
         if not server_manager:
@@ -227,34 +202,6 @@ async def auto_cleanup_expired_keys():
                                 
                                 # Очищаем связанные данные из кэшей
                                 try:
-                                    # Очищаем extension_keys_cache
-                                    keys_to_remove = []
-                                    for short_id, key_email in extension_keys_cache.items():
-                                        if key_email == email:
-                                            keys_to_remove.append(short_id)
-                                    for short_id in keys_to_remove:
-                                        extension_keys_cache.pop(short_id, None)
-                                    
-                                    if keys_to_remove:
-                                        logger.info(f"Очищено {len(keys_to_remove)} записей из extension_keys_cache для удаленного ключа {email}")
-                                    
-                                    # Очищаем extension_messages для удаленного ключа
-                                    extension_keys_to_remove = []
-                                    for payment_id, (chat_id, msg_id) in list(extension_messages.items()):
-                                        try:
-                                            payment_info = await get_payment_by_id(payment_id)
-                                            if payment_info and payment_info.get('meta'):
-                                                meta = payment_info['meta'] if isinstance(payment_info['meta'], dict) else json.loads(payment_info['meta'])
-                                                if meta.get('extension_key_email') == email:
-                                                    extension_keys_to_remove.append(payment_id)
-                                        except Exception as e:
-                                            logger.warning(f"Ошибка при проверке связи платежа {payment_id} с ключом {email}: {e}")
-                                    
-                                    for payment_id in extension_keys_to_remove:
-                                        extension_messages.pop(payment_id, None)
-                                    
-                                    if extension_keys_to_remove:
-                                        logger.info(f"Очищено {len(extension_keys_to_remove)} записей из extension_messages для удаленного ключа {email}")
                                     
                                     # Очищаем уведомления для удаленного ключа
                                     if user_id:

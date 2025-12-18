@@ -31,9 +31,8 @@ from .services.sync_manager import SyncManager
 # === ИМПОРТ ОБРАБОТЧИКОВ ===
 from .handlers.commands import start, edit_main_menu, instruction, mykey
 from .handlers.callbacks import (
-    instruction_callback, extend_key_callback,
-    select_period_callback, select_server_callback, start_callback_handler,
-    extend_period_callback
+    instruction_callback,
+    select_period_callback, select_server_callback, start_callback_handler
 )
 from .handlers.callbacks.extend_subscription_callback import (
     extend_subscription_callback, extend_subscription_period_callback
@@ -239,9 +238,6 @@ notification_manager = None
 # Глобальный объект приложения (будет инициализирован в main)
 app = None
 
-# Глобальный словарь для хранения коротких идентификаторов ключей для продления
-# Ключ: короткий_id, Значение: key_email
-extension_keys_cache = {}
 
 # Глобальный словарь для хранения сообщений продления
 # Ключ: payment_id, Значение: (chat_id, message_id)
@@ -289,7 +285,6 @@ if __name__ == '__main__':
         'instruction_callback': instruction_callback,
         'handle_payment': handle_payment,
         'mykey': mykey,
-        'extend_key_callback': extend_key_callback,
         'admin_errors': admin_errors,
         'admin_notifications': admin_notifications,
         'admin_check_servers': admin_check_servers,
@@ -326,8 +321,6 @@ if __name__ == '__main__':
     # Эти обработчики остаются, так как они не покрываются навигационной системой
     app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^instr_"))
     app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^back_instr$"))
-    app.add_handler(CallbackQueryHandler(extend_key_callback, pattern="^ext_key:"))
-    app.add_handler(CallbackQueryHandler(extend_period_callback, pattern="^ext_per:"))
     app.add_handler(CallbackQueryHandler(extend_subscription_callback, pattern="^extend_sub:"))
     app.add_handler(CallbackQueryHandler(extend_subscription_period_callback, pattern="^ext_sub_per:"))
     app.add_handler(CallbackQueryHandler(select_period_callback, pattern="^select_period_"))
@@ -344,8 +337,10 @@ if __name__ == '__main__':
     # Обработчики callback-ов для главного меню и выбора сервера
     # ВАЖНО: "back", "instruction", "buy_vpn", "mykeys_menu" убраны из паттерна, так как они обрабатываются через NavigationIntegration
     # Оставляем только специфичные callback'и, которые не обрабатываются навигационной системой
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|mykey|keys_page_.*|admin_notifications_refresh|admin_errors_refresh)$"))
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|mykey|admin_notifications_refresh|admin_errors_refresh)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
+    # Обработчик для просмотра и переименования подписок
+    app.add_handler(CallbackQueryHandler(mykey, pattern="^(view_sub:|rename_sub:)"))
  
     
     # Рассылка

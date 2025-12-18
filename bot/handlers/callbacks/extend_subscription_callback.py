@@ -106,13 +106,24 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
         return
     
     # Проверяем, что подписка принадлежит пользователю
-    from ...db.subscribers_db import get_active_subscription_by_user
-    sub = await get_active_subscription_by_user(user_id)
+    from ...db.subscribers_db import get_subscription_by_id
+    sub = await get_subscription_by_id(subscription_id, user_id)
     
-    if not sub or sub['id'] != subscription_id:
+    if not sub:
         await safe_edit_or_reply_universal(
             query.message,
-            f"{UIEmojis.ERROR} Ошибка: подписка не найдена",
+            f"{UIEmojis.ERROR} Ошибка: подписка не найдена или не принадлежит вам",
+            reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
+            menu_type='mykeys_menu'
+        )
+        return
+    
+    # Проверяем, что подписка активна
+    import time
+    if sub['status'] != 'active' or sub['expires_at'] <= int(time.time()):
+        await safe_edit_or_reply_universal(
+            query.message,
+            f"{UIEmojis.ERROR} Ошибка: подписка неактивна или истекла",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
             menu_type='mykeys_menu'
         )
@@ -196,13 +207,24 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
         return
     
     # Проверяем, что подписка принадлежит пользователю
-    from ...db.subscribers_db import get_active_subscription_by_user
-    sub = await get_active_subscription_by_user(user_id)
+    from ...db.subscribers_db import get_subscription_by_id
+    sub = await get_subscription_by_id(subscription_id, user_id)
     
-    if not sub or sub['id'] != subscription_id:
+    if not sub:
         await safe_edit_or_reply_universal(
             query.message,
-            f"{UIEmojis.ERROR} Ошибка: подписка не найдена",
+            f"{UIEmojis.ERROR} Ошибка: подписка не найдена или не принадлежит вам",
+            reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
+            menu_type='mykeys_menu'
+        )
+        return
+    
+    # Проверяем, что подписка активна
+    import time
+    if sub['status'] != 'active' or sub['expires_at'] <= int(time.time()):
+        await safe_edit_or_reply_universal(
+            query.message,
+            f"{UIEmojis.ERROR} Ошибка: подписка неактивна или истекла",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
             menu_type='mykeys_menu'
         )

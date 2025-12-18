@@ -2,18 +2,16 @@
 Обработчик команды /mykey
 """
 import logging
-import json
 import datetime
-import hashlib
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from ...utils import (
-    UIEmojis, UIStyles, safe_edit_or_reply_universal, safe_edit_or_reply,
+    UIEmojis, UIStyles, safe_edit_or_reply_universal,
     check_private_chat, calculate_time_remaining
 )
 from ...navigation import NavigationBuilder, NavStates
-from ...db.subscribers_db import get_active_subscription_by_user, get_subscription_servers
+from ...db.subscribers_db import get_all_active_subscriptions_by_user, get_subscription_servers
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +24,99 @@ def get_globals():
             'nav_system': getattr(bot_module, 'nav_system', None),
             'server_manager': getattr(bot_module, 'server_manager', None),
             'subscription_manager': getattr(bot_module, 'subscription_manager', None),
-            'extension_keys_cache': getattr(bot_module, 'extension_keys_cache', {}),
         }
     except (ImportError, AttributeError):
         return {
             'nav_system': None,
             'server_manager': None,
             'subscription_manager': None,
-            'extension_keys_cache': {},
         }
+
+
+async def show_subscription_details(message, sub: dict, subscription_manager):
+    """
+    Показывает детали конкретной подписки.
+    """
+    import time
+    import os
+    current_time = int(time.time())
+    expires_at = sub["expires_at"]
+    
+    # Получаем список серверов подписки
+    servers = await get_subscription_servers(sub["id"])
+    server_count = len(servers)
+    
+    # Получаем главное название VPN
+    try:
+        from ... import bot as bot_module
+        vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
+    except (ImportError, AttributeError):
+        vpn_brand_name = 'Daralla VPN'
+    
+    # Формируем URL подписки
+    subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
+    webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
+    base_url = subscription_base_url if subscription_base_url else webhook_url
+    
+    if base_url:
+        subscription_url = f"{base_url}/sub/{sub['subscription_token']}"
+    else:
+        subscription_url = f"http://localhost:5000/sub/{sub['subscription_token']}"
+        logger.warning("⚠️ WEBHOOK_URL не установлен!")
+    
+    # Форматируем дату
+    expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
+    expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
+    period_text = "3 месяца" if sub["period"] == "3month" else "1 месяц"
+    
+    sub_name = sub.get('name', 'Подписка')
+    
+    # Формируем сообщение
+    if expires_at > current_time:
+        time_remaining = calculate_time_remaining(expires_at)
+        subscription_message = (
+            f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
+            f"{UIEmojis.SUCCESS} <b>Подписка активна</b>\n\n"
+            f"<b>Период:</b> {period_text}\n"
+            f"<b>Окончание:</b> {expiry_str}\n"
+            f"<b>Осталось:</b> {time_remaining}\n"
+            f"<b>Серверов:</b> {server_count}\n"
+            f"<b>Устройств:</b> {sub['device_limit']}\n\n"
+            f"{UIStyles.subheader('Ссылка на подписку:')}\n"
+            f"<code>{subscription_url}</code>\n\n"
+            f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент.')}"
+        )
+        
+        keyboard_buttons = [
+            [InlineKeyboardButton("Продлить подписку", callback_data=f"extend_sub:{sub['id']}")],
+            [InlineKeyboardButton("✏️ Переименовать", callback_data=f"rename_sub:{sub['id']}")],
+            [InlineKeyboardButton("◀️ Назад к списку", callback_data="mykeys_menu")],
+        ]
+    else:
+        subscription_message = (
+            f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
+            f"{UIEmojis.ERROR} <b>Подписка истекла</b>\n\n"
+            f"<b>Период:</b> {period_text}\n"
+            f"<b>Окончание:</b> {expiry_str}\n"
+            f"<b>Серверов:</b> {server_count}\n"
+            f"<b>Устройств:</b> {sub['device_limit']}\n\n"
+            f"{UIStyles.description('Ваша подписка истекла. Продлите её для продолжения использования.')}"
+        )
+        
+        keyboard_buttons = [
+            [InlineKeyboardButton("Продлить подписку", callback_data=f"extend_sub:{sub['id']}")],
+            [InlineKeyboardButton("◀️ Назад к списку", callback_data="mykeys_menu")],
+        ]
+    
+    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+    
+    await safe_edit_or_reply_universal(
+        message,
+        subscription_message,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+        menu_type='mykeys_menu'
+    )
 
 
 async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,9 +126,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     globals_dict = get_globals()
     nav_system = globals_dict['nav_system']
-    server_manager = globals_dict['server_manager']
     subscription_manager = globals_dict.get('subscription_manager')
-    extension_keys_cache = globals_dict['extension_keys_cache']
     
     # Добавляем состояние в стек только если функция вызывается напрямую (не через навигационную систему)
     # Если функция вызывается через навигационную систему, состояние уже добавлено в стек
@@ -64,320 +144,168 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("mykeys_menu: message is None")
         return
     
-    # Шаг 1: Проверяем наличие активной подписки
+    # Шаг 1: Проверяем наличие активных подписок
     if subscription_manager:
         try:
-            sub = await get_active_subscription_by_user(user_id)
-            if sub:
-                # Проверяем срок действия
+            all_subs = await get_all_active_subscriptions_by_user(user_id)
+            if all_subs:
                 import time
                 current_time = int(time.time())
-                expires_at = sub["expires_at"]
                 
-                # Получаем список серверов подписки
-                servers = await get_subscription_servers(sub["id"])
-                server_count = len(servers)
+                # Проверяем, есть ли callback_data для выбора конкретной подписки или пагинации
+                if update.callback_query and update.callback_query.data:
+                    if update.callback_query.data.startswith('subs_page_'):
+                        # Пагинация - просто продолжаем показ списка (обработается ниже)
+                        pass
+                    elif update.callback_query.data.startswith('view_sub:'):
+                        # Показываем детали конкретной подписки
+                        sub_id = int(update.callback_query.data.split(':')[1])
+                        sub = next((s for s in all_subs if s['id'] == sub_id), None)
+                        if sub:
+                            await show_subscription_details(message, sub, subscription_manager)
+                            return
+                    elif update.callback_query.data.startswith('rename_sub:'):
+                        # Переименование подписки - сохраняем ID в контекст и запрашиваем новое имя
+                        sub_id = int(update.callback_query.data.split(':')[1])
+                        context.user_data['rename_subscription_id'] = sub_id
+                        context.user_data['rename_subscription_message_id'] = message.message_id
+                        context.user_data['rename_subscription_chat_id'] = message.chat.id
+                        
+                        # Проверяем, что подписка принадлежит пользователю
+                        from ...db.subscribers_db import get_subscription_by_id
+                        sub_check = await get_subscription_by_id(sub_id, user_id)
+                        if not sub_check:
+                            error_message = (
+                                f"{UIStyles.header('Переименование подписки')}\n\n"
+                                f"{UIEmojis.ERROR} <b>Ошибка:</b> Подписка не найдена или не принадлежит вам!\n\n"
+                                f"{UIStyles.description('Попробуйте выбрать подписку из списка.')}"
+                            )
+                            keyboard = InlineKeyboardMarkup([
+                                [InlineKeyboardButton("◀️ Назад", callback_data="mykeys_menu")]
+                            ])
+                            await safe_edit_or_reply_universal(
+                                message,
+                                error_message,
+                                reply_markup=keyboard,
+                                parse_mode="HTML",
+                                menu_type='mykeys_menu'
+                            )
+                            return
+                        
+                        rename_message = (
+                            f"{UIStyles.header('Переименование подписки')}\n\n"
+                            f"{UIStyles.description('Введите новое имя для подписки (максимум 50 символов):')}"
+                        )
+                        keyboard = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("◀️ Отмена", callback_data="mykeys_menu")]
+                        ])
+                        await safe_edit_or_reply_universal(
+                            message,
+                            rename_message,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                            menu_type='mykeys_menu'
+                        )
+                        return
                 
-                # Получаем главное название VPN для использования в URL и инструкции
-                try:
-                    from ... import bot as bot_module
-                    vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
-                except (ImportError, AttributeError):
-                    vpn_brand_name = 'Daralla VPN'
+                # Показываем список всех подписок с пагинацией
+                page_size = 5
+                current_page = 0
                 
-                # Формируем URL подписки
-                # Для Happ клиента лучше использовать поддомен (как делают другие разработчики: auth.zkodes.ru)
-                # Happ использует домен из URL как название группы подписки
-                import os
-                import urllib.parse
+                # Получаем текущую страницу из callback_data
+                if update.callback_query and update.callback_query.data and update.callback_query.data.startswith('subs_page_'):
+                    try:
+                        current_page = int(update.callback_query.data.split('_')[2])
+                    except (ValueError, IndexError):
+                        current_page = 0
                 
-                # Проверяем, есть ли специальный URL для подписок (поддомен)
-                subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
-                webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
+                total_pages = (len(all_subs) + page_size - 1) // page_size
+                start_idx = current_page * page_size
+                end_idx = min(start_idx + page_size, len(all_subs))
+                page_subs = all_subs[start_idx:end_idx]
                 
-                # Если SUBSCRIPTION_URL не установлен, используем WEBHOOK_URL
-                # SUBSCRIPTION_URL должен быть поддоменом для Happ (например: https://daralla-vpn.ghosttunnel.space)
-                base_url = subscription_base_url if subscription_base_url else webhook_url
+                subscriptions_list = []
+                keyboard_buttons = []
                 
-                # Формируем subscription URL
-                if base_url:
-                    # Для Happ клиента используем поддомен в URL (например: daralla-vpn.ghosttunnel.space)
-                    # Happ автоматически использует поддомен (или первую часть) как название группы
-                    # Параметр name убираем, так как он может вызывать проблемы с эмодзи и 502 ошибки
-                    # Поддомен в URL - это основной способ для Happ
-                    subscription_url = f"{base_url}/sub/{sub['subscription_token']}"
-                else:
-                    # Если WEBHOOK_URL не установлен, используем временный fallback
-                    subscription_url = f"http://localhost:5000/sub/{sub['subscription_token']}"
-                    logger.warning(
-                        "⚠️ WEBHOOK_URL не установлен! "
-                        "Установите переменную окружения WEBHOOK_URL с публичным URL вашего webhook сервера."
-                    )
-                
-                # Форматируем дату окончания
-                expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
-                expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
-                
-                # Определяем период
-                period_text = "3 месяца" if sub["period"] == "3month" else "1 месяц"
-                
-                # Формируем сообщение о подписке
-                if expires_at > current_time:
-                    # Подписка активна
-                    time_remaining = calculate_time_remaining(expires_at)
-                    subscription_message = (
-                        f"{UIStyles.header('Моя подписка')}\n\n"
-                        f"{UIEmojis.SUCCESS} <b>Подписка активна</b>\n\n"
-                        f"<b>Период:</b> {period_text}\n"
-                        f"<b>Окончание:</b> {expiry_str}\n"
-                        f"<b>Осталось:</b> {time_remaining}\n"
-                        f"<b>Серверов:</b> {server_count}\n"
-                        f"<b>Устройств:</b> {sub['device_limit']}\n\n"
-                        f"{UIStyles.subheader('Ссылка на подписку:')}\n"
-                        f"<code>{subscription_url}</code>\n\n"
-                        f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент. Подписка включает все доступные серверы.')}\n\n"
-                        f"{UIStyles.subheader('💡 Совет:')}\n"
-                        f"{UIStyles.description('После добавления подписки вы можете переименовать её в настройках VPN-клиента на:')}\n"
-                        f"<b><code>{vpn_brand_name}</code></b>"
+                for sub in page_subs:
+                    expires_at = sub["expires_at"]
+                    expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
+                    expiry_str = expiry_datetime.strftime('%d.%m.%Y')
+                    
+                    # Статус подписки
+                    if expires_at > current_time:
+                        status_emoji = UIEmojis.SUCCESS
+                        status_text = "Активна"
+                    else:
+                        status_emoji = UIEmojis.ERROR
+                        status_text = "Истекла"
+                    
+                    sub_name = sub.get('name', f"Подписка {all_subs.index(sub) + 1}")
+                    subscriptions_list.append(
+                        f"{status_emoji} <b>{sub_name}</b>\n"
+                        f"   Окончание: {expiry_str} | {status_text}\n"
                     )
                     
-                    # Кнопки для активной подписки
-                    keyboard_buttons = [
-                        [InlineKeyboardButton("Продлить подписку", callback_data=f"extend_sub:{sub['id']}")],
-                        [NavigationBuilder.create_back_button()]
-                    ]
-                else:
-                    # Подписка истекла
-                    subscription_message = (
-                        f"{UIStyles.header('Моя подписка')}\n\n"
-                        f"{UIEmojis.ERROR} <b>Подписка истекла</b>\n\n"
-                        f"<b>Период:</b> {period_text}\n"
-                        f"<b>Окончание:</b> {expiry_str}\n"
-                        f"<b>Серверов:</b> {server_count}\n"
-                        f"<b>Устройств:</b> {sub['device_limit']}\n\n"
-                        f"{UIStyles.description('Ваша подписка истекла. Продлите её для продолжения использования.')}"
-                    )
-                    
-                    # Кнопки для истекшей подписки
-                    keyboard_buttons = [
-                        [InlineKeyboardButton("Продлить подписку", callback_data=f"extend_sub:{sub['id']}")],
-                        [InlineKeyboardButton("Купить новую подписку", callback_data="buy_menu")],
-                        [NavigationBuilder.create_back_button()]
-                    ]
+                    # Кнопка для просмотра деталей подписки
+                    keyboard_buttons.append([
+                        InlineKeyboardButton(
+                            f"📋 {sub_name}",
+                            callback_data=f"view_sub:{sub['id']}"
+                        )
+                    ])
+                
+                # Кнопки пагинации
+                if len(all_subs) > page_size:
+                    pagination_buttons = []
+                    if current_page > 0:
+                        pagination_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"subs_page_{current_page - 1}"))
+                    if current_page < total_pages - 1:
+                        pagination_buttons.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"subs_page_{current_page + 1}"))
+                    if pagination_buttons:
+                        keyboard_buttons.append(pagination_buttons)
+                
+                # Добавляем кнопку покупки новой подписки
+                keyboard_buttons.append([
+                    InlineKeyboardButton("➕ Купить новую подписку", callback_data="buy_menu")
+                ])
+                keyboard_buttons.append([NavigationBuilder.create_back_button()])
+                
+                subscriptions_text = "\n".join(subscriptions_list)
+                page_info = f" (стр. {current_page + 1}/{total_pages})" if len(all_subs) > page_size else ""
+                message_text = (
+                    f"{UIStyles.header(f'Мои подписки{page_info}')}\n\n"
+                    f"{subscriptions_text}\n"
+                    f"{UIStyles.description('Выберите подписку для просмотра деталей или купите новую.')}"
+                )
                 
                 keyboard = InlineKeyboardMarkup(keyboard_buttons)
                 
                 await safe_edit_or_reply_universal(
                     message,
-                    subscription_message,
+                    message_text,
                     reply_markup=keyboard,
                     parse_mode="HTML",
                     menu_type='mykeys_menu'
                 )
                 return
         except Exception as sub_e:
-            logger.error(f"Ошибка при получении подписки для user_id={user_id}: {sub_e}")
-            # Продолжаем показ старых ключей как fallback
+            logger.error(f"Ошибка при получении подписок для user_id={user_id}: {sub_e}")
     
-    # Шаг 2: Если подписки нет, показываем старые ключи (legacy)
-    if not server_manager:
-        logger.error("server_manager не инициализирован")
-        keyboard = InlineKeyboardMarkup([
-            [NavigationBuilder.create_back_button()]
-        ])
-        await safe_edit_or_reply_universal(message, 'Ошибка: серверы не настроены.', reply_markup=keyboard, menu_type='mykeys_menu')
-        return
-    
-    # Получаем текущую страницу из callback_data или устанавливаем 0
-    current_page = 0
-    if update.callback_query and update.callback_query.data.startswith('keys_page_'):
-        try:
-            current_page = int(update.callback_query.data.split('_')[2])
-            logger.info(f"Переход на страницу {current_page} для user_id={user_id}")
-        except (ValueError, IndexError):
-            current_page = 0
-            logger.error(f"Ошибка парсинга номера страницы: {update.callback_query.data}")
-    
-    try:
-        # Сначала проверяем доступность серверов через кэш (1 проверка на сервер)
-        # Это позволяет избежать множественных попыток подключения
-        server_health_cache = {}
-        for server in server_manager.servers:
-            server_name = server["name"]
-            # Используем кэшированную проверку здоровья (быстро, без retry)
-            is_healthy = server_manager.check_server_health(server_name, force_check=False)
-            server_health_cache[server_name] = is_healthy
-        
-        # Ищем клиентов на всех серверах
-        all_clients = []
-        unique_clients = {}  # Словарь для хранения уникальных клиентов по email
-        unavailable_servers = []  # Список недоступных серверов
-        
-        for server in server_manager.servers:
-            server_name = server["name"]
-            
-            # Пропускаем сервер, если он недоступен (проверено через кэш)
-            if not server_health_cache.get(server_name, False):
-                logger.debug(f"Сервер {server_name} недоступен (из кэша), пропускаем")
-                unavailable_servers.append(server_name)
-                continue
-            
-            try:
-                xui = server["x3"]
-                if xui is None:
-                    logger.warning(f"Сервер {server_name} недоступен, пропускаем")
-                    unavailable_servers.append(server_name)
-                    continue
-                
-                # Используем list_quick() для получения списка (1 попытка, без retry)
-                # Доступность сервера уже проверена через кэш выше
-                inbounds = xui.list_quick()['obj']
-                for inbound in inbounds:
-                    settings = json.loads(inbound['settings'])
-                    clients = settings.get("clients", [])
-                    for client in clients:
-                        if client['email'].startswith(user_id) or client['email'].startswith(f'trial_{user_id}'):
-                            client['server_name'] = server['name']  # Добавляем имя сервера
-                            if client['email'] not in unique_clients:
-                                unique_clients[client['email']] = client
-                                all_clients.append(client)
-            except Exception as e:
-                logger.error(f"Ошибка при получении клиентов с сервера {server['name']}: {e}")
-                unavailable_servers.append(server['name'])
-
-        # Если все серверы недоступны, уведомляем пользователя
-        if unavailable_servers and len(unavailable_servers) == len(server_manager.servers):
-            error_message = (
-                f"{UIStyles.header('Ошибка доступа')}\n\n"
-                f"{UIEmojis.ERROR} <b>Все серверы временно недоступны!</b>\n\n"
-                f"{UIStyles.description('Не удалось получить список ваших ключей. Попробуйте позже.')}"
-            )
-            keyboard = InlineKeyboardMarkup([
-                [NavigationBuilder.create_back_button()]
-            ])
-            await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='mykeys_menu')
-            return
-        
-        if not all_clients:
-            # Если есть недоступные серверы, но не все, сообщаем об этом
-            if unavailable_servers:
-                error_message = (
-                    f"{UIStyles.header('Ваши ключи')}\n\n"
-                    f"{UIEmojis.WARNING} <b>Некоторые серверы недоступны</b>\n\n"
-                    f"Не удалось проверить ключи на серверах: {', '.join(unavailable_servers)}\n\n"
-                    f"{UIStyles.description('У вас нет активных ключей на доступных серверах.')}"
-                )
-            else:
-                error_message = 'У вас нет активных ключей.'
-            
-            keyboard = InlineKeyboardMarkup([
-                [NavigationBuilder.create_back_button()]
-            ])
-            await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML" if unavailable_servers else None, menu_type='mykeys_menu')
-            return
-
-        # Настройки пагинации
-        keys_per_page = 1  # Показываем по 1 ключу на страницу
-        total_pages = (len(all_clients) + keys_per_page - 1) // keys_per_page
-        
-        # Ограничиваем текущую страницу
-        current_page = max(0, min(current_page, total_pages - 1))
-        
-        # Получаем ключи для текущей страницы
-        start_idx = current_page * keys_per_page
-        end_idx = start_idx + keys_per_page
-        page_clients = all_clients[start_idx:end_idx]
-        
-        # Формируем сообщение для текущей страницы
-        now = int(datetime.datetime.now().timestamp())
-        page_text = f"{UIStyles.header(f'Ваши ключи (стр. {current_page + 1}/{total_pages})')}\n\n"
-        
-        for i, client in enumerate(page_clients, start_idx + 1):
-            expiry = int(client.get('expiryTime', 0) / 1000)
-            is_active = client.get('enable', False) and expiry > now
-            expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%d.%m.%Y %H:%M') if expiry else '—'
-            status = 'Активен' if is_active else 'Неактивен'
-            server_name = client.get('server_name', 'Неизвестный сервер')
-            
-            xui = None
-            server_display_name = server_name  # По умолчанию используем server_name
-            for server in server_manager.servers:
-                if server['name'] == server_name:
-                    xui = server['x3']
-                    # Получаем display_name сервера из конфигурации
-                    server_config = server.get('config', {})
-                    server_display_name = server_config.get('display_name', server_name)
-                    break
-            
-            if xui:
-                try:
-                    # Передаем display_name сервера для tag в ссылке (только название сервера, без главного названия)
-                    link = xui.link(client["email"], server_name=server_display_name)
-                except Exception as link_e:
-                    logger.error(f"Ошибка получения ссылки на ключ {client['email']}: {link_e}")
-                    link = "Ошибка получения ссылки"
-                
-                # Добавляем информацию о ключе
-                status_icon = UIEmojis.SUCCESS if status == "Активен" else UIEmojis.ERROR
-                
-                # Вычисляем оставшееся время
-                time_remaining = calculate_time_remaining(expiry)
-                
-                # Получаем имя ключа из поля subId
-                key_name = client.get('subId', '').strip()
-                if key_name:
-                    page_text += f"{UIStyles.subheader(f'{i}. {key_name}')}\n"
-                else:
-                    page_text += f"{UIStyles.subheader(f'{i}. Ключ #{i}')}\n"
-                
-                page_text += f"<b>Email:</b> <code>{client['email']}</code>\n"
-                page_text += f"<b>Статус:</b> {status_icon} {status}\n"
-                page_text += f"<b>Сервер:</b> {server_name}\n"
-                page_text += f"<b>Осталось:</b> {time_remaining}\n\n"
-                page_text += f"<code>{link}</code>\n\n"
-                page_text += f"{UIStyles.description('Нажмите на ключ выше, чтобы скопировать')}\n\n"
-        
-        # Создаем клавиатуру с навигацией
-        keyboard_buttons = []
-        
-        # Кнопка "Продлить" для текущего ключа (если ключ не истек)
-        current_client = page_clients[0] if page_clients else None
-        if current_client:
-            expiry = int(current_client.get('expiryTime', 0) / 1000)
-            now = int(datetime.datetime.now().timestamp())
-            # Показываем кнопку продления если ключ активен или истек менее чем 30 дней назад
-            if expiry > now - (30 * 24 * 3600):  # Можно продлить в течение 30 дней после истечения
-                # Создаем короткий идентификатор для ключа
-                short_id = hashlib.md5(f"{user_id}:{current_client['email']}".encode()).hexdigest()[:8]
-                extension_keys_cache[short_id] = {
-                    'email': current_client['email'],
-                    'created_at': datetime.datetime.now().timestamp()
-                }
-                keyboard_buttons.append([InlineKeyboardButton("Продлить ключ", callback_data=f"ext_key:{short_id}")])
-            
-        
-        # Кнопки навигации по страницам
-        nav_buttons = []
-        if current_page > 0:
-            nav_buttons.append(InlineKeyboardButton(f"Пред. {UIEmojis.PREV}", callback_data=f"keys_page_{current_page - 1}"))
-        if current_page < total_pages - 1:
-            nav_buttons.append(InlineKeyboardButton(f"След. {UIEmojis.NEXT}", callback_data=f"keys_page_{current_page + 1}"))
-        
-        if nav_buttons:
-            keyboard_buttons.append(nav_buttons)
-        
-        # Кнопка "Назад"
-        keyboard_buttons.append([NavigationBuilder.create_back_button()])
-        
-        keyboard = InlineKeyboardMarkup(keyboard_buttons)
-        
-        # Отправляем сообщение с пагинацией
-        await safe_edit_or_reply_universal(message, page_text, reply_markup=keyboard, parse_mode="HTML", menu_type='mykeys_menu')
-        
-    except Exception as e:
-        logger.exception(f"Ошибка в mykey для user_id={user_id}: {e}")
-        keyboard = InlineKeyboardMarkup([
-            [NavigationBuilder.create_back_button()]
-        ])
-        await safe_edit_or_reply(message, f'{UIEmojis.ERROR} Ошибка: {e}', reply_markup=keyboard)
+    # Если подписок нет, показываем сообщение
+    no_subs_message = (
+        f"{UIStyles.header('Ваши подписки')}\n\n"
+        f"{UIEmojis.INFO} У вас пока нет активных подписок.\n\n"
+        f"{UIStyles.description('Купите новую подписку, чтобы начать пользоваться VPN.')}"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Купить подписку", callback_data="buy_menu")],
+        [NavigationBuilder.create_back_button()]
+    ])
+    await safe_edit_or_reply_universal(
+        message,
+        no_subs_message,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+        menu_type='mykeys_menu'
+    )
 

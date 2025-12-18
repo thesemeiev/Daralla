@@ -543,18 +543,9 @@ class NotificationManager:
     
     def _create_expiry_keyboard(self, email: str, user_id: str = None) -> InlineKeyboardMarkup:
         """Создает клавиатуру для уведомления об истекающем ключе"""
-        import hashlib
-        
-        # Создаем короткий ID для кнопки продления (используем тот же формат, что и в extend_key_callback)
-        if user_id:
-            short_id = hashlib.md5(f"{user_id}:{email}".encode()).hexdigest()[:8]
-        else:
-            # Fallback для случаев, когда user_id не передан
-            short_id = hashlib.md5(f"extend:{email}".encode()).hexdigest()[:8]
-        
+        # Уведомления об истечении ключей больше не используются (только подписки)
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить ключ", callback_data=f"ext_key:{short_id}")],
-            [InlineKeyboardButton("Мои ключи", callback_data="mykey")]
+            [InlineKeyboardButton("Мои подписки", callback_data="mykeys_menu")]
         ])
     
     async def _cleanup_expired_notifications(self, all_users_keys: Dict, now: datetime.datetime):

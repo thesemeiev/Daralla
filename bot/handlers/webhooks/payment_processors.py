@@ -104,7 +104,6 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
         # Проверяем, это продление подписки или старого ключа
         is_subscription_extension = period.startswith('extend_sub_')
         extension_subscription_id = meta.get('extension_subscription_id')
-        extension_email = meta.get('extension_key_email')
         
         if is_subscription_extension:
             # Продление подписки
@@ -125,8 +124,16 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 await update_payment_status(payment_id, 'failed')
                 return
             
+            # Проверяем, что подписка принадлежит пользователю
+            from ...db.subscribers_db import get_subscription_by_id, get_subscription_servers
+            sub = await get_subscription_by_id(extension_subscription_id, user_id)
+            
+            if not sub:
+                logger.error(f"Попытка продлить чужую подписку: user_id={user_id}, subscription_id={extension_subscription_id}")
+                await update_payment_status(payment_id, 'failed')
+                return
+            
             # Получаем информацию о подписке
-            from ...db.subscribers_db import get_subscription_servers
             servers = await get_subscription_servers(extension_subscription_id)
             
             if not servers:
@@ -272,204 +279,11 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 logger.error(f"Ошибка отправки уведомления о продлении подписки: {e}")
             
             return
-        
-        # Продление старого ключа (legacy)
-        logger.info(f"Обработка продления ключа: email={extension_email}, period={actual_period}, days={days}")
-        
-        if not extension_email:
-            logger.error(f"Не найден email ключа для продления в meta: {meta}")
+        else:
+            # Это не продление подписки и не продление старого ключа - ошибка
+            logger.error(f"Неизвестный тип продления: period={period}, meta={meta}")
             await update_payment_status(payment_id, 'failed')
             return
-        
-        # Получаем глобальные переменные
-        globals_dict = get_globals()
-        server_manager = globals_dict['server_manager']
-        notification_manager = globals_dict['notification_manager']
-        
-        if not server_manager:
-            logger.error("server_manager не доступен")
-            await update_payment_status(payment_id, 'failed')
-            return
-        
-        # Ищем сервер с ключом для продления
-        try:
-            xui, server_name = server_manager.find_client_on_any_server(extension_email)
-            if not xui or not server_name:
-                logger.error(f"Ключ для продления не найден: {extension_email}")
-                await update_payment_status(payment_id, 'failed')
-                
-                # Отправляем сообщение пользователю об ошибке продления
-                if message_id:
-                    error_message = (
-                        f"{UIStyles.header('Ошибка продления')}\n\n"
-                        f"{UIEmojis.ERROR} <b>Не удалось продлить ключ!</b>\n\n"
-                        f"<b>Ключ:</b> {extension_email}\n"
-                        f"<b>Причина:</b> Ключ не найден на сервере\n\n"
-                        f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
-                    )
-                    
-                    keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MYKEYS_MENU)],
-                        [NavigationBuilder.create_main_menu_button()]
-                    ])
-                    
-                    await safe_edit_message_with_photo(
-                        bot_app.bot,
-                        chat_id=int(user_id),
-                        message_id=message_id,
-                        text=error_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type='extend_key'
-                    )
-                return
-            
-            # Продлеваем ключ
-            try:
-                response = xui.extendClient(extension_email, days)
-            except Exception as e:
-                logger.error(f"Ошибка при продлении ключа {extension_email} на сервере {server_name}: {e}")
-                await update_payment_status(payment_id, 'failed')
-                # Отправляем сообщение об ошибке пользователю
-                if message_id:
-                    error_message = (
-                        f"{UIStyles.header('Ошибка продления')}\n\n"
-                        f"{UIEmojis.ERROR} <b>Не удалось продлить ключ!</b>\n\n"
-                        f"<b>Ключ:</b> {extension_email}\n"
-                        f"<b>Причина:</b> Сервер временно недоступен\n\n"
-                        f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
-                    )
-                    keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MYKEYS_MENU)],
-                        [NavigationBuilder.create_main_menu_button()]
-                    ])
-                    try:
-                        await safe_edit_message_with_photo(
-                            bot_app.bot,
-                            chat_id=int(user_id),
-                            message_id=message_id,
-                            text=error_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type='extend_key'
-                        )
-                    except Exception as edit_e:
-                        logger.error(f"Ошибка отправки сообщения об ошибке: {edit_e}")
-                return
-            
-            # Проверяем не только HTTP статус, но и поле success в JSON
-            is_success = False
-            if response and response.status_code == 200:
-                try:
-                    response_json = response.json()
-                    is_success = response_json.get('success', False)
-                    if not is_success:
-                        error_msg = response_json.get('msg', 'Unknown error')
-                        logger.error(f"Не удалось продлить ключ {extension_email}: {error_msg}")
-                        await update_payment_status(payment_id, 'failed')
-                        # Отправляем сообщение об ошибке пользователю
-                        if message_id:
-                            error_message = (
-                                f"{UIStyles.header('Ошибка продления')}\n\n"
-                                f"{UIEmojis.ERROR} <b>Не удалось продлить ключ!</b>\n\n"
-                                f"<b>Ключ:</b> {extension_email}\n"
-                                f"<b>Причина:</b> {error_msg}\n\n"
-                                f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
-                            )
-                            keyboard = InlineKeyboardMarkup([
-                                [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MYKEYS_MENU)],
-                                [NavigationBuilder.create_main_menu_button()]
-                            ])
-                            try:
-                                await safe_edit_message_with_photo(
-                                    bot_app.bot,
-                                    chat_id=int(user_id),
-                                    message_id=message_id,
-                                    text=error_message,
-                                    reply_markup=keyboard,
-                                    parse_mode="HTML",
-                                    menu_type='extend_key'
-                                )
-                            except Exception as edit_e:
-                                logger.error(f"Ошибка отправки сообщения об ошибке: {edit_e}")
-                        return
-                except (json.JSONDecodeError, ValueError):
-                    # Если ответ не JSON, считаем успешным только если статус 200
-                    is_success = True
-                    logger.warning(f"Ответ от {server_name} не является валидным JSON, но статус 200")
-            
-            if is_success:
-                await update_payment_status(payment_id, 'succeeded')
-                await update_payment_activation(payment_id, 1)
-                
-                # Отправляем уведомление о продлении
-                try:
-                    # Получаем новое время истечения
-                    try:
-                        clients_response = xui.list()
-                    except Exception as e:
-                        logger.error(f"Ошибка получения списка клиентов после продления: {e}")
-                        clients_response = {}
-                    expiry_str = "—"
-                    if clients_response.get('success', False):
-                        for inbound in clients_response.get('obj', []):
-                            settings = json.loads(inbound.get('settings', '{}'))
-                            for client in settings.get('clients', []):
-                                if client.get('email') == extension_email:
-                                    expiry_timestamp = int(client.get('expiryTime', 0) / 1000)
-                                    expiry_str = datetime.datetime.fromtimestamp(expiry_timestamp).strftime('%d.%m.%Y %H:%M') if expiry_timestamp else '—'
-                                    break
-                    
-                    # Очищаем старые уведомления об истечении для продленного ключа
-                    if notification_manager:
-                        await notification_manager.clear_key_notifications(user_id, extension_email)
-                        await notification_manager.record_key_extension(user_id, extension_email)
-                    
-                    extension_message = UIMessages.key_extended_message(
-                        email=extension_email,
-                        server_name=server_name,
-                        days=days,
-                        expiry_str=expiry_str,
-                        period=actual_period
-                    )
-                    
-                    if message_id:
-                        keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MYKEYS_MENU)],
-                            [NavigationBuilder.create_main_menu_button()]
-                        ])
-                        
-                        await safe_edit_message_with_photo(
-                            bot_app.bot,
-                            chat_id=int(user_id),
-                            message_id=message_id,
-                            text=extension_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type='extend_key'
-                        )
-                        logger.info(f"Отредактировано сообщение о продлении ключа {extension_email} пользователю {user_id}")
-                    else:
-                        # Fallback: отправляем новое сообщение
-                        await safe_send_message_with_photo(
-                            bot_app.bot,
-                            chat_id=int(user_id),
-                            text=extension_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type='extend_key'
-                        )
-                        logger.info(f"Отправлено новое сообщение о продлении ключа {extension_email} пользователю {user_id}")
-                    
-                except Exception as e:
-                    logger.error(f"Ошибка отправки уведомления о продлении: {e}")
-            else:
-                logger.error(f"Ошибка продления ключа {extension_email}: {response}")
-                await update_payment_status(payment_id, 'failed')
-                
-        except Exception as e:
-            logger.error(f"Ошибка при продлении ключа {extension_email}: {e}")
-            await update_payment_status(payment_id, 'failed')
                     
     except Exception as e:
         logger.error(f"Ошибка обработки продления ключа {payment_id}: {e}")
@@ -878,12 +692,12 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
         message_id = meta.get('message_id')
         if message_id:
             if is_extension:
-                # Ошибка продления
-                extension_email = meta.get('extension_key_email', 'Неизвестно')
+                # Ошибка продления подписки
+                extension_subscription_id = meta.get('extension_subscription_id', 'Неизвестно')
                 error_message = (
-                    f"{UIStyles.header('Ошибка продления')}\n\n"
+                    f"{UIStyles.header('Ошибка продления подписки')}\n\n"
                     f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
-                    f"<b>Ключ:</b> {extension_email}\n"
+                    f"<b>Подписка ID:</b> {extension_subscription_id}\n"
                     f"<b>Причина:</b> Платеж был отклонен\n"
                     f"<b>Статус:</b> {status}\n\n"
                     f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
@@ -894,7 +708,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                     [NavigationBuilder.create_main_menu_button()]
                 ])
                 
-                menu_type = 'extend_key'
+                menu_type = 'extend_subscription'
             else:
                 # Ошибка обычной покупки
                 error_message = (

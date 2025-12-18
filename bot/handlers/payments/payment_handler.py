@@ -238,11 +238,8 @@ async def handle_payment(update, context, price, period):
             # Подготавливаем метаданные платежа
             payment_meta = {"price": price, "type": period, "key_id": key_id, "unique_email": unique_email, "message_id": message.message_id}
             
-            # Добавляем информацию о продлении, если это продление ключа или подписки
-            if period.startswith('extend_') and context.user_data.get('extension_key_email'):
-                payment_meta['extension_key_email'] = context.user_data['extension_key_email']
-                logger.info(f"Добавлена информация о продлении ключа в метаданные: {context.user_data['extension_key_email']}")
-            elif period.startswith('extend_sub_') and context.user_data.get('extension_subscription_id'):
+            # Добавляем информацию о продлении подписки, если это продление
+            if period.startswith('extend_sub_') and context.user_data.get('extension_subscription_id'):
                 payment_meta['extension_subscription_id'] = context.user_data['extension_subscription_id']
                 logger.info(f"Добавлена информация о продлении подписки в метаданные: {context.user_data['extension_subscription_id']}")
             

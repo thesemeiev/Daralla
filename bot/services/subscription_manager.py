@@ -13,9 +13,11 @@ from ..db.subscribers_db import (
     create_subscription,
     add_subscription_server,
     get_active_subscription_by_user,
+    get_all_active_subscriptions_by_user,
     get_subscription_servers,
     remove_subscription_server,
     get_all_active_subscriptions,
+    update_subscription_name,
 )
 from .server_manager import MultiServerManager
 
@@ -42,19 +44,28 @@ class SubscriptionManager:
         period: str,
         device_limit: int,
         price: float,
+        name: str | None = None,
     ) -> Tuple[dict, str]:
         """
         Создаёт базовую подписку для пользователя в БД (без реального создания клиентов на XUI).
 
         Это первый шаг: мы фиксируем в БД сам факт подписки и её параметры.
         Создание клиентов на серверах XUI будем накручивать на следующем этапе.
+        
+        Args:
+            user_id: ID пользователя Telegram
+            period: Период подписки (month, 3month)
+            device_limit: Лимит устройств
+            price: Цена подписки
+            name: Имя подписки (опционально, если не указано - генерируется автоматически)
         """
         logger.info(
-            "Создание подписки: user_id=%s, period=%s, device_limit=%s, price=%s",
+            "Создание подписки: user_id=%s, period=%s, device_limit=%s, price=%s, name=%s",
             user_id,
             period,
             device_limit,
             price,
+            name,
         )
 
         # 1. Получаем/создаём подписчика
@@ -65,21 +76,37 @@ class SubscriptionManager:
         now = int(datetime.datetime.now().timestamp())
         expires_at = now + days * 24 * 60 * 60
 
-        # 3. Создаём запись подписки
+        # 3. Если имя не указано, генерируем автоматически (Подписка 1, Подписка 2 и т.д.)
+        if not name:
+            existing_subs = await get_all_active_subscriptions_by_user(user_id)
+            subscription_number = len(existing_subs) + 1
+            name = f"Подписка {subscription_number}"
+
+        # 4. Создаём запись подписки
         subscription_id, token = await create_subscription(
             subscriber_id=subscriber_id,
             period=period,
             device_limit=device_limit,
             price=price,
             expires_at=expires_at,
+            name=name,
         )
 
-        sub_dict = await get_active_subscription_by_user(user_id)
+        # 5. Получаем созданную подписку
+        all_subs = await get_all_active_subscriptions_by_user(user_id)
+        sub_dict = next((s for s in all_subs if s['id'] == subscription_id), None)
+        
+        if not sub_dict:
+            # Fallback: получаем по токену
+            from ..db.subscribers_db import get_subscription_by_token
+            sub_dict = await get_subscription_by_token(token)
+        
         logger.info(
-            "Подписка создана: subscription_id=%s, token=%s, user_id=%s",
+            "Подписка создана: subscription_id=%s, token=%s, user_id=%s, name=%s",
             subscription_id,
             token,
             user_id,
+            name,
         )
         return sub_dict, token
 

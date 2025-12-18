@@ -372,73 +372,8 @@ def create_webhook_app(bot_app):
             if telegram_url and is_happ_client:
                 logger.debug(f"Пропущен announce в комментариях для Happ клиента (используются кнопки через заголовки)")
             
-            # Добавляем VLESS ссылки с комментариями о протоколе, транспорте и маскировке
-            # Формат комментария: # Протокол - Транспорт - Маскировка
-            # Это позволяет VPN клиентам отображать эту информацию под названием сервера
-            def parse_vless_info(vless_link: str) -> dict:
-                """
-                Извлекает информацию о протоколе, транспорте и маскировке из VLESS ссылки
-                
-                Returns:
-                    dict с полями: protocol, transport, security
-                """
-                try:
-                    from urllib.parse import urlparse, parse_qs
-                    
-                    # Парсим VLESS ссылку
-                    parsed = urlparse(vless_link)
-                    query_params = parse_qs(parsed.query)
-                    
-                    # Протокол всегда vless (из префикса, в нижнем регистре)
-                    protocol = "vless"
-                    
-                    # Транспорт из параметра type (в нижнем регистре для единообразия)
-                    transport = query_params.get('type', ['tcp'])[0].lower()
-                    # Нормализуем названия транспорта для отображения
-                    transport_names = {
-                        'xhttp': 'xhttp',
-                        'tcp': 'tcp',
-                        'ws': 'ws',
-                        'grpc': 'grpc',
-                        'http': 'http',
-                        'quic': 'quic',
-                    }
-                    transport_display = transport_names.get(transport, transport)
-                    
-                    # Маскировка из параметра security
-                    security = query_params.get('security', ['none'])[0].lower()
-                    # Нормализуем названия маскировки для отображения
-                    security_names = {
-                        'reality': 'Reality',
-                        'tls': 'TLS',
-                        'none': 'None',
-                    }
-                    security_display = security_names.get(security, security.capitalize())
-                    
-                    return {
-                        'protocol': protocol,
-                        'transport': transport_display,
-                        'security': security_display,
-                    }
-                except Exception as e:
-                    logger.warning(f"Не удалось распарсить VLESS ссылку для извлечения информации: {e}")
-                    return {
-                        'protocol': 'vless',
-                        'transport': 'unknown',
-                        'security': 'Unknown',
-                    }
-            
-            # Добавляем каждую ссылку с комментарием о транспорте и маскировке
-            # Протокол (vless) клиенты определяют сами из ссылки, поэтому не добавляем его
-            for link in links:
-                # Извлекаем информацию из ссылки
-                link_info = parse_vless_info(link)
-                # Добавляем комментарий перед ссылкой
-                # Формат: # Транспорт - Маскировка
-                # VPN клиенты (Happ, V2RayTun) могут отображать эту информацию под названием сервера
-                comment = f"# {link_info['transport']} - {link_info['security']}"
-                response_lines.append(comment)
-                response_lines.append(link)
+            # Добавляем VLESS ссылки
+            response_lines.extend(links)
             
             response_text = "\n".join(response_lines) + "\n"
             

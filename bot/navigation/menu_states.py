@@ -11,7 +11,6 @@ class NavStates:
     SERVER_SELECTION = 'server_selection'
     PAYMENT = 'payment'
     MYKEYS_MENU = 'mykeys_menu'
-    EXTEND_KEY = 'extend_key'
     ADMIN_MENU = 'admin_menu'
     ADMIN_ERRORS = 'admin_errors'
     ADMIN_NOTIFICATIONS = 'admin_notifications'
@@ -37,7 +36,6 @@ class MenuTypes:
     PAYMENT_FAILED = 'payment_failed'
     PAYMENT_SUCCESS_KEY = 'payment_success_key'
     MYKEYS_MENU = 'mykeys_menu'
-    EXTEND_KEY = 'extend_key'
     KEY_SUCCESS = 'key_success'
     ADMIN_MENU = 'admin_menu'
     ADMIN_ERRORS = 'admin_errors'
@@ -109,7 +107,6 @@ STATE_TO_HANDLER = {
     NavStates.SERVER_SELECTION: 'buy_menu_handler',
     NavStates.PAYMENT: 'mykey',
     NavStates.MYKEYS_MENU: 'mykey',
-    NavStates.EXTEND_KEY: 'extend_key_callback',
     NavStates.ADMIN_MENU: 'admin_menu',
     NavStates.ADMIN_ERRORS: 'admin_menu',
     NavStates.ADMIN_NOTIFICATIONS: 'admin_menu',
