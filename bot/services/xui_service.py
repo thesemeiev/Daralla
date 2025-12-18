@@ -587,41 +587,35 @@ class X3:
                 logger.info(f"Используется host панели для VPN: {host}")
             
             port = inbounds.get('port', 443)
-            reality = stream.get('realitySettings', {})
-            
-            # В новой версии x-ui структура realitySettings изменилась
-            # Раньше: realitySettings.settings.publicKey
-            # Теперь: realitySettings.publicKey (или settings.publicKey в старых версиях)
-            if 'settings' in reality and isinstance(reality['settings'], dict):
-                reality_settings = reality.get('settings', {})
-                pbk = reality_settings.get('publicKey', '')
-            else:
-                # Новая структура - параметры напрямую в realitySettings
-                pbk = reality.get('publicKey', '')
-            
-            fingerprint = reality.get('fingerprint', 'chrome')
-            spx = reality.get('spiderX', '/')
-            target = reality.get('target', '')
-            sni = target.split(':')[0] if target else 'google.com'
-            logger.info(f"Reality настройки для {self.host}: target='{target}', sni='{sni}', pbk='{pbk[:20]}...'")
-            short_ids = reality.get('shortIds', [''])
-            sid = short_ids[0] if short_ids else ''
             network = stream.get('network', 'tcp')
             security = stream.get('security', 'reality')
             
-            # Получаем дополнительные параметры из xhttpSettings (для XHTTP)
+            # Получаем параметры из streamSettings
             xhttp_settings = stream.get('xhttpSettings', {})
+            reality = stream.get('realitySettings', {})
             
-            # Логируем всю структуру xhttpSettings для отладки
-            logger.info(f"DEBUG: Full xhttpSettings for {user_id}: {json.dumps(xhttp_settings, indent=2, ensure_ascii=False)}")
-            
-            # Инициализируем переменные
-            path = xhttp_settings.get('path', '/update')
+            # XHTTP параметры
+            path = xhttp_settings.get('path', '/')
             xhttp_host = xhttp_settings.get('host', '')
             mode = xhttp_settings.get('mode', 'auto')
             
-            # Логируем полученные параметры для отладки
-            logger.info(f"XHTTP параметры для {user_id}: network={network}, path={path}, host={xhttp_host}, mode={mode}")
+            # Reality параметры
+            pbk = reality.get('publicKey', '')
+            if not pbk and 'settings' in reality:
+                pbk = reality.get('settings', {}).get('publicKey', '')
+            
+            fingerprint = reality.get('fingerprint', 'chrome')
+            spx = reality.get('spiderX', '/') or '/'
+            
+            # SNI: для XHTTP берем из xhttpSettings.host, иначе из realitySettings
+            if network == 'xhttp' and xhttp_host:
+                sni = xhttp_host
+            else:
+                sni = reality.get('serverName') or (reality.get('target', '').split(':')[0] if reality.get('target') else '') or 'google.com'
+            
+            # ShortId: может быть строкой или массивом
+            short_ids = reality.get('shortIds', [''])
+            sid = short_ids[0] if isinstance(short_ids, list) and short_ids else (short_ids if isinstance(short_ids, str) else '')
 
             # Строго в правильном порядке, включая новые параметры
             params = [
@@ -645,13 +639,20 @@ class X3:
                 ("fp", fingerprint),
                 ("sni", sni),
                 ("sid", sid),
-                ("spx", quote(spx) if spx and spx != "/" else quote("/")),
+                ("spx", quote(spx)),
             ])
             
             query = "&".join(f"{k}={v}" for k, v in params)
             tag = f"Daralla-{user_id}"
 
-            return f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
+            vless_link = f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
+            
+            # Логируем сгенерированную ссылку для отладки
+            logger.info(f"Сгенерирована VLESS ссылка для {user_id}: {vless_link[:100]}...")
+            logger.debug(f"Полная VLESS ссылка: {vless_link}")
+            logger.debug(f"Параметры ссылки: host={host}, port={port}, network={network}, security={security}")
+            
+            return vless_link
 
         return 'Клиент не найден.'
     
