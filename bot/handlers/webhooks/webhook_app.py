@@ -370,36 +370,9 @@ def create_webhook_app(bot_app):
             logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
             logger.info(f"Статистика трафика в ответе: upload={total_upload}, download={total_download}, total={total_traffic}, expire={expire_timestamp_seconds}")
             
-            # Формируем Subscription-UserInfo заголовок для других клиентов (base64 JSON) - для совместимости с V2RayTun и др.
-            # subscription_userinfo_happ уже определен выше при формировании комментариев
-            import json
-            import base64
-            
-            subscription_userinfo_json = {
-                "upload": total_upload,  # Реальная статистика upload в байтах
-                "download": total_download,  # Реальная статистика download в байтах
-                "total": total_traffic if total_traffic > 0 else 0,  # Общий лимит трафика в байтах (0 = безлимит)
-                "expire": expire_timestamp_seconds,  # Время истечения подписки (Unix timestamp в секундах)
-                "expiryTime": expire_timestamp_ms,  # Время истечения в миллисекундах (для некоторых клиентов)
-                "remark": vpn_brand_name  # Название группы для VPN клиента (V2RayTun использует это как "Remarks")
-            }
-            
-            # Добавляем ссылки в JSON формат для других клиентов
-            if website_url:
-                subscription_userinfo_json["website"] = website_url
-                subscription_userinfo_json["support-url"] = website_url
-            if telegram_url:
-                subscription_userinfo_json["telegram"] = telegram_url
-                subscription_userinfo_json["telegram-url"] = telegram_url
-            
-            # Кодируем JSON в base64 для других клиентов
-            userinfo_json = json.dumps(subscription_userinfo_json, ensure_ascii=False, separators=(',', ':'))
-            userinfo_base64 = base64.b64encode(userinfo_json.encode('utf-8')).decode('utf-8')
-            
-            # Логируем содержимое для отладки
-            logger.info(f"Subscription-UserInfo (Happ формат): {subscription_userinfo_happ}")
-            logger.info(f"Subscription-UserInfo (JSON формат): {userinfo_json}")
-            logger.info(f"Subscription-UserInfo (Base64): {userinfo_base64[:100]}...")
+            # Логируем содержимое subscription-userinfo для отладки
+            # Используем строковый формат для совместимости с Happ и V2RayTun
+            logger.info(f"subscription-userinfo (строковый формат для Happ и V2RayTun): {subscription_userinfo_happ}")
             
             # Логируем информацию о подписке для отладки
             import datetime
@@ -430,38 +403,35 @@ def create_webhook_app(bot_app):
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
-                "Subscription-UserInfo": userinfo_base64,  # Base64 JSON формат для V2RayTun и других клиентов
-                "subscription-userinfo": subscription_userinfo_happ,  # Строковый формат для Happ VPN (upload=0; download=0; total=0; expire=...)
+                # Используем один заголовок subscription-userinfo в строковом формате для совместимости с Happ и V2RayTun
+                # V2RayTun поддерживает строковый формат: "upload=0; download=100000; total=2000000; expire=1749954800"
+                "subscription-userinfo": subscription_userinfo_happ,  # Строковый формат для Happ и V2RayTun (upload=0; download=0; total=0; expire=...)
                 "Content-Disposition": f'attachment; filename="{clean_filename}"',  # Имя файла для Happ (attachment вместо inline)
                 "new-domain": domain_name,  # Заголовок для Happ VPN клиента (определяет название группы вместо домена из URL)
                 "X-Subscription-Name": clean_name_for_header,  # Дополнительный заголовок с названием (БЕЗ эмодзи, только ASCII)
-                "profile-title": clean_name_for_header,  # Название профиля для Happ (максимум 25 символов)
-                "profile-update-interval": "1",  # Интервал обновления подписки в часах для Happ
+                "profile-title": clean_name_for_header,  # Название профиля для Happ и V2RayTun (максимум 25 символов для Happ)
+                "profile-update-interval": "1",  # Интервал обновления подписки в часах для Happ и V2RayTun
             }
             
             # Добавляем дополнительные заголовки, которые могут поддерживаться некоторыми клиентами
             # (на основе информации из Marzban и других источников, но без официальной документации)
             # Эти заголовки могут использоваться для отображения кнопок и названия в клиентах
             
-            # Заголовки для времени истечения (разные клиенты могут использовать разные форматы)
-            headers["Subscription-Expire"] = str(expire_timestamp_seconds)  # В секундах
-            headers["Subscription-Expiry"] = str(expire_timestamp_ms)  # В миллисекундах
+            # V2RayTun и Happ получают всю информацию из subscription-userinfo заголовка
+            # Дополнительные заголовки могут вызывать конфликты, поэтому используем только основные
             
-            # Заголовки для статистики трафика (некоторые клиенты могут читать из заголовков напрямую)
-            headers["Subscription-Upload"] = str(total_upload)
-            headers["Subscription-Download"] = str(total_download)
-            headers["Subscription-Total"] = str(total_traffic if total_traffic > 0 else 0)
-            
-            # Заголовки для ссылок согласно официальной документации Happ VPN
+            # Заголовки для ссылок согласно официальной документации Happ VPN и V2RayTun
             # Happ использует profile-web-page-url для сайта (левая иконка) и support-url для поддержки (правая иконка)
+            # V2RayTun может использовать support-url для кнопки поддержки
             if website_url:
                 headers["profile-web-page-url"] = website_url  # Кнопка сайта для Happ (левая иконка)
                 # Также добавляем для совместимости с другими клиентами
-                headers["support-url"] = website_url
                 headers["website"] = website_url
                 
             if telegram_url:
-                headers["support-url"] = telegram_url  # Кнопка поддержки для Happ (правая иконка, если ведет в Telegram - показывается иконка Telegram)
+                # support-url используется для кнопки поддержки/Telegram (правая иконка в Happ)
+                # Если ссылка ведет в Telegram, Happ автоматически покажет иконку Telegram
+                headers["support-url"] = telegram_url  # Кнопка поддержки для Happ и V2RayTun
                 # Также добавляем для совместимости с другими клиентами
                 headers["telegram-url"] = telegram_url
                 headers["telegram"] = telegram_url
