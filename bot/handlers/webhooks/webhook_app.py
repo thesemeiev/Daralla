@@ -211,17 +211,33 @@ def create_webhook_app(bot_app):
             if not domain_name or len(domain_name) > 63:  # Максимальная длина домена
                 domain_name = 'daralla-vpn'
             
+            # Получаем ссылки на сайт и Telegram из переменных окружения (если установлены)
+            import os
+            website_url = os.getenv("WEBSITE_URL", "").strip()
+            telegram_url = os.getenv("TELEGRAM_URL", "").strip()
+            
             # Возвращаем список VLESS ссылок в plain text формате
             # Каждая ссылка на новой строке - это стандартный формат для мультисерверных подписок
             # VPN клиенты (v2ray, clash, etc.) автоматически распознают этот формат
             # Для Happ добавляем несколько вариантов комментариев для автоматического определения названия
-            # Попробуем разные форматы, которые могут поддерживаться Happ
-            response_text = (
-                f"#new-domain {domain_name}\n"
-                f"# name: {vpn_brand_name}\n"
-                f"#title: {vpn_brand_name}\n"
-                + "\n".join(links) + "\n"
-            )
+            # Также добавляем ссылки на сайт и Telegram для некоторых клиентов
+            response_lines = []
+            
+            # Добавляем комментарии с названием
+            response_lines.append(f"#new-domain {domain_name}")
+            response_lines.append(f"# name: {vpn_brand_name}")
+            response_lines.append(f"#title: {vpn_brand_name}")
+            
+            # Добавляем ссылки на сайт и Telegram (если установлены)
+            # Некоторые клиенты могут отображать эти ссылки как кнопки
+            if website_url:
+                response_lines.append(f"#website: {website_url}")
+            if telegram_url:
+                response_lines.append(f"#telegram: {telegram_url}")
+            
+            # Добавляем VLESS ссылки
+            response_lines.extend(links)
+            response_text = "\n".join(response_lines) + "\n"
             
             # Логируем первую ссылку для проверки tag
             if links:
@@ -237,6 +253,7 @@ def create_webhook_app(bot_app):
             # Формируем Subscription-UserInfo заголовок для указания названия группы
             # V2RayTun и другие VPN клиенты используют поле "remark" в этом заголовке для отображения названия группы подписки
             # Это стандартный способ указания названия подписки в v2ray протоколе
+            # Также добавляем ссылки на сайт и Telegram для отображения кнопок в клиентах
             import json
             import base64
             subscription_userinfo = {
@@ -246,6 +263,13 @@ def create_webhook_app(bot_app):
                 "expire": sub["expires_at"],
                 "remark": vpn_brand_name  # Название группы для VPN клиента (V2RayTun использует это как "Remarks")
             }
+            
+            # Добавляем ссылки на сайт и Telegram, если установлены
+            # Некоторые клиенты могут использовать эти поля для отображения кнопок
+            if website_url:
+                subscription_userinfo["website"] = website_url
+            if telegram_url:
+                subscription_userinfo["telegram"] = telegram_url
             # Кодируем в base64 для заголовка
             # ensure_ascii=False позволяет сохранить эмодзи в JSON, которые затем кодируются в base64
             userinfo_json = json.dumps(subscription_userinfo, ensure_ascii=False)
