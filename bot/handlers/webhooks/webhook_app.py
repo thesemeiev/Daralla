@@ -317,14 +317,23 @@ def create_webhook_app(bot_app):
             response_lines.append(f"#used-formatted: {format_bytes(total_used)}")
             
             # Добавляем ссылки на сайт и Telegram (если установлены)
-            # Некоторые клиенты могут отображать эти ссылки как кнопки
+            # Формат для Happ VPN согласно официальной документации
             if website_url:
-                response_lines.append(f"#website: {website_url}")
-                response_lines.append(f"#support-url: {website_url}")
+                response_lines.append(f"#profile-web-page-url: {website_url}")  # Кнопка сайта для Happ (левая иконка)
+                response_lines.append(f"#website: {website_url}")  # Для других клиентов
+                response_lines.append(f"#support-url: {website_url}")  # Для других клиентов
             if telegram_url:
-                response_lines.append(f"#telegram: {telegram_url}")
-                response_lines.append(f"#telegram-url: {telegram_url}")
-                response_lines.append(f"#tg: {telegram_url}")
+                response_lines.append(f"#support-url: {telegram_url}")  # Кнопка поддержки для Happ (правая иконка, если ведет в Telegram - показывается иконка Telegram)
+                response_lines.append(f"#telegram: {telegram_url}")  # Для других клиентов
+                response_lines.append(f"#telegram-url: {telegram_url}")  # Для других клиентов
+                response_lines.append(f"#tg: {telegram_url}")  # Для других клиентов
+            
+            # Добавляем subscription-userinfo в формате Happ в комментариях
+            response_lines.append(f"#subscription-userinfo: {subscription_userinfo_happ}")
+            
+            # Добавляем profile-title и profile-update-interval для Happ
+            response_lines.append(f"#profile-title: {clean_name_for_header}")
+            response_lines.append(f"#profile-update-interval: 1")
             
             # Добавляем VLESS ссылки
             response_lines.extend(links)
@@ -342,40 +351,48 @@ def create_webhook_app(bot_app):
             logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
             logger.info(f"Статистика трафика в ответе: upload={total_upload}, download={total_download}, total={total_traffic}, expire={expire_timestamp_seconds}")
             
-            # Формируем Subscription-UserInfo заголовок для указания названия группы
-            # V2RayTun и другие VPN клиенты используют поле "remark" в этом заголовке для отображения названия группы подписки
-            # Это стандартный способ указания названия подписки в v2ray протоколе
-            # Также добавляем ссылки на сайт и Telegram для отображения кнопок в клиентах
-            # И реальную статистику трафика (upload, download, total) для отображения в клиентах
+            # Формируем Subscription-UserInfo заголовок для Happ VPN
+            # Согласно официальной документации Happ, формат должен быть строкой с разделителями ";"
+            # Формат: upload=0; download=2153701362; total=0; expire=1790951622
+            # Также поддерживаем base64 JSON формат для других клиентов (V2RayTun и др.)
+            
+            # Формат для Happ (строка с разделителями)
+            subscription_userinfo_happ = (
+                f"upload={total_upload}; "
+                f"download={total_download}; "
+                f"total={total_traffic if total_traffic > 0 else 0}; "
+                f"expire={expire_timestamp_seconds}"
+            )
+            
+            # Формат для других клиентов (base64 JSON) - для совместимости с V2RayTun и др.
             import json
             import base64
             
-            subscription_userinfo = {
+            subscription_userinfo_json = {
                 "upload": total_upload,  # Реальная статистика upload в байтах
                 "download": total_download,  # Реальная статистика download в байтах
                 "total": total_traffic if total_traffic > 0 else 0,  # Общий лимит трафика в байтах (0 = безлимит)
-                "expire": expire_timestamp_seconds,  # Время истечения подписки (Unix timestamp в секундах) - основной формат
+                "expire": expire_timestamp_seconds,  # Время истечения подписки (Unix timestamp в секундах)
                 "expiryTime": expire_timestamp_ms,  # Время истечения в миллисекундах (для некоторых клиентов)
                 "remark": vpn_brand_name  # Название группы для VPN клиента (V2RayTun использует это как "Remarks")
             }
             
-            # Добавляем ссылки на сайт и Telegram, если установлены
-            # Некоторые клиенты могут использовать эти поля для отображения кнопок
-            # Пробуем разные варианты названий полей, так как документации нет и разные клиенты могут использовать разные поля
+            # Добавляем ссылки в JSON формат для других клиентов
             if website_url:
-                subscription_userinfo["website"] = website_url
-                subscription_userinfo["support-url"] = website_url  # Marzban использует support-url
-                subscription_userinfo["supportUrl"] = website_url  # Альтернативный формат (camelCase)
+                subscription_userinfo_json["website"] = website_url
+                subscription_userinfo_json["support-url"] = website_url
             if telegram_url:
-                subscription_userinfo["telegram"] = telegram_url
-                subscription_userinfo["telegram-url"] = telegram_url  # Альтернативное название
-                subscription_userinfo["telegramUrl"] = telegram_url  # Альтернативный формат (camelCase)
-                subscription_userinfo["tg"] = telegram_url  # Короткое название
+                subscription_userinfo_json["telegram"] = telegram_url
+                subscription_userinfo_json["telegram-url"] = telegram_url
             
-            # Кодируем в base64 для заголовка
-            # ensure_ascii=False позволяет сохранить эмодзи в JSON, которые затем кодируются в base64
-            userinfo_json = json.dumps(subscription_userinfo, ensure_ascii=False)
+            # Кодируем JSON в base64 для других клиентов
+            userinfo_json = json.dumps(subscription_userinfo_json, ensure_ascii=False, separators=(',', ':'))
             userinfo_base64 = base64.b64encode(userinfo_json.encode('utf-8')).decode('utf-8')
+            
+            # Логируем содержимое для отладки
+            logger.info(f"Subscription-UserInfo (Happ формат): {subscription_userinfo_happ}")
+            logger.info(f"Subscription-UserInfo (JSON формат): {userinfo_json}")
+            logger.info(f"Subscription-UserInfo (Base64): {userinfo_base64[:100]}...")
             
             # Логируем информацию о подписке для отладки
             import datetime
@@ -404,15 +421,23 @@ def create_webhook_app(bot_app):
             if not clean_name_for_header:
                 clean_name_for_header = 'Daralla VPN'
             
+            # Happ требует максимум 25 символов для profile-title
+            if len(clean_name_for_header) > 25:
+                clean_name_for_header = clean_name_for_header[:25]
+                logger.warning(f"profile-title обрезан до 25 символов: '{clean_name_for_header}'")
+            
             headers = {
                 "Content-Type": "text/plain; charset=utf-8",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
-                "Subscription-UserInfo": userinfo_base64,  # Заголовок с информацией о подписке (включая название группы)
+                "Subscription-UserInfo": userinfo_base64,  # Base64 JSON формат для V2RayTun и других клиентов
+                "subscription-userinfo": subscription_userinfo_happ,  # Строковый формат для Happ VPN (upload=0; download=0; total=0; expire=...)
                 "Content-Disposition": f'attachment; filename="{clean_filename}"',  # Имя файла для Happ (attachment вместо inline)
                 "new-domain": domain_name,  # Заголовок для Happ VPN клиента (определяет название группы вместо домена из URL)
                 "X-Subscription-Name": clean_name_for_header,  # Дополнительный заголовок с названием (БЕЗ эмодзи, только ASCII)
+                "profile-title": clean_name_for_header,  # Название профиля для Happ (максимум 25 символов)
+                "profile-update-interval": "1",  # Интервал обновления подписки в часах для Happ
             }
             
             # Добавляем дополнительные заголовки, которые могут поддерживаться некоторыми клиентами
@@ -428,19 +453,20 @@ def create_webhook_app(bot_app):
             headers["Subscription-Download"] = str(total_download)
             headers["Subscription-Total"] = str(total_traffic if total_traffic > 0 else 0)
             
-            # Заголовки для ссылок
+            # Заголовки для ссылок согласно официальной документации Happ VPN
+            # Happ использует profile-web-page-url для сайта (левая иконка) и support-url для поддержки (правая иконка)
             if website_url:
-                headers["support-url"] = website_url  # Marzban использует support-url для ссылки на поддержку
-                headers["Support-Url"] = website_url  # Альтернативный формат
-                headers["Website"] = website_url  # Простое название
+                headers["profile-web-page-url"] = website_url  # Кнопка сайта для Happ (левая иконка)
+                # Также добавляем для совместимости с другими клиентами
+                headers["support-url"] = website_url
+                headers["website"] = website_url
+                
             if telegram_url:
-                headers["telegram-url"] = telegram_url  # Возможный заголовок для Telegram ссылки
-                headers["telegram"] = telegram_url  # Альтернативное название для Telegram
-                headers["Telegram-Url"] = telegram_url  # Альтернативный формат
-                headers["Telegram"] = telegram_url  # Простое название
-                headers["TG"] = telegram_url  # Короткое название
-            
-            headers["profile-title"] = clean_name_for_header  # Marzban использует profile-title для названия профиля
+                headers["support-url"] = telegram_url  # Кнопка поддержки для Happ (правая иконка, если ведет в Telegram - показывается иконка Telegram)
+                # Также добавляем для совместимости с другими клиентами
+                headers["telegram-url"] = telegram_url
+                headers["telegram"] = telegram_url
+                headers["tg"] = telegram_url
             
             return (response_text, 200, headers)
             
