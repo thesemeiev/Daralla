@@ -317,10 +317,13 @@ def create_webhook_app(bot_app):
             
             # Добавляем ссылки на сайт и Telegram, если установлены
             # Некоторые клиенты могут использовать эти поля для отображения кнопок
+            # Пробуем разные варианты названий полей, так как документации нет и разные клиенты могут использовать разные поля
             if website_url:
                 subscription_userinfo["website"] = website_url
+                subscription_userinfo["support-url"] = website_url  # Marzban использует support-url
             if telegram_url:
                 subscription_userinfo["telegram"] = telegram_url
+                subscription_userinfo["telegram-url"] = telegram_url  # Альтернативное название
             # Кодируем в base64 для заголовка
             # ensure_ascii=False позволяет сохранить эмодзи в JSON, которые затем кодируются в base64
             userinfo_json = json.dumps(subscription_userinfo, ensure_ascii=False)
@@ -363,6 +366,16 @@ def create_webhook_app(bot_app):
                 "new-domain": domain_name,  # Заголовок для Happ VPN клиента (определяет название группы вместо домена из URL)
                 "X-Subscription-Name": clean_name_for_header,  # Дополнительный заголовок с названием (БЕЗ эмодзи, только ASCII)
             }
+            
+            # Добавляем дополнительные заголовки, которые могут поддерживаться некоторыми клиентами
+            # (на основе информации из Marzban и других источников, но без официальной документации)
+            # Эти заголовки могут использоваться для отображения кнопок и названия в клиентах
+            if website_url:
+                headers["support-url"] = website_url  # Marzban использует support-url для ссылки на поддержку
+            if telegram_url:
+                headers["telegram-url"] = telegram_url  # Возможный заголовок для Telegram ссылки
+            headers["profile-title"] = clean_name_for_header  # Marzban использует profile-title для названия профиля
+            
             return (response_text, 200, headers)
             
         except Exception as e:
