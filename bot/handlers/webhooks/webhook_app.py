@@ -316,6 +316,25 @@ def create_webhook_app(bot_app):
             response_lines.append(f"#total-formatted: {format_bytes(total_traffic) if total_traffic > 0 else 'Unlimited'}")
             response_lines.append(f"#used-formatted: {format_bytes(total_used)}")
             
+            # Подготавливаем данные для Happ VPN перед формированием комментариев
+            # Формат subscription-userinfo для Happ (строка с разделителями)
+            subscription_userinfo_happ = (
+                f"upload={total_upload}; "
+                f"download={total_download}; "
+                f"total={total_traffic if total_traffic > 0 else 0}; "
+                f"expire={expire_timestamp_seconds}"
+            )
+            
+            # Подготавливаем clean_name_for_header для profile-title (максимум 25 символов)
+            import re
+            clean_name_for_header = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip()
+            if not clean_name_for_header:
+                clean_name_for_header = 'Daralla VPN'
+            # Happ требует максимум 25 символов для profile-title
+            if len(clean_name_for_header) > 25:
+                clean_name_for_header = clean_name_for_header[:25]
+                logger.warning(f"profile-title обрезан до 25 символов: '{clean_name_for_header}'")
+            
             # Добавляем ссылки на сайт и Telegram (если установлены)
             # Формат для Happ VPN согласно официальной документации
             if website_url:
@@ -351,20 +370,8 @@ def create_webhook_app(bot_app):
             logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
             logger.info(f"Статистика трафика в ответе: upload={total_upload}, download={total_download}, total={total_traffic}, expire={expire_timestamp_seconds}")
             
-            # Формируем Subscription-UserInfo заголовок для Happ VPN
-            # Согласно официальной документации Happ, формат должен быть строкой с разделителями ";"
-            # Формат: upload=0; download=2153701362; total=0; expire=1790951622
-            # Также поддерживаем base64 JSON формат для других клиентов (V2RayTun и др.)
-            
-            # Формат для Happ (строка с разделителями)
-            subscription_userinfo_happ = (
-                f"upload={total_upload}; "
-                f"download={total_download}; "
-                f"total={total_traffic if total_traffic > 0 else 0}; "
-                f"expire={expire_timestamp_seconds}"
-            )
-            
-            # Формат для других клиентов (base64 JSON) - для совместимости с V2RayTun и др.
+            # Формируем Subscription-UserInfo заголовок для других клиентов (base64 JSON) - для совместимости с V2RayTun и др.
+            # subscription_userinfo_happ уже определен выше при формировании комментариев
             import json
             import base64
             
@@ -416,15 +423,7 @@ def create_webhook_app(bot_app):
             if not clean_filename:
                 clean_filename = 'daralla-vpn'
             
-            # Убираем эмодзи из названия для заголовков (только ASCII)
-            clean_name_for_header = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip()
-            if not clean_name_for_header:
-                clean_name_for_header = 'Daralla VPN'
-            
-            # Happ требует максимум 25 символов для profile-title
-            if len(clean_name_for_header) > 25:
-                clean_name_for_header = clean_name_for_header[:25]
-                logger.warning(f"profile-title обрезан до 25 символов: '{clean_name_for_header}'")
+            # clean_name_for_header уже определен выше при формировании комментариев
             
             headers = {
                 "Content-Type": "text/plain; charset=utf-8",
