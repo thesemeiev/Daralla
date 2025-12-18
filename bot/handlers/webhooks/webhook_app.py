@@ -255,11 +255,17 @@ def create_webhook_app(bot_app):
             # Возвращаем как text/plain (стандартный Content-Type для subscription)
             # Добавляем CORS заголовки и Subscription-UserInfo для VPN клиентов
             # Для Happ пробуем разные варианты заголовков для автоматического определения названия
+            # ВАЖНО: HTTP заголовки должны быть в ASCII/latin-1, без эмодзи!
             import urllib.parse
             # Убираем эмодзи из имени файла для Content-Disposition
             clean_filename = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip().replace(' ', '-').lower()
             if not clean_filename:
                 clean_filename = 'daralla-vpn'
+            
+            # Убираем эмодзи из названия для заголовков (только ASCII)
+            clean_name_for_header = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip()
+            if not clean_name_for_header:
+                clean_name_for_header = 'Daralla VPN'
             
             headers = {
                 "Content-Type": "text/plain; charset=utf-8",
@@ -269,7 +275,7 @@ def create_webhook_app(bot_app):
                 "Subscription-UserInfo": userinfo_base64,  # Заголовок с информацией о подписке (включая название группы)
                 "Content-Disposition": f'attachment; filename="{clean_filename}"',  # Имя файла для Happ (attachment вместо inline)
                 "new-domain": domain_name,  # Заголовок для Happ VPN клиента (определяет название группы вместо домена из URL)
-                "X-Subscription-Name": vpn_brand_name,  # Дополнительный заголовок с названием (на случай если Happ поддерживает)
+                "X-Subscription-Name": clean_name_for_header,  # Дополнительный заголовок с названием (БЕЗ эмодзи, только ASCII)
             }
             return (response_text, 200, headers)
             

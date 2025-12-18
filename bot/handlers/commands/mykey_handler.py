@@ -135,7 +135,10 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"<b>Устройств:</b> {sub['device_limit']}\n\n"
                         f"{UIStyles.subheader('Ссылка на подписку:')}\n"
                         f"<code>{subscription_url}</code>\n\n"
-                        f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент. Подписка включает все доступные серверы.')}"
+                        f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент. Подписка включает все доступные серверы.')}\n\n"
+                        f"{UIStyles.subheader('💡 Совет:')}\n"
+                        f"{UIStyles.description('После добавления подписки вы можете переименовать её в настройках VPN-клиента на:')}\n"
+                        f"<b><code>{vpn_brand_name}</code></b>"
                     )
                     
                     # Кнопки для активной подписки
