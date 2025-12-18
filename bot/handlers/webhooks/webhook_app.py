@@ -159,7 +159,7 @@ def create_webhook_app(bot_app):
             
             logger.info(f"Подписка {sub['id']} валидна, генерируем ссылки...")
             
-            # Генерируем VLESS ссылки
+            # Генерируем VLESS ссылки и получаем информацию о серверах
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -167,11 +167,16 @@ def create_webhook_app(bot_app):
                     subscription_manager.build_vless_links_for_subscription(sub["id"])
                 )
                 logger.info(f"Сгенерировано {len(links)} VLESS ссылок для подписки {sub['id']}")
+                
+                # Получаем список серверов для статистики трафика
+                from ...db.subscribers_db import get_subscription_servers
+                servers = loop.run_until_complete(get_subscription_servers(sub["id"]))
             except Exception as gen_e:
                 logger.error(f"Ошибка при генерации VLESS ссылок для подписки {sub['id']}: {gen_e}", exc_info=True)
                 return (f"Error generating links: {str(gen_e)}", 500)
             finally:
-                loop.close()
+                # НЕ закрываем loop здесь, он понадобится для получения статистики трафика
+                pass
             
             if not links:
                 logger.warning(f"Не удалось сгенерировать ссылки для подписки {sub['id']} (пустой список)")
@@ -250,17 +255,63 @@ def create_webhook_app(bot_app):
             
             logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
             
+            # Получаем статистику трафика со всех серверов подписки
+            # Суммируем upload, download и total со всех серверов
+            total_upload = 0
+            total_download = 0
+            total_traffic = 0
+            
+            try:
+                # Получаем server_manager для доступа к XUI объектам
+                def get_server_manager():
+                    """Получает server_manager из bot.py"""
+                    try:
+                        from ... import bot as bot_module
+                        return getattr(bot_module, 'server_manager', None)
+                    except (ImportError, AttributeError):
+                        return None
+                
+                server_manager = get_server_manager()
+                if server_manager and servers:
+                    for s in servers:
+                        server_name = s["server_name"]
+                        client_email = s["client_email"]
+                        
+                        try:
+                            xui, resolved_name = server_manager.get_server_by_name(server_name)
+                            if xui:
+                                # Получаем статистику трафика клиента с этого сервера
+                                traffic_stats = xui.get_client_traffic(client_email)
+                                if traffic_stats:
+                                    total_upload += traffic_stats.get("upload", 0)
+                                    total_download += traffic_stats.get("download", 0)
+                                    # Для total берем максимальное значение (если лимиты разные на серверах)
+                                    total_traffic = max(total_traffic, traffic_stats.get("total", 0))
+                                    logger.debug(f"Статистика трафика для {client_email} на {server_name}: upload={traffic_stats.get('upload', 0)}, download={traffic_stats.get('download', 0)}, total={traffic_stats.get('total', 0)}")
+                        except Exception as e:
+                            logger.warning(f"Не удалось получить статистику трафика для {client_email} на {server_name}: {e}")
+                            # Продолжаем с другими серверами
+                            continue
+                
+                logger.info(f"Общая статистика трафика подписки: upload={total_upload}, download={total_download}, total={total_traffic}")
+            except Exception as e:
+                logger.warning(f"Ошибка получения статистики трафика: {e}, используем значения по умолчанию")
+            finally:
+                # Закрываем loop после получения статистики
+                loop.close()
+            
             # Формируем Subscription-UserInfo заголовок для указания названия группы
             # V2RayTun и другие VPN клиенты используют поле "remark" в этом заголовке для отображения названия группы подписки
             # Это стандартный способ указания названия подписки в v2ray протоколе
             # Также добавляем ссылки на сайт и Telegram для отображения кнопок в клиентах
+            # И реальную статистику трафика (upload, download, total) для отображения в клиентах
             import json
             import base64
             subscription_userinfo = {
-                "upload": 0,
-                "download": 0,
-                "total": 0,
-                "expire": sub["expires_at"],
+                "upload": total_upload,  # Реальная статистика upload в байтах
+                "download": total_download,  # Реальная статистика download в байтах
+                "total": total_traffic if total_traffic > 0 else 0,  # Общий лимит трафика в байтах (0 = безлимит)
+                "expire": sub["expires_at"],  # Время истечения подписки (Unix timestamp)
                 "remark": vpn_brand_name  # Название группы для VPN клиента (V2RayTun использует это как "Remarks")
             }
             
@@ -275,8 +326,17 @@ def create_webhook_app(bot_app):
             userinfo_json = json.dumps(subscription_userinfo, ensure_ascii=False)
             userinfo_base64 = base64.b64encode(userinfo_json.encode('utf-8')).decode('utf-8')
             
-            logger.info(f"Устанавливаем название группы подписки (Remarks для V2RayTun): '{vpn_brand_name}' (base64: {userinfo_base64[:50]}...)")
-            logger.info(f"Устанавливаем домен для Happ клиента: '{domain_name}' (из '{vpn_brand_name}')")
+            # Логируем информацию о подписке для отладки
+            import datetime
+            expire_datetime = datetime.datetime.fromtimestamp(sub["expires_at"])
+            expire_str = expire_datetime.strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"Устанавливаем название группы подписки (Remarks для V2RayTun): '{vpn_brand_name}'")
+            logger.info(f"Время истечения подписки: {expire_str} (timestamp: {sub['expires_at']})")
+            logger.info(f"Домен для Happ клиента: '{domain_name}' (из '{vpn_brand_name}')")
+            if website_url:
+                logger.info(f"Ссылка на сайт: {website_url}")
+            if telegram_url:
+                logger.info(f"Ссылка на Telegram: {telegram_url}")
             
             # Возвращаем как text/plain (стандартный Content-Type для subscription)
             # Добавляем CORS заголовки и Subscription-UserInfo для VPN клиентов

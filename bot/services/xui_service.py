@@ -449,6 +449,53 @@ class X3:
         """Получает список всех inbounds и клиентов (с retry для надежности)"""
         return self._list_internal(timeout=timeout, skip_health_check=False)
     
+    def get_client_traffic(self, user_email: str, timeout=15):
+        """
+        Получает статистику трафика клиента из 3x-ui
+        
+        Args:
+            user_email: Email клиента
+            timeout: Таймаут запроса
+            
+        Returns:
+            dict с полями: upload (bytes), download (bytes), total (bytes) или None если не найдено
+        """
+        self._ensure_connected()
+        try:
+            # Пробуем получить статистику через API 3x-ui
+            # 3x-ui может предоставлять статистику через разные endpoints
+            # Попробуем несколько вариантов
+            
+            # Вариант 1: Через /panel/api/inbounds/list (может содержать статистику в clientStats)
+            inbounds_list = self.list(timeout=timeout)
+            if inbounds_list.get('success', False) and inbounds_list.get('obj'):
+                for inbound in inbounds_list['obj']:
+                    settings = json.loads(inbound.get('settings', '{}'))
+                    clients = settings.get('clients', [])
+                    for client in clients:
+                        if client.get('email') == user_email:
+                            # Проверяем, есть ли статистика в clientStats
+                            client_stats = inbound.get('clientStats', [])
+                            for stat in client_stats:
+                                if stat.get('email') == user_email:
+                                    upload = stat.get('up', 0)  # Upload в байтах
+                                    download = stat.get('down', 0)  # Download в байтах
+                                    total = stat.get('total', 0)  # Total в байтах
+                                    logger.info(f"Найдена статистика трафика для {user_email}: upload={upload}, download={download}, total={total}")
+                                    return {
+                                        "upload": upload,
+                                        "download": download,
+                                        "total": total
+                                    }
+            
+            # Если статистика не найдена, возвращаем None
+            logger.warning(f"Статистика трафика для клиента {user_email} не найдена в 3x-ui")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения статистики трафика для {user_email}: {e}")
+            return None
+    
     def list_quick(self, timeout=5):
         """
         Быстрая проверка доступности сервера без retry (для health check)
