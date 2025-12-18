@@ -95,6 +95,17 @@ def create_webhook_app(bot_app):
         Эндпоинт для получения VLESS ссылок подписки.
         Возвращает список VLESS ссылок для всех серверов в подписке.
         """
+        # Определяем тип клиента по User-Agent (если возможно)
+        # Многие VPN клиенты не отправляют User-Agent, поэтому определение может быть ненадежным
+        user_agent = request.headers.get('User-Agent', '').lower()
+        x_client = request.headers.get('X-Client', '').lower()
+        is_happ_client = 'happ' in user_agent or 'happ' in x_client
+        is_v2raytun_client = 'v2raytun' in user_agent or 'v2raytun' in x_client
+        
+        # Логируем для отладки
+        if user_agent or x_client:
+            logger.debug(f"Определение клиента: User-Agent='{user_agent[:100]}', X-Client='{x_client}', is_happ={is_happ_client}, is_v2raytun={is_v2raytun_client}")
+        
         # Обрабатываем OPTIONS запрос (CORS preflight)
         if request.method == 'OPTIONS':
             return ('', 200, {
@@ -354,18 +365,12 @@ def create_webhook_app(bot_app):
             response_lines.append(f"#profile-title: {clean_name_for_header}")
             response_lines.append(f"#profile-update-interval: 1")
             
-            # Добавляем announce и announce-url в комментариях для V2RayTun
-            # V2RayTun может читать announce из комментариев в теле ответа
-            # Happ не читает announce из комментариев, поэтому оно не будет показываться в Happ
-            # Используем только Telegram (если есть), так как пользователь хочет только Telegram
-            if telegram_url:
-                # Формируем announce текст только с Telegram (без сайта)
-                announce_text = "#0088cc📱 Telegram"  # Цветной текст: #0088cc (синий Telegram)
-                # Кодируем в base64 для V2RayTun (V2RayTun поддерживает base64 с префиксом base64:)
-                import base64
-                announce_base64 = base64.b64encode(announce_text.encode('utf-8')).decode('utf-8')
-                response_lines.append(f"#announce: base64:{announce_base64}")
-                response_lines.append(f"#announce-url: {telegram_url}")
+            # НЕ добавляем announce в комментариях, чтобы Happ не показывал его
+            # Happ читает announce из комментариев, что вызывает несостыковки с кнопками
+            # V2RayTun будет получать announce через HTTP заголовки (добавляется ниже)
+            # Это обеспечивает единообразное оформление: Happ использует кнопки, V2RayTun использует announce
+            if telegram_url and is_happ_client:
+                logger.debug(f"Пропущен announce в комментариях для Happ клиента (используются кнопки через заголовки)")
             
             # Добавляем VLESS ссылки
             response_lines.extend(links)
@@ -449,11 +454,22 @@ def create_webhook_app(bot_app):
                 headers["telegram-url"] = telegram_url
                 headers["telegram"] = telegram_url
                 headers["tg"] = telegram_url
+                
+                # Добавляем announce в HTTP заголовках для V2RayTun (НЕ в комментариях, чтобы Happ не показывал)
+                # V2RayTun поддерживает announce в заголовках, Happ обычно игнорирует announce в заголовках
+                # Это обеспечивает единообразное оформление: Happ использует кнопки, V2RayTun использует announce
+                if not is_happ_client:
+                    # Формируем announce текст только с Telegram (без сайта) для V2RayTun
+                    announce_text = "#0088cc📱 Telegram"  # Цветной текст: #0088cc (синий Telegram)
+                    # Кодируем в base64 для V2RayTun (V2RayTun поддерживает base64 с префиксом base64:)
+                    import base64
+                    announce_base64 = base64.b64encode(announce_text.encode('utf-8')).decode('utf-8')
+                    headers["announce"] = f"base64:{announce_base64}"
+                    headers["announce-url"] = telegram_url
+                    logger.debug(f"Добавлен announce в заголовках для V2RayTun (клиент: {user_agent[:50] if user_agent else 'unknown'})")
+                else:
+                    logger.debug(f"Пропущен announce в заголовках для Happ клиента (используются кнопки через заголовки)")
             
-            # V2RayTun поддерживает announce и announce-url для отображения объявлений со ссылками
-            # НЕ добавляем announce в HTTP заголовки, чтобы оно не показывалось в Happ
-            # Добавляем announce только в комментарии в теле ответа для V2RayTun
-            # Happ не читает announce из комментариев, поэтому оно не будет показываться в Happ
             
             return (response_text, 200, headers)
             
