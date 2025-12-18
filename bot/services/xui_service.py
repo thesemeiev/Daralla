@@ -662,6 +662,7 @@ class X3:
             
             # Логируем сгенерированную ссылку для отладки
             logger.info(f"Сгенерирована VLESS ссылка для {user_id}: tag='{tag}', server_name='{server_name}'")
+            logger.info(f"Полная VLESS ссылка (первые 200 символов): {vless_link[:200]}...")
             logger.debug(f"Полная VLESS ссылка: {vless_link}")
             logger.debug(f"Параметры ссылки: host={host}, port={port}, network={network}, security={security}")
             
@@ -792,6 +793,9 @@ class X3:
                                         updated_links.append(updated_link)
                                     links = updated_links
                                     logger.info(f"Обновлены tag в {len(links)} ссылках на '{server_name}'")
+                                    # Логируем первую ссылку для проверки
+                                    if links:
+                                        logger.info(f"Пример обновленной ссылки (первые 150 символов): {links[0][:150]}...")
                                 
                                 logger.info(f"Получено {len(links)} ссылок из X-UI subscription endpoint для {user_email}")
                                 return links

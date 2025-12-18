@@ -196,6 +196,15 @@ def create_webhook_app(bot_app):
             # VPN клиенты (v2ray, clash, etc.) автоматически распознают этот формат
             response_text = "\n".join(links) + "\n"
             
+            # Логируем первую ссылку для проверки tag
+            if links:
+                first_link = links[0]
+                if '#' in first_link:
+                    tag_part = first_link.split('#')[1]
+                    logger.info(f"Проверка tag в первой ссылке: '{tag_part}' (URL-decoded)")
+                else:
+                    logger.warning(f"В первой ссылке отсутствует tag!")
+            
             logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']}")
             
             # Возвращаем как text/plain (стандартный Content-Type для subscription)

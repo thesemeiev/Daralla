@@ -277,15 +277,19 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
             server_name = client.get('server_name', 'Неизвестный сервер')
             
             xui = None
+            server_display_name = server_name  # По умолчанию используем server_name
             for server in server_manager.servers:
                 if server['name'] == server_name:
                     xui = server['x3']
+                    # Получаем display_name сервера из конфигурации
+                    server_config = server.get('config', {})
+                    server_display_name = server_config.get('display_name', server_name)
                     break
             
             if xui:
                 try:
-                    # Передаем название сервера для tag в ссылке
-                    link = xui.link(client["email"], server_name=server_name)
+                    # Передаем display_name сервера для tag в ссылке (только название сервера, без главного названия)
+                    link = xui.link(client["email"], server_name=server_display_name)
                 except Exception as link_e:
                     logger.error(f"Ошибка получения ссылки на ключ {client['email']}: {link_e}")
                     link = "Ошибка получения ссылки"

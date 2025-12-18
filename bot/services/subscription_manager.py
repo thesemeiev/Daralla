@@ -130,25 +130,16 @@ class SubscriptionManager:
                     )
                     continue
                 
-                # Формируем красивое название: главное название + название сервера
                 # Получаем display_name сервера из конфигурации (если есть)
+                # Это будет название конкретного сервера (локация)
                 server_config = self.server_manager.get_server_config(server_name)
                 server_display_name = server_config.get("display_name") or resolved_name
                 
-                # Получаем главное название бренда из bot.py
-                try:
-                    import sys
-                    if 'bot.bot' in sys.modules:
-                        bot_module = sys.modules['bot.bot']
-                        main_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla')
-                    else:
-                        main_name = 'Daralla'
-                except:
-                    main_name = 'Daralla'
-                
-                # Формируем итоговое название: "Главное название - Название сервера"
-                display_name = f"{main_name} - {server_display_name}"
-                logger.info(f"Формируем название для VPN клиента: '{display_name}' (main_name='{main_name}', server='{server_display_name}')")
+                # Используем только название сервера в tag
+                # VPN клиент будет группировать серверы по главному названию из subscription URL
+                # Главное название задается через VPN_BRAND_NAME, но в tag используем только название сервера
+                display_name = server_display_name
+                logger.info(f"Формируем название для VPN клиента: '{display_name}' (server='{server_display_name}')")
                 
                 # Используем готовый subscription endpoint X-UI вместо ручной генерации
                 # Это более надежно - X-UI сам правильно генерирует ссылки
