@@ -34,7 +34,8 @@ class MultiServerManager:
                     x3_server = X3(
                         login=server_config["login"],
                         password=server_config["password"], 
-                        host=server_config["host"]
+                        host=server_config["host"],
+                        vpn_host=server_config.get("vpn_host")  # IP/домен VPN сервера (если отличается от панели)
                     )
                     # Всегда добавляем сервер в список, подключение произойдет при первом использовании
                     server_info = {

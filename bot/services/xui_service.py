@@ -16,10 +16,11 @@ logger = logging.getLogger(__name__)
 class X3:
     """Класс для работы с X-UI панелью управления VPN"""
     
-    def __init__(self, login, password, host):
+    def __init__(self, login, password, host, vpn_host=None):
         self.login = login
         self.password = password
         self.host = host
+        self.vpn_host = vpn_host  # IP/домен VPN сервера (если отличается от панели)
         self.ses = requests.Session()
         
         # Определяем протокол и настраиваем SSL соответственно
@@ -573,8 +574,18 @@ class X3:
             if not client:
                 continue
 
-            host_part = self.host.split('//')[-1]
-            host = host_part.split(':')[0] if ':' in host_part else host_part
+            # Используем vpn_host если указан, иначе берем из host панели
+            if self.vpn_host:
+                # Если vpn_host указан, используем его
+                host_part = self.vpn_host.split('//')[-1] if '//' in self.vpn_host else self.vpn_host
+                host = host_part.split(':')[0] if ':' in host_part else host_part
+                logger.info(f"Используется VPN host из конфигурации: {host}")
+            else:
+                # Иначе используем IP панели (как раньше)
+                host_part = self.host.split('//')[-1]
+                host = host_part.split(':')[0] if ':' in host_part else host_part
+                logger.info(f"Используется host панели для VPN: {host}")
+            
             port = inbounds.get('port', 443)
             reality = stream.get('realitySettings', {})
             
