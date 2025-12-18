@@ -221,45 +221,17 @@ def create_webhook_app(bot_app):
             website_url = os.getenv("WEBSITE_URL", "").strip()
             telegram_url = os.getenv("TELEGRAM_URL", "").strip()
             
-            # Возвращаем список VLESS ссылок в plain text формате
-            # Каждая ссылка на новой строке - это стандартный формат для мультисерверных подписок
-            # VPN клиенты (v2ray, clash, etc.) автоматически распознают этот формат
-            # Для Happ добавляем несколько вариантов комментариев для автоматического определения названия
-            # Также добавляем ссылки на сайт и Telegram для некоторых клиентов
-            response_lines = []
+            # Определяем время истечения (в секундах и миллисекундах)
+            expire_timestamp_seconds = sub["expires_at"]  # Unix timestamp в секундах
+            expire_timestamp_ms = expire_timestamp_seconds * 1000  # В миллисекундах
             
-            # Добавляем комментарии с названием
-            response_lines.append(f"#new-domain {domain_name}")
-            response_lines.append(f"# name: {vpn_brand_name}")
-            response_lines.append(f"#title: {vpn_brand_name}")
-            
-            # Добавляем ссылки на сайт и Telegram (если установлены)
-            # Некоторые клиенты могут отображать эти ссылки как кнопки
-            if website_url:
-                response_lines.append(f"#website: {website_url}")
-            if telegram_url:
-                response_lines.append(f"#telegram: {telegram_url}")
-            
-            # Добавляем VLESS ссылки
-            response_lines.extend(links)
-            response_text = "\n".join(response_lines) + "\n"
-            
-            # Логируем первую ссылку для проверки tag
-            if links:
-                first_link = links[0]
-                if '#' in first_link:
-                    tag_part = first_link.split('#')[1]
-                    logger.info(f"Проверка tag в первой ссылке: '{tag_part}' (URL-decoded)")
-                else:
-                    logger.warning(f"В первой ссылке отсутствует tag!")
-            
-            logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
-            
-            # Получаем статистику трафика со всех серверов подписки
+            # Получаем статистику трафика со всех серверов подписки ПЕРЕД формированием ответа
             # Суммируем upload, download и total со всех серверов
             total_upload = 0
             total_download = 0
             total_traffic = 0
+            
+            logger.info(f"Начало получения статистики трафика для подписки {sub['id']} с {len(servers)} серверами")
             
             try:
                 # Получаем server_manager для доступа к XUI объектам
@@ -300,6 +272,76 @@ def create_webhook_app(bot_app):
                 # Закрываем loop после получения статистики
                 loop.close()
             
+            # Теперь формируем ответ с комментариями (после получения статистики трафика)
+            # Возвращаем список VLESS ссылок в plain text формате
+            # Каждая ссылка на новой строке - это стандартный формат для мультисерверных подписок
+            # VPN клиенты (v2ray, clash, etc.) автоматически распознают этот формат
+            # Для Happ добавляем несколько вариантов комментариев для автоматического определения названия
+            # Также добавляем ссылки на сайт и Telegram для некоторых клиентов
+            response_lines = []
+            
+            # Добавляем комментарии с названием
+            response_lines.append(f"#new-domain {domain_name}")
+            response_lines.append(f"# name: {vpn_brand_name}")
+            response_lines.append(f"#title: {vpn_brand_name}")
+            
+            # Добавляем информацию о времени истечения в комментариях
+            # Некоторые клиенты могут читать эту информацию из комментариев
+            import datetime
+            expire_datetime = datetime.datetime.fromtimestamp(expire_timestamp_seconds)
+            expire_str = expire_datetime.strftime('%Y-%m-%d %H:%M:%S')
+            response_lines.append(f"#expire: {expire_timestamp_seconds}")  # В секундах
+            response_lines.append(f"#expiryTime: {expire_timestamp_ms}")  # В миллисекундах
+            response_lines.append(f"#expire-date: {expire_str}")  # Человекочитаемый формат
+            
+            # Добавляем информацию о трафике в комментариях
+            # Форматируем трафик в читаемый вид (ГБ, МБ)
+            def format_bytes(bytes_value):
+                """Форматирует байты в читаемый формат"""
+                if bytes_value == 0:
+                    return "0 B"
+                for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                    if bytes_value < 1024.0:
+                        return f"{bytes_value:.2f} {unit}"
+                    bytes_value /= 1024.0
+                return f"{bytes_value:.2f} PB"
+            
+            total_used = total_upload + total_download
+            response_lines.append(f"#upload: {total_upload}")  # В байтах
+            response_lines.append(f"#download: {total_download}")  # В байтах
+            response_lines.append(f"#total: {total_traffic if total_traffic > 0 else 0}")  # Лимит в байтах
+            response_lines.append(f"#used: {total_used}")  # Использовано в байтах
+            response_lines.append(f"#upload-formatted: {format_bytes(total_upload)}")
+            response_lines.append(f"#download-formatted: {format_bytes(total_download)}")
+            response_lines.append(f"#total-formatted: {format_bytes(total_traffic) if total_traffic > 0 else 'Unlimited'}")
+            response_lines.append(f"#used-formatted: {format_bytes(total_used)}")
+            
+            # Добавляем ссылки на сайт и Telegram (если установлены)
+            # Некоторые клиенты могут отображать эти ссылки как кнопки
+            if website_url:
+                response_lines.append(f"#website: {website_url}")
+                response_lines.append(f"#support-url: {website_url}")
+            if telegram_url:
+                response_lines.append(f"#telegram: {telegram_url}")
+                response_lines.append(f"#telegram-url: {telegram_url}")
+                response_lines.append(f"#tg: {telegram_url}")
+            
+            # Добавляем VLESS ссылки
+            response_lines.extend(links)
+            response_text = "\n".join(response_lines) + "\n"
+            
+            # Логируем первую ссылку для проверки tag
+            if links:
+                first_link = links[0]
+                if '#' in first_link:
+                    tag_part = first_link.split('#')[1]
+                    logger.info(f"Проверка tag в первой ссылке: '{tag_part}' (URL-decoded)")
+                else:
+                    logger.warning(f"В первой ссылке отсутствует tag!")
+            
+            logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
+            logger.info(f"Статистика трафика в ответе: upload={total_upload}, download={total_download}, total={total_traffic}, expire={expire_timestamp_seconds}")
+            
             # Формируем Subscription-UserInfo заголовок для указания названия группы
             # V2RayTun и другие VPN клиенты используют поле "remark" в этом заголовке для отображения названия группы подписки
             # Это стандартный способ указания названия подписки в v2ray протоколе
@@ -307,11 +349,13 @@ def create_webhook_app(bot_app):
             # И реальную статистику трафика (upload, download, total) для отображения в клиентах
             import json
             import base64
+            
             subscription_userinfo = {
                 "upload": total_upload,  # Реальная статистика upload в байтах
                 "download": total_download,  # Реальная статистика download в байтах
                 "total": total_traffic if total_traffic > 0 else 0,  # Общий лимит трафика в байтах (0 = безлимит)
-                "expire": sub["expires_at"],  # Время истечения подписки (Unix timestamp)
+                "expire": expire_timestamp_seconds,  # Время истечения подписки (Unix timestamp в секундах) - основной формат
+                "expiryTime": expire_timestamp_ms,  # Время истечения в миллисекундах (для некоторых клиентов)
                 "remark": vpn_brand_name  # Название группы для VPN клиента (V2RayTun использует это как "Remarks")
             }
             
@@ -321,9 +365,13 @@ def create_webhook_app(bot_app):
             if website_url:
                 subscription_userinfo["website"] = website_url
                 subscription_userinfo["support-url"] = website_url  # Marzban использует support-url
+                subscription_userinfo["supportUrl"] = website_url  # Альтернативный формат (camelCase)
             if telegram_url:
                 subscription_userinfo["telegram"] = telegram_url
                 subscription_userinfo["telegram-url"] = telegram_url  # Альтернативное название
+                subscription_userinfo["telegramUrl"] = telegram_url  # Альтернативный формат (camelCase)
+                subscription_userinfo["tg"] = telegram_url  # Короткое название
+            
             # Кодируем в base64 для заголовка
             # ensure_ascii=False позволяет сохранить эмодзи в JSON, которые затем кодируются в base64
             userinfo_json = json.dumps(subscription_userinfo, ensure_ascii=False)
@@ -370,11 +418,28 @@ def create_webhook_app(bot_app):
             # Добавляем дополнительные заголовки, которые могут поддерживаться некоторыми клиентами
             # (на основе информации из Marzban и других источников, но без официальной документации)
             # Эти заголовки могут использоваться для отображения кнопок и названия в клиентах
+            
+            # Заголовки для времени истечения (разные клиенты могут использовать разные форматы)
+            headers["Subscription-Expire"] = str(expire_timestamp_seconds)  # В секундах
+            headers["Subscription-Expiry"] = str(expire_timestamp_ms)  # В миллисекундах
+            
+            # Заголовки для статистики трафика (некоторые клиенты могут читать из заголовков напрямую)
+            headers["Subscription-Upload"] = str(total_upload)
+            headers["Subscription-Download"] = str(total_download)
+            headers["Subscription-Total"] = str(total_traffic if total_traffic > 0 else 0)
+            
+            # Заголовки для ссылок
             if website_url:
                 headers["support-url"] = website_url  # Marzban использует support-url для ссылки на поддержку
+                headers["Support-Url"] = website_url  # Альтернативный формат
+                headers["Website"] = website_url  # Простое название
             if telegram_url:
                 headers["telegram-url"] = telegram_url  # Возможный заголовок для Telegram ссылки
                 headers["telegram"] = telegram_url  # Альтернативное название для Telegram
+                headers["Telegram-Url"] = telegram_url  # Альтернативный формат
+                headers["Telegram"] = telegram_url  # Простое название
+                headers["TG"] = telegram_url  # Короткое название
+            
             headers["profile-title"] = clean_name_for_header  # Marzban использует profile-title для названия профиля
             
             return (response_text, 200, headers)

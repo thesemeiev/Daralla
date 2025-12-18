@@ -268,6 +268,25 @@ async def get_subscription_servers(subscription_id: int) -> list[dict]:
             ]
 
 
+async def remove_subscription_server(subscription_id: int, server_name: str) -> bool:
+    """
+    Удаляет связь подписки с конкретным сервером XUI.
+    
+    Returns:
+        True если сервер был удален, False если не найден
+    """
+    async with aiosqlite.connect(SUBSCRIBERS_DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            DELETE FROM subscription_servers
+            WHERE subscription_id = ? AND server_name = ?
+            """,
+            (subscription_id, server_name),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
 async def get_all_active_subscriptions() -> list[dict]:
     """
     Возвращает все активные подписки.

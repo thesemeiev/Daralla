@@ -7,7 +7,7 @@ import asyncio
 import telegram
 from ..db import init_all_db
 from ..services import NotificationManager
-from ..core.tasks import cleanup_old_payments_task, expired_keys_cleanup_task, sync_db_with_xui_task
+from ..core.tasks import cleanup_old_payments_task, expired_keys_cleanup_task, sync_db_with_xui_task, sync_servers_with_config_task
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +231,29 @@ async def on_startup(app):
         asyncio.create_task(expired_keys_cleanup_task())
         # Запускаем задачу синхронизации БД с X-UI
         asyncio.create_task(sync_db_with_xui_task())
+        
+        # Запускаем задачу синхронизации серверов с конфигурацией
+        asyncio.create_task(sync_servers_with_config_task())
+        
+        # Выполняем первоначальную синхронизацию серверов с конфигурацией при старте
+        # (после небольшой задержки, чтобы все сервисы успели инициализироваться)
+        async def initial_sync():
+            await asyncio.sleep(30)  # Ждем 30 секунд после старта
+            subscription_manager = globals_dict.get('subscription_manager')
+            if subscription_manager:
+                logger.info("Выполнение первоначальной синхронизации серверов с конфигурацией...")
+                try:
+                    stats = await subscription_manager.sync_servers_with_config(auto_create_clients=True)
+                    logger.info(
+                        f"Первоначальная синхронизация завершена: "
+                        f"добавлено {stats['servers_added']} серверов, "
+                        f"удалено {stats['servers_removed']} серверов, "
+                        f"создано {stats['clients_created']} клиентов"
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка первоначальной синхронизации серверов: {e}")
+        
+        asyncio.create_task(initial_sync())
         
     except Exception as e:
         logger.error(f"Ошибка инициализации бота: {e}")

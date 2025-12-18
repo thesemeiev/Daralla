@@ -374,6 +374,33 @@ class X3:
                     return True
         return False
 
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    def get_client_expiry_time(self, user_email, timeout=15):
+        """
+        Получает время истечения клиента по email.
+        
+        Returns:
+            int: Unix timestamp в секундах, или None если клиент не найден
+        """
+        self._ensure_connected()
+        try:
+            inbounds_list = self.list(timeout=timeout)
+            if inbounds_list.get('success', False) and inbounds_list.get('obj'):
+                for inbound in inbounds_list['obj']:
+                    settings = json.loads(inbound.get('settings', '{}'))
+                    clients = settings.get('clients', [])
+                    for client in clients:
+                        if client.get('email') == user_email:
+                            expiry_time_ms = client.get('expiryTime', 0)
+                            if expiry_time_ms > 0:
+                                # Конвертируем из миллисекунд в секунды
+                                return expiry_time_ms // 1000
+                            return None
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка получения времени истечения клиента {user_email}: {e}")
+            return None
+
     def _list_internal(self, timeout=15, skip_health_check=False):
         """Внутренний метод для получения списка inbounds (без retry)"""
         self._ensure_connected()

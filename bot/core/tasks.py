@@ -397,3 +397,50 @@ async def sync_db_with_xui_task():
             # В случае ошибки ждем 1 час перед повторной попыткой
             await asyncio.sleep(60 * 60)
 
+
+async def sync_servers_with_config_task():
+    """
+    Периодическая задача синхронизации серверов в подписках с конфигурацией.
+    Запускается каждый час для автоматического добавления/удаления серверов.
+    """
+    logger.info("Запуск периодической синхронизации серверов с конфигурацией")
+    while True:
+        try:
+            # Ждем 1 час перед первой синхронизацией (чтобы не нагружать при старте)
+            await asyncio.sleep(60 * 60)
+            
+            # Получаем SubscriptionManager из глобальных переменных
+            globals_dict = get_globals()
+            subscription_manager = globals_dict.get('subscription_manager')
+            
+            if not subscription_manager:
+                logger.warning("subscription_manager не доступен, пропускаем синхронизацию")
+                continue
+            
+            # Выполняем синхронизацию серверов с конфигурацией
+            stats = await subscription_manager.sync_servers_with_config(auto_create_clients=True)
+            
+            # Логируем результаты
+            if stats['errors']:
+                logger.warning(
+                    f"Синхронизация серверов завершена с ошибками: "
+                    f"проверено {stats['subscriptions_checked']} подписок, "
+                    f"добавлено {stats['servers_added']} серверов, "
+                    f"удалено {stats['servers_removed']} серверов, "
+                    f"создано {stats['clients_created']} клиентов, "
+                    f"ошибок {len(stats['errors'])}"
+                )
+            else:
+                logger.info(
+                    f"Синхронизация серверов успешно завершена: "
+                    f"проверено {stats['subscriptions_checked']} подписок, "
+                    f"добавлено {stats['servers_added']} серверов, "
+                    f"удалено {stats['servers_removed']} серверов, "
+                    f"создано {stats['clients_created']} клиентов"
+                )
+            
+        except Exception as e:
+            logger.error(f"Ошибка в задаче синхронизации серверов с конфигурацией: {e}")
+            # В случае ошибки ждем 30 минут перед повторной попыткой
+            await asyncio.sleep(30 * 60)
+
