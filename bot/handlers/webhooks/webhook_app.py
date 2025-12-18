@@ -235,7 +235,8 @@ def create_webhook_app(bot_app):
             logger.info(f"Возвращаем {len(links)} VLESS ссылок для подписки {sub['id']} с названием группы: '{vpn_brand_name}'")
             
             # Формируем Subscription-UserInfo заголовок для указания названия группы
-            # Многие VPN клиенты используют этот заголовок для отображения названия подписки
+            # V2RayTun и другие VPN клиенты используют поле "remark" в этом заголовке для отображения названия группы подписки
+            # Это стандартный способ указания названия подписки в v2ray протоколе
             import json
             import base64
             subscription_userinfo = {
@@ -243,13 +244,14 @@ def create_webhook_app(bot_app):
                 "download": 0,
                 "total": 0,
                 "expire": sub["expires_at"],
-                "remark": vpn_brand_name  # Название группы для VPN клиента
+                "remark": vpn_brand_name  # Название группы для VPN клиента (V2RayTun использует это как "Remarks")
             }
             # Кодируем в base64 для заголовка
+            # ensure_ascii=False позволяет сохранить эмодзи в JSON, которые затем кодируются в base64
             userinfo_json = json.dumps(subscription_userinfo, ensure_ascii=False)
             userinfo_base64 = base64.b64encode(userinfo_json.encode('utf-8')).decode('utf-8')
             
-            logger.info(f"Устанавливаем название группы подписки: '{vpn_brand_name}' (base64: {userinfo_base64[:50]}...)")
+            logger.info(f"Устанавливаем название группы подписки (Remarks для V2RayTun): '{vpn_brand_name}' (base64: {userinfo_base64[:50]}...)")
             logger.info(f"Устанавливаем домен для Happ клиента: '{domain_name}' (из '{vpn_brand_name}')")
             
             # Возвращаем как text/plain (стандартный Content-Type для subscription)
