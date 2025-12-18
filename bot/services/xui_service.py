@@ -765,6 +765,8 @@ class X3:
                                 links = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
                                 
                                 # Заменяем tag (название) в ссылках на название сервера, если указано
+                                # X-UI может возвращать ссылки с доменом в tag (например, ghosttunnel.space)
+                                # Мы заменяем его на красивое название бренда
                                 if server_name:
                                     updated_links = []
                                     # URL-encode название сервера для правильной работы в VPN клиентах
@@ -773,10 +775,16 @@ class X3:
                                         # VLESS ссылка имеет формат: vless://...?#tag
                                         # Заменяем часть после # на название сервера
                                         if '#' in link:
-                                            link_without_tag = link.split('#')[0]
-                                            old_tag = link.split('#')[1] if '#' in link else None
+                                            # Разделяем ссылку на части до и после #
+                                            parts = link.split('#', 1)
+                                            link_without_tag = parts[0]
+                                            old_tag = parts[1] if len(parts) > 1 else None
+                                            # Всегда заменяем tag, даже если там домен
                                             updated_link = f"{link_without_tag}#{encoded_server_name}"
-                                            logger.debug(f"Заменяем tag: '{old_tag}' -> '{server_name}' в ссылке")
+                                            if old_tag:
+                                                logger.debug(f"Заменяем tag: '{old_tag}' -> '{server_name}' в ссылке")
+                                            else:
+                                                logger.debug(f"Добавляем tag '{server_name}' к ссылке")
                                         else:
                                             # Если tag отсутствует, добавляем его
                                             updated_link = f"{link}#{encoded_server_name}"

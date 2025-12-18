@@ -148,10 +148,11 @@ class SubscriptionManager:
                 
                 # Формируем итоговое название: "Главное название - Название сервера"
                 display_name = f"{main_name} - {server_display_name}"
+                logger.debug(f"Формируем название для VPN клиента: '{display_name}' (main_name='{main_name}', server='{server_display_name}')")
                 
                 # Используем готовый subscription endpoint X-UI вместо ручной генерации
                 # Это более надежно - X-UI сам правильно генерирует ссылки
-                # Передаем красивое название для tag в ссылках
+                # Передаем красивое название для tag в ссылках (заменит домен ghosttunnel.space на Daralla)
                 try:
                     xui_links = xui.get_subscription_links(client_email, server_name=display_name)
                     if xui_links:
