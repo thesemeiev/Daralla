@@ -86,18 +86,26 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     vpn_brand_name = 'Daralla VPN'
                 
                 # Формируем URL подписки
-                # WEBHOOK_URL должен быть публичным URL вашего webhook сервера
+                # Для Happ клиента лучше использовать поддомен (как делают другие разработчики: auth.zkodes.ru)
+                # Happ использует домен из URL как название группы подписки
                 import os
+                import urllib.parse
+                
+                # Проверяем, есть ли специальный URL для подписок (поддомен)
+                subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
                 webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
                 
+                # Если SUBSCRIPTION_URL не установлен, используем WEBHOOK_URL
+                # SUBSCRIPTION_URL должен быть поддоменом для Happ (например: https://daralla-vpn.ghosttunnel.space)
+                base_url = subscription_base_url if subscription_base_url else webhook_url
+                
                 # Формируем subscription URL
-                # Для Happ клиента добавляем параметр name в URL (некоторые клиенты используют это для автоматического названия)
-                import urllib.parse
-                if webhook_url:
-                    # Пробуем добавить параметр name в URL для автоматического определения названия в Happ
-                    # Если Happ не поддерживает, параметр просто игнорируется
-                    name_param = urllib.parse.quote(vpn_brand_name)
-                    subscription_url = f"{webhook_url}/sub/{sub['subscription_token']}?name={name_param}"
+                if base_url:
+                    # Для Happ клиента используем поддомен в URL (например: daralla-vpn.ghosttunnel.space)
+                    # Happ автоматически использует поддомен (или первую часть) как название группы
+                    # Параметр name убираем, так как он может вызывать проблемы с эмодзи и 502 ошибки
+                    # Поддомен в URL - это основной способ для Happ
+                    subscription_url = f"{base_url}/sub/{sub['subscription_token']}"
                 else:
                     # Если WEBHOOK_URL не установлен, используем временный fallback
                     subscription_url = f"http://localhost:5000/sub/{sub['subscription_token']}"

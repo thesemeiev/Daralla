@@ -713,13 +713,23 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 vpn_brand_name = 'Daralla VPN'
             
             # Формируем subscription URL
-            # Для Happ клиента добавляем параметр name в URL (некоторые клиенты используют это для автоматического названия)
+            # Для Happ клиента лучше использовать поддомен (как делают другие разработчики: auth.zkodes.ru)
+            # Happ использует домен из URL как название группы подписки
             import urllib.parse
-            if webhook_url:
-                # Используем публичный URL webhook сервера
-                # Пробуем добавить параметр name в URL для автоматического определения названия в Happ
-                name_param = urllib.parse.quote(vpn_brand_name)
-                subscription_url = f"{webhook_url}/sub/{token}?name={name_param}"
+            
+            # Проверяем, есть ли специальный URL для подписок (поддомен)
+            subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
+            
+            # Если SUBSCRIPTION_URL не установлен, используем WEBHOOK_URL
+            # SUBSCRIPTION_URL должен быть поддоменом для Happ (например: https://daralla-vpn.ghosttunnel.space)
+            base_url = subscription_base_url if subscription_base_url else webhook_url
+            
+            if base_url:
+                # Для Happ клиента используем поддомен в URL (например: daralla-vpn.ghosttunnel.space)
+                # Happ автоматически использует поддомен (или первую часть) как название группы
+                # Параметр name убираем, так как он может вызывать проблемы с эмодзи и 502 ошибки
+                # Поддомен в URL - это основной способ для Happ
+                subscription_url = f"{base_url}/sub/{token}"
                 logger.info(f"Subscription URL сформирован: {subscription_url}")
             else:
                 # Если WEBHOOK_URL не установлен, предупреждаем
