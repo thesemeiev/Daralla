@@ -130,25 +130,42 @@ class SubscriptionManager:
                     )
                     continue
                 
-                # Генерируем VLESS ссылку используя метод link из X3
+                # Используем готовый subscription endpoint X-UI вместо ручной генерации
+                # Это более надежно - X-UI сам правильно генерирует ссылки
                 try:
-                    vless_link = xui.link(client_email)
-                    if vless_link and vless_link != 'Клиент не найден.':
-                        links.append(vless_link)
+                    xui_links = xui.get_subscription_links(client_email)
+                    if xui_links:
+                        links.extend(xui_links)
                         logger.debug(
-                            "VLESS ссылка сгенерирована: server=%s, email=%s",
+                            "Получено %d ссылок из X-UI subscription endpoint: server=%s, email=%s",
+                            len(xui_links),
                             resolved_name,
                             client_email,
                         )
                     else:
+                        # Fallback: если subscription endpoint не работает, используем ручную генерацию
                         logger.warning(
-                            "Не удалось сгенерировать VLESS ссылку для server=%s, email=%s",
+                            "Subscription endpoint не вернул ссылки, используем ручную генерацию: server=%s, email=%s",
                             resolved_name,
                             client_email,
                         )
+                        vless_link = xui.link(client_email)
+                        if vless_link and vless_link != 'Клиент не найден.':
+                            links.append(vless_link)
+                            logger.debug(
+                                "VLESS ссылка сгенерирована вручную: server=%s, email=%s",
+                                resolved_name,
+                                client_email,
+                            )
+                        else:
+                            logger.warning(
+                                "Не удалось сгенерировать VLESS ссылку для server=%s, email=%s",
+                                resolved_name,
+                                client_email,
+                            )
                 except Exception as link_e:
                     logger.error(
-                        "Ошибка генерации VLESS ссылки для server=%s, email=%s: %s",
+                        "Ошибка получения ссылок для server=%s, email=%s: %s",
                         resolved_name,
                         client_email,
                         link_e,

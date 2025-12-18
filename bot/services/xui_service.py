@@ -7,6 +7,7 @@ import uuid
 import datetime
 import requests
 import urllib3
+from typing import List
 from urllib.parse import quote
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -141,9 +142,10 @@ class X3:
             # Для обычных ключей используем дни
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
         header = {"Accept": "application/json"}
+        # Минимальный набор параметров для VLESS клиента
+        # alterId и flow не нужны для VLESS протокола
         client_data = {
             "id": str(uuid.uuid1()),
-            "alterId": 90,
             "email": str(user_email),
             "limitIp": 1,
             "totalGB": 0,
@@ -151,8 +153,11 @@ class X3:
             "enable": True,
             "tgId": str(tg_id),
             "subId": key_name,  # Сохраняем имя ключа в поле subId
-            "flow": "xtls-rprx-vision"
         }
+        
+        # Добавляем alterId и flow только если они действительно нужны
+        # (для совместимости со старыми версиями X-UI)
+        # Но для VLESS они не обязательны
         data1 = {
             "id": inbound_id,
             "settings": json.dumps({"clients": [client_data]})
@@ -703,4 +708,64 @@ class X3:
         except Exception as e:
             logger.error(f"Ошибка получения подписочной ссылки для {user_email}: {e}")
             return ""
+    
+    def get_subscription_links(self, user_email: str) -> List[str]:
+        """
+        Получает VLESS ссылки напрямую из X-UI subscription endpoint
+        
+        Это более надежный способ - используем готовый endpoint X-UI вместо ручной генерации.
+        X-UI сам правильно генерирует ссылки с учетом всех настроек.
+        
+        Args:
+            user_email: Email клиента
+            
+        Returns:
+            Список VLESS ссылок из X-UI subscription endpoint
+        """
+        self._ensure_connected()
+        try:
+            inbounds_list = self.list()
+            if not inbounds_list.get('success', False):
+                logger.warning(f"Не удалось получить список inbounds для subscription links")
+                return []
+            
+            # Ищем клиента по email
+            for inbound in inbounds_list.get('obj', []):
+                settings = json.loads(inbound.get('settings', '{}'))
+                clients = settings.get('clients', [])
+                
+                for client in clients:
+                    if client.get('email') == user_email:
+                        sub_id = client.get('subId', '')
+                        if not sub_id:
+                            logger.warning(f"Клиент {user_email} найден, но subId пуст")
+                            return []
+                        
+                        # Формируем URL subscription endpoint X-UI
+                        host_part = self.host.split('//')[-1]
+                        if '/panel' in host_part:
+                            host_part = host_part.split('/panel')[0]
+                        subscription_url = f"{self.host.split('//')[0]}//{host_part}/sub/{sub_id}"
+                        
+                        # Получаем ссылки из X-UI subscription endpoint
+                        try:
+                            # Используем сессию без авторизации для публичного endpoint
+                            response = requests.get(subscription_url, timeout=10, verify=False)
+                            if response.status_code == 200:
+                                # X-UI возвращает ссылки в plain text формате (каждая на новой строке)
+                                links = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
+                                logger.info(f"Получено {len(links)} ссылок из X-UI subscription endpoint для {user_email}")
+                                return links
+                            else:
+                                logger.warning(f"X-UI subscription endpoint вернул статус {response.status_code}")
+                                return []
+                        except Exception as e:
+                            logger.error(f"Ошибка получения ссылок из X-UI subscription endpoint: {e}")
+                            return []
+            
+            logger.warning(f"Клиент с email {user_email} не найден для получения subscription links")
+            return []
+        except Exception as e:
+            logger.error(f"Ошибка получения subscription links для {user_email}: {e}")
+            return []
 
