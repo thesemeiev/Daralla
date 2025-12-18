@@ -201,6 +201,25 @@ jobs:
             echo ".env file restored"
           else
             echo ".env backup not found"
+            # Create minimal .env file if it doesn't exist
+            if [ ! -f ".env" ]; then
+              echo "Creating minimal .env file..."
+              echo "# Telegram Bot Configuration" | sudo tee .env > /dev/null
+              echo "TELEGRAM_TOKEN=" | sudo tee -a .env > /dev/null
+              echo "ADMIN_ID=" | sudo tee -a .env > /dev/null
+              echo "# YooKassa Payment Configuration" | sudo tee -a .env > /dev/null
+              echo "YOOKASSA_SHOP_ID=" | sudo tee -a .env > /dev/null
+              echo "YOOKASSA_SECRET_KEY=" | sudo tee -a .env > /dev/null
+              echo "# Webhook Configuration" | sudo tee -a .env > /dev/null
+              echo "NGROK_AUTH_TOKEN=" | sudo tee -a .env > /dev/null
+              echo "WEBHOOK_URL=" | sudo tee -a .env > /dev/null
+              echo "# X-UI Server Configuration" | sudo tee -a .env > /dev/null
+              echo "XUI_HOST_LATVIA_1=" | sudo tee -a .env > /dev/null
+              echo "XUI_LOGIN_LATVIA_1=" | sudo tee -a .env > /dev/null
+              echo "XUI_PASSWORD_LATVIA_1=" | sudo tee -a .env > /dev/null
+              echo "⚠️  Minimal .env file created. Please configure it manually!"
+              echo "⚠️  Edit /root/Daralla/.env and add your configuration values"
+            fi
           fi
 
           # Check restoration

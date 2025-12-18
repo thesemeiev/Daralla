@@ -60,11 +60,14 @@ current_dir = pathlib.Path(__file__).parent
 project_root = current_dir.parent
 env_path = project_root / '.env'
 
-# Загружаем .env из корня проекта
+# Загружаем .env из корня проекта (если файл существует)
+# В Docker переменные уже передаются через environment:, но загрузка из файла
+# может быть полезна для локальной разработки
 if env_path.exists():
-    load_dotenv(env_path)
+    load_dotenv(env_path, override=False)  # override=False - не перезаписывать существующие переменные
 else:
-    print("ВНИМАНИЕ: Файл .env не найден! Создайте файл .env в корне проекта с переменными окружения.")
+    # В Docker это нормально, так как переменные передаются через environment:
+    pass
 from urllib.parse import quote
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
@@ -131,7 +134,11 @@ set_image_paths(IMAGE_PATHS)
 
 # Проверяем наличие обязательных переменных
 if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN не найден в переменных окружения! Создайте файл bot/.env")
+    raise ValueError(
+        "TELEGRAM_TOKEN не найден в переменных окружения!\n"
+        "В Docker: убедитесь, что файл .env существует в корне проекта и содержит TELEGRAM_TOKEN.\n"
+        "Docker Compose автоматически загружает переменные из .env файла."
+    )
 
 if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
     print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
@@ -287,8 +294,9 @@ if __name__ == '__main__':
     # но мы также можем сохранить ссылку на него под именем 'bot.bot'
     if 'bot.bot' not in sys.modules or sys.modules['bot.bot'] is not sys.modules[__name__]:
         # Сохраняем ссылку на текущий модуль под именем 'bot.bot'
+        # Это также делает доступными все атрибуты модуля (app, nav_system и т.д.)
         sys.modules['bot.bot'] = sys.modules[__name__]
-        logger.debug(f"nav_system сохранен: __name__={__name__}, также доступен как 'bot.bot'")
+        logger.debug(f"Модуль сохранен: __name__={__name__}, также доступен как 'bot.bot' (app и nav_system доступны)")
     else:
         logger.debug(f"nav_system сохранен в {__name__} (уже доступен как 'bot.bot')")
     

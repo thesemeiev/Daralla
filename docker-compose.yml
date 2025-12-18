@@ -14,8 +14,9 @@ services:
       - ADMIN_IDS=${ADMIN_ID}
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
       - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY}
-      - NGROK_AUTH_TOKEN=${NGROK_AUTH_TOKEN}
-      - WEBHOOK_URL=${WEBHOOK_URL}
+      # Опциональные переменные (могут быть пустыми)
+      - NGROK_AUTH_TOKEN=${NGROK_AUTH_TOKEN:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
       # Finland серверы
 
 

@@ -15,12 +15,24 @@ logger = logging.getLogger(__name__)
 def get_globals():
     """Получает глобальные переменные из bot.py"""
     try:
-        from ... import bot as bot_module
+        import sys
+        import importlib
+        # Пытаемся получить модуль bot.bot
+        if 'bot.bot' in sys.modules:
+            bot_module = sys.modules['bot.bot']
+        elif '__main__' in sys.modules:
+            # Если запущено через python -m bot.bot, модуль может быть в __main__
+            bot_module = sys.modules['__main__']
+        else:
+            # Если модуль еще не загружен, импортируем его
+            bot_module = importlib.import_module('bot.bot')
+        
         return {
             'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
             'app': getattr(bot_module, 'app', None),
         }
-    except (ImportError, AttributeError):
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Не удалось получить глобальные переменные: {e}")
         return {
             'ADMIN_IDS': [],
             'app': None,
