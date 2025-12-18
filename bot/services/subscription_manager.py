@@ -130,10 +130,30 @@ class SubscriptionManager:
                     )
                     continue
                 
+                # Формируем красивое название: главное название + название сервера
+                # Получаем display_name сервера из конфигурации (если есть)
+                server_config = self.server_manager.get_server_config(server_name)
+                server_display_name = server_config.get("display_name") or resolved_name
+                
+                # Получаем главное название бренда из bot.py
+                try:
+                    import sys
+                    if 'bot.bot' in sys.modules:
+                        bot_module = sys.modules['bot.bot']
+                        main_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla')
+                    else:
+                        main_name = 'Daralla'
+                except:
+                    main_name = 'Daralla'
+                
+                # Формируем итоговое название: "Главное название - Название сервера"
+                display_name = f"{main_name} - {server_display_name}"
+                
                 # Используем готовый subscription endpoint X-UI вместо ручной генерации
                 # Это более надежно - X-UI сам правильно генерирует ссылки
+                # Передаем красивое название для tag в ссылках
                 try:
-                    xui_links = xui.get_subscription_links(client_email)
+                    xui_links = xui.get_subscription_links(client_email, server_name=display_name)
                     if xui_links:
                         links.extend(xui_links)
                         logger.debug(
@@ -149,7 +169,7 @@ class SubscriptionManager:
                             resolved_name,
                             client_email,
                         )
-                        vless_link = xui.link(client_email)
+                        vless_link = xui.link(client_email, server_name=display_name)
                         if vless_link and vless_link != 'Клиент не найден.':
                             links.append(vless_link)
                             logger.debug(

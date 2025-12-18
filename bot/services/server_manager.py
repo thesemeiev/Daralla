@@ -80,6 +80,14 @@ class MultiServerManager:
                     return server["x3"], server["name"]
         raise Exception(f"Сервер {server_name} не найден или недоступен")
     
+    def get_server_config(self, server_name):
+        """Возвращает конфигурацию сервера по имени"""
+        for location, servers in self.servers_by_location.items():
+            for server in servers:
+                if server["name"].lower() == server_name.lower():
+                    return server.get("config", {})
+        return {}
+    
     def get_server_with_least_clients_in_location(self, location):
         """Возвращает сервер с наименьшим количеством клиентов в конкретной локации"""
         if location not in self.servers_by_location:

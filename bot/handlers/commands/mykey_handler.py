@@ -284,7 +284,8 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if xui:
                 try:
-                    link = xui.link(client["email"])
+                    # Передаем название сервера для tag в ссылке
+                    link = xui.link(client["email"], server_name=server_name)
                 except Exception as link_e:
                     logger.error(f"Ошибка получения ссылки на ключ {client['email']}: {link_e}")
                     link = "Ошибка получения ссылки"

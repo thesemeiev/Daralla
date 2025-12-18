@@ -143,12 +143,20 @@ if not TELEGRAM_TOKEN:
 if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
     print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
 
+# Главное название бренда для VPN клиента
+# Это название будет использоваться для всех серверов в подписке
+VPN_BRAND_NAME = "🌐 Daralla VPN"  # Можно изменить на любое красивое название
+
 # Конфигурация серверов по локациям
+# ВАЖНО:
+# - "name" - уникальный идентификатор сервера (используется в БД и коде, должен быть уникальным)
+# - "display_name" - красивое название для отображения в VPN клиенте (опционально, если не указано - используется "name")
 SERVERS_BY_LOCATION = {
  
     "Latvia": [
         {
-            "name": "Latvia-1",
+            "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
+            "display_name": "🇱🇻 🌐 Latvia Premium - 1",  # Красивое название для VPN клиента (опционально)
             "host": os.getenv("XUI_HOST_LATVIA_1"),
             "login": os.getenv("XUI_LOGIN_LATVIA_1"),
             "password": os.getenv("XUI_PASSWORD_LATVIA_1"),

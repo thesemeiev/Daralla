@@ -102,7 +102,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         if is_success:
                             try:
-                                link = xui.link(unique_email)
+                                # Передаем название сервера для tag в ссылке
+                                link = xui.link(unique_email, server_name=server_name)
                             except Exception as link_e:
                                 logger.error(f"Ошибка получения ссылки на ключ: {link_e}")
                                 link = "Ошибка получения ссылки"

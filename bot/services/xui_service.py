@@ -567,8 +567,14 @@ class X3:
             logger.error(f"Ошибка при обновлении имени ключа {user_email}: {e}")
             raise
 
-    def link(self, user_id: str):
-        """Генерирует VLESS ссылку для клиента"""
+    def link(self, user_id: str, server_name: str = None):
+        """
+        Генерирует VLESS ссылку для клиента
+        
+        Args:
+            user_id: Email клиента
+            server_name: Название сервера для tag (если не указано, используется user_id)
+        """
         self._ensure_connected()
         inbounds_list = self.list()['obj']
         for inbounds in inbounds_list:
@@ -648,7 +654,9 @@ class X3:
             ])
             
             query = "&".join(f"{k}={v}" for k, v in params)
-            tag = f"Daralla-{user_id}"
+            # Используем название сервера в tag, если указано, иначе используем user_id
+            # Tag должен быть URL-encoded для правильной работы в VPN клиентах
+            tag = quote(server_name, safe='') if server_name else f"Daralla-{user_id}"
 
             vless_link = f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
             
@@ -709,7 +717,7 @@ class X3:
             logger.error(f"Ошибка получения подписочной ссылки для {user_email}: {e}")
             return ""
     
-    def get_subscription_links(self, user_email: str) -> List[str]:
+    def get_subscription_links(self, user_email: str, server_name: str = None) -> List[str]:
         """
         Получает VLESS ссылки напрямую из X-UI subscription endpoint
         
@@ -718,9 +726,10 @@ class X3:
         
         Args:
             user_email: Email клиента
+            server_name: Название сервера для замены tag в ссылках
             
         Returns:
-            Список VLESS ссылок из X-UI subscription endpoint
+            Список VLESS ссылок из X-UI subscription endpoint (с обновленным tag если указано server_name)
         """
         self._ensure_connected()
         try:
@@ -754,6 +763,28 @@ class X3:
                             if response.status_code == 200:
                                 # X-UI возвращает ссылки в plain text формате (каждая на новой строке)
                                 links = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
+                                
+                                # Заменяем tag (название) в ссылках на название сервера, если указано
+                                if server_name:
+                                    updated_links = []
+                                    # URL-encode название сервера для правильной работы в VPN клиентах
+                                    encoded_server_name = quote(server_name, safe='')
+                                    for link in links:
+                                        # VLESS ссылка имеет формат: vless://...?#tag
+                                        # Заменяем часть после # на название сервера
+                                        if '#' in link:
+                                            link_without_tag = link.split('#')[0]
+                                            old_tag = link.split('#')[1] if '#' in link else None
+                                            updated_link = f"{link_without_tag}#{encoded_server_name}"
+                                            logger.debug(f"Заменяем tag: '{old_tag}' -> '{server_name}' в ссылке")
+                                        else:
+                                            # Если tag отсутствует, добавляем его
+                                            updated_link = f"{link}#{encoded_server_name}"
+                                            logger.debug(f"Добавляем tag '{server_name}' к ссылке без tag")
+                                        updated_links.append(updated_link)
+                                    links = updated_links
+                                    logger.info(f"Обновлены tag в {len(links)} ссылках на '{server_name}'")
+                                
                                 logger.info(f"Получено {len(links)} ссылок из X-UI subscription endpoint для {user_email}")
                                 return links
                             else:
