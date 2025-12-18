@@ -214,8 +214,14 @@ def create_webhook_app(bot_app):
             # Возвращаем список VLESS ссылок в plain text формате
             # Каждая ссылка на новой строке - это стандартный формат для мультисерверных подписок
             # VPN клиенты (v2ray, clash, etc.) автоматически распознают этот формат
-            # Для Happ добавляем комментарий #new-domain в начале (Happ использует это для названия группы)
-            response_text = f"#new-domain {domain_name}\n" + "\n".join(links) + "\n"
+            # Для Happ добавляем несколько вариантов комментариев для автоматического определения названия
+            # Попробуем разные форматы, которые могут поддерживаться Happ
+            response_text = (
+                f"#new-domain {domain_name}\n"
+                f"# name: {vpn_brand_name}\n"
+                f"#title: {vpn_brand_name}\n"
+                + "\n".join(links) + "\n"
+            )
             
             # Логируем первую ссылку для проверки tag
             if links:
@@ -248,18 +254,22 @@ def create_webhook_app(bot_app):
             
             # Возвращаем как text/plain (стандартный Content-Type для subscription)
             # Добавляем CORS заголовки и Subscription-UserInfo для VPN клиентов
-            # Также добавляем Content-Disposition с именем файла (некоторые клиенты используют это)
-            # Для Happ добавляем заголовок new-domain (Happ использует это для названия группы вместо домена из URL)
+            # Для Happ пробуем разные варианты заголовков для автоматического определения названия
             import urllib.parse
-            safe_filename = urllib.parse.quote(vpn_brand_name.replace(' ', '_').replace('🌐', '').strip())
+            # Убираем эмодзи из имени файла для Content-Disposition
+            clean_filename = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip().replace(' ', '-').lower()
+            if not clean_filename:
+                clean_filename = 'daralla-vpn'
+            
             headers = {
                 "Content-Type": "text/plain; charset=utf-8",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
                 "Subscription-UserInfo": userinfo_base64,  # Заголовок с информацией о подписке (включая название группы)
-                "Content-Disposition": f'inline; filename="{safe_filename}.txt"',  # Имя файла для некоторых клиентов
+                "Content-Disposition": f'attachment; filename="{clean_filename}"',  # Имя файла для Happ (attachment вместо inline)
                 "new-domain": domain_name,  # Заголовок для Happ VPN клиента (определяет название группы вместо домена из URL)
+                "X-Subscription-Name": vpn_brand_name,  # Дополнительный заголовок с названием (на случай если Happ поддерживает)
             }
             return (response_text, 200, headers)
             

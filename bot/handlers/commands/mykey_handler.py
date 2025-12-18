@@ -78,14 +78,26 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 servers = await get_subscription_servers(sub["id"])
                 server_count = len(servers)
                 
+                # Получаем главное название VPN для использования в URL и инструкции
+                try:
+                    from ... import bot as bot_module
+                    vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
+                except (ImportError, AttributeError):
+                    vpn_brand_name = 'Daralla VPN'
+                
                 # Формируем URL подписки
                 # WEBHOOK_URL должен быть публичным URL вашего webhook сервера
                 import os
                 webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
                 
                 # Формируем subscription URL
+                # Для Happ клиента добавляем параметр name в URL (некоторые клиенты используют это для автоматического названия)
+                import urllib.parse
                 if webhook_url:
-                    subscription_url = f"{webhook_url}/sub/{sub['subscription_token']}"
+                    # Пробуем добавить параметр name в URL для автоматического определения названия в Happ
+                    # Если Happ не поддерживает, параметр просто игнорируется
+                    name_param = urllib.parse.quote(vpn_brand_name)
+                    subscription_url = f"{webhook_url}/sub/{sub['subscription_token']}?name={name_param}"
                 else:
                     # Если WEBHOOK_URL не установлен, используем временный fallback
                     subscription_url = f"http://localhost:5000/sub/{sub['subscription_token']}"

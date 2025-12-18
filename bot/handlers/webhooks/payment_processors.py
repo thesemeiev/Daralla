@@ -705,10 +705,21 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             import os
             webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
             
+            # Получаем главное название VPN для параметра в URL
+            try:
+                from ... import bot as bot_module
+                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
+            except (ImportError, AttributeError):
+                vpn_brand_name = 'Daralla VPN'
+            
             # Формируем subscription URL
+            # Для Happ клиента добавляем параметр name в URL (некоторые клиенты используют это для автоматического названия)
+            import urllib.parse
             if webhook_url:
                 # Используем публичный URL webhook сервера
-                subscription_url = f"{webhook_url}/sub/{token}"
+                # Пробуем добавить параметр name в URL для автоматического определения названия в Happ
+                name_param = urllib.parse.quote(vpn_brand_name)
+                subscription_url = f"{webhook_url}/sub/{token}?name={name_param}"
                 logger.info(f"Subscription URL сформирован: {subscription_url}")
             else:
                 # Если WEBHOOK_URL не установлен, предупреждаем
