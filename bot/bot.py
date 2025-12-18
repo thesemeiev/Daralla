@@ -152,7 +152,6 @@ VPN_BRAND_NAME = "🌐 Daralla VPN"  # Можно изменить на любо
 # - "name" - уникальный идентификатор сервера (используется в БД и коде, должен быть уникальным)
 # - "display_name" - красивое название для отображения в VPN клиенте (опционально, если не указано - используется "name")
 SERVERS_BY_LOCATION = {
- 
     "Latvia": [
         {
             "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
@@ -162,6 +161,8 @@ SERVERS_BY_LOCATION = {
             "password": os.getenv("XUI_PASSWORD_LATVIA_1"),
             "vpn_host": os.getenv("XUI_VPN_HOST_LATVIA_1")  # IP/домен VPN сервера (если отличается от панели)
         },
+    ],
+    "Netherlands": [
         {
             "name": "Netherlands-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
             "display_name": "🇳🇱 🌐 Netherlands Premium - 1",  # Красивое название для VPN клиента (опционально)
@@ -171,7 +172,6 @@ SERVERS_BY_LOCATION = {
             "vpn_host": os.getenv("XUI_VPN_HOST_NETHERLANDS_1")  # IP/домен VPN сервера (если отличается от панели)
         },
     ],
- 
 }
 
 # Создаем плоский список всех серверов для обратной совместимости
