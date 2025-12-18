@@ -475,12 +475,34 @@ class X3:
                     for client in clients:
                         if client.get('email') == user_email:
                             # Проверяем, есть ли статистика в clientStats
+                            # clientStats может быть списком или словарем
                             client_stats = inbound.get('clientStats', [])
-                            for stat in client_stats:
-                                if stat.get('email') == user_email:
-                                    upload = stat.get('up', 0)  # Upload в байтах
-                                    download = stat.get('down', 0)  # Download в байтах
-                                    total = stat.get('total', 0)  # Total в байтах
+                            
+                            # Логируем структуру для отладки
+                            if client_stats:
+                                logger.debug(f"clientStats для inbound {inbound.get('id')}: type={type(client_stats)}, sample={str(client_stats)[:200]}")
+                            
+                            # Если clientStats - это список
+                            if isinstance(client_stats, list):
+                                for stat in client_stats:
+                                    if stat.get('email') == user_email:
+                                        upload = stat.get('up', 0) or stat.get('upload', 0)  # Upload в байтах
+                                        download = stat.get('down', 0) or stat.get('download', 0)  # Download в байтах
+                                        total = stat.get('total', 0)  # Total в байтах
+                                        logger.info(f"Найдена статистика трафика для {user_email}: upload={upload}, download={download}, total={total}")
+                                        return {
+                                            "upload": upload,
+                                            "download": download,
+                                            "total": total
+                                        }
+                            
+                            # Если clientStats - это словарь (ключ = email)
+                            elif isinstance(client_stats, dict):
+                                stat = client_stats.get(user_email)
+                                if stat:
+                                    upload = stat.get('up', 0) or stat.get('upload', 0)
+                                    download = stat.get('down', 0) or stat.get('download', 0)
+                                    total = stat.get('total', 0)
                                     logger.info(f"Найдена статистика трафика для {user_email}: upload={upload}, download={download}, total={total}")
                                     return {
                                         "upload": upload,
@@ -488,8 +510,9 @@ class X3:
                                         "total": total
                                     }
             
-            # Если статистика не найдена, возвращаем None
+            # Если статистика не найдена, логируем структуру ответа для отладки
             logger.warning(f"Статистика трафика для клиента {user_email} не найдена в 3x-ui")
+            logger.debug(f"Структура ответа 3x-ui (первые 500 символов): {str(inbounds_list)[:500]}")
             return None
             
         except Exception as e:

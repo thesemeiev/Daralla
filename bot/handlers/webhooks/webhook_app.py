@@ -374,6 +374,7 @@ def create_webhook_app(bot_app):
                 headers["support-url"] = website_url  # Marzban использует support-url для ссылки на поддержку
             if telegram_url:
                 headers["telegram-url"] = telegram_url  # Возможный заголовок для Telegram ссылки
+                headers["telegram"] = telegram_url  # Альтернативное название для Telegram
             headers["profile-title"] = clean_name_for_header  # Marzban использует profile-title для названия профиля
             
             return (response_text, 200, headers)
