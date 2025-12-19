@@ -32,9 +32,8 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.INSTRUCTION_MENU, self.instruction_menu)
         nav_manager.register_handler(NavStates.INSTRUCTION_PLATFORM, self.instruction_platform)
         nav_manager.register_handler(NavStates.BUY_MENU, self.buy_menu)
-        nav_manager.register_handler(NavStates.SERVER_SELECTION, self.server_selection)
         nav_manager.register_handler(NavStates.PAYMENT, self.payment)
-        nav_manager.register_handler(NavStates.MYKEYS_MENU, self.mykeys_menu)
+        nav_manager.register_handler(NavStates.SUBSCRIPTIONS_MENU, self.subscriptions_menu)
         
         # Админ меню
         nav_manager.register_handler(NavStates.ADMIN_MENU, self.admin_menu)
@@ -85,131 +84,6 @@ class MenuHandlers:
         buy_menu_text = UIMessages.buy_menu_message()
         await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
     
-    async def server_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Выбор сервера"""
-        # Импортируем необходимые функции
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-        from .menu_states import CallbackData
-        from ..utils import UIEmojis, UIStyles, UIMessages, safe_edit_or_reply_universal, UIButtons
-        from ..bot import SERVERS_BY_LOCATION, new_client_manager
-        
-        message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        if message is None:
-            logger.error("server_selection: message is None")
-            return
-        
-        # Используем кэш для быстрого отображения (пользователь может обновить)
-        health_results = new_client_manager.check_all_servers_health(force_check=False)
-        
-        # Создаем кнопки для локаций с флагами и статусом
-        location_buttons = []
-        
-        # Словарь флагов для известных локаций (можно расширять)
-        # Если локация не найдена в словаре, используется флаг по умолчанию
-        location_flags = {
-            "Finland": "🇫🇮",
-            "Latvia": "🇱🇻", 
-            "Estonia": "🇪🇪",
-            "Russia": "🇷🇺",
-            "Germany": "🇩🇪",
-            "Netherlands": "🇳🇱",
-            "USA": "🇺🇸",
-            "UK": "🇬🇧",
-            "France": "🇫🇷",
-            "Poland": "🇵🇱",
-            "Sweden": "🇸🇪",
-            "Norway": "🇳🇴",
-            "Denmark": "🇩🇰",
-        }
-        
-        # Формируем текст с информацией о локациях
-        location_info_text = ""
-        
-        # Проходим по всем локациям из конфига (автоматически добавляются новые)
-        for location, servers in SERVERS_BY_LOCATION.items():
-            if not servers:
-                continue
-                
-            # Проверяем доступность серверов в локации
-            available_servers = 0
-            total_servers = 0
-            
-            for server in servers:
-                if server.get("host") and server.get("login") and server.get("password"):
-                    total_servers += 1
-                    if health_results.get(server.get('name', ''), False):
-                        available_servers += 1
-            
-            # Пропускаем локации без серверов
-            if total_servers == 0:
-                continue
-            
-            # Показываем кнопку ТОЛЬКО если есть хотя бы один доступный сервер
-            if available_servers == 0:
-                # Недоступные локации не показываем в меню
-                continue
-                
-            # Получаем флаг локации (или используем флаг по умолчанию)
-            flag = location_flags.get(location, "🌍")
-            
-            # Формируем кнопку для доступной локации
-            status_icon = UIEmojis.SUCCESS
-            status_text = f"Доступно {available_servers}/{total_servers} серверов"
-            button_text = f"{flag} {location} {status_icon}"
-            callback_data = f"select_server_{location.lower()}"
-            
-            location_buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
-            
-            # Добавляем информацию о локации в текст
-            location_info_text += f"{flag} <b>{location}</b> - {status_text}\n"
-        
-        # Добавляем кнопку "Автовыбор" (только если есть доступные серверы)
-        available_servers = sum(1 for is_healthy in health_results.values() if is_healthy)
-        if available_servers > 0:
-            location_buttons.append([InlineKeyboardButton("🎯 Автовыбор", callback_data=CallbackData.SELECT_SERVER_AUTO)])
-            location_info_text += "<b>🎯 Автовыбор</b> - Локация с наименьшей нагрузкой\n"
-        
-        location_buttons.append([InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=CallbackData.REFRESH_SERVERS)])
-        
-        # Определяем текст периода и кнопку назад в зависимости от типа покупки
-        pending_period = context.user_data.get("pending_period")
-        if pending_period == "month":
-            period_text = "1 месяц за 100₽"
-            location_buttons.append([UIButtons.back_button()])
-        elif pending_period == "3month":
-            period_text = "3 месяца за 250₽"
-            location_buttons.append([UIButtons.back_button()])
-        else:
-            period_text = "Неизвестный период"
-            location_buttons.append([UIButtons.back_button()])
-        
-        keyboard = InlineKeyboardMarkup(location_buttons)
-        
-        # Если нет доступных локаций, показываем предупреждение
-        if len(location_buttons) == 0 or available_servers == 0:
-            # Формируем информацию о всех локациях (включая недоступные) для текста
-            all_locations_text = ""
-            for location, servers in SERVERS_BY_LOCATION.items():
-                if not servers:
-                    continue
-                total_servers = sum(1 for s in servers if s.get("host") and s.get("login") and s.get("password"))
-                if total_servers == 0:
-                    continue
-                flag = location_flags.get(location, "🌍")
-                all_locations_text += f"{flag} <b>{location}</b> - Недоступно ({total_servers} серверов)\n"
-            
-            message_text = (
-                f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n"
-                f"{UIEmojis.WARNING} <b>Внимание: Нет доступных локаций</b>\n\n"
-                f"Все серверы временно недоступны. Пожалуйста, попробуйте позже.\n\n"
-                f"{all_locations_text if all_locations_text else 'Нет настроенных локаций.'}\n\n"
-                f"Нажмите кнопку \"{UIEmojis.REFRESH} Обновить\" для проверки статуса серверов."
-            )
-        else:
-            message_text = f"{UIStyles.subheader(f'Выбран период: {period_text}')}\n\n{UIMessages.server_selection_message()}\n\n{location_info_text}"
-        
-        await safe_edit_or_reply_universal(message, message_text, reply_markup=keyboard, parse_mode="HTML", menu_type='server_selection')
-    
     async def payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Обработка платежа"""
         from ..handlers.payments import handle_payment
@@ -217,8 +91,8 @@ class MenuHandlers:
         period = kwargs.get('period')
         await handle_payment(update, context, price, period)
     
-    async def mykeys_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
-        """Меню моих ключей"""
+    async def subscriptions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Меню моих подписок"""
         from ..handlers.commands import mykey
         await mykey(update, context)
     async def admin_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
@@ -384,12 +258,12 @@ class NavigationIntegration:
                 pattern=f"^{CallbackData.BUY_VPN}$"
             ),
             CallbackQueryHandler(
-                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.MYKEYS_MENU),
-                pattern=f"^{CallbackData.MY_KEYS}$"
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.SUBSCRIPTIONS_MENU),
+                pattern=f"^{CallbackData.MY_SUBSCRIPTIONS}$"
             ),
             CallbackQueryHandler(
-                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.MYKEYS_MENU),
-                pattern=f"^{CallbackData.MYKEYS_MENU}$"
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.SUBSCRIPTIONS_MENU),
+                pattern=f"^{CallbackData.SUBSCRIPTIONS_MENU}$"
             ),
             
             # Админ меню

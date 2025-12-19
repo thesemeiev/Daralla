@@ -1,5 +1,5 @@
 """
-Обработчик текстовых сообщений для переименования ключей
+Обработчик текстовых сообщений для переименования подписок
 """
 import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -77,7 +77,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                     f"{UIStyles.description('Попробуйте выбрать подписку из списка.')}"
                 )
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.MYKEYS_MENU)]
+                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
                 ])
                 await safe_edit_message_with_photo(
                     context.bot,
@@ -86,7 +86,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                     text=error_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='mykeys_menu'
+                    menu_type='subs_menu'
                 )
             return
         
@@ -112,7 +112,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                 f"{UIStyles.description('Максимум 50 символов. Попробуйте еще раз.')}"
             )
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.MYKEYS_MENU)]
+                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
             ])
             await safe_edit_message_with_photo(
                 context.bot,
@@ -121,7 +121,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                 text=error_message,
                 reply_markup=keyboard,
                 parse_mode="HTML",
-                menu_type='mykeys_menu'
+                menu_type='subs_menu'
             )
             return
         
@@ -132,7 +132,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                 f"{UIStyles.description('Введите корректное имя для подписки.')}"
             )
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.MYKEYS_MENU)]
+                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
             ])
             await safe_edit_message_with_photo(
                 context.bot,
@@ -141,7 +141,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                 text=error_message,
                 reply_markup=keyboard,
                 parse_mode="HTML",
-                menu_type='mykeys_menu'
+                menu_type='subs_menu'
             )
             return
         
@@ -162,7 +162,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.MYKEYS_MENU)],
+            [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
             [NavigationBuilder.create_back_button()]
         ])
         
@@ -173,7 +173,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             text=success_message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type='mykeys_menu'
+            menu_type='subs_menu'
         )
         
     except Exception as e:
@@ -183,7 +183,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             f"{UIEmojis.ERROR} <b>Ошибка:</b> {str(e)}"
         )
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.MYKEYS_MENU)]
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
         ])
         try:
             message_id = context.user_data.get('rename_subscription_message_id')
@@ -196,7 +196,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                     text=error_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='mykeys_menu'
+                    menu_type='subs_menu'
                 )
         except Exception as edit_e:
             logger.error(f"Ошибка редактирования сообщения: {edit_e}")

@@ -84,7 +84,7 @@ class UIButtons:
         """Кнопки главного меню"""
         buttons = [
             [InlineKeyboardButton("Купить", callback_data=CallbackData.BUY_VPN)],
-            [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MYKEYS_MENU), 
+            [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU), 
              InlineKeyboardButton("Инструкция", callback_data=CallbackData.INSTRUCTION)],
             [InlineKeyboardButton("Наш канал", url="https://t.me/DarallaNews")],
         ]
@@ -174,31 +174,23 @@ class UIMessages:
                 f"{UIEmojis.WARNING} <b>Ваша подписка истекает менее чем через час!</b>\n\n"
                 f"Осталось: <b>{time_remaining}</b>\n\n"
                 f"Продлите подписку, чтобы продолжить пользоваться VPN без перерывов.\n\n"
-                f"Используйте команду /mykey для продления."
+                f"Используйте команду /mysubs для продления."
             )
         elif days_until_expiry <= 1:
             return (
                 f"{UIEmojis.WARNING} <b>Ваша подписка истекает через {days_until_expiry} день!</b>\n\n"
                 f"Осталось: <b>{time_remaining}</b>\n\n"
                 f"Продлите подписку, чтобы продолжить пользоваться VPN без перерывов.\n\n"
-                f"Используйте команду /mykey для продления."
+                f"Используйте команду /mysubs для продления."
             )
         else:
             return (
                 f"{UIEmojis.WARNING} <b>Ваша подписка истекает через {days_until_expiry} дней</b>\n\n"
                 f"Осталось: <b>{time_remaining}</b>\n\n"
                 f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
-                f"Используйте команду /mykey для продления."
+                f"Используйте команду /mysubs для продления."
             )
     
     # Старые методы для ключей удалены - теперь работаем только с подписками
     
-    @staticmethod
-    def server_selection_message():
-        """Сообщение выбора сервера"""
-        return (
-            f"{UIStyles.header('Выбор локации')}\n\n"
-            f"{UIStyles.description('Выберите локацию для вашего VPN-ключа:')}\n"
-            f"{UIStyles.info_message('Рекомендуется выбрать ближайший к вам сервер для лучшей скорости.')}"
-        )
 

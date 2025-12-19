@@ -55,39 +55,33 @@ async def handle_payment(update, context, price, period):
     logger.info(f"handle_payment: message={message}, message_id={getattr(message, 'message_id', 'None')}")
     
     # Проверяем доступность серверов ПЕРЕД созданием платежа (только для новых покупок, не для продления)
+    # Подписка включает все доступные серверы автоматически
     if not period.startswith('extend_'):
         try:
             from ...bot import new_client_manager, SERVERS_BY_LOCATION
-            selected_location = context.user_data.get("selected_location", "auto")
             
-            # Проверяем доступность серверов (один раз для всех серверов)
+            # Проверяем доступность серверов (проверяем все серверы, подписка включает все доступные)
             all_health = new_client_manager.check_all_servers_health(force_check=False)
             available_servers = 0
-            if selected_location == "auto":
-                # Проверяем все локации
-                for location, servers in SERVERS_BY_LOCATION.items():
-                    for server in servers:
-                        if server.get("host") and server.get("login") and server.get("password"):
-                            if all_health.get(server["name"], False):
-                                available_servers += 1
-            else:
-                # Проверяем конкретную локацию
-                for server in SERVERS_BY_LOCATION.get(selected_location, []):
+            
+            # Проверяем все локации - подписка включает все доступные серверы
+            for location, servers in SERVERS_BY_LOCATION.items():
+                for server in servers:
                     if server.get("host") and server.get("login") and server.get("password"):
                         if all_health.get(server["name"], False):
                             available_servers += 1
             
             if available_servers == 0:
-                logger.warning(f"Нет доступных серверов для создания ключа. user_id={user_id}, location={selected_location}")
+                logger.warning(f"Нет доступных серверов для создания подписки. user_id={user_id}")
                 error_message = (
                     f"{UIEmojis.ERROR} <b>Серверы временно недоступны</b>\n\n"
-                    f"Все серверы в выбранной локации временно недоступны.\n\n"
-                    f"Пожалуйста, попробуйте позже или выберите другую локацию."
+                    f"Все серверы временно недоступны.\n\n"
+                    f"Пожалуйста, попробуйте позже."
                 )
                 keyboard = InlineKeyboardMarkup([
                     [NavigationBuilder.create_back_button()]
                 ])
-                await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='server_selection')
+                await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
                 return
         except Exception as e:
             logger.error(f"Ошибка проверки доступности серверов: {e}")
@@ -214,7 +208,7 @@ async def handle_payment(update, context, price, period):
                     f"Период: <b>{period_text}</b>\n\n"
                     f"<a href='{payment_url}'>Перейти к оплате</a>\n\n"
                     f"{UIEmojis.WARNING} <i>Ссылка действительна 15 минут</i>\n\n"
-                    f"После оплаты ключ будет активирован автоматически."
+                    f"После оплаты подписка будет активирована автоматически и включит все доступные серверы."
                 )
                 
                 # Создаем кнопку "Назад"

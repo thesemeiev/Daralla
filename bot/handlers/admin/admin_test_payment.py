@@ -72,7 +72,7 @@ async def admin_test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             await update.message.reply_text(
                 f"{UIEmojis.SUCCESS} <b>Платеж {payment_id} подтвержден!</b>\n\n"
-                f"{UIStyles.description('Платеж обработан и ключи созданы.')}",
+                f"{UIStyles.description('Платеж обработан и подписка создана.')}",
                 parse_mode="HTML"
             )
             logger.info(f"Админ {user_id_int} подтвердил платеж {payment_id} через команду")

@@ -32,7 +32,7 @@ from .services.sync_manager import SyncManager
 from .handlers.commands import start, edit_main_menu, instruction, mykey
 from .handlers.callbacks import (
     instruction_callback,
-    select_period_callback, select_server_callback, start_callback_handler
+    select_period_callback, start_callback_handler
 )
 from .handlers.callbacks.extend_subscription_callback import (
     extend_subscription_callback, extend_subscription_period_callback
@@ -106,9 +106,9 @@ IMAGE_PATHS = {
     'instruction_menu': 'images/instruction_menu.jpg',
     'instruction_platform': 'images/instruction_platform.jpg',
     'buy_menu': 'images/buy_menu.jpg',
-    'mykeys_menu': 'images/mykeys_menu.jpg',
+    'subs_menu': 'images/mykeys_menu.jpg',
     'server_selection': 'images/server_selection.jpg',
-    'extend_key': 'images/extend_key.jpg',
+    'extend_sub': 'images/extend_key.jpg',
     'admin_menu': 'images/admin_menu.jpg',
     'admin_errors': 'images/admin_errors.jpg',
     'admin_notifications': 'images/admin_notifications.jpg',
@@ -124,8 +124,8 @@ IMAGE_PATHS = {
     'instruction_linux': 'images/instruction_linux.jpg',
     'instruction_tv': 'images/instruction_tv.jpg',
     'instruction_faq': 'images/instruction_faq.jpg',
-    'key_success': 'images/key_success.jpg',
-    'payment_success_key': 'images/payment_success_key.jpg'
+    'sub_success': 'images/key_success.jpg',
+    'payment_success': 'images/payment_success.jpg'
 }
 
 # Устанавливаем пути к изображениям в утилитах
@@ -285,7 +285,7 @@ if __name__ == '__main__':
         'instruction': instruction,
         'instruction_callback': instruction_callback,
         'handle_payment': handle_payment,
-        'mykey': mykey,
+        'mysubs': mykey,
         'admin_errors': admin_errors,
         'admin_notifications': admin_notifications,
         'admin_check_servers': admin_check_servers,
@@ -315,7 +315,7 @@ if __name__ == '__main__':
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler('start', start))
-    app.add_handler(CommandHandler('mykey', mykey))
+    app.add_handler(CommandHandler(['mysubs', 'mykey'], mykey))
     app.add_handler(CommandHandler('instruction', instruction))
    
     app.add_handler(CommandHandler('check_servers', force_check_servers))
@@ -338,8 +338,7 @@ if __name__ == '__main__':
     # Обработчики callback-ов для главного меню и выбора сервера
     # ВАЖНО: "back", "instruction", "buy_vpn", "mykeys_menu" убраны из паттерна, так как они обрабатываются через NavigationIntegration
     # Оставляем только специфичные callback'и, которые не обрабатываются навигационной системой
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|mykey|admin_notifications_refresh|admin_errors_refresh)$"))
-    app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|my_subs|admin_notifications_refresh|admin_errors_refresh)$"))
     # Обработчик для просмотра и переименования подписок
 
     app.add_handler(CallbackQueryHandler(mykey, pattern=f"^({CallbackData.VIEW_SUB}|{CallbackData.RENAME_SUB})"))

@@ -8,9 +8,8 @@ class NavStates:
     INSTRUCTION_MENU = 'instruction_menu'
     INSTRUCTION_PLATFORM = 'instruction_platform'
     BUY_MENU = 'buy_menu'
-    SERVER_SELECTION = 'server_selection'
     PAYMENT = 'payment'
-    MYKEYS_MENU = 'mykeys_menu'
+    SUBSCRIPTIONS_MENU = 'subs_menu'
     ADMIN_MENU = 'admin_menu'
     ADMIN_ERRORS = 'admin_errors'
     ADMIN_NOTIFICATIONS = 'admin_notifications'
@@ -30,13 +29,10 @@ class MenuTypes:
     INSTRUCTION_TV = 'instruction_tv'
     INSTRUCTION_FAQ = 'instruction_faq'
     BUY_MENU = 'buy_menu'
-    SERVER_SELECTION = 'server_selection'
     PAYMENT = 'payment'
     PAYMENT_SUCCESS = 'payment_success'
     PAYMENT_FAILED = 'payment_failed'
-    PAYMENT_SUCCESS_KEY = 'payment_success_key'
-    MYKEYS_MENU = 'mykeys_menu'
-    KEY_SUCCESS = 'key_success'
+    SUBSCRIPTIONS_MENU = 'subs_menu'
     ADMIN_MENU = 'admin_menu'
     ADMIN_ERRORS = 'admin_errors'
     ADMIN_NOTIFICATIONS = 'admin_notifications'
@@ -49,8 +45,8 @@ class CallbackData:
     MAIN_MENU = 'main_menu'
     INSTRUCTION = 'instruction'
     BUY_VPN = 'buy_vpn'
-    MY_KEYS = 'mykey'
-    MYKEYS_MENU = 'mykeys_menu'
+    MY_SUBSCRIPTIONS = 'my_subs'
+    SUBSCRIPTIONS_MENU = 'subs_menu'
     ADMIN_MENU = 'admin_menu'
     ADMIN_ERRORS = 'admin_errors'
     ADMIN_NOTIFICATIONS = 'admin_notifications'
@@ -69,14 +65,6 @@ class CallbackData:
     # Покупка
     SELECT_PERIOD_MONTH = 'select_period_month'
     SELECT_PERIOD_3MONTH = 'select_period_3month'
-    SELECT_SERVER_AUTO = 'select_server_auto'
-    SELECT_SERVER_FINLAND = 'select_server_finland'
-    SELECT_SERVER_LATVIA = 'select_server_latvia'
-    SELECT_SERVER_ESTONIA = 'select_server_estonia'
-    REFRESH_SERVERS = 'refresh_servers'
-    
-    # Ключи
-    DELETE_KEY = 'delete_key'
     
     # Подписки (паттерны для динамических callback_data)
     VIEW_SUB = 'view_sub:'  # Используется как f"view_sub:{id}"
@@ -97,8 +85,8 @@ CALLBACK_TO_STATE = {
     CallbackData.MAIN_MENU: NavStates.MAIN_MENU,
     CallbackData.INSTRUCTION: NavStates.INSTRUCTION_MENU,
     CallbackData.BUY_VPN: NavStates.BUY_MENU,
-    CallbackData.MY_KEYS: NavStates.MYKEYS_MENU,
-    CallbackData.MYKEYS_MENU: NavStates.MYKEYS_MENU,
+    CallbackData.MY_SUBSCRIPTIONS: NavStates.SUBSCRIPTIONS_MENU,
+    CallbackData.SUBSCRIPTIONS_MENU: NavStates.SUBSCRIPTIONS_MENU,
     CallbackData.ADMIN_MENU: NavStates.ADMIN_MENU,
     CallbackData.ADMIN_ERRORS: NavStates.ADMIN_ERRORS,
     CallbackData.ADMIN_NOTIFICATIONS: NavStates.ADMIN_NOTIFICATIONS,
@@ -112,13 +100,11 @@ STATE_TO_HANDLER = {
     NavStates.INSTRUCTION_MENU: 'instruction',
     NavStates.INSTRUCTION_PLATFORM: 'instruction',
     NavStates.BUY_MENU: 'buy_menu_handler',
-    NavStates.SERVER_SELECTION: 'buy_menu_handler',
     NavStates.PAYMENT: 'mykey',
-    NavStates.MYKEYS_MENU: 'mykey',
+    NavStates.SUBSCRIPTIONS_MENU: 'mykey',
     NavStates.ADMIN_MENU: 'admin_menu',
     NavStates.ADMIN_ERRORS: 'admin_menu',
     NavStates.ADMIN_NOTIFICATIONS: 'admin_menu',
     NavStates.ADMIN_CHECK_SERVERS: 'admin_menu',
     NavStates.ADMIN_BROADCAST: 'admin_menu',
 }
-

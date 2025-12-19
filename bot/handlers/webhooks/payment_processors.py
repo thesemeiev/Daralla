@@ -221,7 +221,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                     )
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MYKEYS_MENU)],
+                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                         [NavigationBuilder.create_main_menu_button()]
                     ])
                     await safe_edit_message_with_photo(
@@ -231,7 +231,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=error_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='extend_key'
+                        menu_type='payment_success'
                     )
                 return
             
@@ -303,7 +303,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 
                 if message_id:
                     keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Мои ключи", callback_data=CallbackData.MYKEYS_MENU)],
+                        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                         [NavigationBuilder.create_main_menu_button()]
                     ])
                     
@@ -314,7 +314,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=extension_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='extend_key'
+                        menu_type='payment_success'
                     )
                     logger.info(f"Отредактировано сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
                 else:
@@ -325,7 +325,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=extension_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='extend_key'
+                        menu_type='payment_success'
                     )
                     logger.info(f"Отправлено новое сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
                     
@@ -513,7 +513,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 error_message = (
                     f"{UIStyles.header('Ошибка создания подписки')}\n\n"
                     f"{UIEmojis.ERROR} <b>Не удалось создать подписку!</b>\n\n"
-                    f"<b>Причина:</b> Не удалось создать ключи на серверах\n\n"
+                    f"<b>Причина:</b> Не удалось создать клиентов на серверах\n\n"
                     f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                 )
                 keyboard = InlineKeyboardMarkup([
@@ -615,7 +615,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 subscription_message += f"\n\n{UIEmojis.WARNING} <i>Не удалось создать клиентов на серверах: {', '.join(failed_servers)}</i>"
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.MYKEYS_MENU)],
+                [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                 [NavigationBuilder.create_main_menu_button()]
             ])
             
@@ -644,7 +644,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         text=subscription_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='key_success'
+                        menu_type='payment_success'
                     )
                     logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о подписке")
                 except Exception as edit_error:
@@ -661,7 +661,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         text=subscription_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='key_success'
+                        menu_type='payment_success'
                     )
                     logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
             else:
@@ -672,7 +672,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     text=subscription_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='key_success'
+                    menu_type='sub_success'
                 )
                 logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
                 
@@ -746,7 +746,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 )
                 
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.MY_KEYS)],
+                    [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                     [NavigationBuilder.create_main_menu_button()]
                 ])
                 

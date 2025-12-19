@@ -90,7 +90,7 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
         keyboard_buttons = [
             [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")],
             [InlineKeyboardButton(f"{UIEmojis.EDIT} Переименовать", callback_data=f"{CallbackData.RENAME_SUB}{sub['id']}")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.MYKEYS_MENU)],
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
         ]
     else:
         subscription_message = (
@@ -105,7 +105,7 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
         
         keyboard_buttons = [
             [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.MYKEYS_MENU)],
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
         ]
     
     keyboard = InlineKeyboardMarkup(keyboard_buttons)
@@ -115,7 +115,7 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
         subscription_message,
         reply_markup=keyboard,
         parse_mode="HTML",
-        menu_type='mykeys_menu'
+        menu_type='subs_menu'
     )
 
 
@@ -181,14 +181,14 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 f"{UIStyles.description('Попробуйте выбрать подписку из списка.')}"
                             )
                             keyboard = InlineKeyboardMarkup([
-                                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.MYKEYS_MENU)]
+                                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
                             ])
                             await safe_edit_or_reply_universal(
                                 message,
                                 error_message,
                                 reply_markup=keyboard,
                                 parse_mode="HTML",
-                                menu_type='mykeys_menu'
+                                menu_type='subs_menu'
                             )
                             return
                         
@@ -197,14 +197,14 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"{UIStyles.description('Введите новое имя для подписки (максимум 50 символов):')}"
                         )
                         keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.MYKEYS_MENU)]
+                            [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
                         ])
                         await safe_edit_or_reply_universal(
                             message,
                             rename_message,
                             reply_markup=keyboard,
                             parse_mode="HTML",
-                            menu_type='mykeys_menu'
+                            menu_type='subs_menu'
                         )
                         return
                 
@@ -285,7 +285,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     message_text,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='mykeys_menu'
+                    menu_type='subs_menu'
                 )
                 return
         except Exception as sub_e:
@@ -306,6 +306,6 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         no_subs_message,
         reply_markup=keyboard,
         parse_mode="HTML",
-        menu_type='mykeys_menu'
+        menu_type='subs_menu'
     )
 

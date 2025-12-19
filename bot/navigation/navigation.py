@@ -140,14 +140,6 @@ class NavigationManager:
             self.push_state(context, NavStates.MAIN_MENU)
             return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
-        # Специальная логика для webhook-сообщений
-        if prev_state == NavStates.SERVER_SELECTION:
-            message = query.message
-            if message and message.caption and ("Покупка прошла успешно" in message.caption or "Ваш ключ" in message.caption):
-                logger.info("← BACK_NAVIGATION: Server selection with success message, clearing stack and going to main menu")
-                self.clear_stack(context)
-                self.push_state(context, NavStates.MAIN_MENU)
-                return await self.navigate_to_state(update, context, NavStates.MAIN_MENU)
         
         # Обычная навигация - возвращаемся к предыдущему состоянию
         # НЕ добавляем prev_state в стек через push_state, так как он уже там
@@ -203,7 +195,6 @@ class NavigationValidator:
         """Проверяет, разрешен ли переход между состояниями"""
         # Запрещенные переходы
         forbidden_transitions = {
-            (NavStates.PAYMENT, NavStates.SERVER_SELECTION),  # После оплаты нельзя вернуться к выбору сервера
             (NavStates.ADMIN_ERRORS, NavStates.ADMIN_ERRORS),  # Нельзя остаться в том же админ-меню
             (NavStates.ADMIN_NOTIFICATIONS, NavStates.ADMIN_NOTIFICATIONS),
             (NavStates.ADMIN_CHECK_SERVERS, NavStates.ADMIN_CHECK_SERVERS),
@@ -215,13 +206,12 @@ class NavigationValidator:
     def get_allowed_transitions(from_state: str) -> List[str]:
         """Возвращает список разрешенных переходов из состояния"""
         allowed = {
-            NavStates.MAIN_MENU: [NavStates.INSTRUCTION_MENU, NavStates.BUY_MENU, NavStates.MYKEYS_MENU, NavStates.ADMIN_MENU],
+            NavStates.MAIN_MENU: [NavStates.INSTRUCTION_MENU, NavStates.BUY_MENU, NavStates.SUBSCRIPTIONS_MENU, NavStates.ADMIN_MENU],
             NavStates.INSTRUCTION_MENU: [NavStates.INSTRUCTION_PLATFORM, NavStates.MAIN_MENU],
             NavStates.INSTRUCTION_PLATFORM: [NavStates.INSTRUCTION_MENU],
-            NavStates.BUY_MENU: [NavStates.SERVER_SELECTION, NavStates.MAIN_MENU],
-            NavStates.SERVER_SELECTION: [NavStates.PAYMENT, NavStates.BUY_MENU],
-            NavStates.PAYMENT: [NavStates.MYKEYS_MENU, NavStates.MAIN_MENU],
-            NavStates.MYKEYS_MENU: [NavStates.MAIN_MENU],
+            NavStates.BUY_MENU: [NavStates.PAYMENT, NavStates.MAIN_MENU],
+            NavStates.PAYMENT: [NavStates.SUBSCRIPTIONS_MENU, NavStates.MAIN_MENU],
+            NavStates.SUBSCRIPTIONS_MENU: [NavStates.MAIN_MENU],
             NavStates.ADMIN_MENU: [NavStates.ADMIN_ERRORS, NavStates.ADMIN_NOTIFICATIONS, NavStates.ADMIN_CHECK_SERVERS, NavStates.ADMIN_BROADCAST, NavStates.MAIN_MENU],
             NavStates.ADMIN_ERRORS: [NavStates.ADMIN_MENU],
             NavStates.ADMIN_NOTIFICATIONS: [NavStates.ADMIN_MENU],

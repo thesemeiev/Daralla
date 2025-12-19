@@ -1,5 +1,5 @@
 """
-Обработчики callback-ов для платежей и выбора периода/сервера
+Обработчики callback-ов для платежей и выбора периода
 """
 
 import logging
@@ -97,117 +97,13 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
         await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Неверный выбор тарифа")
         return
     
-    # Сохраняем в контекст (на будущее, если где-то понадобится)
+    # Сохраняем в контекст
     context.user_data["pending_period"] = period
     context.user_data["pending_price"] = price
-    context.user_data["selected_location"] = "auto"  # сервера выбираются автоматически
     
     # Запускаем процесс оплаты сразу, без выбора сервера
     globals_dict = get_globals()
     handle_payment = globals_dict["handle_payment"]
-    await handle_payment(update, context, price, period)
-
-
-async def select_server_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик выбора сервера"""
-    query = update.callback_query
-    
-    # Отвечаем на callback query СРАЗУ, до любых долгих операций
-    await safe_answer_callback_query(query)
-    
-    globals_dict = get_globals()
-    handle_payment = globals_dict['handle_payment']
-    SERVERS_BY_LOCATION = globals_dict['SERVERS_BY_LOCATION']
-    new_client_manager = globals_dict['new_client_manager']
-    nav_system = globals_dict['nav_system']
-    
-    # Обработка обновления списка серверов
-    if query.data == "refresh_servers":
-        # Навигационная система обязательна, поэтому просто обновляем текущее состояние
-        if not nav_system:
-            logger.error("select_server_callback: nav_system is None при refresh_servers")
-            await safe_edit_or_reply(
-                query.message,
-                f"{UIEmojis.ERROR} Внутренняя ошибка навигации. Попробуйте позже."
-            )
-            return
-
-        from ...navigation import nav_manager
-        # Перерисовываем текущее состояние выбора сервера через навигацию
-        await nav_system.navigate_to_state(update, context, NavStates.SERVER_SELECTION)
-        logger.info(f"select_server_callback: refresh_servers -> stack {nav_manager.get_stack(context)}")
-        return
-    
-    # Определяем выбранную локацию динамически из конфига
-    selected_location = None
-    if query.data == "select_server_auto":
-        selected_location = "auto"
-    elif query.data.startswith("select_server_"):
-        # Извлекаем название локации из callback_data: select_server_latvia -> Latvia
-        location_key = query.data.replace("select_server_", "")
-        # Ищем локацию в конфиге (регистронезависимо)
-        for location in SERVERS_BY_LOCATION.keys():
-            if location.lower() == location_key:
-                selected_location = location
-                break
-    
-    if not selected_location:
-        await safe_edit_or_reply(query.message, f"{UIEmojis.ERROR} Неверный выбор локации")
-        return
-    
-    # Проверяем доступность серверов один раз для всех (перед условием)
-    all_health = new_client_manager.check_all_servers_health(force_check=False)
-    
-    # Проверяем доступность выбранной локации
-    if selected_location != "auto":
-        # Проверяем, есть ли доступные серверы в локации
-        available_servers = 0
-        for server in SERVERS_BY_LOCATION.get(selected_location, []):
-            if server["host"] and server["login"] and server["password"]:
-                if all_health.get(server["name"], False):
-                    available_servers += 1
-        
-        if available_servers == 0:
-            await safe_edit_or_reply(
-                query.message, 
-                f"❌ Локация {selected_location} недоступна\n\n"
-                f"Все серверы в этой локации временно недоступны. Пожалуйста, выберите другую локацию.",
-                parse_mode="HTML"
-            )
-            return
-    else:
-        # Для автовыбора проверяем, есть ли доступные серверы в любой локации
-        total_available = 0
-        for location, servers in SERVERS_BY_LOCATION.items():
-            for server in servers:
-                if server["host"] and server["login"] and server["password"]:
-                    if all_health.get(server["name"], False):
-                        total_available += 1
-        
-        if total_available == 0:
-            await safe_edit_or_reply(
-                query.message, 
-                "❌ Нет доступных серверов\n\n"
-                "Все серверы временно недоступны. Попробуйте позже.",
-                parse_mode="HTML"
-            )
-            return
-    
-    # Сохраняем выбранную локацию
-    context.user_data["selected_location"] = selected_location
-    
-    # Добавляем SERVER_SELECTION в стек навигации (если еще не добавлено)
-    # Это нужно для правильной работы кнопки "назад"
-    from ...navigation import nav_manager
-    current_stack = nav_manager.get_stack(context)
-    if NavStates.SERVER_SELECTION not in current_stack:
-        nav_manager.push_state(context, NavStates.SERVER_SELECTION)
-    
-    # Получаем сохраненные данные (1 подписка = 1 устройство)
-    period = context.user_data.get("pending_period")
-    price = context.user_data.get("pending_price")
-    
-    # Запускаем процесс оплаты
     await handle_payment(update, context, price, period)
 
 
@@ -239,8 +135,6 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await nav_system.navigate_to_state(update, context, NavStates.BUY_MENU)
     elif query.data.startswith("select_period_"):
         await select_period_callback(update, context)
-    elif query.data.startswith("select_server_"):
-        await select_server_callback(update, context)
     elif query.data == "mykey":
         # Используем навигационную систему для перехода к "Мои ключи"
         # ВАЖНО: "mykeys_menu" обрабатывается через NavigationIntegration, поэтому здесь только "mykey"

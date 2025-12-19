@@ -135,7 +135,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("1 месяц - 150₽", callback_data=f"{CallbackData.EXT_SUB_PER}month:{subscription_id}")],
         [InlineKeyboardButton("3 месяца - 350₽", callback_data=f"{CallbackData.EXT_SUB_PER}3month:{subscription_id}")],
-        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.MYKEYS_MENU)]
+        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
     ])
     
     period_text = "3 месяца" if sub['period'] == "3month" else "1 месяц"
@@ -247,7 +247,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
     except Exception as e:
         logger.error(f"Ошибка создания платежа для продления подписки: {e}")
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.MYKEYS_MENU)]
+            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
         ])
         await safe_edit_or_reply_universal(
             query.message,
