@@ -22,14 +22,21 @@ extension_messages = {}
 
 def get_globals():
     """Получает глобальные переменные из bot.py"""
-    from ...bot import (
-        nav_system, notify_admin, extension_messages as ext_messages
-    )
-    return {
-        'nav_system': nav_system,
-        'notify_admin': notify_admin,
-        'extension_messages': ext_messages,
-    }
+    try:
+        from ... import bot as bot_module
+        return {
+            'nav_system': getattr(bot_module, 'nav_system', None),
+            'notify_admin': getattr(bot_module, 'notify_admin', None),
+            'extension_messages': getattr(bot_module, 'extension_messages', {}),
+            'admin_ids': getattr(bot_module, 'ADMIN_IDS', []),
+        }
+    except (ImportError, AttributeError):
+        return {
+            'nav_system': None,
+            'notify_admin': None,
+            'extension_messages': {},
+            'admin_ids': [],
+        }
 
 async def handle_payment(update, context, price, period):
     """Обработчик создания платежа"""
@@ -39,6 +46,7 @@ async def handle_payment(update, context, price, period):
     nav_system = globals_dict['nav_system']
     notify_admin = globals_dict['notify_admin']
     extension_messages = globals_dict['extension_messages']
+    admin_ids = globals_dict['admin_ids']
     
     # Проверяем, что price и period не None
     if price is None or period is None:
@@ -175,7 +183,8 @@ async def handle_payment(update, context, price, period):
         except Exception as e:
             logger.exception(f"Ошибка создания платежа для user_id={user_id}")
             # Уведомляем админа о критической ошибке создания платежа
-            await notify_admin(context.bot, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать платеж:\nПользователь: {user_id}\nПериод: {period}\nЦена: {price}\nОшибка: {str(e)}")
+            if notify_admin:
+                await notify_admin(context.bot, admin_ids, f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать платеж:\nПользователь: {user_id}\nПериод: {period}\nЦена: {price}\nОшибка: {str(e)}")
             await safe_edit_or_reply(message, 'Ошибка при создании платежа. Попробуйте позже.')
             return
         
@@ -242,5 +251,6 @@ async def handle_payment(update, context, price, period):
     except Exception as e:
         logger.exception(f"Ошибка в handle_payment для user_id={user_id}")
         await safe_edit_or_reply(message, 'Произошла внутренняя ошибка. Администратор уже уведомлён.')
-        await notify_admin(context.bot, f"Ошибка в handle_payment для user_id={user_id}: {e}\n{traceback.format_exc()}")
+        if notify_admin:
+            await notify_admin(context.bot, admin_ids, f"Ошибка в handle_payment для user_id={user_id}: {e}\n{traceback.format_exc()}")
 

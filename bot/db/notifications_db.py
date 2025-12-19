@@ -78,9 +78,12 @@ async def record_notification_metrics(notification_type: str, success: bool = Tr
 async def cleanup_old_notifications(days: int = 30):
     cutoff = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM sent_notifications WHERE sent_at < ?", (cutoff,))
+        cursor = await db.execute("DELETE FROM sent_notifications WHERE sent_at < ?", (cutoff,))
+        deleted_count = cursor.rowcount
         await db.execute("DELETE FROM notification_effectiveness WHERE sent_at < ?", (cutoff,))
+        deleted_count += cursor.rowcount
         await db.commit()
+        return deleted_count
 
 async def get_notification_stats(days: int = 7):
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
@@ -140,7 +143,8 @@ async def get_daily_notification_stats(days: int = 14):
             GROUP BY date
             ORDER BY date DESC
         ''', (cutoff,)) as cur:
-            return [dict(row) for row in cur]
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
 
 async def clear_user_notifications(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:

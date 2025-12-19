@@ -86,18 +86,38 @@ async def get_all_pending_payments() -> list:
         logger.error(f"GET_ALL_PENDING_PAYMENTS error: {e}")
         return []
 
-async def get_pending_payment(user_id: str) -> dict:
+async def get_pending_payment(user_id: str, period: str = None) -> dict:
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1", (user_id,)) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    res = dict(row)
-                    if res['meta']:
-                        res['meta'] = json.loads(res['meta'])
-                    return res
+            if period:
+                # Ищем платеж с конкретным периодом в meta (JSON)
+                async with db.execute(
+                    "SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC", 
+                    (user_id,)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    for row in rows:
+                        res = dict(row)
+                        if res['meta']:
+                            meta = json.loads(res['meta'])
+                            if meta.get('type') == period:
+                                res['meta'] = meta
+                                return res
                 return None
+            else:
+                # Просто последний ожидающий платеж
+                async with db.execute(
+                    "SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1", 
+                    (user_id,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        res = dict(row)
+                        if res['meta']:
+                            res['meta'] = json.loads(res['meta'])
+                        return res
+                    return None
     except Exception as e:
         logger.error(f"GET_PENDING_PAYMENT error: {e}")
         return None

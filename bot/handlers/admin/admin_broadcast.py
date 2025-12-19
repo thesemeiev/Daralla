@@ -26,17 +26,23 @@ BROADCAST_CONFIRM = 1002
 # Импортируем глобальные переменные из bot.py
 def get_globals():
     """Получает глобальные переменные из bot.py"""
-    try:
-        from ... import bot as bot_module
+    import sys
+    bot_module = sys.modules.get('bot.bot')
+    if not bot_module:
+        try:
+            from ... import bot as bot_module
+        except (ImportError, AttributeError):
+            pass
+    
+    if bot_module:
         return {
             'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
             'nav_system': getattr(bot_module, 'nav_system', None),
         }
-    except (ImportError, AttributeError):
-        return {
-            'ADMIN_IDS': [],
-            'nav_system': None,
-        }
+    return {
+        'ADMIN_IDS': [],
+        'nav_system': None,
+    }
 
 
 async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):

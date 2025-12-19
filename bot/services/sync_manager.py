@@ -1,388 +1,112 @@
 """
-Менеджер синхронизации между БД и X-UI серверами.
-Решает проблему рассинхронизации данных.
+Менеджер синхронизации данных между БД и серверами X-UI
 """
-import logging
 import asyncio
-from typing import List, Dict, Tuple
+import logging
+import time
+from typing import List, Dict, Any
 
 from ..db.subscribers_db import (
     get_all_active_subscriptions,
     get_subscription_servers,
     update_subscription_status,
+    remove_subscription_server
 )
-from .server_manager import MultiServerManager
+from .subscription_manager import SubscriptionManager
 
 logger = logging.getLogger(__name__)
 
-
 class SyncManager:
-    """
-    Управляет синхронизацией между БД подписок и реальными клиентами на X-UI серверах.
+    """Менеджер для поддержания консистентности данных"""
     
-    Архитектура: БД является источником истины (Source of Truth).
-    X-UI серверы синхронизируются с БД, а не наоборот.
-    
-    Решает проблемы:
-    - Клиент в БД, но не на сервере (нужно создать на сервере)
-    - Клиент на сервере, но не в БД (orphaned - нужно удалить с сервера или добавить в БД)
-    - Несоответствие статусов (активен в БД, но истек на сервере - обновляем сервер)
-    """
-    
-    def __init__(self, server_manager: MultiServerManager, subscription_manager=None):
+    def __init__(self, server_manager, subscription_manager: SubscriptionManager):
         self.server_manager = server_manager
         self.subscription_manager = subscription_manager
-    
-    async def sync_subscription_with_servers(self, subscription_id: int, auto_fix: bool = False) -> Dict[str, any]:
-        """
-        Синхронизирует одну подписку с серверами X-UI.
-        
-        Args:
-            subscription_id: ID подписки для синхронизации
-            auto_fix: Если True, автоматически создает отсутствующих клиентов на серверах
-        
-        Returns:
-            dict с результатами синхронизации:
-            {
-                'subscription_id': int,
-                'servers_checked': int,
-                'servers_synced': int,
-                'clients_created': int,
-                'clients_removed': int,
-                'errors': List[str]
-            }
-        """
-        from ..db.subscribers_db import get_subscription_by_token
-        
-        # Получаем информацию о подписке
-        servers = await get_subscription_servers(subscription_id)
-        if not servers:
-            logger.warning(f"Подписка {subscription_id} не имеет привязанных серверов")
-            return {
-                'subscription_id': subscription_id,
-                'servers_checked': 0,
-                'servers_synced': 0,
-                'clients_created': 0,
-                'clients_removed': 0,
-                'errors': []
-            }
-        
-        result = {
-            'subscription_id': subscription_id,
-            'servers_checked': 0,
-            'servers_synced': 0,
-            'clients_created': 0,
-            'clients_removed': 0,
-            'errors': []
-        }
-        
-        # Проверяем каждый сервер
-        for server_info in servers:
-            server_name = server_info['server_name']
-            client_email = server_info['client_email']
-            
-            try:
-                result['servers_checked'] += 1
-                
-                # Получаем X-UI объект для сервера
-                xui, resolved_name = self.server_manager.get_server_by_name(server_name)
-                if not xui:
-                    result['errors'].append(f"Сервер {server_name} недоступен")
-                    continue
-                
-                # Проверяем, существует ли клиент на сервере
-                client_exists = xui.client_exists(client_email)
-                
-                if not client_exists:
-                    # Клиент должен быть на сервере, но его нет
-                    logger.warning(
-                        f"Клиент {client_email} не найден на сервере {server_name} для подписки {subscription_id}"
-                    )
-                    
-                    if auto_fix:
-                        # Автоматическое восстановление: создаем отсутствующего клиента
-                        try:
-                            # Получаем информацию о подписке для восстановления
-                            from ..db.subscribers_db import get_all_active_subscriptions
-                            
-                            # Находим подписку по ID
-                            all_subs = await get_all_active_subscriptions()
-                            subscription = None
-                            for sub in all_subs:
-                                if sub['id'] == subscription_id:
-                                    subscription = sub
-                                    break
-                            
-                            if subscription:
-                                # Вычисляем оставшиеся дни до истечения
-                                import time
-                                current_time = int(time.time())
-                                expires_at = subscription.get('expires_at', 0)
-                                
-                                if expires_at > current_time:
-                                    # Подписка еще активна, вычисляем дни
-                                    remaining_seconds = expires_at - current_time
-                                    remaining_days = max(1, remaining_seconds // (24 * 60 * 60))  # Минимум 1 день
-                                    
-                                    # Извлекаем user_id из email (формат: user_id_uuid)
-                                    user_id = client_email.split('_')[0] if '_' in client_email else None
-                                    
-                                    if user_id:
-                                        logger.info(
-                                            f"Автоматическое восстановление клиента {client_email} на сервере {server_name}"
-                                        )
-                                        
-                                        # Используем единую функцию ensure_client_on_server для создания клиента
-                                        # Это обеспечит единообразную обработку и синхронизацию времени
-                                        try:
-                                            if self.subscription_manager:
-                                                # Используем единую функцию из subscription_manager
-                                                client_exists, client_created = await self.subscription_manager.ensure_client_on_server(
-                                                    subscription_id=subscription_id,
-                                                    server_name=server_name,
-                                                    client_email=client_email,
-                                                    user_id=user_id,
-                                                    expires_at=expires_at,
-                                                    token=subscription.get('subscription_token', '')
-                                                )
-                                                
-                                                if client_exists:
-                                                    result['servers_synced'] += 1
-                                                    if client_created:
-                                                        result['clients_created'] += 1
-                                                        logger.info(
-                                                            f"Клиент {client_email} успешно восстановлен на сервере {server_name}"
-                                                        )
-                                                    else:
-                                                        logger.info(
-                                                            f"Клиент {client_email} уже существует на сервере {server_name}"
-                                                        )
-                                                    continue  # Пропускаем добавление ошибки
-                                                else:
-                                                    result['errors'].append(
-                                                        f"Не удалось восстановить клиента {client_email} на сервере {server_name}"
-                                                    )
-                                            else:
-                                                # Fallback: если subscription_manager не доступен, используем прямое создание
-                                                logger.warning("subscription_manager не доступен, используем прямое создание клиента")
-                                                response = xui.addClient(
-                                                    day=remaining_days,
-                                                    tg_id=user_id,
-                                                    user_email=client_email,
-                                                    timeout=15,
-                                                    key_name=subscription.get('subscription_token', '')
-                                                )
-                                                
-                                                if response and response.status_code == 200:
-                                                    try:
-                                                        response_json = response.json()
-                                                        if response_json.get('success', False):
-                                                            result['clients_created'] += 1
-                                                            result['servers_synced'] += 1
-                                                            logger.info(
-                                                                f"Клиент {client_email} успешно восстановлен на сервере {server_name}"
-                                                            )
-                                                            continue
-                                                    except:
-                                                        pass
-                                                
-                                                # Если создание не удалось, но клиент уже существует (duplicate)
-                                                try:
-                                                    if xui.client_exists(client_email):
-                                                        result['servers_synced'] += 1
-                                                        logger.info(
-                                                            f"Клиент {client_email} уже существует на сервере {server_name} после попытки восстановления"
-                                                        )
-                                                        continue
-                                                except:
-                                                    pass
-                                                
-                                                result['errors'].append(
-                                                    f"Не удалось восстановить клиента {client_email} на сервере {server_name}"
-                                                )
-                                        except Exception as create_e:
-                                            logger.error(f"Ошибка создания клиента при восстановлении: {create_e}")
-                                            result['errors'].append(
-                                                f"Ошибка восстановления клиента {client_email}: {create_e}"
-                                            )
-                                    else:
-                                        result['errors'].append(
-                                            f"Не удалось извлечь user_id из email {client_email}"
-                                        )
-                                else:
-                                    result['errors'].append(
-                                        f"Подписка {subscription_id} истекла, восстановление не требуется"
-                                    )
-                            else:
-                                result['errors'].append(
-                                    f"Подписка {subscription_id} не найдена для восстановления"
-                                )
-                        except Exception as fix_e:
-                            logger.error(f"Ошибка автоматического восстановления клиента: {fix_e}")
-                            result['errors'].append(
-                                f"Клиент {client_email} отсутствует на сервере {server_name} (ошибка восстановления: {fix_e})"
-                            )
-                    else:
-                        result['errors'].append(
-                            f"Клиент {client_email} отсутствует на сервере {server_name}"
-                        )
-                else:
-                    # Клиент существует - проверяем его статус
-                    result['servers_synced'] += 1
-                    logger.debug(
-                        f"Клиент {client_email} синхронизирован на сервере {server_name}"
-                    )
-                    
-            except Exception as e:
-                error_msg = f"Ошибка синхронизации сервера {server_name}: {e}"
-                logger.error(error_msg)
-                result['errors'].append(error_msg)
-        
-        return result
-    
-    async def find_orphaned_clients(self) -> List[Dict[str, any]]:
-        """
-        Находит клиентов на серверах X-UI, которые не привязаны ни к одной подписке в БД.
-        
-        Returns:
-            Список словарей с информацией об orphaned клиентах:
-            [
-                {
-                    'server_name': str,
-                    'client_email': str,
-                    'client_id': str,
-                    'inbound_id': int
-                },
-                ...
-            ]
-        """
-        orphaned = []
-        
-        # Получаем все email'ы из БД подписок
-        all_subscriptions = await get_all_active_subscriptions()
-        db_emails = set()
-        
-        for sub in all_subscriptions:
-            servers = await get_subscription_servers(sub['id'])
-            for server_info in servers:
-                db_emails.add(server_info['client_email'])
-        
-        # Проверяем всех клиентов на всех серверах
-        for server in self.server_manager.servers:
-            server_name = server['name']
-            xui = server.get('x3')
-            
-            if not xui:
-                continue
-            
-            try:
-                inbounds_list = xui.list()
-                if not inbounds_list.get('success', False):
-                    continue
-                
-                for inbound in inbounds_list.get('obj', []):
-                    inbound_id = inbound.get('id')
-                    settings = inbound.get('settings', '{}')
-                    
-                    import json
-                    try:
-                        clients = json.loads(settings).get('clients', [])
-                    except:
-                        continue
-                    
-                    for client in clients:
-                        client_email = client.get('email', '')
-                        # Пропускаем клиентов, которые не созданы ботом (не имеют формата user_id_*)
-                        if not client_email or '_' not in client_email:
-                            continue
-                        
-                        # Если клиент не в БД, он orphaned
-                        if client_email not in db_emails:
-                            orphaned.append({
-                                'server_name': server_name,
-                                'client_email': client_email,
-                                'client_id': client.get('id'),
-                                'inbound_id': inbound_id
-                            })
-                            
-            except Exception as e:
-                logger.error(f"Ошибка поиска orphaned клиентов на сервере {server_name}: {e}")
-                continue
-        
-        return orphaned
-    
-    async def sync_all_subscriptions(self, auto_fix: bool = False) -> Dict[str, any]:
-        """
-        Синхронизирует все активные подписки с серверами.
-        
-        Args:
-            auto_fix: Если True, автоматически восстанавливает отсутствующих клиентов
-        
-        Returns:
-            Общая статистика синхронизации
-        """
-        logger.info(f"Начало синхронизации всех подписок (auto_fix={auto_fix})")
-        
-        all_subscriptions = await get_all_active_subscriptions()
-        total_stats = {
-            'subscriptions_checked': len(all_subscriptions),
-            'subscriptions_synced': 0,
-            'total_servers_checked': 0,
-            'total_servers_synced': 0,
-            'total_clients_created': 0,
-            'total_errors': 0,
-            'errors': []
-        }
-        
-        for sub in all_subscriptions:
-            sub_id = sub['id']
-            try:
-                result = await self.sync_subscription_with_servers(sub_id, auto_fix=auto_fix)
-                
-                total_stats['total_servers_checked'] += result['servers_checked']
-                total_stats['total_servers_synced'] += result['servers_synced']
-                total_stats['total_clients_created'] += result.get('clients_created', 0)
-                total_stats['total_errors'] += len(result['errors'])
-                
-                if result['servers_synced'] == result['servers_checked'] and not result['errors']:
-                    total_stats['subscriptions_synced'] += 1
-                else:
-                    total_stats['errors'].extend(result['errors'])
-                    
-            except Exception as e:
-                error_msg = f"Ошибка синхронизации подписки {sub_id}: {e}"
-                logger.error(error_msg)
-                total_stats['total_errors'] += 1
-                total_stats['errors'].append(error_msg)
-        
-        logger.info(
-            f"Синхронизация завершена: "
-            f"проверено подписок {total_stats['subscriptions_checked']}, "
-            f"синхронизировано {total_stats['subscriptions_synced']}, "
-            f"создано клиентов {total_stats['total_clients_created']}, "
-            f"ошибок {total_stats['total_errors']}"
-        )
-        
-        return total_stats
-    
-    async def verify_client_exists(self, server_name: str, client_email: str) -> Tuple[bool, str]:
-        """
-        Проверяет существование клиента на сервере и возвращает детальную информацию.
-        
-        Returns:
-            (exists: bool, message: str)
-        """
-        try:
-            xui, resolved_name = self.server_manager.get_server_by_name(server_name)
-            if not xui:
-                return False, f"Сервер {server_name} недоступен"
-            
-            exists = xui.client_exists(client_email)
-            if exists:
-                return True, f"Клиент {client_email} существует на сервере {resolved_name}"
-            else:
-                return False, f"Клиент {client_email} не найден на сервере {resolved_name}"
-                
-        except Exception as e:
-            return False, f"Ошибка проверки клиента: {e}"
+        self.is_running = False
 
+    async def run_sync(self):
+        """Запуск полной синхронизации"""
+        logger.info("🌀 Запуск полной синхронизации серверов...")
+        
+        # 1. Очистка старых подписок (истекли более 3 дней назад)
+        await self.cleanup_expired_subscriptions(days_limit=3)
+        
+        # 2. Синхронизация активных подписок с конфигурацией серверов
+        await self.subscription_manager.sync_servers_with_config(auto_create_clients=True)
+        
+        # 3. Проверка консистентности времени и наличия клиентов
+        await self.sync_all_clients_states()
+        
+        logger.info("✅ Синхронизация завершена")
+
+    async def cleanup_expired_subscriptions(self, days_limit: int = 3):
+        """Удаляет подписки, которые истекли более N дней назад"""
+        now = int(time.time())
+        cutoff = now - (days_limit * 24 * 60 * 60)
+        
+        # Получаем все подписки
+        async with self.server_manager as _: # Просто для логов, если нужно
+            # Нам нужны все подписки из БД, у которых expires_at < cutoff
+            from ..db.subscribers_db import get_all_active_subscriptions_by_user
+            # Но проще получить вообще все и отфильтровать
+            all_subs = await get_all_active_subscriptions()
+            
+            for sub in all_subs:
+                if sub['expires_at'] < cutoff:
+                    sub_id = sub['id']
+                    logger.info(f"🗑 Удаление просроченной подписки {sub_id} (истекла {days_limit}+ дня назад)")
+                    
+                    # 1. Удаляем клиентов со всех серверов
+                    servers = await get_subscription_servers(sub_id)
+                    for s_info in servers:
+                        server_name = s_info['server_name']
+                        client_email = s_info['client_email']
+                        
+                        try:
+                            xui, _ = self.server_manager.get_server_by_name(server_name)
+                            if xui:
+                                xui.deleteClient(client_email)
+                                logger.debug(f"Удален клиент {client_email} с сервера {server_name}")
+                        except Exception as e:
+                            logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
+                    
+                    # 2. Удаляем из БД (статус canceled или полное удаление)
+                    # По вашей просьбе — удаляем совсем
+                    await update_subscription_status(sub_id, 'deleted')
+                    # В реальной БД лучше просто скрыть, но мы удаляем связи
+                    for s_info in servers:
+                        await remove_subscription_server(sub_id, s_info['server_name'])
+                    
+                    logger.info(f"Подписка {sub_id} полностью удалена")
+
+    async def sync_all_clients_states(self):
+        """Проверяет каждый клиент на каждом сервере и синхронизирует время"""
+        active_subs = await get_all_active_subscriptions()
+        now = int(time.time())
+        
+        for sub in active_subs:
+            sub_id = sub['id']
+            expires_at = sub['expires_at']
+            user_id = sub['user_id']
+            token = sub['subscription_token']
+            
+            # Если подписка истекла, но еще не удалена (меньше 3 дней), 
+            # мы её не трогаем, X-UI сам её заблокирует
+            if expires_at < now:
+                continue
+                
+            servers = await get_subscription_servers(sub_id)
+            for s_info in servers:
+                server_name = s_info['server_name']
+                client_email = s_info['client_email']
+                
+                # Используем ensure_client_on_server, который мы уже доработали.
+                # Он проверит существование И синхронизирует время (expiryTime).
+                await self.subscription_manager.ensure_client_on_server(
+                    subscription_id=sub_id,
+                    server_name=server_name,
+                    client_email=client_email,
+                    user_id=user_id,
+                    expires_at=expires_at,
+                    token=token
+                )

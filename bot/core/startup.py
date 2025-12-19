@@ -7,7 +7,6 @@ import asyncio
 import telegram
 from ..db import init_all_db
 from ..services import NotificationManager
-from ..core.tasks import cleanup_old_payments_task, sync_db_with_xui_task, sync_servers_with_config_task
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +131,10 @@ async def on_startup(app):
         
         logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
         
+        # 1. Инициализация БД
         await init_all_db()
         
-        # Инициализируем менеджер уведомлений
+        # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
         await notification_manager.initialize()
         await notification_manager.start()
@@ -143,13 +143,14 @@ async def on_startup(app):
         logger.info("Менеджер уведомлений запущен")
         logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
         
-        # Запускаем задачи с передачей менеджеров
-        asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))
-        asyncio.create_task(cleanup_old_payments_task())
-        asyncio.create_task(sync_db_with_xui_task(sync_manager))
-        asyncio.create_task(sync_servers_with_config_task(subscription_manager))
+        # 3. Запуск фоновых задач (единый цикл)
+        from .tasks import start_background_tasks
+        await start_background_tasks(sync_manager, subscription_manager, notification_manager)
         
-        # Первоначальная синхронизация
+        # 4. Запуск мониторинга здоровья серверов
+        asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))
+        
+        # 5. Первоначальная синхронизация через 30 секунд
         async def initial_sync():
             await asyncio.sleep(30)
             if subscription_manager:

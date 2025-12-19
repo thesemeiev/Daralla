@@ -275,6 +275,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 globals_dict = get_globals()
                 notification_manager = globals_dict.get('notification_manager')
                 if notification_manager:
+                    # Передаем user_id и subscription_id для записи эффективности
                     await notification_manager.record_subscription_extension(user_id, extension_subscription_id)
             except Exception as e:
                 logger.warning(f"Ошибка записи продления подписки для уведомлений: {e}")
