@@ -182,14 +182,14 @@ jobs:
             
             # Verify restoration
             echo "Verifying database restoration..."
-            if [ -f "data/subscribers.db" ]; then
-              echo "Checking subscribers.db content..."
-              sudo sqlite3 data/subscribers.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscribers.db"
+            if [ -f "data/daralla.db" ]; then
+              echo "Checking daralla.db content..."
+              sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read daralla.db"
             fi
           else
             echo "Database backups not found - creating empty databases"
             sudo mkdir -p data
-            sudo touch data/vpn_keys.db data/subscribers.db data/notifications.db data/users.db
+            sudo touch data/daralla.db
             echo "Empty databases created"
           fi
 
@@ -228,9 +228,9 @@ jobs:
           ls -lh data/*.db || echo "Databases not found"
           
           # Verify database content
-          if [ -f "data/vpn_keys.db" ]; then
-            echo "Checking vpn_keys.db content..."
-            sudo sqlite3 data/vpn_keys.db "SELECT name FROM sqlite_master WHERE type='table';" || echo "Cannot read vpn_keys.db"
+          if [ -f "data/daralla.db" ]; then
+            echo "Checking daralla.db content..."
+            sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table';" || echo "Cannot read daralla.db"
           fi
           
           # Fix permissions after restoration
@@ -304,9 +304,9 @@ jobs:
           
           # Final verification of data
           echo "Final data verification..."
-          if [ -f "data/subscribers.db" ]; then
-            echo "Final subscribers.db check:"
-            sudo sqlite3 data/subscribers.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+          if [ -f "data/daralla.db" ]; then
+            echo "Final daralla.db check:"
+            sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
           fi
           
           echo "✅ Deployment to TEST server completed!"

@@ -13,13 +13,13 @@ sudo docker-compose down
 # Создаем папку data если её нет
 sudo mkdir -p data
 
-# Создаем файлы БД если их нет
-sudo touch data/vpn_keys.db data/referral_system.db data/notifications.db
+# Создаем файл единой БД если его нет
+sudo touch data/daralla.db
 
 # Устанавливаем правильные права
 echo "📝 Устанавливаю права доступа..."
 sudo chown -R 1000:1000 data/
-sudo chmod -R 666 data/*.db
+sudo chmod 666 data/daralla.db
 sudo chmod 755 data/
 
 # Проверяем права

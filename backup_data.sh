@@ -23,14 +23,12 @@ if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
     echo "Проверка содержимого бэкапа:"
     sudo tar -tzf "/root/backups/data/backup_${timestamp}.tar.gz"
     
-    # Показываем статистику рефералов из бэкапа
-    echo "Статистика рефералов в бэкапе:"
+    # Показываем статистику из бэкапа
+    echo "Статистика подписок в бэкапе:"
     sudo tar -xzf "/root/backups/data/backup_${timestamp}.tar.gz" -C /tmp/
-    if [ -f "/tmp/data/referral_system.db" ]; then
-        echo "Количество реферальных связей:"
-        sudo sqlite3 /tmp/data/referral_system.db "SELECT COUNT(*) FROM referrals;"
-        echo "Количество пользователей с баллами:"
-        sudo sqlite3 /tmp/data/referral_system.db "SELECT COUNT(*) FROM user_points;"
+    if [ -f "/tmp/data/daralla.db" ]; then
+        echo "Количество активных подписок:"
+        sudo sqlite3 /tmp/data/daralla.db "SELECT COUNT(*) FROM subscriptions WHERE status='active';"
         sudo rm -rf /tmp/data
     fi
     
