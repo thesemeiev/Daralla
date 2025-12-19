@@ -44,40 +44,38 @@ class SyncManager:
         now = int(time.time())
         cutoff = now - (days_limit * 24 * 60 * 60)
         
-        # Получаем все подписки
-        async with self.server_manager as _: # Просто для логов, если нужно
-            # Нам нужны все подписки из БД, у которых expires_at < cutoff
-            from ..db.subscribers_db import get_all_active_subscriptions_by_user
-            # Но проще получить вообще все и отфильтровать
-            all_subs = await get_all_active_subscriptions()
-            
-            for sub in all_subs:
-                if sub['expires_at'] < cutoff:
-                    sub_id = sub['id']
-                    logger.info(f"🗑 Удаление просроченной подписки {sub_id} (истекла {days_limit}+ дня назад)")
+        # Нам нужны все подписки из БД, у которых expires_at < cutoff
+        from ..db.subscribers_db import get_all_active_subscriptions_by_user
+        # Но проще получить вообще все и отфильтровать
+        all_subs = await get_all_active_subscriptions()
+        
+        for sub in all_subs:
+            if sub['expires_at'] < cutoff:
+                sub_id = sub['id']
+                logger.info(f"🗑 Удаление просроченной подписки {sub_id} (истекла {days_limit}+ дня назад)")
+                
+                # 1. Удаляем клиентов со всех серверов
+                servers = await get_subscription_servers(sub_id)
+                for s_info in servers:
+                    server_name = s_info['server_name']
+                    client_email = s_info['client_email']
                     
-                    # 1. Удаляем клиентов со всех серверов
-                    servers = await get_subscription_servers(sub_id)
-                    for s_info in servers:
-                        server_name = s_info['server_name']
-                        client_email = s_info['client_email']
-                        
-                        try:
-                            xui, _ = self.server_manager.get_server_by_name(server_name)
-                            if xui:
-                                xui.deleteClient(client_email)
-                                logger.debug(f"Удален клиент {client_email} с сервера {server_name}")
-                        except Exception as e:
-                            logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
-                    
-                    # 2. Удаляем из БД (статус canceled или полное удаление)
-                    # По вашей просьбе — удаляем совсем
-                    await update_subscription_status(sub_id, 'deleted')
-                    # В реальной БД лучше просто скрыть, но мы удаляем связи
-                    for s_info in servers:
-                        await remove_subscription_server(sub_id, s_info['server_name'])
-                    
-                    logger.info(f"Подписка {sub_id} полностью удалена")
+                    try:
+                        xui, _ = self.server_manager.get_server_by_name(server_name)
+                        if xui:
+                            xui.deleteClient(client_email)
+                            logger.debug(f"Удален клиент {client_email} с сервера {server_name}")
+                    except Exception as e:
+                        logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
+                
+                # 2. Удаляем из БД (статус canceled или полное удаление)
+                # По вашей просьбе — удаляем совсем
+                await update_subscription_status(sub_id, 'deleted')
+                # В реальной БД лучше просто скрыть, но мы удаляем связи
+                for s_info in servers:
+                    await remove_subscription_server(sub_id, s_info['server_name'])
+                
+                logger.info(f"Подписка {sub_id} полностью удалена")
 
     async def sync_all_clients_states(self):
         """Проверяет каждый клиент на каждом сервере и синхронизирует время"""

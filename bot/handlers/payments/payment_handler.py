@@ -244,7 +244,7 @@ async def handle_payment(update, context, price, period):
                 payment_meta['extension_subscription_id'] = context.user_data['extension_subscription_id']
                 logger.info(f"Добавлена информация о продлении подписки в метаданные: {context.user_data['extension_subscription_id']}")
             
-            await add_payment(user_id, payment.id, 'pending', now, payment_meta)
+            await add_payment(payment.id, user_id, 'pending', payment_meta)
         except Exception as e:
             logger.exception(f"Ошибка отправки сообщения об оплате для user_id={user_id}")
             await safe_edit_or_reply(message, 'Ошибка при отправке информации об оплате.')
