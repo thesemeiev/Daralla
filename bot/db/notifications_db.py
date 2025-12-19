@@ -86,14 +86,48 @@ async def get_notification_stats(days: int = 7):
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
+        
+        # Общая статистика
         async with db.execute('''
-            SELECT notification_type, SUM(total_sent) as total, SUM(success_count) as success, 
-                   SUM(failed_count) as failed, SUM(blocked_users) as blocked
+            SELECT SUM(total_sent) as total_sent, 
+                   SUM(success_count) as success_count, 
+                   SUM(failed_count) as failed_count, 
+                   SUM(blocked_users) as blocked_users
+            FROM notification_metrics 
+            WHERE date >= ?
+        ''', (cutoff,)) as cur:
+            row = await cur.fetchone()
+            stats = dict(row) if row and row['total_sent'] else {
+                'total_sent': 0, 'success_count': 0, 'failed_count': 0, 'blocked_users': 0
+            }
+
+        # Расчет success_rate
+        if stats['total_sent'] > 0:
+            stats['success_rate'] = (stats['success_count'] / stats['total_sent']) * 100
+        else:
+            stats['success_rate'] = 0
+
+        # Статистика по типам
+        async with db.execute('''
+            SELECT notification_type, SUM(total_sent) as total, SUM(success_count) as success
             FROM notification_metrics 
             WHERE date >= ?
             GROUP BY notification_type
         ''', (cutoff,)) as cur:
-            return [dict(row) for row in cur]
+            rows = await cur.fetchall()
+            stats['by_type'] = [dict(r) for r in rows]
+
+        # Статистика эффективности
+        async with db.execute('''
+            SELECT action_taken, COUNT(*) as count
+            FROM notification_effectiveness
+            WHERE sent_at >= ?
+            GROUP BY action_taken
+        ''', (int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()),)) as cur:
+            rows = await cur.fetchall()
+            stats['effectiveness_stats'] = {r['action_taken']: r['count'] for r in rows}
+
+        return stats
 
 async def get_daily_notification_stats(days: int = 14):
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')

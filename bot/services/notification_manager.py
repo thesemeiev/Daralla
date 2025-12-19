@@ -187,7 +187,7 @@ class NotificationManager:
         """Отправляет уведомление об истекающей подписке"""
         try:
             # Проверка отправки за последние 24 часа для защиты от спама
-            if await is_subscription_notification_sent(user_id, subscription_id, notification_type, hours_limit=24):
+            if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
                 return False
             
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry)
@@ -208,16 +208,12 @@ class NotificationManager:
                 
                 await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
                 await record_notification_metrics(notification_type, True)
-                await record_subscription_notification_effectiveness(
-                    user_id, subscription_id, notification_type,
-                    action_taken=None, days_until_expiry=days_until_expiry
-                )
                 return True
                 
             except (telegram.error.Forbidden, telegram.error.BadRequest) as e:
                 # Если бот заблокирован, помечаем в метриках
                 is_blocked = "Chat not found" in str(e) or isinstance(e, telegram.error.Forbidden)
-                await record_notification_metrics(notification_type, False, user_blocked=is_blocked)
+                await record_notification_metrics(notification_type, False, is_blocked=is_blocked)
                 # Чтобы больше не пытаться слать этому пользователю сегодня
                 await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
                 return False
@@ -273,8 +269,8 @@ class NotificationManager:
         try:
             await record_subscription_notification_effectiveness(
                 user_id, subscription_id, "extension", 
-                action_taken="extended"
+                action="extended"
             )
-            await clear_subscription_notifications(user_id, subscription_id)
+            await clear_subscription_notifications(subscription_id)
         except Exception as e:
             logger.error(f"Ошибка записи продления подписки: {e}")

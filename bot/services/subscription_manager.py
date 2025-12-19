@@ -13,7 +13,6 @@ from ..db.subscribers_db import (
     get_or_create_subscriber,
     create_subscription,
     add_subscription_server,
-    get_active_subscription_by_user,
     get_all_active_subscriptions_by_user,
     get_subscription_servers,
     remove_subscription_server,
