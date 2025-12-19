@@ -78,6 +78,14 @@ class CallbackData:
     # Ключи
     DELETE_KEY = 'delete_key'
     
+    # Подписки (паттерны для динамических callback_data)
+    VIEW_SUB = 'view_sub:'  # Используется как f"view_sub:{id}"
+    RENAME_SUB = 'rename_sub:'  # Используется как f"rename_sub:{id}"
+    EXTEND_SUB = 'extend_sub:'  # Используется как f"extend_sub:{id}"
+    EXT_SUB_PER = 'ext_sub_per:'  # Используется как f"ext_sub_per:{period}:{id}"
+    SUBS_PAGE = 'subs_page_'  # Используется как f"subs_page_{page}"
+    BUY_MENU = 'buy_menu'  # Для покупки новой подписки
+    
     # Админ
     ADMIN_ERRORS_REFRESH = 'admin_errors_refresh'
     ADMIN_NOTIFICATIONS_REFRESH = 'admin_notifications_refresh'

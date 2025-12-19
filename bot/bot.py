@@ -20,7 +20,7 @@ from .utils import (
     UIEmojis, UIStyles, UIButtons, UIMessages,
     safe_edit_or_reply, safe_edit_or_reply_photo, safe_edit_or_reply_universal,
     safe_send_message_with_photo, safe_edit_message_with_photo,
-    check_private_chat, calculate_time_remaining, format_vpn_key_message,
+    check_private_chat, calculate_time_remaining,
     set_image_paths
 )
 
@@ -83,10 +83,10 @@ import hmac
 import hashlib
 
 from .db import (
-    init_all_db, init_payments_db, add_payment, get_payment, get_payment_by_id, update_payment_status, 
+    init_all_db, init_payments_db, add_payment, get_payment_by_id, update_payment_status, 
     get_all_pending_payments, get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
     is_known_user, register_simple_user, get_all_user_ids, update_payment_activation,
-    get_config, set_config, get_all_config, DB_PATH, DATA_DIR
+    get_config, set_config, get_all_config, PAYMENTS_DB_PATH, DATA_DIR
 )
 
 
@@ -222,11 +222,12 @@ new_client_manager = MultiServerManager(SERVERS_BY_LOCATION)
 # Менеджер подписок (использует менеджер новых клиентов для создания клиентов на серверах)
 subscription_manager = SubscriptionManager(new_client_manager)
 # Менеджер синхронизации БД с X-UI серверами
-sync_manager = SyncManager(new_client_manager)
+# Передаем subscription_manager для использования единой функции ensure_client_on_server
+sync_manager = SyncManager(new_client_manager, subscription_manager)
 
 from .handlers.webhooks import create_webhook_app
 
-from .core import cleanup_old_payments_task, expired_keys_cleanup_task, auto_cleanup_expired_keys
+from .core import cleanup_old_payments_task
 
 from .handlers.utils import error_handler
 
@@ -340,7 +341,8 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|mykey|admin_notifications_refresh|admin_errors_refresh)$"))
     app.add_handler(CallbackQueryHandler(select_server_callback, pattern="^(select_server_.*|server_unavailable_.*|refresh_servers)$"))
     # Обработчик для просмотра и переименования подписок
-    app.add_handler(CallbackQueryHandler(mykey, pattern="^(view_sub:|rename_sub:)"))
+
+    app.add_handler(CallbackQueryHandler(mykey, pattern=f"^({CallbackData.VIEW_SUB}|{CallbackData.RENAME_SUB})"))
  
     
     # Рассылка

@@ -27,13 +27,21 @@ async def init_notifications_db():
                 CREATE TABLE IF NOT EXISTS sent_notifications (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT NOT NULL,
-                    key_email TEXT NOT NULL,
+                    subscription_id INTEGER NOT NULL,  -- ID подписки
                     notification_type TEXT NOT NULL,
                     sent_at INTEGER NOT NULL,
                     server_name TEXT,
-                    UNIQUE(user_id, key_email, notification_type)
+                    UNIQUE(user_id, subscription_id, notification_type)
                 )
             """)
+            
+            # Миграция: добавляем поле subscription_id если его нет
+            try:
+                await db.execute("ALTER TABLE sent_notifications ADD COLUMN subscription_id INTEGER")
+                logger.info("NOTIFICATIONS_DB: Добавлено поле subscription_id в таблицу sent_notifications")
+            except Exception as e:
+                if "duplicate column" not in str(e).lower():
+                    logger.debug(f"NOTIFICATIONS_DB: Поле subscription_id уже существует или ошибка: {e}")
             
             # Таблица для метрик уведомлений
             await db.execute("""
@@ -54,7 +62,7 @@ async def init_notifications_db():
                 CREATE TABLE IF NOT EXISTS notification_effectiveness (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT NOT NULL,
-                    key_email TEXT NOT NULL,
+                    subscription_id INTEGER NOT NULL,  -- ID подписки
                     notification_type TEXT NOT NULL,
                     sent_at INTEGER NOT NULL,
                     action_taken TEXT,  -- 'extended', 'ignored', 'expired'
@@ -62,6 +70,14 @@ async def init_notifications_db():
                     days_until_expiry INTEGER
                 )
             """)
+            
+            # Миграция: добавляем поле subscription_id если его нет
+            try:
+                await db.execute("ALTER TABLE notification_effectiveness ADD COLUMN subscription_id INTEGER")
+                logger.info("NOTIFICATIONS_DB: Добавлено поле subscription_id в таблицу notification_effectiveness")
+            except Exception as e:
+                if "duplicate column" not in str(e).lower():
+                    logger.debug(f"NOTIFICATIONS_DB: Поле subscription_id уже существует или ошибка: {e}")
             
             # Таблица для настроек уведомлений
             await db.execute("""
@@ -74,7 +90,7 @@ async def init_notifications_db():
             
             # Создаем индексы для быстрого поиска
             await db.execute("CREATE INDEX IF NOT EXISTS idx_sent_notifications_user ON sent_notifications(user_id)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_sent_notifications_email ON sent_notifications(key_email)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sent_notifications_subscription ON sent_notifications(subscription_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_sent_notifications_type ON sent_notifications(notification_type)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_sent_notifications_sent_at ON sent_notifications(sent_at)")
             
@@ -82,6 +98,7 @@ async def init_notifications_db():
             await db.execute("CREATE INDEX IF NOT EXISTS idx_metrics_type ON notification_metrics(notification_type)")
             
             await db.execute("CREATE INDEX IF NOT EXISTS idx_effectiveness_user ON notification_effectiveness(user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_effectiveness_subscription ON notification_effectiveness(subscription_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_effectiveness_action ON notification_effectiveness(action_taken)")
             
             await db.commit()
@@ -91,40 +108,7 @@ async def init_notifications_db():
         logger.error(f"Ошибка инициализации базы данных уведомлений: {e}")
         raise
 
-async def is_notification_sent(user_id: str, key_email: str, notification_type: str) -> bool:
-    """Проверяет, было ли уже отправлено уведомление"""
-    try:
-        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
-            cursor = await db.execute("""
-                SELECT id FROM sent_notifications 
-                WHERE user_id = ? AND key_email = ? AND notification_type = ?
-            """, (user_id, key_email, notification_type))
-            
-            result = await cursor.fetchone()
-            return result is not None
-            
-    except Exception as e:
-        logger.error(f"Ошибка проверки отправленного уведомления: {e}")
-        return False
-
-async def mark_notification_sent(user_id: str, key_email: str, notification_type: str, server_name: str = None) -> bool:
-    """Отмечает уведомление как отправленное"""
-    try:
-        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
-            now = int(datetime.datetime.now().timestamp())
-            
-            await db.execute("""
-                INSERT OR REPLACE INTO sent_notifications 
-                (user_id, key_email, notification_type, sent_at, server_name)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, key_email, notification_type, now, server_name))
-            
-            await db.commit()
-            return True
-            
-    except Exception as e:
-        logger.error(f"Ошибка сохранения отправленного уведомления: {e}")
-        return False
+# Старые функции для ключей удалены - используйте функции для подписок
 
 async def record_notification_metrics(notification_type: str, success: bool, user_blocked: bool = False) -> bool:
     """Записывает метрики уведомления"""
@@ -176,26 +160,7 @@ async def record_notification_metrics(notification_type: str, success: bool, use
         logger.error(f"Ошибка записи метрик уведомления: {e}")
         return False
 
-async def record_notification_effectiveness(user_id: str, key_email: str, notification_type: str, 
-                                         action_taken: str = None, days_until_expiry: int = None) -> bool:
-    """Записывает эффективность уведомления"""
-    try:
-        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
-            now = int(datetime.datetime.now().timestamp())
-            action_taken_at = now if action_taken else None
-            
-            await db.execute("""
-                INSERT INTO notification_effectiveness 
-                (user_id, key_email, notification_type, sent_at, action_taken, action_taken_at, days_until_expiry)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, key_email, notification_type, now, action_taken, action_taken_at, days_until_expiry))
-            
-            await db.commit()
-            return True
-            
-    except Exception as e:
-        logger.error(f"Ошибка записи эффективности уведомления: {e}")
-        return False
+# Старая функция record_notification_effectiveness для ключей удалена - используйте record_subscription_notification_effectiveness
 
 async def cleanup_old_notifications(days_to_keep: int = 30) -> int:
     """Очищает старые записи уведомлений"""
@@ -354,30 +319,88 @@ async def clear_user_notifications(user_id: str) -> int:
         logger.error(f"Ошибка очистки уведомлений пользователя {user_id}: {e}")
         return 0
 
-async def clear_key_notifications(user_id: str, key_email: str) -> int:
-    """Очищает все уведомления для конкретного ключа (при продлении)"""
+# Старая функция clear_key_notifications удалена - используйте clear_subscription_notifications
+
+async def is_subscription_notification_sent(user_id: str, subscription_id: int, notification_type: str) -> bool:
+    """Проверяет, было ли уже отправлено уведомление для подписки"""
     try:
         async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
-            # Удаляем отправленные уведомления для конкретного ключа
             cursor = await db.execute("""
-                DELETE FROM sent_notifications WHERE user_id = ? AND key_email = ?
-            """, (user_id, key_email))
+                SELECT id FROM sent_notifications 
+                WHERE user_id = ? AND subscription_id = ? AND notification_type = ?
+            """, (user_id, subscription_id, notification_type))
+            
+            result = await cursor.fetchone()
+            return result is not None
+            
+    except Exception as e:
+        logger.error(f"Ошибка проверки отправленного уведомления для подписки: {e}")
+        return False
+
+async def mark_subscription_notification_sent(user_id: str, subscription_id: int, notification_type: str, server_name: str = None) -> bool:
+    """Отмечает уведомление для подписки как отправленное"""
+    try:
+        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
+            now = int(datetime.datetime.now().timestamp())
+            
+            await db.execute("""
+                INSERT OR REPLACE INTO sent_notifications 
+                (user_id, subscription_id, notification_type, sent_at, server_name)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, subscription_id, notification_type, now, server_name))
+            
+            await db.commit()
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка сохранения отправленного уведомления для подписки: {e}")
+        return False
+
+async def clear_subscription_notifications(user_id: str, subscription_id: int) -> int:
+    """Очищает все уведомления для конкретной подписки (при продлении)"""
+    try:
+        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
+            # Удаляем отправленные уведомления для конкретной подписки
+            cursor = await db.execute("""
+                DELETE FROM sent_notifications WHERE user_id = ? AND subscription_id = ?
+            """, (user_id, subscription_id))
             deleted_notifications = cursor.rowcount
             
-            # Удаляем записи эффективности для конкретного ключа
+            # Удаляем записи эффективности для конкретной подписки
             cursor = await db.execute("""
-                DELETE FROM notification_effectiveness WHERE user_id = ? AND key_email = ?
-            """, (user_id, key_email))
+                DELETE FROM notification_effectiveness WHERE user_id = ? AND subscription_id = ?
+            """, (user_id, subscription_id))
             deleted_effectiveness = cursor.rowcount
             
             await db.commit()
             
-            logger.info(f"Очищено {deleted_notifications} уведомлений и {deleted_effectiveness} записей эффективности для ключа {key_email}")
+            logger.info(f"Очищено {deleted_notifications} уведомлений и {deleted_effectiveness} записей эффективности для подписки {subscription_id}")
             return deleted_notifications + deleted_effectiveness
             
     except Exception as e:
-        logger.error(f"Ошибка очистки уведомлений для ключа {key_email}: {e}")
+        logger.error(f"Ошибка очистки уведомлений для подписки {subscription_id}: {e}")
         return 0
+
+async def record_subscription_notification_effectiveness(user_id: str, subscription_id: int, notification_type: str, 
+                                                       action_taken: str = None, days_until_expiry: int = None) -> bool:
+    """Записывает эффективность уведомления для подписки"""
+    try:
+        async with aiosqlite.connect(NOTIFICATIONS_DB_PATH) as db:
+            now = int(datetime.datetime.now().timestamp())
+            action_taken_at = now if action_taken else None
+            
+            await db.execute("""
+                INSERT INTO notification_effectiveness 
+                (user_id, subscription_id, notification_type, sent_at, action_taken, action_taken_at, days_until_expiry)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, subscription_id, notification_type, now, action_taken, action_taken_at, days_until_expiry))
+            
+            await db.commit()
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка записи эффективности уведомления для подписки: {e}")
+        return False
 
 async def get_notification_settings() -> Dict[str, str]:
     """Получает настройки уведомлений"""

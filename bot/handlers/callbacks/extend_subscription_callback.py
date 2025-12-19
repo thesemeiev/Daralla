@@ -133,8 +133,8 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     
     # Показываем меню выбора периода продления
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("1 месяц - 150₽", callback_data=f"ext_sub_per:month:{subscription_id}")],
-        [InlineKeyboardButton("3 месяца - 350₽", callback_data=f"ext_sub_per:3month:{subscription_id}")],
+        [InlineKeyboardButton("1 месяц - 150₽", callback_data=f"{CallbackData.EXT_SUB_PER}month:{subscription_id}")],
+        [InlineKeyboardButton("3 месяца - 350₽", callback_data=f"{CallbackData.EXT_SUB_PER}3month:{subscription_id}")],
         [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.MYKEYS_MENU)]
     ])
     
@@ -183,7 +183,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
         )
         return
     
-    # Извлекаем период и subscription_id из callback_data: ext_sub_per:month:subscription_id
+    # Извлекаем период и subscription_id из callback_data: {CallbackData.EXT_SUB_PER}month:subscription_id
     parts = query.data.split(":", 2)
     if len(parts) < 3:
         await safe_edit_or_reply_universal(

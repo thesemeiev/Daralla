@@ -13,7 +13,7 @@ from yookassa import Payment
 
 from ...utils import UIEmojis, safe_edit_or_reply, safe_edit_or_reply_universal
 from ...navigation import NavStates, NavigationBuilder
-from ...db import get_pending_payment, add_payment, DB_PATH
+from ...db import get_pending_payment, add_payment, PAYMENTS_DB_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +106,8 @@ async def handle_payment(update, context, price, period):
         logger.info(f"Проверка существующих платежей: user_id={user_id}, period={period}, found={payment_info is not None}")
         
         # Проверяем pending платежи пользователя и отменяем только неоплаченные
-        logger.info(f"HANDLE_PAYMENT: Подключаемся к базе данных по пути: {DB_PATH}")
-        async with aiosqlite.connect(DB_PATH) as db:
+        logger.info(f"HANDLE_PAYMENT: Подключаемся к базе данных по пути: {PAYMENTS_DB_PATH}")
+        async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
             # Проверяем существование таблицы payments
             async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payments'") as cursor:
                 table_exists = await cursor.fetchone()
@@ -148,8 +148,8 @@ async def handle_payment(update, context, price, period):
         
         # 2. Создаём новый платёж
         now = int(datetime.datetime.now().timestamp())
-        key_id = str(uuid.uuid4())
-        unique_email = f'{user_id}_{key_id}'
+        subscription_id = str(uuid.uuid4())
+        unique_email = f'{user_id}_{subscription_id}'
         
         # Обычная покупка за деньги (1 подписка = 1 устройство)
         try:
@@ -161,10 +161,8 @@ async def handle_payment(update, context, price, period):
                 "description": f"VPN {period} для {user_id}",
                 "metadata": {
                     "user_id": user_id, 
-                    "key_id": key_id, 
                     "type": period,
                     "device_limit": devices,
-                    "selected_location": context.user_data.get("selected_location", "auto"),
                     "message_id": message.message_id if message else None,
                     "unique_email": unique_email,
                     "price": price,
@@ -236,7 +234,7 @@ async def handle_payment(update, context, price, period):
                     logger.error(f"Не удалось удалить сообщение с меню выбора периода: {delete_error}")
             
             # Подготавливаем метаданные платежа
-            payment_meta = {"price": price, "type": period, "key_id": key_id, "unique_email": unique_email, "message_id": message.message_id}
+            payment_meta = {"price": price, "type": period, "unique_email": unique_email, "message_id": message.message_id}
             
             # Добавляем информацию о продлении подписки, если это продление
             if period.startswith('extend_sub_') and context.user_data.get('extension_subscription_id'):

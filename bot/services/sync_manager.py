@@ -29,8 +29,9 @@ class SyncManager:
     - Несоответствие статусов (активен в БД, но истек на сервере - обновляем сервер)
     """
     
-    def __init__(self, server_manager: MultiServerManager):
+    def __init__(self, server_manager: MultiServerManager, subscription_manager=None):
         self.server_manager = server_manager
+        self.subscription_manager = subscription_manager
     
     async def sync_subscription_with_servers(self, subscription_id: int, auto_fix: bool = False) -> Dict[str, any]:
         """
@@ -128,48 +129,77 @@ class SyncManager:
                                     
                                     if user_id:
                                         logger.info(
-                                            f"Автоматическое восстановление клиента {client_email} на сервере {server_name}, "
-                                            f"осталось дней: {remaining_days}"
+                                            f"Автоматическое восстановление клиента {client_email} на сервере {server_name}"
                                         )
                                         
-                                        # Создаем клиента
+                                        # Используем единую функцию ensure_client_on_server для создания клиента
+                                        # Это обеспечит единообразную обработку и синхронизацию времени
                                         try:
-                                            response = xui.addClient(
-                                                day=remaining_days,
-                                                tg_id=user_id,
-                                                user_email=client_email,
-                                                timeout=15,
-                                                key_name=subscription.get('subscription_token', '')
-                                            )
-                                            
-                                            # Проверяем успешность
-                                            if response.status_code == 200:
-                                                try:
-                                                    response_json = response.json()
-                                                    if response_json.get('success', False):
+                                            if self.subscription_manager:
+                                                # Используем единую функцию из subscription_manager
+                                                client_exists, client_created = await self.subscription_manager.ensure_client_on_server(
+                                                    subscription_id=subscription_id,
+                                                    server_name=server_name,
+                                                    client_email=client_email,
+                                                    user_id=user_id,
+                                                    expires_at=expires_at,
+                                                    token=subscription.get('subscription_token', '')
+                                                )
+                                                
+                                                if client_exists:
+                                                    result['servers_synced'] += 1
+                                                    if client_created:
                                                         result['clients_created'] += 1
-                                                        result['servers_synced'] += 1
                                                         logger.info(
                                                             f"Клиент {client_email} успешно восстановлен на сервере {server_name}"
                                                         )
-                                                        continue  # Пропускаем добавление ошибки
+                                                    else:
+                                                        logger.info(
+                                                            f"Клиент {client_email} уже существует на сервере {server_name}"
+                                                        )
+                                                    continue  # Пропускаем добавление ошибки
+                                                else:
+                                                    result['errors'].append(
+                                                        f"Не удалось восстановить клиента {client_email} на сервере {server_name}"
+                                                    )
+                                            else:
+                                                # Fallback: если subscription_manager не доступен, используем прямое создание
+                                                logger.warning("subscription_manager не доступен, используем прямое создание клиента")
+                                                response = xui.addClient(
+                                                    day=remaining_days,
+                                                    tg_id=user_id,
+                                                    user_email=client_email,
+                                                    timeout=15,
+                                                    key_name=subscription.get('subscription_token', '')
+                                                )
+                                                
+                                                if response and response.status_code == 200:
+                                                    try:
+                                                        response_json = response.json()
+                                                        if response_json.get('success', False):
+                                                            result['clients_created'] += 1
+                                                            result['servers_synced'] += 1
+                                                            logger.info(
+                                                                f"Клиент {client_email} успешно восстановлен на сервере {server_name}"
+                                                            )
+                                                            continue
+                                                    except:
+                                                        pass
+                                                
+                                                # Если создание не удалось, но клиент уже существует (duplicate)
+                                                try:
+                                                    if xui.client_exists(client_email):
+                                                        result['servers_synced'] += 1
+                                                        logger.info(
+                                                            f"Клиент {client_email} уже существует на сервере {server_name} после попытки восстановления"
+                                                        )
+                                                        continue
                                                 except:
                                                     pass
-                                            
-                                            # Если создание не удалось, но клиент уже существует (duplicate)
-                                            try:
-                                                if xui.client_exists(client_email):
-                                                    result['servers_synced'] += 1
-                                                    logger.info(
-                                                        f"Клиент {client_email} уже существует на сервере {server_name} после попытки восстановления"
-                                                    )
-                                                    continue
-                                            except:
-                                                pass
-                                            
-                                            result['errors'].append(
-                                                f"Не удалось восстановить клиента {client_email} на сервере {server_name}"
-                                            )
+                                                
+                                                result['errors'].append(
+                                                    f"Не удалось восстановить клиента {client_email} на сервере {server_name}"
+                                                )
                                         except Exception as create_e:
                                             logger.error(f"Ошибка создания клиента при восстановлении: {create_e}")
                                             result['errors'].append(

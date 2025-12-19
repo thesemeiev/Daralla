@@ -6,6 +6,7 @@
 import datetime
 import json
 import logging
+import time
 from typing import Optional, Tuple, List
 
 from ..db.subscribers_db import (
@@ -134,6 +135,111 @@ class SubscriptionManager:
             client_email=client_email,
             client_id=client_id,
         )
+
+    async def ensure_client_on_server(
+        self,
+        subscription_id: int,
+        server_name: str,
+        client_email: str,
+        user_id: str,
+        expires_at: int,
+        token: str,
+    ) -> Tuple[bool, bool]:
+        """
+        Гарантирует наличие клиента на сервере.
+        
+        Если клиента нет - создает его.
+        Если клиент есть - проверяет и синхронизирует время истечения.
+        
+        Args:
+            subscription_id: ID подписки
+            server_name: Имя сервера
+            client_email: Email клиента
+            user_id: ID пользователя Telegram
+            expires_at: Время истечения подписки (timestamp)
+            token: Токен подписки
+        
+        Returns:
+            Tuple[bool, bool]:
+                - Первый bool: True если клиент существует/создан успешно
+                - Второй bool: True если клиент был создан (False если уже существовал)
+        """
+        try:
+            xui, resolved_name = self.server_manager.get_server_by_name(server_name)
+            if xui is None:
+                logger.error(f"Сервер {server_name} недоступен")
+                return False, False
+            
+            # Проверяем существование клиента
+            if xui.client_exists(client_email):
+                logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
+                
+                # Проверяем и синхронизируем время истечения
+                try:
+                    server_expiry = xui.get_client_expiry_time(client_email)
+                    current_time = int(time.time())
+                    
+                    if server_expiry and server_expiry < expires_at:
+                        # Время на сервере меньше, чем в БД - синхронизируем
+                        days_to_add = (expires_at - server_expiry) // (24 * 60 * 60)
+                        if days_to_add > 0:
+                            logger.info(
+                                f"Синхронизация времени истечения на сервере {server_name}: "
+                                f"добавляем {days_to_add} дней (сервер: {server_expiry}, БД: {expires_at})"
+                            )
+                            response = xui.extendClient(client_email, days_to_add)
+                            if response and response.status_code == 200:
+                                try:
+                                    response_json = response.json()
+                                    if response_json.get('success', False):
+                                        logger.info(f"Время истечения синхронизировано на сервере {server_name}")
+                                    else:
+                                        logger.warning(f"Не удалось синхронизировать время на сервере {server_name}")
+                                except (json.JSONDecodeError, ValueError):
+                                    logger.warning(f"Ответ от {server_name} не является валидным JSON при синхронизации")
+                except Exception as sync_e:
+                    logger.warning(f"Ошибка синхронизации времени на сервере {server_name}: {sync_e}")
+                
+                return True, False  # Клиент существует, не создавали
+            else:
+                # Клиент не найден - создаем его
+                logger.info(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
+                current_time = int(time.time())
+                days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
+                
+                response = xui.addClient(
+                    day=days_remaining,
+                    tg_id=user_id,
+                    user_email=client_email,
+                    timeout=15,
+                    key_name=token
+                )
+                
+                if response and response.status_code == 200:
+                    try:
+                        response_json = response.json()
+                        if response_json.get('success', False):
+                            logger.info(f"Клиент {client_email} успешно создан на сервере {server_name}")
+                            return True, True  # Клиент создан
+                        else:
+                            error_msg = response_json.get('msg', 'Unknown error')
+                            if 'duplicate email' in error_msg.lower() or 'duplicate' in error_msg.lower():
+                                logger.info(f"Клиент {client_email} уже существует на сервере {server_name} (создан между проверкой и созданием)")
+                                return True, False  # Клиент существует, не создавали
+                            else:
+                                logger.error(f"Ошибка создания клиента на сервере {server_name}: {error_msg}")
+                                return False, False
+                    except (json.JSONDecodeError, ValueError):
+                        # Если ответ не JSON, но статус 200, считаем успехом
+                        logger.info(f"Клиент {client_email} создан на сервере {server_name} (статус 200, не JSON)")
+                        return True, True
+                else:
+                    logger.error(f"Ошибка создания клиента на сервере {server_name}: HTTP {response.status_code if response else 'None'}")
+                    return False, False
+                    
+        except Exception as e:
+            logger.error(f"Ошибка ensure_client_on_server для {server_name}: {e}")
+            return False, False
 
     async def build_vless_links_for_subscription(
         self, subscription_id: int
@@ -273,6 +379,7 @@ class SubscriptionManager:
             subscription_id = sub["id"]
             user_id = sub["user_id"]
             token = sub["subscription_token"]
+            expires_at = sub["expires_at"]
             
             try:
                 # Получаем список серверов, привязанных к этой подписке
@@ -314,100 +421,24 @@ class SubscriptionManager:
                         
                         # Если auto_create_clients=True, создаем клиента на новом сервере
                         if auto_create_clients:
-                            try:
-                                xui, resolved_name = self.server_manager.get_server_by_name(server_name)
-                                if xui is None:
-                                    logger.warning(
-                                        f"Сервер {server_name} недоступен для подписки {subscription_id}"
-                                    )
-                                    continue
-                                
-                                # Проверяем, не существует ли уже клиент
-                                if xui.client_exists(client_email):
-                                    logger.info(
-                                        f"Клиент {client_email} уже существует на сервере {server_name}"
-                                    )
-                                else:
-                                    # Вычисляем срок действия подписки
-                                    # Используем время из БД подписки как основной источник истины
-                                    expires_at_from_db = sub["expires_at"]
-                                    import time
-                                    current_time = int(time.time())
-                                    
-                                    # Проверяем время истечения существующих клиентов на других серверах
-                                    # Это гарантирует синхронизацию, если время было изменено вручную на сервере
-                                    max_expires_at = expires_at_from_db
-                                    
-                                    if current_servers:
-                                        logger.debug(
-                                            f"Проверка времени истечения существующих клиентов для синхронизации"
-                                        )
-                                        for existing_server in current_servers:
-                                            existing_server_name = existing_server["server_name"]
-                                            try:
-                                                existing_xui, _ = self.server_manager.get_server_by_name(existing_server_name)
-                                                if existing_xui:
-                                                    existing_expiry = existing_xui.get_client_expiry_time(client_email)
-                                                    if existing_expiry and existing_expiry > max_expires_at:
-                                                        max_expires_at = existing_expiry
-                                                        logger.info(
-                                                            f"Найдено более позднее время истечения на сервере {existing_server_name}: "
-                                                            f"{existing_expiry} (из БД: {expires_at_from_db})"
-                                                        )
-                                            except Exception as e:
-                                                logger.debug(
-                                                    f"Не удалось проверить время истечения на сервере {existing_server_name}: {e}"
-                                                )
-                                    
-                                    # Вычисляем количество дней до истечения
-                                    days_remaining = max(1, (max_expires_at - current_time) // (24 * 60 * 60))
-                                    
-                                    logger.info(
-                                        f"Создание клиента на сервере {server_name} с временем истечения: "
-                                        f"{days_remaining} дней (expires_at={max_expires_at}, "
-                                        f"из БД={expires_at_from_db})"
-                                    )
-                                    
-                                    # Создаем клиента на новом сервере
-                                    response = xui.addClient(
-                                        day=days_remaining,
-                                        tg_id=user_id,
-                                        user_email=client_email,
-                                        timeout=15,
-                                        key_name=token  # Используем токен подписки как subId
-                                    )
-                                    
-                                    if response.status_code == 200:
-                                        try:
-                                            response_json = response.json()
-                                            if response_json.get('success', False):
-                                                logger.info(
-                                                    f"Клиент {client_email} создан на сервере {server_name} для подписки {subscription_id}"
-                                                )
-                                                stats["clients_created"] += 1
-                                            else:
-                                                error_msg = response_json.get('msg', 'Unknown error')
-                                                if 'duplicate email' in error_msg.lower():
-                                                    logger.info(
-                                                        f"Клиент {client_email} уже существует на сервере {server_name}"
-                                                    )
-                                                else:
-                                                    raise Exception(f"Ошибка создания клиента: {error_msg}")
-                                        except (json.JSONDecodeError, ValueError):
-                                            # Если ответ не JSON, но статус 200, считаем успехом
-                                            logger.info(
-                                                f"Клиент {client_email} создан на сервере {server_name} (статус 200)"
-                                            )
-                                            stats["clients_created"] += 1
-                                    else:
-                                        raise Exception(f"HTTP {response.status_code}")
-                                
-                            except Exception as create_e:
+                            client_exists, client_created = await self.ensure_client_on_server(
+                                subscription_id=subscription_id,
+                                server_name=server_name,
+                                client_email=client_email,
+                                user_id=user_id,
+                                expires_at=expires_at,
+                                token=token,
+                            )
+                            
+                            if client_created:
+                                stats["clients_created"] += 1
+                            
+                            if not client_exists:
                                 logger.error(
-                                    f"Ошибка создания клиента на сервере {server_name} для подписки {subscription_id}: {create_e}"
+                                    f"Не удалось создать клиента на сервере {server_name} для подписки {subscription_id}"
                                 )
                                 stats["errors"].append(
-                                    f"Подписка {subscription_id}, сервер {server_name}: {str(create_e)}"
+                                    f"Подписка {subscription_id}, сервер {server_name}: не удалось создать клиента"
                                 )
                                 # Продолжаем - привязываем сервер даже если создание не удалось
                                 # (клиент может быть создан вручную позже)
@@ -470,5 +501,3 @@ class SubscriptionManager:
         )
         
         return stats
-
-

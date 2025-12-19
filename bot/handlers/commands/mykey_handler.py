@@ -10,7 +10,7 @@ from ...utils import (
     UIEmojis, UIStyles, safe_edit_or_reply_universal,
     check_private_chat, calculate_time_remaining
 )
-from ...navigation import NavigationBuilder, NavStates
+from ...navigation import NavigationBuilder, NavStates, CallbackData
 from ...db.subscribers_db import get_all_active_subscriptions_by_user, get_subscription_servers
 
 logger = logging.getLogger(__name__)
@@ -88,9 +88,9 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
         )
         
         keyboard_buttons = [
-            [InlineKeyboardButton("Продлить подписку", callback_data=f"extend_sub:{sub['id']}")],
-            [InlineKeyboardButton("✏️ Переименовать", callback_data=f"rename_sub:{sub['id']}")],
-            [InlineKeyboardButton("◀️ Назад к списку", callback_data="mykeys_menu")],
+            [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")],
+            [InlineKeyboardButton(f"{UIEmojis.EDIT} Переименовать", callback_data=f"{CallbackData.RENAME_SUB}{sub['id']}")],
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.MYKEYS_MENU)],
         ]
     else:
         subscription_message = (
@@ -104,8 +104,8 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
         )
         
         keyboard_buttons = [
-            [InlineKeyboardButton("Продлить подписку", callback_data=f"extend_sub:{sub['id']}")],
-            [InlineKeyboardButton("◀️ Назад к списку", callback_data="mykeys_menu")],
+            [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")],
+            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.MYKEYS_MENU)],
         ]
     
     keyboard = InlineKeyboardMarkup(keyboard_buttons)
@@ -154,17 +154,17 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Проверяем, есть ли callback_data для выбора конкретной подписки или пагинации
                 if update.callback_query and update.callback_query.data:
-                    if update.callback_query.data.startswith('subs_page_'):
+                    if update.callback_query.data.startswith(CallbackData.SUBS_PAGE):
                         # Пагинация - просто продолжаем показ списка (обработается ниже)
                         pass
-                    elif update.callback_query.data.startswith('view_sub:'):
+                    elif update.callback_query.data.startswith(CallbackData.VIEW_SUB):
                         # Показываем детали конкретной подписки
                         sub_id = int(update.callback_query.data.split(':')[1])
                         sub = next((s for s in all_subs if s['id'] == sub_id), None)
                         if sub:
                             await show_subscription_details(message, sub, subscription_manager)
                             return
-                    elif update.callback_query.data.startswith('rename_sub:'):
+                    elif update.callback_query.data.startswith(CallbackData.RENAME_SUB):
                         # Переименование подписки - сохраняем ID в контекст и запрашиваем новое имя
                         sub_id = int(update.callback_query.data.split(':')[1])
                         context.user_data['rename_subscription_id'] = sub_id
@@ -181,7 +181,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 f"{UIStyles.description('Попробуйте выбрать подписку из списка.')}"
                             )
                             keyboard = InlineKeyboardMarkup([
-                                [InlineKeyboardButton("◀️ Назад", callback_data="mykeys_menu")]
+                                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.MYKEYS_MENU)]
                             ])
                             await safe_edit_or_reply_universal(
                                 message,
@@ -197,7 +197,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"{UIStyles.description('Введите новое имя для подписки (максимум 50 символов):')}"
                         )
                         keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("◀️ Отмена", callback_data="mykeys_menu")]
+                            [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.MYKEYS_MENU)]
                         ])
                         await safe_edit_or_reply_universal(
                             message,
@@ -213,7 +213,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 current_page = 0
                 
                 # Получаем текущую страницу из callback_data
-                if update.callback_query and update.callback_query.data and update.callback_query.data.startswith('subs_page_'):
+                if update.callback_query and update.callback_query.data and update.callback_query.data.startswith(CallbackData.SUBS_PAGE):
                     try:
                         current_page = int(update.callback_query.data.split('_')[2])
                     except (ValueError, IndexError):
@@ -250,7 +250,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     keyboard_buttons.append([
                         InlineKeyboardButton(
                             f"📋 {sub_name}",
-                            callback_data=f"view_sub:{sub['id']}"
+                            callback_data=f"{CallbackData.VIEW_SUB}{sub['id']}"
                         )
                     ])
                 
@@ -258,15 +258,15 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if len(all_subs) > page_size:
                     pagination_buttons = []
                     if current_page > 0:
-                        pagination_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"subs_page_{current_page - 1}"))
+                        pagination_buttons.append(InlineKeyboardButton(f"{UIEmojis.ARROW_LEFT} Назад", callback_data=f"{CallbackData.SUBS_PAGE}{current_page - 1}"))
                     if current_page < total_pages - 1:
-                        pagination_buttons.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"subs_page_{current_page + 1}"))
+                        pagination_buttons.append(InlineKeyboardButton(f"Вперед {UIEmojis.ARROW_RIGHT}", callback_data=f"{CallbackData.SUBS_PAGE}{current_page + 1}"))
                     if pagination_buttons:
                         keyboard_buttons.append(pagination_buttons)
                 
                 # Добавляем кнопку покупки новой подписки
                 keyboard_buttons.append([
-                    InlineKeyboardButton("➕ Купить новую подписку", callback_data="buy_menu")
+                    InlineKeyboardButton(f"{UIEmojis.ADD} Купить новую подписку", callback_data=CallbackData.BUY_MENU)
                 ])
                 keyboard_buttons.append([NavigationBuilder.create_back_button()])
                 
@@ -298,7 +298,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{UIStyles.description('Купите новую подписку, чтобы начать пользоваться VPN.')}"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Купить подписку", callback_data="buy_menu")],
+        [InlineKeyboardButton("Купить подписку", callback_data=CallbackData.BUY_MENU)],
         [NavigationBuilder.create_back_button()]
     ])
     await safe_edit_or_reply_universal(

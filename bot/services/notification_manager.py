@@ -16,17 +16,17 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 
 from ..db import (
     init_notifications_db,
-    is_notification_sent,
-    mark_notification_sent,
     record_notification_metrics,
-    record_notification_effectiveness,
     cleanup_old_notifications,
     get_notification_stats,
     get_daily_notification_stats,
     clear_user_notifications,
-    clear_key_notifications,
     get_notification_settings,
-    set_notification_setting
+    set_notification_setting,
+    is_subscription_notification_sent,
+    mark_subscription_notification_sent,
+    clear_subscription_notifications,
+    record_subscription_notification_effectiveness
 )
 
 logger = logging.getLogger(__name__)
@@ -99,15 +99,15 @@ class NotificationManager:
         logger.info("Менеджер уведомлений остановлен")
     
     async def _expiry_notifications_task(self):
-        """Задача для проверки истекающих ключей"""
-        logger.info("Запуск задачи уведомлений об истечении ключей")
+        """Задача для проверки истекающих подписок"""
+        logger.info("Запуск задачи уведомлений об истечении подписок")
         
         # Ждем 30 секунд после запуска
         await asyncio.sleep(30)
         
         while self.is_running:
             try:
-                await self.check_expiring_keys()
+                await self.check_expiring_keys()  # Проверяет только подписки
                 
                 # Получаем интервал проверки из настроек
                 settings = await get_notification_settings()
@@ -153,129 +153,12 @@ class NotificationManager:
                 await asyncio.sleep(3600)  # Ждем час при ошибке
     
     async def check_expiring_keys(self):
-        """Проверяет все ключи и подписки пользователей на истечение и отправляет уведомления"""
-        logger.info("Проверка истекающих ключей и подписок...")
+        """Проверяет все подписки пользователей на истечение и отправляет уведомления"""
+        logger.info("Проверка истекающих подписок...")
         
         try:
-            # Сначала проверяем подписки
+            # Проверяем только подписки (старая логика ключей удалена)
             await self._check_expiring_subscriptions()
-            
-            # Проверяем, есть ли серверы для проверки старых ключей
-            if not self.server_manager or not self.server_manager.servers:
-                logger.warning("Нет серверов для проверки ключей, пропускаем проверку уведомлений")
-                return
-            
-            all_users_keys = {}
-            unavailable_servers_count = 0
-            
-            # Получаем все ключи со всех серверов
-            for server in self.server_manager.servers:
-                try:
-                    xui = server["x3"]
-                    if xui is None:
-                        logger.warning(f"Сервер {server['name']} недоступен, пропускаем проверку уведомлений")
-                        unavailable_servers_count += 1
-                        continue
-                    
-                    # Дополнительная проверка доступности сервера
-                    try:
-                        if not self.server_manager.check_server_health(server["name"]):
-                            logger.warning(f"Сервер {server['name']} недоступен по проверке здоровья, пропускаем проверку уведомлений")
-                            unavailable_servers_count += 1
-                            continue
-                    except Exception as health_check_error:
-                        logger.warning(f"Ошибка проверки здоровья сервера {server['name']}: {health_check_error}, пропускаем проверку уведомлений")
-                        unavailable_servers_count += 1
-                        continue
-                    
-                    server_name = server['name']
-                    try:
-                        inbounds = xui.list()['obj']
-                    except Exception as list_error:
-                        logger.warning(f"Ошибка получения списка клиентов с сервера {server['name']}: {list_error}, пропускаем проверку уведомлений")
-                        unavailable_servers_count += 1
-                        continue
-                    
-                    for inbound in inbounds:
-                        settings = json.loads(inbound['settings'])
-                        clients = settings.get("clients", [])
-                        
-                        for client in clients:
-                            email = client.get('email', '')
-                            # Ищем пользовательские ключи (не тестовые)
-                            if '_' in email:
-                                user_id = email.split('_')[0]
-                                if user_id not in all_users_keys:
-                                    all_users_keys[user_id] = []
-                                
-                                client_info = client.copy()
-                                client_info['server_name'] = server_name
-                                all_users_keys[user_id].append(client_info)
-                                
-                except Exception as e:
-                    logger.error(f"Ошибка получения ключей с сервера {server['name']}: {e}")
-                    unavailable_servers_count += 1
-                    continue
-            
-            # Если все серверы недоступны, просто логируем и выходим
-            if unavailable_servers_count > 0 and unavailable_servers_count == len(self.server_manager.servers):
-                logger.info("Все серверы недоступны для проверки уведомлений, пропускаем проверку")
-                return
-            
-            # Проверяем каждого пользователя
-            now = datetime.datetime.now()
-            notifications_sent = 0
-            
-            for user_id, user_keys in all_users_keys.items():
-                try:
-                    for key in user_keys:
-                        email = key.get('email', '')
-                        expiry_time_ms = key.get('expiryTime', 0)
-                        
-                        if expiry_time_ms == 0:
-                            continue  # Ключ без времени истечения
-                        
-                        # Конвертируем время истечения
-                        expiry_time = datetime.datetime.fromtimestamp(expiry_time_ms / 1000)
-                        time_diff = expiry_time - now
-                        
-                        # Определяем тип уведомления (только для активных ключей)
-                        notification_type = None
-                        if time_diff.total_seconds() > 0:  # Ключ еще активен
-                            if time_diff.total_seconds() <= 3600:  # Меньше 1 часа
-                                notification_type = "1hour"
-                            elif time_diff.total_seconds() <= 86400:  # Меньше 1 дня
-                                notification_type = "1day"
-                            elif time_diff.total_seconds() <= 259200:  # Меньше 3 дней
-                                notification_type = "3days"
-                        
-                        # Вычисляем точное оставшееся время
-                        if notification_type:
-                            # Импортируем функцию вычисления времени
-                            try:
-                                from ..utils import calculate_time_remaining
-                            except ImportError:
-                                from ..bot import calculate_time_remaining
-                            
-                            time_remaining = calculate_time_remaining(expiry_time_ms / 1000)
-                            
-                            success = await self._send_expiry_notification(
-                                user_id, email, notification_type, time_remaining, 
-                                key.get('server_name', ''), time_diff.days
-                            )
-                            
-                            if success:
-                                notifications_sent += 1
-                                
-                except Exception as e:
-                    logger.error(f"Ошибка обработки ключей пользователя {user_id}: {e}")
-                    continue
-            
-            if notifications_sent > 0:
-                logger.info(f"Отправлено {notifications_sent} уведомлений об истечении ключей")
-            
-            # Очищаем старые записи уведомлений
-            await self._cleanup_expired_notifications(all_users_keys, now)
             
         except Exception as e:
             logger.error(f"Ошибка в check_expiring_keys: {e}")
@@ -347,229 +230,76 @@ class NotificationManager:
         """Отправляет уведомление об истекающей подписке"""
         try:
             # Проверяем, не отправляли ли мы уже уведомление этого типа для этой подписки
-            notification_key = f"subscription_{subscription_id}_{notification_type}"
-            
-            async with aiosqlite.connect(self.db_path) as db:
-                async with db.execute(
-                    """
-                    SELECT id FROM notifications
-                    WHERE user_id = ? AND notification_type = ? AND key_identifier = ?
-                    AND created_at > datetime('now', '-1 day')
-                    """,
-                    (user_id, notification_type, notification_key)
-                ) as cursor:
-                    existing = await cursor.fetchone()
-                    if existing:
-                        return False  # Уже отправляли недавно
+            # Защита от спама: проверяем, было ли отправлено уведомление за последние 24 часа
+            if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
+                logger.debug(f"Уведомление {notification_type} для подписки {subscription_id} уже отправлено пользователю {user_id}")
+                return False
             
             # Получаем текст уведомления
-            from ..utils import UIMessages
+            from ..utils import UIMessages, UIEmojis
             message_text = UIMessages.subscription_expiring_message(
                 time_remaining, days_until_expiry
             )
             
+            # Создаем клавиатуру с кнопкой продления
+            from ..navigation import NavigationBuilder, CallbackData
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить подписку", callback_data=f"extend_sub:{subscription_id}")],
+                [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.MYKEYS_MENU)],
+                [NavigationBuilder.create_main_menu_button()]
+            ])
+            
             # Отправляем уведомление
-            if self.app and self.app.bot:
-                try:
-                    await self.app.bot.send_message(
-                        chat_id=int(user_id),
-                        text=message_text,
-                        parse_mode="HTML"
-                    )
-                    
-                    # Сохраняем запись об уведомлении
-                    async with aiosqlite.connect(self.db_path) as db:
-                        await db.execute(
-                            """
-                            INSERT INTO notifications (user_id, notification_type, key_identifier, created_at)
-                            VALUES (?, ?, ?, datetime('now'))
-                            """,
-                            (user_id, notification_type, notification_key)
-                        )
-                        await db.commit()
-                    
-                    logger.info(f"Отправлено уведомление об истечении подписки пользователю {user_id}")
-                    return True
-                except Exception as send_error:
-                    logger.error(f"Ошибка отправки уведомления пользователю {user_id}: {send_error}")
-                    return False
-            else:
-                logger.warning("app или app.bot не доступен для отправки уведомления")
+            try:
+                await self.bot.send_message(
+                    chat_id=int(user_id),
+                    text=message_text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard
+                )
+                
+                # Отмечаем как отправленное
+                await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
+                
+                # Записываем метрики
+                await record_notification_metrics(notification_type, True)
+                
+                # Записываем эффективность
+                await record_subscription_notification_effectiveness(
+                    user_id, subscription_id, notification_type,
+                    action_taken=None, days_until_expiry=days_until_expiry
+                )
+                
+                logger.info(f"Отправлено уведомление {notification_type} об истечении подписки {subscription_id} пользователю {user_id}")
+                return True
+                
+            except telegram.error.Forbidden as e:
+                # Пользователь заблокировал бота
+                logger.warning(f"Пользователь {user_id} заблокировал бота: {e}")
+                await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
+                await record_notification_metrics(notification_type, False, user_blocked=True)
+                return False
+                
+            except telegram.error.BadRequest as e:
+                if "Chat not found" in str(e):
+                    logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат: {e}")
+                    await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
+                    await record_notification_metrics(notification_type, False, user_blocked=True)
+                else:
+                    logger.error(f'BadRequest ошибка отправки уведомления пользователю {user_id}: {e}')
+                    await record_notification_metrics(notification_type, False)
+                return False
+                
+            except Exception as send_error:
+                logger.error(f"Ошибка отправки уведомления пользователю {user_id}: {send_error}")
+                await record_notification_metrics(notification_type, False)
                 return False
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об истечении подписки: {e}")
             return False
     
-    async def _send_expiry_notification(self, user_id: str, email: str, notification_type: str, 
-                                      time_remaining: str, server_name: str, days_until_expiry: int) -> bool:
-        """Отправляет уведомление об истекающем ключе"""
-        try:
-            # Проверяем, не отправляли ли уже это уведомление
-            if await is_notification_sent(user_id, email, notification_type):
-                return False
-            
-            # Создаем сообщение
-            message = self._create_expiry_message(email, server_name, time_remaining)
-            
-            # Создаем клавиатуру
-            keyboard = self._create_expiry_keyboard(email, user_id)
-            
-            # Отправляем уведомление
-            await self.bot.send_message(
-                chat_id=user_id,
-                text=message,
-                parse_mode="HTML",
-                reply_markup=keyboard
-            )
-            
-            # Отмечаем как отправленное
-            await mark_notification_sent(user_id, email, notification_type, server_name)
-            
-            # Записываем метрики
-            await record_notification_metrics(notification_type, True)
-            
-            # Записываем эффективность
-            await record_notification_effectiveness(
-                user_id, email, notification_type, 
-                action_taken=None, days_until_expiry=days_until_expiry
-            )
-            
-            logger.info(f"Отправлено уведомление {notification_type} пользователю {user_id} для ключа {email}")
-            return True
-            
-        except telegram.error.Forbidden as e:
-            # Пользователь заблокировал бота или удалил чат
-            logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат: {e}")
-            
-            # ВАЖНО: НЕ удаляем записи! Отмечаем как отправленное, чтобы не пытаться снова
-            await mark_notification_sent(user_id, email, notification_type, server_name)
-            
-            # Записываем метрики
-            await record_notification_metrics(notification_type, False, user_blocked=True)
-            
-            return False
-            
-        except telegram.error.BadRequest as e:
-            if "Chat not found" in str(e):
-                logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат: {e}")
-                # ВАЖНО: НЕ удаляем записи! Отмечаем как отправленное
-                await mark_notification_sent(user_id, email, notification_type, server_name)
-                await record_notification_metrics(notification_type, False, user_blocked=True)
-            else:
-                logger.error(f'BadRequest ошибка отправки уведомления пользователю {user_id}: {e}')
-                await record_notification_metrics(notification_type, False)
-            return False
-            
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления пользователю {user_id}: {e}")
-            await record_notification_metrics(notification_type, False)
-            return False
-    
-    def _create_expiry_message(self, email: str, server_name: str, time_remaining: str) -> str:
-        """Создает сообщение об истекающем ключе"""
-        try:
-            from ..utils import UIMessages
-        except ImportError:
-            from ..bot import UIMessages
-        
-        return UIMessages.key_expiring_message(email, server_name, time_remaining)
-    
-    def _create_deletion_message(self, email: str, server_name: str, days_expired: int) -> str:
-        """Создает сообщение об удаленном ключе"""
-        try:
-            from ..utils import UIMessages
-        except ImportError:
-            from ..bot import UIMessages
-        
-        return UIMessages.key_deleted_message(email, server_name, days_expired)
-    
-    async def _send_deletion_notification(self, user_id: str, email: str, server_name: str, days_expired: int) -> bool:
-        """Отправляет уведомление об удаленном ключе"""
-        try:
-            # Проверяем, не отправляли ли уже это уведомление
-            if await is_notification_sent(user_id, email, "deleted"):
-                return False
-            
-            # Создаем сообщение
-            message = self._create_deletion_message(email, server_name, days_expired)
-            
-            # Создаем клавиатуру
-            keyboard = self._create_deletion_keyboard()
-            
-            # Отправляем уведомление
-            await self.bot.send_message(
-                chat_id=user_id,
-                text=message,
-                parse_mode="HTML",
-                reply_markup=keyboard
-            )
-            
-            # Отмечаем как отправленное
-            await mark_notification_sent(user_id, email, "deleted", server_name)
-            
-            # Записываем метрики
-            await record_notification_metrics("deleted", True)
-            
-            logger.info(f"Отправлено уведомление об удалении ключа пользователю {user_id} для ключа {email}")
-            return True
-            
-        except telegram.error.Forbidden as e:
-            # Пользователь заблокировал бота или удалил чат
-            logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат (deletion notification): {e}")
-            await mark_notification_sent(user_id, email, "deleted", server_name)
-            await record_notification_metrics("deleted", False, user_blocked=True)
-            return False
-        except telegram.error.BadRequest as e:
-            if "Chat not found" in str(e):
-                logger.warning(f"Пользователь {user_id} заблокировал бота или удалил чат (deletion notification): {e}")
-                await mark_notification_sent(user_id, email, "deleted", server_name)
-                await record_notification_metrics("deleted", False, user_blocked=True)
-            else:
-                logger.error(f'BadRequest ошибка отправки уведомления об удалении пользователю {user_id}: {e}')
-                await record_notification_metrics("deleted", False)
-            return False
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об удалении пользователю {user_id}: {e}")
-            await record_notification_metrics("deleted", False)
-            return False
-    
-    def _create_deletion_keyboard(self) -> InlineKeyboardMarkup:
-        """Создает клавиатуру для уведомления об удаленном ключе"""
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("Купить новый ключ", callback_data="buy_menu")],
-            [InlineKeyboardButton("Мои ключи", callback_data="mykey")]
-        ])
-    
-    def _create_expiry_keyboard(self, email: str, user_id: str = None) -> InlineKeyboardMarkup:
-        """Создает клавиатуру для уведомления об истекающем ключе"""
-        # Уведомления об истечении ключей больше не используются (только подписки)
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("Мои подписки", callback_data="mykeys_menu")]
-        ])
-    
-    async def _cleanup_expired_notifications(self, all_users_keys: Dict, now: datetime.datetime):
-        """Очищает записи уведомлений для истекших или удаленных ключей"""
-        try:
-            # Получаем все отправленные уведомления
-            # (Логика очистки будет реализована в notifications_db.py)
-            pass  # Пока оставляем пустым, логика очистки уже есть в базе данных
-            
-        except Exception as e:
-            logger.error(f"Ошибка очистки уведомлений: {e}")
-    
-    async def send_key_deletion_notification(self, user_id: str, email: str, server_name: str, days_expired: int) -> bool:
-        """Публичный метод для отправки уведомления об удаленном ключе (обертка)."""
-        return await self._send_deletion_notification(user_id, email, server_name, days_expired)
-    
-    async def clear_key_notifications(self, user_id: str, email: str) -> bool:
-        """Очищает все уведомления для конкретного ключа (при продлении)"""
-        try:
-            from ..db import clear_key_notifications
-            return await clear_key_notifications(user_id, email)
-        except Exception as e:
-            logger.error(f"Ошибка очистки уведомлений для ключа {email}: {e}")
-            return False
+    # Методы для ключей удалены - теперь работаем только с подписками
     
     async def _collect_metrics(self):
         """Собирает и анализирует метрики"""
@@ -647,16 +377,21 @@ class NotificationManager:
             logger.error(f"Ошибка создания дашборда: {e}")
             return f"❌ Ошибка загрузки дашборда: {e}"
     
-    async def record_key_extension(self, user_id: str, key_email: str):
-        """Записывает факт продления ключа для анализа эффективности"""
+    # Метод record_key_extension удален - используйте record_subscription_extension
+
+    async def record_subscription_extension(self, user_id: str, subscription_id: int):
+        """Записывает факт продления подписки для анализа эффективности"""
         try:
-            # Находим последнее уведомление для этого ключа
-            # и отмечаем, что пользователь продлил ключ
-            await record_notification_effectiveness(
-                user_id, key_email, "extension", 
+            # Находим последнее уведомление для этой подписки
+            # и отмечаем, что пользователь продлил подписку
+            await record_subscription_notification_effectiveness(
+                user_id, subscription_id, "extension", 
                 action_taken="extended"
             )
             
+            # Очищаем уведомления об истечении для этой подписки
+            await clear_subscription_notifications(user_id, subscription_id)
+            
         except Exception as e:
-            logger.error(f"Ошибка записи продления ключа: {e}")
+            logger.error(f"Ошибка записи продления подписки: {e}")
 

@@ -9,8 +9,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from ...db import get_payment_by_id, update_payment_status, update_payment_activation
 from ...utils import (
     UIEmojis, UIStyles, UIMessages,
-    safe_edit_message_with_photo, safe_send_message_with_photo,
-    format_vpn_key_message
+    safe_edit_message_with_photo, safe_send_message_with_photo
 )
 from ...navigation import NavigationBuilder, CallbackData
 
@@ -58,9 +57,9 @@ async def process_payment_webhook(bot_app, payment_id, status):
         
         logger.info(f"Обработка webhook платежа: payment_id={payment_id}, user_id={user_id}, status={status}, current_status={current_status}, activated={is_activated}")
         
-        # Обрабатываем платеж аналогично auto_activate_keys
+        # Обрабатываем платеж в зависимости от статуса
         if status == 'succeeded':
-            # Успешная оплата - обрабатываем как в auto_activate_keys
+            # Успешная оплата - создаем или продлеваем подписку
             await process_successful_payment(bot_app, payment_id, user_id, meta)
         elif status in ['canceled', 'refunded']:
             # Отмененная/возвращенная оплата
@@ -84,10 +83,10 @@ async def process_successful_payment(bot_app, payment_id, user_id, meta):
         # Проверяем, это продление или новая покупка
         is_extension = period.startswith('extend_')
         if is_extension:
-            # Обработка продления (код из auto_activate_keys)
+            # Обработка продления подписки
             await process_extension_payment(bot_app, payment_id, user_id, meta, message_id)
         else:
-            # Обработка новой покупки (код из auto_activate_keys)
+            # Обработка новой покупки подписки
             await process_new_purchase_payment(bot_app, payment_id, user_id, meta, message_id)
             
     except Exception as e:
@@ -95,19 +94,24 @@ async def process_successful_payment(bot_app, payment_id, user_id, meta):
 
 
 async def process_extension_payment(bot_app, payment_id, user_id, meta, message_id):
-    """Обрабатывает продление ключа или подписки"""
+    """Обрабатывает продление подписки"""
     try:
         period = meta.get('type', 'month')
-        actual_period = period.replace('extend_', '').replace('extend_sub_', '')  # убираем префиксы
+        # Убираем префиксы: extend_sub_month -> month, extend_sub_3month -> 3month
+        actual_period = period
+        if period.startswith('extend_sub_'):
+            actual_period = period.replace('extend_sub_', '', 1)
+        elif period.startswith('extend_'):
+            actual_period = period.replace('extend_', '', 1)
         days = 90 if actual_period == '3month' else 30
         
-        # Проверяем, это продление подписки или старого ключа
+        # Проверяем, это продление подписки
         is_subscription_extension = period.startswith('extend_sub_')
         extension_subscription_id = meta.get('extension_subscription_id')
         
         if is_subscription_extension:
             # Продление подписки
-            logger.info(f"Обработка продления подписки: subscription_id={extension_subscription_id}, period={actual_period}, days={days}")
+            logger.info(f"Обработка продления подписки: subscription_id={extension_subscription_id}, period={period}, actual_period={actual_period}, days={days}")
             
             if not extension_subscription_id:
                 logger.error(f"Не найден subscription_id для продления в meta: {meta}")
@@ -141,7 +145,8 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 await update_payment_status(payment_id, 'failed')
                 return
             
-            # Продлеваем ключи на всех серверах подписки
+            # Продлеваем клиентов на всех серверах подписки
+            import time
             successful_extensions = []
             failed_extensions = []
             
@@ -156,6 +161,26 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         failed_extensions.append(server_name)
                         continue
                     
+                    # Сначала гарантируем наличие клиента на сервере
+                    # Это обеспечит, что клиент точно существует перед продлением
+                    current_time = int(time.time())
+                    expires_at = sub['expires_at'] if sub else (current_time + days * 24 * 60 * 60)
+                    
+                    client_exists, client_created = await subscription_manager.ensure_client_on_server(
+                        subscription_id=extension_subscription_id,
+                        server_name=server_name,
+                        client_email=client_email,
+                        user_id=user_id,
+                        expires_at=expires_at,
+                        token=sub['subscription_token'] if sub else ''
+                    )
+                    
+                    if not client_exists:
+                        logger.error(f"Не удалось гарантировать наличие клиента {client_email} на сервере {server_name}")
+                        failed_extensions.append(server_name)
+                        continue
+                    
+                    # Теперь продлеваем клиента
                     response = xui.extendClient(client_email, days)
                     
                     # Проверяем не только HTTP статус, но и поле success в JSON
@@ -166,7 +191,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                             is_success = response_json.get('success', False)
                             if not is_success:
                                 error_msg = response_json.get('msg', 'Unknown error')
-                                logger.warning(f"Не удалось продлить ключ на сервере {server_name}: {error_msg}")
+                                logger.warning(f"Не удалось продлить клиента на сервере {server_name}: {error_msg}")
                         except (json.JSONDecodeError, ValueError):
                             # Если ответ не JSON, считаем успешным только если статус 200
                             is_success = True
@@ -174,23 +199,25 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     
                     if is_success:
                         successful_extensions.append(server_name)
-                        logger.info(f"Ключ продлен на сервере {server_name} для подписки {extension_subscription_id}")
+                        logger.info(f"Клиент продлен на сервере {server_name} для подписки {extension_subscription_id}")
                     else:
-                        logger.warning(f"Не удалось продлить ключ на сервере {server_name}: статус {response.status_code if response else 'None'}")
+                        logger.warning(f"Не удалось продлить клиента на сервере {server_name}: статус {response.status_code if response else 'None'}")
                         failed_extensions.append(server_name)
                 except Exception as e:
-                    logger.error(f"Ошибка продления ключа на сервере {server_name}: {e}")
+                    # Ошибка при продлении - логируем и добавляем в failed
+                    logger.error(f"Ошибка продления клиента на сервере {server_name}: {e}")
                     failed_extensions.append(server_name)
             
+            # Проверяем, что продление прошло успешно хотя бы на одном сервере
             if not successful_extensions:
-                logger.error(f"Не удалось продлить ключи ни на одном сервере для подписки {extension_subscription_id}")
+                logger.error(f"Не удалось продлить клиентов ни на одном сервере для подписки {extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
                 # Уведомляем пользователя
                 if message_id:
                     error_message = (
                         f"{UIStyles.header('Ошибка продления подписки')}\n\n"
                         f"{UIEmojis.ERROR} <b>Не удалось продлить подписку!</b>\n\n"
-                        f"<b>Причина:</b> Не удалось продлить ключи на серверах\n\n"
+                        f"<b>Причина:</b> Не удалось продлить клиентов на серверах\n\n"
                         f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                     )
                     keyboard = InlineKeyboardMarkup([
@@ -208,14 +235,25 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     )
                 return
             
+            # Проверяем, что продление прошло на всех серверах
+            # Клиент должен быть на всех серверах подписки
+            if failed_extensions:
+                logger.error(
+                    f"КРИТИЧЕСКАЯ ОШИБКА: Продление подписки {extension_subscription_id} прошло не на всех серверах! "
+                    f"Успешно на {len(successful_extensions)} серверах, "
+                    f"ошибки на {len(failed_extensions)} серверах: {failed_extensions}. "
+                    f"Клиент должен быть на всех серверах подписки!"
+                )
+                # Если есть ошибки на серверах - это критическая проблема
+                # Но если хотя бы на одном сервере продление прошло, обновляем подписку в БД
+                # и предупреждаем пользователя о проблемах
+            
             # Обновляем срок действия подписки в БД
-            import time
-            from ...db.subscribers_db import get_active_subscription_by_user
-            sub = await get_active_subscription_by_user(str(user_id))
-            if sub and sub['id'] == extension_subscription_id:
+            # Используем sub, который уже был получен выше с проверкой владельца
+            current_time = int(time.time())
+            if sub:
                 # Вычисляем новое время истечения
                 current_expires_at = sub['expires_at']
-                current_time = int(time.time())
                 # Если подписка уже истекла, начинаем с текущего времени, иначе продлеваем от текущего expires_at
                 base_time = max(current_expires_at, current_time)
                 new_expires_at = base_time + days * 24 * 60 * 60
@@ -224,9 +262,22 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 from ...db.subscribers_db import update_subscription_expiry
                 await update_subscription_expiry(extension_subscription_id, new_expires_at)
                 logger.info(f"Подписка {extension_subscription_id} продлена до {new_expires_at}")
+            else:
+                # Если подписка не найдена, используем текущее время + дни
+                new_expires_at = current_time + days * 24 * 60 * 60
+                logger.warning(f"Подписка {extension_subscription_id} не найдена в БД, используем расчетное время: {new_expires_at}")
             
             await update_payment_status(payment_id, 'succeeded')
             await update_payment_activation(payment_id, 1)
+            
+            # Записываем факт продления подписки для анализа эффективности уведомлений
+            try:
+                globals_dict = get_globals()
+                notification_manager = globals_dict.get('notification_manager')
+                if notification_manager:
+                    await notification_manager.record_subscription_extension(user_id, extension_subscription_id)
+            except Exception as e:
+                logger.warning(f"Ошибка записи продления подписки для уведомлений: {e}")
             
             # Отправляем уведомление о продлении подписки
             try:
@@ -239,11 +290,14 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     f"{UIEmojis.SUCCESS} <b>Ваша подписка успешно продлена</b>\n\n"
                     f"<b>Период:</b> {period_text}\n"
                     f"<b>Новое окончание:</b> {expiry_str}\n"
-                    f"<b>Серверов продлено:</b> {len(successful_extensions)}\n\n"
+                    f"<b>Серверов продлено:</b> {len(successful_extensions)} из {len(servers)}\n\n"
                 )
                 
                 if failed_extensions:
-                    extension_message += f"{UIEmojis.WARNING} <i>Не удалось продлить на серверах: {', '.join(failed_extensions)}</i>\n\n"
+                    extension_message += (
+                        f"{UIEmojis.WARNING} <b>Внимание!</b> Не удалось продлить на серверах: {', '.join(failed_extensions)}\n\n"
+                        f"{UIStyles.description('Клиент должен быть на всех серверах подписки. Обратитесь в поддержку для решения проблемы.')}\n\n"
+                    )
                 
                 extension_message += f"{UIStyles.description('Подписка активна и готова к использованию.')}"
                 
@@ -280,17 +334,17 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             
             return
         else:
-            # Это не продление подписки и не продление старого ключа - ошибка
+            # Это не продление подписки - ошибка
             logger.error(f"Неизвестный тип продления: period={period}, meta={meta}")
             await update_payment_status(payment_id, 'failed')
             return
                     
     except Exception as e:
-        logger.error(f"Ошибка обработки продления ключа {payment_id}: {e}")
+        logger.error(f"Ошибка обработки продления подписки {payment_id}: {e}")
 
 
 async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, message_id):
-    """Обрабатывает новую покупку - создаёт подписку и ключи на всех доступных серверах"""
+    """Обрабатывает новую покупку - создаёт подписку и клиентов на всех доступных серверах"""
     try:
         period = meta.get('type', 'month')
         days = 90 if period == '3month' else 30
@@ -339,24 +393,26 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             await update_payment_status(payment_id, 'failed')
             return
         
-        # Шаг 2: Получаем все доступные серверы
-        all_health = new_client_manager.check_all_servers_health(force_check=False)
-        healthy_servers = []
+        # Шаг 2: Получаем ВСЕ серверы из конфигурации (не только здоровые)
+        # Гибридный подход: привязываем все серверы к подписке сразу,
+        # но создаем клиентов только на доступных. Нездоровые серверы
+        # будут синхронизированы автоматически при следующей синхронизации.
+        all_configured_servers = []
         for server in new_client_manager.servers:
             server_name = server["name"]
-            if all_health.get(server_name, False) and server.get("x3") is not None:
-                healthy_servers.append((server["x3"], server_name))
+            if server.get("x3") is not None:
+                all_configured_servers.append(server_name)
         
-        if not healthy_servers:
-            logger.error("Нет доступных серверов для создания ключей")
+        if not all_configured_servers:
+            logger.error("Нет серверов в конфигурации")
             await update_payment_status(payment_id, 'failed')
             # Уведомляем пользователя
             try:
                 error_message = (
                     f"{UIStyles.header('Ошибка создания подписки')}\n\n"
                     f"{UIEmojis.ERROR} <b>Не удалось создать подписку!</b>\n\n"
-                    f"<b>Причина:</b> Все серверы временно недоступны\n\n"
-                    f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
+                    f"<b>Причина:</b> Нет серверов в конфигурации\n\n"
+                    f"{UIStyles.description('Обратитесь в поддержку')}"
                 )
                 keyboard = InlineKeyboardMarkup([
                     [NavigationBuilder.create_main_menu_button()]
@@ -374,92 +430,66 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
         
-        # Шаг 3: Создаём клиента на каждом доступном сервере с одним и тем же email
+        # Шаг 3: Создаём клиента на каждом сервере из конфигурации
+        # Используем единую функцию ensure_client_on_server для гарантии наличия клиента
         # Используем токен подписки как subId для связи клиента с подпиской в X-UI
+        # Гибридный подход: привязываем все серверы к подписке, создаем клиентов на доступных
         successful_servers = []
         failed_servers = []
         
-        for xui, server_name in healthy_servers:
+        # Получаем expires_at из подписки
+        expires_at = sub_dict.get('expires_at') if sub_dict else None
+        if not expires_at:
+            import time
+            expires_at = int(time.time()) + days * 24 * 60 * 60
+        
+        # Сначала привязываем ВСЕ серверы к подписке в БД (даже если недоступны)
+        # Это гарантирует, что все серверы будут в подписке сразу
+        for server_name in all_configured_servers:
             try:
-                # Проверяем, не существует ли уже клиент на сервере (предотвращение рассинхронизации)
-                client_already_exists = False
-                try:
-                    if xui.client_exists(unique_email):
-                        logger.info(f"Клиент с email {unique_email} уже существует на сервере {server_name}, пропускаем создание")
-                        client_already_exists = True
-                        is_success = True
-                    else:
-                        # Клиент не существует, создаем его
-                        response = xui.addClient(
-                            day=days, 
-                            tg_id=user_id, 
-                            user_email=unique_email, 
-                            timeout=15,
-                            key_name=token  # Используем токен подписки как subId
-                        )
-                        
-                        # Проверяем не только HTTP статус, но и поле success в JSON
-                        is_success = False
-                        if response.status_code == 200:
-                            try:
-                                response_json = response.json()
-                                is_success = response_json.get('success', False)
-                                if not is_success:
-                                    error_msg = response_json.get('msg', 'Unknown error')
-                                    # Проверяем, не является ли ошибка "Duplicate email" - это означает, что клиент уже существует
-                                    if 'duplicate email' in error_msg.lower() or 'duplicate' in error_msg.lower():
-                                        logger.info(f"Клиент с email {unique_email} уже существует на сервере {server_name}, считаем успехом")
-                                        is_success = True
-                                        client_already_exists = True
-                                    else:
-                                        logger.warning(f"Не удалось создать клиента на сервере {server_name}: {error_msg}")
-                            except (json.JSONDecodeError, ValueError):
-                                # Если ответ не JSON, считаем успешным только если статус 200
-                                is_success = True
-                                logger.warning(f"Ответ от {server_name} не является валидным JSON, но статус 200")
-                except Exception as check_e:
-                    # Если проверка существования не удалась, все равно пытаемся создать
-                    logger.warning(f"Ошибка проверки существования клиента на {server_name}: {check_e}, пытаемся создать")
-                    response = xui.addClient(
-                        day=days, 
-                        tg_id=user_id, 
-                        user_email=unique_email, 
-                        timeout=15,
-                        key_name=token
-                    )
-                    
-                    is_success = False
-                    if response.status_code == 200:
-                        try:
-                            response_json = response.json()
-                            is_success = response_json.get('success', False)
-                            if not is_success:
-                                error_msg = response_json.get('msg', 'Unknown error')
-                                if 'duplicate email' in error_msg.lower() or 'duplicate' in error_msg.lower():
-                                    logger.info(f"Клиент с email {unique_email} уже существует на сервере {server_name}")
-                                    is_success = True
-                                    client_already_exists = True
-                                else:
-                                    logger.warning(f"Не удалось создать клиента на сервере {server_name}: {error_msg}")
-                        except (json.JSONDecodeError, ValueError):
-                            is_success = True
-                            logger.warning(f"Ответ от {server_name} не является валидным JSON, но статус 200")
-                
-                if is_success:
-                    successful_servers.append((server_name, unique_email))
-                    # Привязываем сервер к подписке
-                    try:
-                        await subscription_manager.attach_server_to_subscription(
-                            subscription_id=sub_dict["id"],
-                            server_name=server_name,
-                            client_email=unique_email,
-                            client_id=None,
-                        )
-                        logger.info(f"Клиент создан и привязан к подписке на сервере {server_name}")
-                    except Exception as attach_e:
-                        logger.error(f"Ошибка привязки сервера {server_name} к подписке: {attach_e}")
+                # Привязываем сервер к подписке в БД (даже если он недоступен)
+                # Клиент будет создан автоматически при синхронизации, если сервер недоступен сейчас
+                await subscription_manager.attach_server_to_subscription(
+                    subscription_id=sub_dict["id"],
+                    server_name=server_name,
+                    client_email=unique_email,
+                    client_id=None,
+                )
+                logger.info(f"Сервер {server_name} привязан к подписке {sub_dict['id']}")
+            except Exception as attach_e:
+                # Если сервер уже привязан, это нормально (идемпотентность)
+                if "UNIQUE constraint" in str(attach_e) or "already exists" in str(attach_e).lower():
+                    logger.info(f"Сервер {server_name} уже привязан к подписке {sub_dict['id']}")
                 else:
-                    logger.warning(f"Не удалось создать клиента на сервере {server_name}: статус {response.status_code}")
+                    logger.error(f"Ошибка привязки сервера {server_name} к подписке: {attach_e}")
+        
+        # Теперь пытаемся создать клиентов на всех серверах
+        # Если сервер недоступен - клиент будет создан при синхронизации
+        for server_name in all_configured_servers:
+            try:
+                # Используем единую функцию ensure_client_on_server
+                # Она гарантирует наличие клиента и синхронизирует время истечения
+                client_exists, client_created = await subscription_manager.ensure_client_on_server(
+                    subscription_id=sub_dict["id"],
+                    server_name=server_name,
+                    client_email=unique_email,
+                    user_id=user_id,
+                    expires_at=expires_at,
+                    token=token
+                )
+                
+                if client_exists:
+                    successful_servers.append((server_name, unique_email))
+                    # Сервер уже привязан к подписке выше, просто логируем результат
+                    if client_created:
+                        logger.info(f"Клиент создан на сервере {server_name} для подписки {sub_dict['id']}")
+                    else:
+                        logger.info(f"Клиент уже существует на сервере {server_name}")
+                else:
+                    # Сервер недоступен или ошибка создания
+                    # Это не критично - клиент будет создан при синхронизации
+                    # Сервер уже привязан к подписке выше
+                    logger.warning(f"Не удалось создать клиента на сервере {server_name} (будет создан при синхронизации)")
                     failed_servers.append(server_name)
             except Exception as e:
                 logger.error(f"Ошибка создания клиента на сервере {server_name}: {e}")
@@ -503,8 +533,20 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             return
         
         # Шаг 4: Обновляем статус платежа
+        # Подписка создана успешно, если хотя бы на одном сервере клиент создан
+        # Нездоровые серверы уже привязаны к подписке, клиенты будут созданы при синхронизации
         await update_payment_status(payment_id, 'succeeded')
         await update_payment_activation(payment_id, 1)
+        
+        # Логируем результаты
+        if failed_servers:
+            logger.info(
+                f"Подписка {sub_dict['id']} создана: "
+                f"клиенты созданы на {len(successful_servers)} серверах, "
+                f"на {len(failed_servers)} серверах будут созданы при синхронизации: {failed_servers}"
+            )
+        else:
+            logger.info(f"Подписка {sub_dict['id']} создана: клиенты созданы на всех {len(successful_servers)} серверах")
         
         # Шаг 5: Отправляем информацию о подписке пользователю
         try:
@@ -570,10 +612,10 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             )
             
             if failed_servers:
-                subscription_message += f"\n\n{UIEmojis.WARNING} <i>Не удалось создать ключи на серверах: {', '.join(failed_servers)}</i>"
+                subscription_message += f"\n\n{UIEmojis.WARNING} <i>Не удалось создать клиентов на серверах: {', '.join(failed_servers)}</i>"
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Мои ключи", callback_data="mykeys_menu")],
+                [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.MYKEYS_MENU)],
                 [NavigationBuilder.create_main_menu_button()]
             ])
             

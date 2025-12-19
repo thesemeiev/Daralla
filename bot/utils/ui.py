@@ -14,10 +14,17 @@ class UIEmojis:
     CLOSE = "✕"
     REFRESH = "↻"
     
+    # Дополнительные для кнопок
+    EDIT = "✏️"  # Для переименования
+    ADD = "➕"  # Для добавления/покупки
+    ARROW_LEFT = "⬅️"  # Для пагинации
+    ARROW_RIGHT = "➡️"  # Для пагинации
+    
     # Статусы
     SUCCESS = "✓"
     ERROR = "✗"
     WARNING = "⚠"
+    INFO = "ℹ️"  # Информация
 
 
 class UIStyles:
@@ -184,57 +191,7 @@ class UIMessages:
                 f"Используйте команду /mykey для продления."
             )
     
-    def key_expiring_message(email, server, time_remaining):
-        """Сообщение об истекающем ключе"""
-        return (
-            f"{UIStyles.warning_message('Внимание! Ключ скоро истечет')}\n\n"
-            f"<b>Ключ:</b> <code>{email}</code>\n"
-            f"<b>Сервер:</b> {server}\n"
-            f"<b>Осталось:</b> {time_remaining}\n\n"
-            f"{UIStyles.description('Продлите ключ, чтобы не потерять доступ к VPN!')}"
-        )
-    
-    @staticmethod
-    def key_deleted_message(email, server, days_expired):
-        """Сообщение об удаленном ключе"""
-        return (
-            f"{UIStyles.error_message('Ключ был удален')}\n\n"
-            f"<b>Ключ:</b> <code>{email}</code>\n"
-            f"<b>Сервер:</b> {server}\n"
-            f"<b>Истек:</b> {days_expired} дней назад\n\n"
-            f"{UIStyles.description('Ключ был автоматически удален из-за истечения срока действия.')}\n"
-            f"{UIStyles.description('Купите новый ключ, чтобы продолжить пользоваться VPN.')}"
-        )
-    
-    @staticmethod
-    def no_keys_message():
-        """Сообщение об отсутствии ключей"""
-        return (
-            f"{UIStyles.info_message('У вас пока нет активных ключей')}\n\n"
-            f"{UIStyles.description('Купите подписку для начала использования VPN.')}"
-        )
-    
-    @staticmethod
-    def key_extended_message(email, server_name, days, expiry_str, period=None):
-        """Сообщение о продлении ключа"""
-        # Определяем текст периода
-        if period:
-            if period == '3month':
-                period_text = "3 месяца"
-            elif period == 'month':
-                period_text = "1 месяц"
-            else:
-                period_text = f"{days} дней"
-        else:
-            period_text = f"{days} дней"
-        
-        return (
-            f"{UIEmojis.SUCCESS} Ключ успешно продлен!\n\n"
-            f"Ключ: `{email}`\n"
-            f"Сервер: {server_name}\n"
-            f"Продлен на: {period_text}\n"
-            f"Новое время истечения: {expiry_str}"
-        )
+    # Старые методы для ключей удалены - теперь работаем только с подписками
     
     @staticmethod
     def server_selection_message():

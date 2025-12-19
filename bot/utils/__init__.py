@@ -12,7 +12,7 @@ from .message_helpers import (
     set_image_paths,
 )
 from .validators import check_private_chat
-from .helpers import calculate_time_remaining, format_vpn_key_message, check_user_has_existing_keys
+from .helpers import calculate_time_remaining
 
 __all__ = [
     'UIEmojis',
@@ -28,7 +28,5 @@ __all__ = [
     'set_image_paths',
     'check_private_chat',
     'calculate_time_remaining',
-    'format_vpn_key_message',
-    'check_user_has_existing_keys',
 ]
 

@@ -1,3 +1,7 @@
+"""
+База данных для платежей подписок
+Хранит все платежи (pending, succeeded, failed, canceled)
+"""
 import aiosqlite
 import asyncio
 import json
@@ -10,9 +14,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 # Создаем папку data если её нет
 os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, 'vpn_keys.db')
+PAYMENTS_DB_PATH = os.path.join(DATA_DIR, 'payments.db')
 USERS_DB_PATH = os.path.join(DATA_DIR, 'users.db')
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Функции для работы с users.db (пользователи и конфигурация)
+# ============================================================================
 
 async def init_users_db():
     """Инициализирует таблицы для пользователей и конфигурации"""
@@ -54,6 +62,7 @@ async def get_all_user_ids(min_last_seen: int = None) -> list:
     except Exception as e:
         logger.error(f"GET_ALL_USER_IDS error: {e}")
         return []
+
 async def register_simple_user(user_id: str):
     """Регистрирует пользователя в таблице users (upsert)."""
     try:
@@ -77,185 +86,6 @@ async def is_known_user(user_id: str) -> bool:
     except Exception as e:
         logger.error(f"IS_KNOWN_USER error for user_id={user_id}: {e}")
         return False
-
-async def init_payments_db():
-    logger.info(f"INIT_PAYMENTS_DB: Начинаем инициализацию базы данных по пути {DB_PATH}")
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            logger.info("INIT_PAYMENTS_DB: Подключение к базе данных успешно")
-            await db.execute('''
-                CREATE TABLE IF NOT EXISTS payments (
-                    user_id TEXT,
-                    payment_id TEXT PRIMARY KEY,
-                    status TEXT,
-                    created_at INTEGER,
-                    meta TEXT,
-                    activated INTEGER DEFAULT 0
-                )
-            ''')
-            logger.info("INIT_PAYMENTS_DB: Таблица payments создана/проверена")
-            await db.commit()
-            logger.info("INIT_PAYMENTS_DB: Изменения зафиксированы")
-    except Exception as e:
-        logger.error(f"INIT_PAYMENTS_DB: Ошибка при инициализации: {e}")
-        raise
-
-async def add_payment(user_id: str, payment_id: str, status: str, created_at: int, meta: dict):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('''
-            INSERT OR REPLACE INTO payments (user_id, payment_id, status, created_at, meta, activated)
-            VALUES (?, ?, ?, ?, ?, COALESCE((SELECT activated FROM payments WHERE payment_id = ?), 0))
-        ''', (user_id, payment_id, status, created_at, json.dumps(meta), payment_id))
-        await db.commit()
-    logger.info(f"Платёж добавлен: user_id={user_id}, payment_id={payment_id}, status={status}")
-
-async def get_payment(user_id: str) -> dict | None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute('''
-            SELECT user_id, payment_id, status, created_at, meta, activated
-            FROM payments
-            WHERE user_id = ?
-            ORDER BY created_at DESC LIMIT 1
-        ''', (user_id,)) as cursor:
-            row = await cursor.fetchone()
-            if row:
-                return {
-                    'user_id': row[0],
-                    'payment_id': row[1],
-                    'status': row[2],
-                    'created_at': row[3],
-                    'meta': json.loads(row[4]) if row[4] else {},
-                    'activated': bool(row[5])
-                }
-            return None
-
-async def get_payment_by_id(payment_id: str) -> dict | None:
-    """Получает платеж по payment_id (для webhook'ов)"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute('''
-            SELECT user_id, payment_id, status, created_at, meta, activated
-            FROM payments
-            WHERE payment_id = ?
-        ''', (payment_id,)) as cursor:
-            row = await cursor.fetchone()
-            if row:
-                return {
-                    'user_id': row[0],
-                    'payment_id': row[1],
-                    'status': row[2],
-                    'created_at': row[3],
-                    'meta': json.loads(row[4]) if row[4] else {},
-                    'activated': bool(row[5])
-                }
-            return None
-
-async def update_payment_status(payment_id: str, status: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('UPDATE payments SET status = ? WHERE payment_id = ?', (status, payment_id))
-        await db.commit()
-    logger.info(f"Статус платежа обновлён: payment_id={payment_id}, status={status}")
-
-async def mark_payment_as_activated(payment_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('UPDATE payments SET activated = 1 WHERE payment_id = ?', (payment_id,))
-        await db.commit()
-    logger.info(f"Платёж помечен как активированный: payment_id={payment_id}")
-
-async def update_payment_activation(payment_id: str, activated: int):
-    """Обновляет статус активации платежа"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (activated, payment_id))
-        await db.commit()
-    logger.info(f"Обновлен статус активации: payment_id={payment_id}, activated={activated}")
-
-async def get_all_pending_payments() -> list:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute('''
-            SELECT user_id, payment_id, status, created_at, meta, activated
-            FROM payments
-            WHERE status = ?
-        ''', ('pending',)) as cursor:
-            rows = await cursor.fetchall()
-            return [
-                {
-                    'user_id': row[0],
-                    'payment_id': row[1],
-                    'status': row[2],
-                    'created_at': row[3],
-                    'meta': json.loads(row[4]) if row[4] else {},
-                    'activated': bool(row[5])
-                } for row in rows
-            ]
-
-async def get_pending_payment(user_id: str, period: str) -> dict | None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute('''
-            SELECT user_id, payment_id, status, created_at, meta, activated
-            FROM payments
-            WHERE user_id = ? AND status = ? AND json_extract(meta, '$.period') = ?
-            ORDER BY created_at DESC LIMIT 1
-        ''', (user_id, 'pending', period)) as cursor:
-            row = await cursor.fetchone()
-            if row:
-                return {
-                    'user_id': row[0],
-                    'payment_id': row[1],
-                    'status': row[2],
-                    'created_at': row[3],
-                    'meta': json.loads(row[4]) if row[4] else {},
-                    'activated': bool(row[5])
-                }
-            return None
-
-# Для теста
-if __name__ == '__main__':
-    asyncio.run(init_payments_db())
-
-async def cleanup_old_payments(days_old: int = 7):
-    """
-    Очищает старые записи платежей из базы данных
-    :param days_old: Удаляет записи старше указанного количества дней
-    """
-    import time
-    cutoff_time = int(time.time()) - (days_old * 24 * 60 * 60)
-    
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Удаляем старые записи
-        async with db.execute('''
-            DELETE FROM payments 
-            WHERE created_at < ? AND status IN ('succeeded', 'canceled', 'refunded')
-        ''', (cutoff_time,)) as cursor:
-            deleted_count = cursor.rowcount
-        
-        await db.commit()
-    
-    logger.info(f"Очищено {deleted_count} старых записей платежей (старше {days_old} дней)")
-    return deleted_count
-
-
-async def cleanup_expired_pending_payments(minutes_old: int = 20):
-    """
-    Очищает просроченные pending платежи
-    :param minutes_old: Удаляет pending платежи старше указанного количества минут
-    """
-    import time
-    cutoff_time = int(time.time()) - (minutes_old * 60)
-    
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Удаляем просроченные pending платежи
-        async with db.execute('''
-            DELETE FROM payments 
-            WHERE created_at < ? AND status = 'pending'
-        ''', (cutoff_time,)) as cursor:
-            deleted_count = cursor.rowcount
-        
-        await db.commit()
-    
-    logger.info(f"Удалено {deleted_count} просроченных pending платежей (старше {minutes_old} минут)")
-    return deleted_count
-
-
-
 
 async def get_config(key: str, default_value: str = None) -> str:
     """Получает значение конфигурации по ключу"""
@@ -294,3 +124,162 @@ async def get_all_config() -> dict:
     except Exception as e:
         logger.error(f"GET_ALL_CONFIG: error - {e}")
         return {}
+
+# ============================================================================
+# Функции для работы с payments.db (платежи подписок)
+# ============================================================================
+
+async def init_payments_db():
+    """Инициализирует базу данных платежей"""
+    logger.info(f"INIT_PAYMENTS_DB: Начинаем инициализацию базы данных по пути {PAYMENTS_DB_PATH}")
+    try:
+        async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+            logger.info("INIT_PAYMENTS_DB: Подключение к базе данных успешно")
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS payments (
+                    user_id TEXT,
+                    payment_id TEXT PRIMARY KEY,
+                    status TEXT,
+                    created_at INTEGER,
+                    meta TEXT,
+                    activated INTEGER DEFAULT 0
+                )
+            ''')
+            logger.info("INIT_PAYMENTS_DB: Таблица payments создана/проверена")
+            await db.commit()
+            logger.info("INIT_PAYMENTS_DB: Изменения зафиксированы")
+    except Exception as e:
+        logger.error(f"INIT_PAYMENTS_DB: Ошибка при инициализации: {e}")
+        raise
+
+async def add_payment(user_id: str, payment_id: str, status: str, created_at: int, meta: dict):
+    """Добавляет платеж в базу данных"""
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        await db.execute('''
+            INSERT OR REPLACE INTO payments (user_id, payment_id, status, created_at, meta, activated)
+            VALUES (?, ?, ?, ?, ?, COALESCE((SELECT activated FROM payments WHERE payment_id = ?), 0))
+        ''', (user_id, payment_id, status, created_at, json.dumps(meta), payment_id))
+        await db.commit()
+    logger.info(f"Платёж добавлен: user_id={user_id}, payment_id={payment_id}, status={status}")
+
+async def get_payment_by_id(payment_id: str) -> dict | None:
+    """Получает платеж по payment_id (для webhook'ов)"""
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        async with db.execute('''
+            SELECT user_id, payment_id, status, created_at, meta, activated
+            FROM payments
+            WHERE payment_id = ?
+        ''', (payment_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return {
+                    'user_id': row[0],
+                    'payment_id': row[1],
+                    'status': row[2],
+                    'created_at': row[3],
+                    'meta': json.loads(row[4]) if row[4] else {},
+                    'activated': bool(row[5])
+                }
+            return None
+
+async def update_payment_status(payment_id: str, status: str):
+    """Обновляет статус платежа"""
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        await db.execute('UPDATE payments SET status = ? WHERE payment_id = ?', (status, payment_id))
+        await db.commit()
+    logger.info(f"Статус платежа обновлён: payment_id={payment_id}, status={status}")
+
+async def update_payment_activation(payment_id: str, activated: int):
+    """Обновляет статус активации платежа (защита от повторной обработки webhook'ов)"""
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (activated, payment_id))
+        await db.commit()
+    logger.info(f"Обновлен статус активации: payment_id={payment_id}, activated={activated}")
+
+async def get_all_pending_payments() -> list:
+    """Возвращает все pending платежи (для админ-панели)"""
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        async with db.execute('''
+            SELECT user_id, payment_id, status, created_at, meta, activated
+            FROM payments
+            WHERE status = ?
+        ''', ('pending',)) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                {
+                    'user_id': row[0],
+                    'payment_id': row[1],
+                    'status': row[2],
+                    'created_at': row[3],
+                    'meta': json.loads(row[4]) if row[4] else {},
+                    'activated': bool(row[5])
+                } for row in rows
+            ]
+
+async def get_pending_payment(user_id: str, period: str) -> dict | None:
+    """Проверяет наличие pending платежа для пользователя и периода"""
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        async with db.execute('''
+            SELECT user_id, payment_id, status, created_at, meta, activated
+            FROM payments
+            WHERE user_id = ? AND status = ? AND json_extract(meta, '$.type') = ?
+            ORDER BY created_at DESC LIMIT 1
+        ''', (user_id, 'pending', period)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return {
+                    'user_id': row[0],
+                    'payment_id': row[1],
+                    'status': row[2],
+                    'created_at': row[3],
+                    'meta': json.loads(row[4]) if row[4] else {},
+                    'activated': bool(row[5])
+                }
+            return None
+
+async def cleanup_old_payments(days_old: int = 7):
+    """
+    Очищает старые записи платежей из базы данных
+    :param days_old: Удаляет записи старше указанного количества дней
+    """
+    import time
+    cutoff_time = int(time.time()) - (days_old * 24 * 60 * 60)
+    
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        # Удаляем старые записи
+        async with db.execute('''
+            DELETE FROM payments 
+            WHERE created_at < ? AND status IN ('succeeded', 'canceled', 'refunded')
+        ''', (cutoff_time,)) as cursor:
+            deleted_count = cursor.rowcount
+        
+        await db.commit()
+    
+    logger.info(f"Очищено {deleted_count} старых записей платежей (старше {days_old} дней)")
+    return deleted_count
+
+async def cleanup_expired_pending_payments(minutes_old: int = 20):
+    """
+    Очищает просроченные pending платежи
+    :param minutes_old: Удаляет pending платежи старше указанного количества минут
+    """
+    import time
+    cutoff_time = int(time.time()) - (minutes_old * 60)
+    
+    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+        # Удаляем просроченные pending платежи
+        async with db.execute('''
+            DELETE FROM payments 
+            WHERE created_at < ? AND status = 'pending'
+        ''', (cutoff_time,)) as cursor:
+            deleted_count = cursor.rowcount
+        
+        await db.commit()
+    
+    logger.info(f"Удалено {deleted_count} просроченных pending платежей (старше {minutes_old} минут)")
+    return deleted_count
+
+# Для ручного запуска из консоли (инициализация БД)
+if __name__ == '__main__':
+    asyncio.run(init_payments_db())
+

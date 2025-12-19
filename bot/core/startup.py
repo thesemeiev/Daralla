@@ -7,7 +7,7 @@ import asyncio
 import telegram
 from ..db import init_all_db
 from ..services import NotificationManager
-from ..core.tasks import cleanup_old_payments_task, expired_keys_cleanup_task, sync_db_with_xui_task, sync_servers_with_config_task
+from ..core.tasks import cleanup_old_payments_task, sync_db_with_xui_task, sync_servers_with_config_task
 
 logger = logging.getLogger(__name__)
 
@@ -226,9 +226,7 @@ async def on_startup(app):
         
         # Запускаем остальные задачи
         asyncio.create_task(server_health_monitor(app))
-        asyncio.create_task(cleanup_old_payments_task())
-        # Запускаем задачу очистки просроченных ключей
-        asyncio.create_task(expired_keys_cleanup_task())
+        asyncio.create_task(cleanup_old_payments_task())  # Включает очистку истекших подписок
         # Запускаем задачу синхронизации БД с X-UI
         asyncio.create_task(sync_db_with_xui_task())
         
