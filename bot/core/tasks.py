@@ -3,7 +3,6 @@
 """
 import asyncio
 import logging
-from .startup import get_globals
 
 logger = logging.getLogger(__name__)
 

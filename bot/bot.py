@@ -227,7 +227,7 @@ sync_manager = SyncManager(new_client_manager, subscription_manager)
 
 from .handlers.webhooks import create_webhook_app
 
-from .core import cleanup_old_payments_task
+
 
 from .handlers.utils import error_handler
 
