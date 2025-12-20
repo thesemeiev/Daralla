@@ -114,15 +114,15 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
             ])
-                await safe_edit_message_with_photo(
-                    context.bot,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-                )
+            await safe_edit_message_with_photo(
+                context.bot,
+                chat_id=chat_id,
+                message_id=message_id,
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+            )
             return
         
         if not new_name or not new_name.strip():
@@ -134,15 +134,15 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
             ])
-                await safe_edit_message_with_photo(
-                    context.bot,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-                )
+            await safe_edit_message_with_photo(
+                context.bot,
+                chat_id=chat_id,
+                message_id=message_id,
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+            )
             return
         
         # Обновляем имя подписки в БД
