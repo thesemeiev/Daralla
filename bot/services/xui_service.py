@@ -117,6 +117,7 @@ class X3:
         self._ensure_connected()
         
         # Если inbound_id не указан, получаем первый доступный inbound
+        first_inbound = None
         if inbound_id is None:
             try:
                 inbounds_list = self.list(timeout=timeout)
@@ -134,6 +135,17 @@ class X3:
                 # Fallback: используем 1 (старое поведение)
                 inbound_id = 1
                 logger.warning(f"Используется fallback inbound_id=1")
+        else:
+            # Если inbound_id указан, получаем его настройки для определения flow
+            try:
+                inbounds_list = self.list(timeout=timeout)
+                if inbounds_list.get('success', False) and inbounds_list.get('obj'):
+                    for inbound in inbounds_list['obj']:
+                        if inbound.get('id') == inbound_id:
+                            first_inbound = inbound
+                            break
+            except Exception as e:
+                logger.warning(f"Не удалось получить настройки inbound для определения flow: {e}")
         
         if hours is not None:
             # Для тестовых ключей используем часы
@@ -143,7 +155,6 @@ class X3:
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
         header = {"Accept": "application/json"}
         # Минимальный набор параметров для VLESS клиента
-        # alterId и flow не нужны для VLESS протокола
         client_data = {
             "id": str(uuid.uuid1()),
             "email": str(user_email),
@@ -155,9 +166,30 @@ class X3:
             "subId": key_name,  # Сохраняем имя ключа в поле subId
         }
         
-        # Добавляем alterId и flow только если они действительно нужны
-        # (для совместимости со старыми версиями X-UI)
-        # Но для VLESS они не обязательны
+        # Автоматическое определение flow на основе настроек inbound'а
+        # Flow нужен ТОЛЬКО для: VLESS + TCP + Reality
+        if first_inbound:
+            try:
+                stream_settings = first_inbound.get('streamSettings')
+                if stream_settings:
+                    # streamSettings может быть строкой JSON или словарем
+                    if isinstance(stream_settings, str):
+                        stream = json.loads(stream_settings)
+                    else:
+                        stream = stream_settings
+                    
+                    protocol = first_inbound.get('protocol', 'vless').lower()
+                    network = stream.get('network', 'tcp').lower()
+                    security = stream.get('security', 'reality').lower()
+                    
+                    # Flow нужен только для VLESS + TCP + Reality
+                    if protocol == 'vless' and network == 'tcp' and security == 'reality':
+                        client_data['flow'] = 'xtls-rprx-vision'
+                        logger.info(f"Добавлен flow=xtls-rprx-vision для клиента {user_email} (VLESS+TCP+Reality)")
+                    else:
+                        logger.debug(f"Flow не требуется для клиента {user_email} (protocol={protocol}, network={network}, security={security})")
+            except Exception as e:
+                logger.warning(f"Ошибка определения flow для клиента {user_email}: {e}, создаем без flow")
         data1 = {
             "id": inbound_id,
             "settings": json.dumps({"clients": [client_data]})

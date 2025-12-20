@@ -30,7 +30,12 @@ services:
       - XUI_LOGIN_NETHERLANDS_1=${XUI_LOGIN_NETHERLANDS_1}
       - XUI_PASSWORD_NETHERLANDS_1=${XUI_PASSWORD_NETHERLANDS_1}
 
-      # Estonia серверы
+      # Russia серверы
+      - XUI_HOST_RUSSIA_1=${XUI_HOST_RUSSIA_1}
+      - XUI_LOGIN_RUSSIA_1=${XUI_LOGIN_RUSSIA_1}
+      - XUI_PASSWORD_RUSSIA_1=${XUI_PASSWORD_RUSSIA_1}
+
+
 
     ports:
       # Открываем порт для webhook'ов YooKassa

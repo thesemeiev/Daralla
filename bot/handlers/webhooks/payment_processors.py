@@ -145,8 +145,28 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 await update_payment_status(payment_id, 'failed')
                 return
             
-            # Продлеваем клиентов на всех серверах подписки
+            # Шаг 1: Вычисляем новое время истечения и обновляем БД
+            # Это делаем ПЕРВЫМ, чтобы БД была источником истины
             import time
+            current_time = int(time.time())
+            if sub:
+                # Вычисляем новое время истечения
+                current_expires_at = sub['expires_at']
+                # Если подписка уже истекла, начинаем с текущего времени, иначе продлеваем от текущего expires_at
+                base_time = max(current_expires_at, current_time)
+                new_expires_at = base_time + days * 24 * 60 * 60
+                
+                # Обновляем expires_at в БД ПЕРЕД синхронизацией серверов
+                from ...db.subscribers_db import update_subscription_expiry
+                await update_subscription_expiry(extension_subscription_id, new_expires_at)
+                logger.info(f"Подписка {extension_subscription_id} продлена до {new_expires_at} в БД")
+            else:
+                # Если подписка не найдена, используем текущее время + дни
+                new_expires_at = current_time + days * 24 * 60 * 60
+                logger.warning(f"Подписка {extension_subscription_id} не найдена в БД, используем расчетное время: {new_expires_at}")
+            
+            # Шаг 2: Синхронизируем время на всех серверах через ensure_client_on_server
+            # Эта функция сама проверит время на сервере и синхронизирует его с БД
             successful_extensions = []
             failed_extensions = []
             
@@ -155,69 +175,41 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 client_email = server_info['client_email']
                 
                 try:
-                    xui, resolved_name = new_client_manager.get_server_by_name(server_name)
-                    if not xui:
-                        logger.warning(f"Сервер {server_name} недоступен для продления")
-                        failed_extensions.append(server_name)
-                        continue
-                    
-                    # Сначала гарантируем наличие клиента на сервере
-                    # Это обеспечит, что клиент точно существует перед продлением
-                    current_time = int(time.time())
-                    expires_at = sub['expires_at'] if sub else (current_time + days * 24 * 60 * 60)
-                    
+                    # Используем ensure_client_on_server с НОВЫМ expires_at
+                    # Он сам проверит время на сервере и синхронизирует его с БД
                     client_exists, client_created = await subscription_manager.ensure_client_on_server(
                         subscription_id=extension_subscription_id,
                         server_name=server_name,
                         client_email=client_email,
                         user_id=user_id,
-                        expires_at=expires_at,
+                        expires_at=new_expires_at,  # Используем НОВОЕ время из БД
                         token=sub['subscription_token'] if sub else ''
                     )
                     
-                    if not client_exists:
-                        logger.error(f"Не удалось гарантировать наличие клиента {client_email} на сервере {server_name}")
-                        failed_extensions.append(server_name)
-                        continue
-                    
-                    # Теперь продлеваем клиента
-                    response = xui.extendClient(client_email, days)
-                    
-                    # Проверяем не только HTTP статус, но и поле success в JSON
-                    is_success = False
-                    if response and response.status_code == 200:
-                        try:
-                            response_json = response.json()
-                            is_success = response_json.get('success', False)
-                            if not is_success:
-                                error_msg = response_json.get('msg', 'Unknown error')
-                                logger.warning(f"Не удалось продлить клиента на сервере {server_name}: {error_msg}")
-                        except (json.JSONDecodeError, ValueError):
-                            # Если ответ не JSON, считаем успешным только если статус 200
-                            is_success = True
-                            logger.warning(f"Ответ от {server_name} не является валидным JSON, но статус 200")
-                    
-                    if is_success:
+                    if client_exists:
                         successful_extensions.append(server_name)
-                        logger.info(f"Клиент продлен на сервере {server_name} для подписки {extension_subscription_id}")
+                        if client_created:
+                            logger.info(f"Клиент создан на сервере {server_name} для подписки {extension_subscription_id}")
+                        else:
+                            logger.info(f"Время клиента синхронизировано на сервере {server_name} для подписки {extension_subscription_id}")
                     else:
-                        logger.warning(f"Не удалось продлить клиента на сервере {server_name}: статус {response.status_code if response else 'None'}")
+                        logger.warning(f"Не удалось синхронизировать клиента на сервере {server_name}")
                         failed_extensions.append(server_name)
                 except Exception as e:
-                    # Ошибка при продлении - логируем и добавляем в failed
-                    logger.error(f"Ошибка продления клиента на сервере {server_name}: {e}")
+                    # Ошибка при синхронизации - логируем и добавляем в failed
+                    logger.error(f"Ошибка синхронизации клиента на сервере {server_name}: {e}")
                     failed_extensions.append(server_name)
             
-            # Проверяем, что продление прошло успешно хотя бы на одном сервере
+            # Проверяем, что синхронизация прошла успешно хотя бы на одном сервере
             if not successful_extensions:
-                logger.error(f"Не удалось продлить клиентов ни на одном сервере для подписки {extension_subscription_id}")
+                logger.error(f"Не удалось синхронизировать клиентов ни на одном сервере для подписки {extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
                 # Уведомляем пользователя
                 if message_id:
                     error_message = (
                         f"{UIStyles.header('Ошибка продления подписки')}\n\n"
                         f"{UIEmojis.ERROR} <b>Не удалось продлить подписку!</b>\n\n"
-                        f"<b>Причина:</b> Не удалось продлить клиентов на серверах\n\n"
+                        f"<b>Причина:</b> Не удалось синхронизировать клиентов на серверах\n\n"
                         f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                     )
                     keyboard = InlineKeyboardMarkup([
@@ -235,37 +227,14 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     )
                 return
             
-            # Проверяем, что продление прошло на всех серверах
-            # Клиент должен быть на всех серверах подписки
+            # Проверяем, что синхронизация прошла на всех серверах
             if failed_extensions:
-                logger.error(
-                    f"КРИТИЧЕСКАЯ ОШИБКА: Продление подписки {extension_subscription_id} прошло не на всех серверах! "
-                    f"Успешно на {len(successful_extensions)} серверах, "
+                logger.warning(
+                    f"Продление подписки {extension_subscription_id} прошло не на всех серверах: "
+                    f"успешно на {len(successful_extensions)} серверах, "
                     f"ошибки на {len(failed_extensions)} серверах: {failed_extensions}. "
-                    f"Клиент должен быть на всех серверах подписки!"
+                    f"Серверы будут синхронизированы при следующей автоматической синхронизации."
                 )
-                # Если есть ошибки на серверах - это критическая проблема
-                # Но если хотя бы на одном сервере продление прошло, обновляем подписку в БД
-                # и предупреждаем пользователя о проблемах
-            
-            # Обновляем срок действия подписки в БД
-            # Используем sub, который уже был получен выше с проверкой владельца
-            current_time = int(time.time())
-            if sub:
-                # Вычисляем новое время истечения
-                current_expires_at = sub['expires_at']
-                # Если подписка уже истекла, начинаем с текущего времени, иначе продлеваем от текущего expires_at
-                base_time = max(current_expires_at, current_time)
-                new_expires_at = base_time + days * 24 * 60 * 60
-                
-                # Обновляем expires_at в БД
-                from ...db.subscribers_db import update_subscription_expiry
-                await update_subscription_expiry(extension_subscription_id, new_expires_at)
-                logger.info(f"Подписка {extension_subscription_id} продлена до {new_expires_at}")
-            else:
-                # Если подписка не найдена, используем текущее время + дни
-                new_expires_at = current_time + days * 24 * 60 * 60
-                logger.warning(f"Подписка {extension_subscription_id} не найдена в БД, используем расчетное время: {new_expires_at}")
             
             await update_payment_status(payment_id, 'succeeded')
             await update_payment_activation(payment_id, 1)
