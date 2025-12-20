@@ -44,12 +44,10 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     nav_system = globals_dict['nav_system']
     
-    if update.callback_query and not context.user_data.get('_nav_called', False):
+    # Если это callback_query, отвечаем на него
+    if update.callback_query:
         from ...utils import safe_answer_callback_query
         await safe_answer_callback_query(update.callback_query)
-        if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_SEARCH_USER)
-            return
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -63,7 +61,7 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     message = (
-        f"{UIStyles.header('🔍 Поиск пользователя')}\n\n"
+        f"{UIStyles.header('Поиск пользователя')}\n\n"
         f"{UIStyles.description('Введите Telegram ID пользователя или используйте команду:')}\n"
         f"<code>/admin_user &lt;user_id&gt;</code>\n\n"
         f"{UIStyles.description('Пример:')}\n"
@@ -111,16 +109,16 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         canceled_subs = [s for s in subscriptions if s['status'] == 'canceled']
         
         message = (
-            f"{UIStyles.header('👤 Информация о пользователе')}\n\n"
+            f"{UIStyles.header('Информация о пользователе')}\n\n"
             f"<b>Telegram ID:</b> <code>{user_id}</code>\n"
             f"<b>Первый запуск:</b> {first_seen}\n"
             f"<b>Последняя активность:</b> {last_seen}\n\n"
-            f"<b>📋 Подписки:</b>\n"
+            f"<b>Подписки:</b>\n"
             f"   Всего: {len(subscriptions)}\n"
             f"   {UIEmojis.SUCCESS} Активных: {len(active_subs)}\n"
             f"   {UIEmojis.ERROR} Истекших: {len(expired_subs)}\n"
             f"   {UIEmojis.WARNING} Отмененных: {len(canceled_subs)}\n\n"
-            f"<b>💳 Платежи:</b> {len(payments)} (показано последних 10)\n"
+            f"<b>Платежи:</b> {len(payments)} (показано последних 10)\n"
         )
         
         # Кнопки действий
@@ -129,7 +127,7 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         if subscriptions:
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    f"📋 Все подписки ({len(subscriptions)})",
+                    f"Все подписки ({len(subscriptions)})",
                     callback_data=f"admin_user_subs:{user_id}"
                 )
             ])
@@ -137,17 +135,10 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         if payments:
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    f"💳 История платежей ({len(payments)})",
+                    f"История платежей ({len(payments)})",
                     callback_data=f"admin_user_payments:{user_id}"
                 )
             ])
-        
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                f"✉️ Отправить сообщение",
-                callback_data=f"admin_user_message:{user_id}"
-            )
-        ])
         
         keyboard_buttons.append([NavigationBuilder.create_back_button()])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
@@ -199,7 +190,7 @@ async def admin_user_subscriptions(update: Update, context: ContextTypes.DEFAULT
         
         if not subscriptions:
             message = (
-                f"{UIStyles.header('📋 Подписки пользователя')}\n\n"
+                f"{UIStyles.header('Подписки пользователя')}\n\n"
                 f"{UIEmojis.WARNING} У пользователя <code>{user_id}</code> нет подписок."
             )
             keyboard = InlineKeyboardMarkup([
@@ -209,7 +200,7 @@ async def admin_user_subscriptions(update: Update, context: ContextTypes.DEFAULT
             await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_SUBSCRIPTIONS)
             return
         
-        message = f"{UIStyles.header('📋 Подписки пользователя')}\n\n"
+        message = f"{UIStyles.header('Подписки пользователя')}\n\n"
         keyboard_buttons = []
         
         for sub in subscriptions[:10]:  # Показываем максимум 10
@@ -283,7 +274,7 @@ async def admin_user_payments(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         if not payments:
             message = (
-                f"{UIStyles.header('💳 Платежи пользователя')}\n\n"
+                f"{UIStyles.header('Платежи пользователя')}\n\n"
                 f"{UIEmojis.WARNING} У пользователя <code>{user_id}</code> нет платежей."
             )
             keyboard = InlineKeyboardMarkup([
@@ -293,7 +284,7 @@ async def admin_user_payments(update: Update, context: ContextTypes.DEFAULT_TYPE
             await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_PAYMENTS)
             return
         
-        message = f"{UIStyles.header('💳 Платежи пользователя')}\n\n"
+        message = f"{UIStyles.header('Платежи пользователя')}\n\n"
         
         for payment in payments:
             payment_id = payment['payment_id']

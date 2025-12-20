@@ -40,7 +40,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         config = await get_all_config()
-        message = "⚙️ Конфигурация:\n\n"
+        message = "Конфигурация:\n\n"
         if config:
             for key, data in config.items():
                 message += f"• {data['description']}: {data['value']}\n"

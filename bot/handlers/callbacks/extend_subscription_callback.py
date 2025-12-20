@@ -251,7 +251,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
         ])
         await safe_edit_or_reply_universal(
             query.message,
-            "❌ Ошибка при создании платежа. Попробуйте позже.",
+            "Ошибка при создании платежа. Попробуйте позже.",
             reply_markup=keyboard,
             menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )

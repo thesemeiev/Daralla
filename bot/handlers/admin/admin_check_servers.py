@@ -66,7 +66,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         health_results = server_manager.check_all_servers_health(force_check=True)
         health_status = server_manager.get_server_health_status()
         
-        message = "🔍 Детальная проверка серверов:\n\n"
+        message = "Детальная проверка серверов:\n\n"
         
         for server in server_manager.servers:
             server_name = server["name"]
@@ -136,7 +136,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
                     pass
         
         message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        message += f"<b>📊 Общая статистика</b>\n\n"
+        message += f"<b>Общая статистика</b>\n\n"
         
         message += f"<b>Серверы:</b>\n"
         message += f"   Всего серверов: {total_servers}\n"
@@ -154,7 +154,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Статистика подписок из БД
         if sub_stats:
-            message += f"<b>📋 Подписки (из БД):</b>\n"
+            message += f"<b>Подписки (из БД):</b>\n"
             message += f"   Всего подписок: {sub_stats['total_subscriptions']}\n"
             message += f"   Активных: {sub_stats['active_subscriptions']}\n"
             message += f"   Истекших: {sub_stats['expired_subscriptions']}\n\n"
@@ -163,7 +163,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             message += f"   Всего пользователей: {sub_stats['total_users']}\n"
             message += f"   С активными подписками: {sub_stats['users_with_active_subs']}\n\n"
             
-            message += f"<b>🔑 Клиенты на серверах (X-UI):</b>\n"
+            message += f"<b>Клиенты на серверах (X-UI):</b>\n"
             message += f"   Всего клиентов: {sub_stats['total_server_clients']}\n"
             message += f"   Для активных подписок: {sub_stats['active_server_clients']}\n\n"
         
@@ -205,7 +205,7 @@ async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        await safe_edit_or_reply(update.message, '🔄 Принудительная проверка серверов...')
+        await safe_edit_or_reply(update.message, 'Принудительная проверка серверов...')
         
         # Получаем new_client_manager из глобальных переменных
         try:
@@ -224,7 +224,7 @@ async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         new_client_health = new_client_manager.check_all_servers_health(force_check=True) if new_client_manager else {}
         
         # Формируем отчет
-        message = "🔍 Результаты принудительной проверки:\n\n"
+        message = "Результаты принудительной проверки:\n\n"
         
         # Основные серверы
         message += "Основные серверы:\n"
@@ -305,7 +305,7 @@ async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         expired_xui_clients_all = expired_clients_main + expired_clients_new
         
         message += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        message += f"<b>📊 Общая статистика</b>\n\n"
+        message += f"<b>Общая статистика</b>\n\n"
         
         message += f"<b>Серверы:</b>\n"
         message += f"Всего серверов: {total_servers}\n"
@@ -315,7 +315,7 @@ async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Статистика подписок из БД
         if sub_stats:
-            message += f"<b>📋 Подписки (из БД):</b>\n"
+            message += f"<b>Подписки (из БД):</b>\n"
             message += f"Всего подписок: {sub_stats['total_subscriptions']}\n"
             message += f"Активных: {sub_stats['active_subscriptions']}\n"
             message += f"Истекших: {sub_stats['expired_subscriptions']}\n\n"
@@ -324,7 +324,7 @@ async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             message += f"Всего пользователей: {sub_stats['total_users']}\n"
             message += f"С активными подписками: {sub_stats['users_with_active_subs']}\n\n"
             
-            message += f"<b>🔑 Клиенты на серверах (X-UI):</b>\n"
+            message += f"<b>Клиенты на серверах (X-UI):</b>\n"
             message += f"Всего клиентов: {sub_stats['total_server_clients']}\n"
             message += f"Для активных подписок: {sub_stats['active_server_clients']}\n\n"
         

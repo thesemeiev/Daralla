@@ -55,11 +55,11 @@ async def admin_test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Проверяем, что пользователь - админ (ADMIN_IDS содержит int)
     if user_id_int not in ADMIN_IDS:
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        await update.message.reply_text("У вас нет доступа к этой команде.")
         return
     
     if not app:
-        await update.message.reply_text("❌ Приложение бота не доступно.")
+        await update.message.reply_text("Приложение бота не доступно.")
         return
     
     # Проверяем, передан ли payment_id как аргумент
@@ -79,7 +79,7 @@ async def admin_test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         except Exception as e:
             logger.error(f"Ошибка при подтверждении платежа {payment_id}: {e}")
-            await update.message.reply_text(f"❌ Ошибка: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
             return
     
     # Получаем список pending платежей
@@ -160,7 +160,7 @@ async def admin_test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
     except Exception as e:
         logger.error(f"Ошибка в admin_test_payment: {e}")
-        await update.message.reply_text(f"❌ Ошибка: {e}")
+        await update.message.reply_text(f"Ошибка: {e}")
 
 
 async def test_confirm_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -175,17 +175,17 @@ async def test_confirm_payment_callback(update: Update, context: ContextTypes.DE
     
     # Проверяем, что пользователь - админ (ADMIN_IDS содержит int)
     if user_id_int not in ADMIN_IDS:
-        await query.answer("❌ У вас нет доступа к этой команде.", show_alert=True)
+        await query.answer("У вас нет доступа к этой команде.", show_alert=True)
         return
     
     if not app:
-        await query.answer("❌ Приложение бота не доступно.", show_alert=True)
+        await query.answer("Приложение бота не доступно.", show_alert=True)
         return
     
     # Извлекаем payment_id из callback_data
     parts = query.data.split(":", 1)
     if len(parts) < 2:
-        await query.answer("❌ Ошибка: неверный формат данных.", show_alert=True)
+        await query.answer("Ошибка: неверный формат данных.", show_alert=True)
         return
     
     payment_id = parts[1]
@@ -194,14 +194,14 @@ async def test_confirm_payment_callback(update: Update, context: ContextTypes.DE
         # Получаем информацию о платеже
         payment_info = await get_payment_by_id(payment_id)
         if not payment_info:
-            await query.answer("❌ Платеж не найден.", show_alert=True)
+            await query.answer("Платеж не найден.", show_alert=True)
             return
         
         # Импортируем функцию обработки платежа
         from ...handlers.webhooks.payment_processors import process_payment_webhook
         
         # Симулируем успешный платеж
-        await query.answer("⏳ Подтверждаю платеж...", show_alert=False)
+        await query.answer("Подтверждаю платеж...", show_alert=False)
         
         # Вызываем обработчик успешного платежа
         await process_payment_webhook(app, payment_id, 'succeeded')
@@ -220,5 +220,5 @@ async def test_confirm_payment_callback(update: Update, context: ContextTypes.DE
         
     except Exception as e:
         logger.error(f"Ошибка при подтверждении платежа {payment_id}: {e}")
-        await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+        await query.answer(f"Ошибка: {e}", show_alert=True)
 

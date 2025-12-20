@@ -33,7 +33,7 @@ async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     
     if user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Нет доступа к этой команде")
+        await update.message.reply_text("Нет доступа к этой команде")
         return
     
     if not context.args or len(context.args) == 0:

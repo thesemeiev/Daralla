@@ -119,11 +119,11 @@ class MenuHandlers:
         context.user_data.pop('config_chat_id', None)
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔍 Поиск пользователя", callback_data=CallbackData.ADMIN_SEARCH_USER)],
-            [InlineKeyboardButton("📊 Логи", callback_data=CallbackData.ADMIN_ERRORS)],
-            [InlineKeyboardButton("🖥 Проверка серверов", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
-            [InlineKeyboardButton("🔔 Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
-            [InlineKeyboardButton("📢 Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
+            [InlineKeyboardButton("Поиск пользователя", callback_data=CallbackData.ADMIN_SEARCH_USER)],
+            [InlineKeyboardButton("Логи", callback_data=CallbackData.ADMIN_ERRORS)],
+            [InlineKeyboardButton("Проверка серверов", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
+            [InlineKeyboardButton("Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
+            [InlineKeyboardButton("Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
             [UIButtons.back_button()],
         ])
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)

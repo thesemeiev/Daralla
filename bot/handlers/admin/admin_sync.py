@@ -37,11 +37,11 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Проверяем доступ
     if user_id_int not in ADMIN_IDS:
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        await update.message.reply_text("У вас нет доступа к этой команде.")
         return
     
     if not sync_manager:
-        await update.message.reply_text("❌ SyncManager не доступен.")
+        await update.message.reply_text("SyncManager не доступен.")
         return
     
     # Проверяем, есть ли флаг --fix для автоматического восстановления
@@ -52,9 +52,9 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Запускаем синхронизацию
     if auto_fix:
-        await update.message.reply_text("⏳ Запуск синхронизации с автоматическим восстановлением...")
+        await update.message.reply_text("Запуск синхронизации с автоматическим восстановлением...")
     else:
-        await update.message.reply_text("⏳ Запуск синхронизации БД с X-UI серверами...")
+        await update.message.reply_text("Запуск синхронизации БД с X-UI серверами...")
     
     try:
         # Синхронизируем все подписки
@@ -104,5 +104,5 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Ошибка синхронизации: {e}")
-        await update.message.reply_text(f"❌ Ошибка синхронизации: {e}")
+        await update.message.reply_text(f"Ошибка синхронизации: {e}")
 

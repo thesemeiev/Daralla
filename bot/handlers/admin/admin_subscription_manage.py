@@ -114,7 +114,7 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         status_text = "Активна" if is_active else f"Неактивна (status: {sub['status']}, expired: {is_expired})"
         
         message = (
-            f"{UIStyles.header('📋 Информация о подписке')}\n\n"
+            f"{UIStyles.header('Информация о подписке')}\n\n"
             f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
             f"<b>ID подписки:</b> {sub['id']}\n"
             f"<b>Пользователь:</b> <code>{sub['user_id']}</code>\n"
@@ -154,7 +154,7 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         if sub['status'] != 'canceled':
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    f"❌ Отменить подписку",
+                    f"Отменить подписку",
                     callback_data=f"admin_sub_cancel:{subscription_id}"
                 )
             ])
@@ -200,7 +200,7 @@ async def admin_extend_subscription(update: Update, context: ContextTypes.DEFAUL
         return
     
     try:
-        await update.callback_query.answer("⏳ Продлеваю подписку...", show_alert=False)
+        await update.callback_query.answer("Продлеваю подписку...", show_alert=False)
         
         # Получаем подписку
         from ...db.subscribers_db import get_all_active_subscriptions
@@ -240,7 +240,7 @@ async def admin_extend_subscription(update: Update, context: ContextTypes.DEFAUL
         new_expires_str = datetime.datetime.fromtimestamp(new_expires).strftime('%d.%m.%Y %H:%M:%S')
         
         await update.callback_query.edit_message_text(
-            f"{UIStyles.header('✅ Подписка продлена')}\n\n"
+            f"{UIStyles.header('Подписка продлена')}\n\n"
             f"{UIEmojis.SUCCESS} Подписка <b>{sub.get('name', f'#{subscription_id}')}</b> продлена на {days} дней.\n\n"
             f"<b>Новая дата истечения:</b> {new_expires_str}\n\n"
             f"{UIStyles.description('Время синхронизировано на всех серверах.')}",
@@ -281,7 +281,7 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
         return
     
     try:
-        await update.callback_query.answer("⏳ Отменяю подписку...", show_alert=False)
+        await update.callback_query.answer("Отменяю подписку...", show_alert=False)
         
         # Получаем подписку
         from ...db.subscribers_db import get_all_active_subscriptions
@@ -299,7 +299,7 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
         await update_subscription_status(subscription_id, 'canceled')
         
         await update.callback_query.edit_message_text(
-            f"{UIStyles.header('❌ Подписка отменена')}\n\n"
+            f"{UIStyles.header('Подписка отменена')}\n\n"
             f"{UIEmojis.SUCCESS} Подписка <b>{sub.get('name', f'#{subscription_id}')}</b> отменена.\n\n"
             f"{UIStyles.description('Статус подписки изменен на canceled.')}",
             parse_mode="HTML"
