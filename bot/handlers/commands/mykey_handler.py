@@ -77,11 +77,9 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
         time_remaining = calculate_time_remaining(expires_at)
         subscription_message = (
             f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
-            f"{UIEmojis.SUCCESS} <b>Подписка активна</b>\n\n"
-            f"<b>Период:</b> {period_text}\n"
+            f"<b>Подписка активна</b> {UIEmojis.SUCCESS}\n\n"
             f"<b>Окончание:</b> {expiry_str}\n"
             f"<b>Осталось:</b> {time_remaining}\n"
-            f"<b>Серверов:</b> {server_count}\n"
             f"<b>Устройств:</b> {sub['device_limit']}\n\n"
             f"{UIStyles.subheader('Ссылка на подписку:')}\n"
             f"<code>{subscription_url}</code>\n\n"
@@ -97,7 +95,6 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
         subscription_message = (
             f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
             f"{UIEmojis.ERROR} <b>Подписка истекла</b>\n\n"
-            f"<b>Период:</b> {period_text}\n"
             f"<b>Окончание:</b> {expiry_str}\n"
             f"<b>Серверов:</b> {server_count}\n"
             f"<b>Устройств:</b> {sub['device_limit']}\n\n"

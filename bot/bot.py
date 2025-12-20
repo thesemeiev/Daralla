@@ -46,7 +46,9 @@ from .handlers.admin import (
     admin_broadcast_start, admin_broadcast_input, admin_broadcast_send,
     admin_broadcast_cancel, admin_broadcast_export,
     admin_test_payment, test_confirm_payment_callback,
-    admin_sync, admin_check_subscription
+    admin_sync, admin_check_subscription,
+    admin_search_user, admin_user_subscriptions, admin_user_payments,
+    admin_subscription_info, admin_extend_subscription, admin_cancel_subscription
 )
 from .handlers.admin.admin_broadcast import BROADCAST_WAITING_TEXT, BROADCAST_CONFIRM
 

@@ -162,7 +162,7 @@ class MenuHandlers:
     
     async def admin_user_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Информация о пользователе"""
-        from ..handlers.admin.admin_user_management import show_user_info
+        from ..handlers.admin.admin_user_management import show_user_info, admin_search_user
         user_id = context.user_data.get('admin_selected_user_id')
         if user_id:
             await show_user_info(update, context, user_id)

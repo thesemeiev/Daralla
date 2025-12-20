@@ -301,7 +301,7 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
         await update.callback_query.edit_message_text(
             f"{UIStyles.header('❌ Подписка отменена')}\n\n"
             f"{UIEmojis.SUCCESS} Подписка <b>{sub.get('name', f'#{subscription_id}')}</b> отменена.\n\n"
-            f"{UIStyles.description('Статус подписки изменен на "canceled".')}",
+            f"{UIStyles.description('Статус подписки изменен на canceled.')}",
             parse_mode="HTML"
         )
         
