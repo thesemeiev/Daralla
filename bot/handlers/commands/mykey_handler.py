@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 
 from ...utils import (
     UIEmojis, UIStyles, safe_edit_or_reply_universal,
+    safe_edit_message_with_photo,
     check_private_chat, calculate_time_remaining
 )
 from ...navigation import NavigationBuilder, NavStates, CallbackData, MenuTypes
@@ -33,7 +34,7 @@ def get_globals():
         }
 
 
-async def show_subscription_details(message, sub: dict, subscription_manager):
+async def show_subscription_details(message, sub: dict, subscription_manager, update=None, context=None):
     """
     Показывает детали конкретной подписки.
     """
@@ -110,13 +111,25 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
     
     keyboard = InlineKeyboardMarkup(keyboard_buttons)
     
-    await safe_edit_or_reply_universal(
-        message,
-        subscription_message,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-    )
+    # Если это callback_query, используем safe_edit_message_with_photo для правильного редактирования медиа
+    if update and update.callback_query and message:
+        await safe_edit_message_with_photo(
+            context.bot if context else update.callback_query.message.bot,
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text=subscription_message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+        )
+    else:
+        await safe_edit_or_reply_universal(
+            message,
+            subscription_message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+        )
 
 
 async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -162,7 +175,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         sub_id = int(update.callback_query.data.split(':')[1])
                         sub = next((s for s in all_subs if s['id'] == sub_id), None)
                         if sub:
-                            await show_subscription_details(message, sub, subscription_manager)
+                            await show_subscription_details(message, sub, subscription_manager, update, context)
                             return
                     elif update.callback_query.data.startswith(CallbackData.RENAME_SUB):
                         # Переименование подписки - сохраняем ID в контекст и запрашиваем новое имя
@@ -183,13 +196,24 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             keyboard = InlineKeyboardMarkup([
                                 [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
                             ])
-                            await safe_edit_or_reply_universal(
-                                message,
-                                error_message,
-                                reply_markup=keyboard,
-                                parse_mode="HTML",
-                                menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-                            )
+                            if update.callback_query:
+                                await safe_edit_message_with_photo(
+                                    context.bot,
+                                    chat_id=message.chat.id,
+                                    message_id=message.message_id,
+                                    text=error_message,
+                                    reply_markup=keyboard,
+                                    parse_mode="HTML",
+                                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                                )
+                            else:
+                                await safe_edit_or_reply_universal(
+                                    message,
+                                    error_message,
+                                    reply_markup=keyboard,
+                                    parse_mode="HTML",
+                                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                                )
                             return
                         
                         rename_message = (
@@ -199,13 +223,24 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         keyboard = InlineKeyboardMarkup([
                             [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
                         ])
-                        await safe_edit_or_reply_universal(
-                            message,
-                            rename_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-                        )
+                        if update.callback_query:
+                            await safe_edit_message_with_photo(
+                                context.bot,
+                                chat_id=message.chat.id,
+                                message_id=message.message_id,
+                                text=rename_message,
+                                reply_markup=keyboard,
+                                parse_mode="HTML",
+                                menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                            )
+                        else:
+                            await safe_edit_or_reply_universal(
+                                message,
+                                rename_message,
+                                reply_markup=keyboard,
+                                parse_mode="HTML",
+                                menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                            )
                         return
                 
                 # Показываем список всех подписок с пагинацией
@@ -280,13 +315,25 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 keyboard = InlineKeyboardMarkup(keyboard_buttons)
                 
-                await safe_edit_or_reply_universal(
-                    message,
-                    message_text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-                )
+                # Если это callback_query, используем safe_edit_message_with_photo для правильного редактирования медиа
+                if update.callback_query:
+                    await safe_edit_message_with_photo(
+                        context.bot,
+                        chat_id=message.chat.id,
+                        message_id=message.message_id,
+                        text=message_text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                    )
+                else:
+                    await safe_edit_or_reply_universal(
+                        message,
+                        message_text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                    )
                 return
         except Exception as sub_e:
             logger.error(f"Ошибка при получении подписок для user_id={user_id}: {sub_e}")
@@ -301,11 +348,23 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Купить подписку", callback_data=CallbackData.BUY_MENU)],
         [NavigationBuilder.create_back_button()]
     ])
-    await safe_edit_or_reply_universal(
-        message,
-        no_subs_message,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
-    )
+    # Если это callback_query, используем safe_edit_message_with_photo для правильного редактирования медиа
+    if update.callback_query:
+        await safe_edit_message_with_photo(
+            context.bot,
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text=no_subs_message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+        )
+    else:
+        await safe_edit_or_reply_universal(
+            message,
+            no_subs_message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+        )
 
