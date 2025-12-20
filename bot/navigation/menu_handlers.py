@@ -40,6 +40,7 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.ADMIN_ERRORS, self.admin_errors)
         nav_manager.register_handler(NavStates.ADMIN_NOTIFICATIONS, self.admin_notifications)
         nav_manager.register_handler(NavStates.ADMIN_CHECK_SERVERS, self.admin_check_servers)
+        nav_manager.register_handler(NavStates.ADMIN_SEARCH_USER, self.admin_search_user)
         nav_manager.register_handler(NavStates.ADMIN_BROADCAST, self.admin_broadcast)
     
     async def main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
@@ -314,6 +315,10 @@ class NavigationIntegration:
             CallbackQueryHandler(
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_CHECK_SERVERS),
                 pattern=f"^{CallbackData.ADMIN_CHECK_SERVERS}$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_SEARCH_USER),
+                pattern=f"^{CallbackData.ADMIN_SEARCH_USER}$"
             ),
             CallbackQueryHandler(
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_BROADCAST),

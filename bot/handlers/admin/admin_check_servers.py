@@ -159,7 +159,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             message += f"   Активных: {sub_stats['active_subscriptions']}\n"
             message += f"   Истекших: {sub_stats['expired_subscriptions']}\n\n"
             
-            message += f"<b>👥 Пользователи:</b>\n"
+            message += f"<b>Пользователи:</b>\n"
             message += f"   Всего пользователей: {sub_stats['total_users']}\n"
             message += f"   С активными подписками: {sub_stats['users_with_active_subs']}\n\n"
             
@@ -168,13 +168,13 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             message += f"   Для активных подписок: {sub_stats['active_server_clients']}\n\n"
         
         # Статистика клиентов X-UI (для справки)
-        message += f"<b>ℹ️ Клиенты X-UI на серверах:</b>\n"
+        message += f"<b>ℹКлиенты X-UI на серверах:</b>\n"
         message += f"   (Все клиенты, включая не связанные с подписками)\n"
         message += f"   Всего: {total_xui_clients_all}\n"
         message += f"   Активных: {active_xui_clients_all}\n"
         message += f"   Истекших: {expired_xui_clients_all}\n\n"
         
-        message += f"⏰ Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+        message += f"Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
