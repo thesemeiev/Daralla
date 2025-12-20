@@ -208,9 +208,16 @@ async def admin_extend_subscription(update: Update, context: ContextTypes.DEFAUL
         sub = next((s for s in all_subs if s['id'] == subscription_id), None)
         
         if not sub:
-            await update.callback_query.edit_message_text(
+            message_obj = update.callback_query.message if update.callback_query else None
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            await safe_edit_or_reply_universal(
+                message_obj,
                 f"{UIEmojis.ERROR} Подписка не найдена",
-                parse_mode="HTML"
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.ADMIN_SUBSCRIPTION_INFO
             )
             return
         
@@ -239,12 +246,25 @@ async def admin_extend_subscription(update: Update, context: ContextTypes.DEFAUL
         
         new_expires_str = datetime.datetime.fromtimestamp(new_expires).strftime('%d.%m.%Y %H:%M:%S')
         
-        await update.callback_query.edit_message_text(
+        message = (
             f"{UIStyles.header('Подписка продлена')}\n\n"
             f"{UIEmojis.SUCCESS} Подписка <b>{sub.get('name', f'#{subscription_id}')}</b> продлена на {days} дней.\n\n"
             f"<b>Новая дата истечения:</b> {new_expires_str}\n\n"
-            f"{UIStyles.description('Время синхронизировано на всех серверах.')}",
-            parse_mode="HTML"
+            f"{UIStyles.description('Время синхронизировано на всех серверах.')}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Информация о подписке", callback_data=f"{CallbackData.ADMIN_SUB_INFO}{subscription_id}")],
+            [NavigationBuilder.create_back_button()]
+        ])
+        
+        message_obj = update.callback_query.message if update.callback_query else None
+        await safe_edit_or_reply_universal(
+            message_obj,
+            message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.ADMIN_SUBSCRIPTION_INFO
         )
         
         logger.info(f"Админ {update.effective_user.id} продлил подписку {subscription_id} на {days} дней")
@@ -289,20 +309,40 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
         sub = next((s for s in all_subs if s['id'] == subscription_id), None)
         
         if not sub:
-            await update.callback_query.edit_message_text(
+            message_obj = update.callback_query.message if update.callback_query else None
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            await safe_edit_or_reply_universal(
+                message_obj,
                 f"{UIEmojis.ERROR} Подписка не найдена",
-                parse_mode="HTML"
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.ADMIN_SUBSCRIPTION_INFO
             )
             return
         
         # Обновляем статус
         await update_subscription_status(subscription_id, 'canceled')
         
-        await update.callback_query.edit_message_text(
+        message = (
             f"{UIStyles.header('Подписка отменена')}\n\n"
             f"{UIEmojis.SUCCESS} Подписка <b>{sub.get('name', f'#{subscription_id}')}</b> отменена.\n\n"
-            f"{UIStyles.description('Статус подписки изменен на canceled.')}",
-            parse_mode="HTML"
+            f"{UIStyles.description('Статус подписки изменен на canceled.')}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Информация о подписке", callback_data=f"{CallbackData.ADMIN_SUB_INFO}{subscription_id}")],
+            [NavigationBuilder.create_back_button()]
+        ])
+        
+        message_obj = update.callback_query.message if update.callback_query else None
+        await safe_edit_or_reply_universal(
+            message_obj,
+            message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.ADMIN_SUBSCRIPTION_INFO
         )
         
         logger.info(f"Админ {update.effective_user.id} отменил подписку {subscription_id}")

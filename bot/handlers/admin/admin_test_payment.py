@@ -207,13 +207,23 @@ async def test_confirm_payment_callback(update: Update, context: ContextTypes.DE
         await process_payment_webhook(app, payment_id, 'succeeded')
         
         # Уведомляем админа об успехе
-        await query.edit_message_text(
+        from ...navigation import NavigationBuilder
+        message = (
             f"{UIStyles.header('Платеж подтвержден')}\n\n"
             f"{UIEmojis.SUCCESS} <b>Платеж успешно подтвержден!</b>\n\n"
             f"<b>Payment ID:</b> <code>{payment_id}</code>\n"
             f"<b>Пользователь:</b> {payment_info['user_id']}\n\n"
-            f"{UIStyles.description('Платеж обработан и ключи созданы.')}",
-            parse_mode="HTML"
+            f"{UIStyles.description('Платеж обработан и подписка создана.')}"
+        )
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        await safe_edit_or_reply_universal(
+            query.message,
+            message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.ADMIN_MENU
         )
         
         logger.info(f"Админ {user_id_int} подтвердил тестовый платеж {payment_id}")

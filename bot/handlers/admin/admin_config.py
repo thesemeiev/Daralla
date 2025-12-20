@@ -6,8 +6,9 @@ from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ...utils import (
-    UIEmojis, safe_edit_or_reply, check_private_chat
+    UIEmojis, safe_edit_or_reply_universal, check_private_chat
 )
+from ...navigation import MenuTypes
 from ...navigation import NavigationBuilder
 from ...db import get_all_config
 
@@ -35,7 +36,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply(message_obj, 'Нет доступа.')
+        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_MENU)
         return
     
     try:
@@ -52,9 +53,10 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply(message_obj, message, reply_markup=keyboard, parse_mode="Markdown")
+        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="Markdown", menu_type=MenuTypes.ADMIN_MENU)
         
     except Exception as e:
         logger.exception("Ошибка в admin_config")
-        await safe_edit_or_reply(update.message, f'{UIEmojis.ERROR} Ошибка: {e}')
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, f'{UIEmojis.ERROR} Ошибка: {e}', menu_type=MenuTypes.ADMIN_MENU)
 

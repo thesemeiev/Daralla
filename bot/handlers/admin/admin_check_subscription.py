@@ -3,11 +3,12 @@
 """
 import logging
 import datetime
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ...db.subscribers_db import get_subscription_by_token, get_subscription_servers
-from ...utils import UIEmojis, UIStyles
+from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal
+from ...navigation import NavigationBuilder, MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -32,15 +33,23 @@ async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT
     globals_dict = get_globals()
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     
+    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    
     if user.id not in ADMIN_IDS:
-        await update.message.reply_text("Нет доступа к этой команде")
+        await safe_edit_or_reply_universal(message_obj, "Нет доступа к этой команде", menu_type=MenuTypes.ADMIN_MENU)
         return
     
     if not context.args or len(context.args) == 0:
-        await update.message.reply_text(
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        await safe_edit_or_reply_universal(
+            message_obj,
             f"{UIStyles.header('Проверка подписки')}\n\n"
             f"Использование: /admin_check_subscription <token>\n\n"
-            f"Пример: /admin_check_subscription 1b97286f426a4d0687fdc3c3"
+            f"Пример: /admin_check_subscription 1b97286f426a4d0687fdc3c3",
+            reply_markup=keyboard,
+            menu_type=MenuTypes.ADMIN_MENU
         )
         return
     
@@ -51,9 +60,15 @@ async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT
         sub = await get_subscription_by_token(token)
         
         if not sub:
-            await update.message.reply_text(
-                f"{UIEmojis.ERROR} Подписка с токеном `{token}` не найдена",
-                parse_mode="Markdown"
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            await safe_edit_or_reply_universal(
+                message_obj,
+                f"{UIEmojis.ERROR} Подписка с токеном <code>{token}</code> не найдена",
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.ADMIN_MENU
             )
             return
         
@@ -101,11 +116,26 @@ async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT
         else:
             message += f"\n{UIEmojis.WARNING} <b>WEBHOOK_URL не установлен!</b>"
         
-        await update.message.reply_text(message, parse_mode="HTML")
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        await safe_edit_or_reply_universal(
+            message_obj,
+            message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.ADMIN_MENU
+        )
         
     except Exception as e:
         logger.error(f"Ошибка в admin_check_subscription: {e}", exc_info=True)
-        await update.message.reply_text(
-            f"{UIEmojis.ERROR} Ошибка при проверке подписки: {str(e)}"
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        await safe_edit_or_reply_universal(
+            message_obj,
+            f"{UIEmojis.ERROR} Ошибка при проверке подписки: {str(e)}",
+            reply_markup=keyboard,
+            menu_type=MenuTypes.ADMIN_MENU
         )
 

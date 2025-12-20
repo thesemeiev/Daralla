@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 
 from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal, check_private_chat
 from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
+from telegram.ext import ConversationHandler, MessageHandler, filters
 from ...db import (
     get_user_by_id, get_all_subscriptions_by_user, get_payments_by_user,
     get_subscription_servers, update_subscription_status,
@@ -15,6 +16,9 @@ from ...db import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Константа для состояния поиска пользователя
+SEARCH_USER_WAITING_ID = 2001
 
 def get_globals():
     """Получает глобальные переменные из bot.py"""
@@ -36,13 +40,12 @@ def get_globals():
 
 
 async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Поиск пользователя"""
+    """Поиск пользователя - показывает инструкцию"""
     if not await check_private_chat(update):
-        return
+        return ConversationHandler.END
     
     globals_dict = get_globals()
     ADMIN_IDS = globals_dict['ADMIN_IDS']
-    nav_system = globals_dict['nav_system']
     
     # Если это callback_query, отвечаем на него
     if update.callback_query:
@@ -52,20 +55,18 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_MENU)
-        return
+        return ConversationHandler.END
     
     # Если передан user_id как аргумент команды
     if update.message and context.args and len(context.args) > 0:
         user_id = context.args[0]
         await show_user_info(update, context, user_id)
-        return
+        return ConversationHandler.END
     
     message = (
         f"{UIStyles.header('Поиск пользователя')}\n\n"
-        f"{UIStyles.description('Введите Telegram ID пользователя или используйте команду:')}\n"
-        f"<code>/admin_user &lt;user_id&gt;</code>\n\n"
-        f"{UIStyles.description('Пример:')}\n"
-        f"<code>/admin_user 123456789</code>"
+        f"{UIStyles.description('Введите Telegram ID пользователя:')}\n\n"
+        f"{UIStyles.description('Пример: 123456789')}"
     )
     
     keyboard = InlineKeyboardMarkup([
@@ -74,6 +75,33 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+    
+    return SEARCH_USER_WAITING_ID
+
+
+async def admin_search_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод user_id для поиска пользователя"""
+    if not await check_private_chat(update):
+        return ConversationHandler.END
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
+    
+    if update.effective_user.id not in ADMIN_IDS:
+        return ConversationHandler.END
+    
+    user_id = update.message.text.strip()
+    
+    # Удаляем сообщение пользователя с ID
+    try:
+        await update.message.delete()
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение пользователя: {e}")
+    
+    # Показываем информацию о пользователе
+    await show_user_info(update, context, user_id)
+    
+    return ConversationHandler.END
 
 
 async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str):

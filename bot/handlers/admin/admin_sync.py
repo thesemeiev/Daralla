@@ -2,11 +2,11 @@
 Админ-команда для ручной синхронизации БД с X-UI серверами
 """
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from ...utils import UIStyles, UIEmojis
-from ...navigation import NavigationBuilder
+from ...utils import UIStyles, UIEmojis, safe_edit_or_reply_universal
+from ...navigation import NavigationBuilder, MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +35,15 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     sync_manager = globals_dict['sync_manager']
     
+    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    
     # Проверяем доступ
     if user_id_int not in ADMIN_IDS:
-        await update.message.reply_text("У вас нет доступа к этой команде.")
+        await safe_edit_or_reply_universal(message_obj, "У вас нет доступа к этой команде.", menu_type=MenuTypes.ADMIN_MENU)
         return
     
     if not sync_manager:
-        await update.message.reply_text("SyncManager не доступен.")
+        await safe_edit_or_reply_universal(message_obj, "SyncManager не доступен.", menu_type=MenuTypes.ADMIN_MENU)
         return
     
     # Проверяем, есть ли флаг --fix для автоматического восстановления
@@ -52,9 +54,9 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Запускаем синхронизацию
     if auto_fix:
-        await update.message.reply_text("Запуск синхронизации с автоматическим восстановлением...")
+        await safe_edit_or_reply_universal(message_obj, "Запуск синхронизации с автоматическим восстановлением...", menu_type=MenuTypes.ADMIN_MENU)
     else:
-        await update.message.reply_text("Запуск синхронизации БД с X-UI серверами...")
+        await safe_edit_or_reply_universal(message_obj, "Запуск синхронизации БД с X-UI серверами...", menu_type=MenuTypes.ADMIN_MENU)
     
     try:
         # Синхронизируем все подписки
@@ -93,16 +95,20 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Ошибка поиска orphaned клиентов: {e}")
         
-        keyboard = NavigationBuilder.create_main_menu_button()
-        await update.message.reply_text(
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        await safe_edit_or_reply_universal(
+            message_obj,
             report,
             reply_markup=keyboard,
-            parse_mode="HTML"
+            parse_mode="HTML",
+            menu_type=MenuTypes.ADMIN_MENU
         )
         
         logger.info(f"Админ {user_id_int} выполнил ручную синхронизацию")
         
     except Exception as e:
         logger.error(f"Ошибка синхронизации: {e}")
-        await update.message.reply_text(f"Ошибка синхронизации: {e}")
+        await safe_edit_or_reply_universal(message_obj, f"Ошибка синхронизации: {e}", menu_type=MenuTypes.ADMIN_MENU)
 

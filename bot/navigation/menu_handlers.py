@@ -42,6 +42,9 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.ADMIN_CHECK_SERVERS, self.admin_check_servers)
         nav_manager.register_handler(NavStates.ADMIN_SEARCH_USER, self.admin_search_user)
         nav_manager.register_handler(NavStates.ADMIN_BROADCAST, self.admin_broadcast)
+        nav_manager.register_handler(NavStates.ADMIN_CONFIG, self.admin_config)
+        nav_manager.register_handler(NavStates.ADMIN_SYNC, self.admin_sync)
+        nav_manager.register_handler(NavStates.ADMIN_CHECK_SUBSCRIPTION, self.admin_check_subscription)
     
     async def main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Главное меню"""
@@ -125,6 +128,10 @@ class MenuHandlers:
             [InlineKeyboardButton("Проверка серверов", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
             [InlineKeyboardButton("Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
             [InlineKeyboardButton("Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
+            [InlineKeyboardButton("Тестовое подтверждение", callback_data=CallbackData.ADMIN_TEST_PAYMENT)],
+            [InlineKeyboardButton("Конфигурация", callback_data=CallbackData.ADMIN_CONFIG)],
+            [InlineKeyboardButton("Синхронизация", callback_data=CallbackData.ADMIN_SYNC)],
+            [InlineKeyboardButton("Проверка подписки", callback_data=CallbackData.ADMIN_CHECK_SUBSCRIPTION)],
             [UIButtons.back_button()],
         ])
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -186,6 +193,48 @@ class MenuHandlers:
         """Информация о подписке"""
         from ..handlers.admin.admin_subscription_manage import admin_subscription_info
         await admin_subscription_info(update, context)
+    
+    async def admin_test_payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Тестовое подтверждение платежей"""
+        from ..handlers.admin.admin_test_payment import admin_test_payment
+        # Создаем фиктивный update с message для команды
+        if update.callback_query:
+            # Если это callback, создаем фиктивный message
+            class FakeMessage:
+                def __init__(self, original_message):
+                    self.from_user = update.effective_user
+                    self.chat = original_message.chat
+                    self.text = "/admin_test_payment"
+                    self.message_id = original_message.message_id
+                    self.reply_text = original_message.reply_text
+                    self.edit_text = original_message.edit_text
+                    self.edit_caption = original_message.edit_caption
+                    self.photo = original_message.photo
+                    self.caption = original_message.caption
+                    self.reply_markup = original_message.reply_markup
+            
+            fake_update = Update(
+                update_id=update.update_id,
+                message=FakeMessage(update.callback_query.message)
+            )
+            await admin_test_payment(fake_update, context)
+        else:
+            await admin_test_payment(update, context)
+    
+    async def admin_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Конфигурация"""
+        from ..handlers.admin.admin_config import admin_config
+        await admin_config(update, context)
+    
+    async def admin_sync(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Синхронизация"""
+        from ..handlers.admin.admin_sync import admin_sync
+        await admin_sync(update, context)
+    
+    async def admin_check_subscription(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Проверка подписки по токену"""
+        from ..handlers.admin.admin_check_subscription import admin_check_subscription
+        await admin_check_subscription(update, context)
     
 
 class NavigationCallbacks:
@@ -323,6 +372,23 @@ class NavigationIntegration:
             CallbackQueryHandler(
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_BROADCAST),
                 pattern=f"^{CallbackData.ADMIN_BROADCAST_START}$"
+            ),
+            # Тестовое подтверждение - вызываем команду напрямую
+            CallbackQueryHandler(
+                lambda u, c: self.menu_handlers.admin_test_payment(u, c),
+                pattern=f"^{CallbackData.ADMIN_TEST_PAYMENT}$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_CONFIG),
+                pattern=f"^{CallbackData.ADMIN_CONFIG}$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_SYNC),
+                pattern=f"^{CallbackData.ADMIN_SYNC}$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_CHECK_SUBSCRIPTION),
+                pattern=f"^{CallbackData.ADMIN_CHECK_SUBSCRIPTION}$"
             ),
         ]
 

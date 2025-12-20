@@ -405,7 +405,31 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_extend_subscription, pattern="^admin_sub_extend:"))
     app.add_handler(CallbackQueryHandler(admin_cancel_subscription, pattern="^admin_sub_cancel:"))
     
+    # ConversationHandler для поиска пользователя
+    from .handlers.admin.admin_user_management import (
+        admin_search_user, admin_search_user_input, SEARCH_USER_WAITING_ID
+    )
+    admin_search_user_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(admin_search_user, pattern="^admin_search_user$"),
+            CommandHandler('admin_user', admin_search_user)
+        ],
+        states={
+            SEARCH_USER_WAITING_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search_user_input),
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(lambda u, c: nav_manager.handle_back_navigation(u, c), pattern="^back$"),
+        ],
+        per_user=True,
+        per_chat=True,
+        per_message=False
+    )
+    app.add_handler(admin_search_user_conv)
+    
     # Обработчик текстовых сообщений
+    # (должен быть после ConversationHandler)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
     # === НОВЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ ===

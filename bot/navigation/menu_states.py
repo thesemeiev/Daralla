@@ -20,6 +20,9 @@ class NavStates:
     ADMIN_USER_SUBSCRIPTIONS = 'admin_user_subscriptions'
     ADMIN_USER_PAYMENTS = 'admin_user_payments'
     ADMIN_SUBSCRIPTION_INFO = 'admin_subscription_info'
+    ADMIN_CONFIG = 'admin_config'
+    ADMIN_SYNC = 'admin_sync'
+    ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'
 
 class MenuTypes:
     """Типы меню для изображений"""
@@ -48,6 +51,9 @@ class MenuTypes:
     ADMIN_USER_SUBSCRIPTIONS = 'admin_user_subscriptions'
     ADMIN_USER_PAYMENTS = 'admin_user_payments'
     ADMIN_SUBSCRIPTION_INFO = 'admin_subscription_info'
+    ADMIN_CONFIG = 'admin_config'
+    ADMIN_SYNC = 'admin_sync'
+    ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'
 
 class CallbackData:
     """Константы callback_data"""
@@ -96,6 +102,10 @@ class CallbackData:
     ADMIN_SUB_INFO = 'admin_sub_info:'  # f"admin_sub_info:{sub_id}"
     ADMIN_SUB_EXTEND = 'admin_sub_extend:'  # f"admin_sub_extend:{sub_id}:{days}"
     ADMIN_SUB_CANCEL = 'admin_sub_cancel:'  # f"admin_sub_cancel:{sub_id}"
+    ADMIN_TEST_PAYMENT = 'admin_test_payment'  # Тестовое подтверждение платежей
+    ADMIN_CONFIG = 'admin_config'  # Конфигурация
+    ADMIN_SYNC = 'admin_sync'  # Синхронизация
+    ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'  # Проверка подписки по токену
 
 # Маппинг callback_data на состояния
 CALLBACK_TO_STATE = {
@@ -110,6 +120,10 @@ CALLBACK_TO_STATE = {
     CallbackData.ADMIN_CHECK_SERVERS: NavStates.ADMIN_CHECK_SERVERS,
     CallbackData.ADMIN_BROADCAST_START: NavStates.ADMIN_BROADCAST,
     CallbackData.ADMIN_SEARCH_USER: NavStates.ADMIN_SEARCH_USER,
+    CallbackData.ADMIN_TEST_PAYMENT: NavStates.ADMIN_MENU,  # Обрабатывается через команду
+    CallbackData.ADMIN_CONFIG: NavStates.ADMIN_CONFIG,
+    CallbackData.ADMIN_SYNC: NavStates.ADMIN_SYNC,
+    CallbackData.ADMIN_CHECK_SUBSCRIPTION: NavStates.ADMIN_CHECK_SUBSCRIPTION,
 }
 
 # Маппинг состояний на функции-обработчики
@@ -130,4 +144,7 @@ STATE_TO_HANDLER = {
     NavStates.ADMIN_USER_SUBSCRIPTIONS: 'admin_user_subscriptions',
     NavStates.ADMIN_USER_PAYMENTS: 'admin_user_payments',
     NavStates.ADMIN_SUBSCRIPTION_INFO: 'admin_subscription_info',
+    NavStates.ADMIN_CONFIG: 'admin_config',
+    NavStates.ADMIN_SYNC: 'admin_sync',
+    NavStates.ADMIN_CHECK_SUBSCRIPTION: 'admin_check_subscription',
 }
