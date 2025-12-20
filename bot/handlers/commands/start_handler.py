@@ -10,6 +10,7 @@ from ...utils import (
     safe_edit_or_reply_universal, check_private_chat
 )
 from ...db import register_simple_user
+from ...navigation import NavStates, MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     globals_dict = get_globals()
     nav_system = globals_dict.get('nav_system')
     if nav_system:
-        from ...navigation import nav_manager, NavStates, MenuTypes
+        from ...navigation import nav_manager
         nav_manager.clear_stack(context)
         nav_manager.push_state(context, NavStates.MAIN_MENU)
     
@@ -89,8 +90,6 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         logger.error("edit_main_menu: message is None")
         return
-    
-    from ...navigation import MenuTypes
     
     logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
     try:
