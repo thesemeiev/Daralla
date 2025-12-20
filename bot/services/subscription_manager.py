@@ -143,12 +143,13 @@ class SubscriptionManager:
         user_id: str,
         expires_at: int,
         token: str,
+        device_limit: int = None,
     ) -> Tuple[bool, bool]:
         """
         Гарантирует наличие клиента на сервере.
         
         Если клиента нет - создает его.
-        Если клиент есть - проверяет и синхронизирует время истечения.
+        Если клиент есть - проверяет и синхронизирует время истечения и limitIp.
         
         Args:
             subscription_id: ID подписки
@@ -157,6 +158,7 @@ class SubscriptionManager:
             user_id: ID пользователя Telegram
             expires_at: Время истечения подписки (timestamp)
             token: Токен подписки
+            device_limit: Лимит устройств/IP (если None, получается из подписки)
         
         Returns:
             Tuple[bool, bool]:
@@ -164,6 +166,17 @@ class SubscriptionManager:
                 - Второй bool: True если клиент был создан (False если уже существовал)
         """
         try:
+            # Получаем device_limit из подписки, если не передан
+            if device_limit is None:
+                from ..db import get_subscription_by_id_only
+                sub = await get_subscription_by_id_only(subscription_id)
+                if sub:
+                    device_limit = sub.get('device_limit', 1)
+                    logger.debug(f"Получен device_limit={device_limit} для подписки {subscription_id}")
+                else:
+                    device_limit = 1  # Fallback
+                    logger.warning(f"Не удалось найти подписку {subscription_id} для получения device_limit, используем 1")
+            
             xui, resolved_name = self.server_manager.get_server_by_name(server_name)
             if xui is None:
                 logger.error(f"Сервер {server_name} недоступен")
@@ -199,6 +212,21 @@ class SubscriptionManager:
                 except Exception as sync_e:
                     logger.warning(f"Ошибка синхронизации времени на сервере {server_name}: {sync_e}")
                 
+                # Проверяем и синхронизируем limitIp
+                try:
+                    client_info = xui.get_client_info(client_email)
+                    if client_info:
+                        current_limit_ip = client_info['client'].get('limitIp', 1)
+                        if current_limit_ip != device_limit:
+                            logger.info(
+                                f"Синхронизация limitIp на сервере {server_name}: "
+                                f"{current_limit_ip} -> {device_limit}"
+                            )
+                            xui.updateClientLimitIp(client_email, device_limit)
+                            logger.info(f"limitIp синхронизирован на сервере {server_name}")
+                except Exception as limit_sync_e:
+                    logger.warning(f"Ошибка синхронизации limitIp на сервере {server_name}: {limit_sync_e}")
+                
                 return True, False  # Клиент существует, не создавали
             else:
                 # Клиент не найден - создаем его
@@ -211,7 +239,8 @@ class SubscriptionManager:
                     tg_id=user_id,
                     user_email=client_email,
                     timeout=15,
-                    key_name=token
+                    key_name=token,
+                    limit_ip=device_limit
                 )
                 
                 if response and response.status_code == 200:

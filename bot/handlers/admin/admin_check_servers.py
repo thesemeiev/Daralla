@@ -10,6 +10,7 @@ from ...utils import (
     UIEmojis, safe_edit_or_reply_universal, safe_edit_or_reply, check_private_chat
 )
 from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
+from ...db import get_subscription_statistics
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +87,9 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
                         message += f"{UIEmojis.ERROR} {server_name}: Ошибка получения данных\n"
                         continue
                     message += f"{UIEmojis.SUCCESS} {server_name}: Онлайн\n"
-                    message += f"   Всего клиентов: {total_clients}\n"
-                    message += f"   Активных клиентов: {active_clients}\n"
-                    message += f"   Истекших клиентов: {expired_clients}\n"
+                    message += f"   Клиентов X-UI: {total_clients}\n"
+                    message += f"   Активных: {active_clients}\n"
+                    message += f"   Истекших: {expired_clients}\n"
                     message += f"   Последняя проверка: {status_info.get('last_check', 'Неизвестно')}\n"
                 except Exception as e:
                     message += f"{UIEmojis.SUCCESS} {server_name}: Онлайн (ошибка получения деталей: {str(e)[:50]}...)\n"
@@ -100,15 +101,22 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             message += "\n"
         
+        # Получаем статистику подписок из БД
+        try:
+            sub_stats = await get_subscription_statistics()
+        except Exception as e:
+            logger.error(f"Ошибка получения статистики подписок: {e}")
+            sub_stats = None
+        
         # Добавляем общую статистику
         total_servers = len(server_manager.servers)
         online_servers = sum(1 for is_healthy in health_results.values() if is_healthy)
         offline_servers = total_servers - online_servers
         
-        # Подсчитываем общее количество клиентов
-        total_clients_all = 0
-        active_clients_all = 0
-        expired_clients_all = 0
+        # Подсчитываем общее количество клиентов X-UI на серверах
+        total_xui_clients_all = 0
+        active_xui_clients_all = 0
+        expired_xui_clients_all = 0
         
         for server in server_manager.servers:
             if health_results.get(server["name"], False):
@@ -118,16 +126,19 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
                         continue
                     try:
                         total_clients, active_clients, expired_clients = xui.get_clients_status_count()
+                        total_xui_clients_all += total_clients
+                        active_xui_clients_all += active_clients
+                        expired_xui_clients_all += expired_clients
                     except Exception as count_e:
-                        logger.error(f"Ошибка получения количества клиентов с сервера {server_name}: {count_e}")
+                        logger.error(f"Ошибка получения количества клиентов с сервера {server['name']}: {count_e}")
                         continue
-                    total_clients_all += total_clients
-                    active_clients_all += active_clients
-                    expired_clients_all += expired_clients
                 except:
                     pass
         
-        message += f"Общая статистика:\n"
+        message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        message += f"<b>📊 Общая статистика</b>\n\n"
+        
+        message += f"<b>Серверы:</b>\n"
         message += f"   Всего серверов: {total_servers}\n"
         message += f"   Онлайн: {online_servers}\n"
         message += f"   Офлайн: {offline_servers}\n"
@@ -139,12 +150,31 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Добавляем предупреждение, если нет доступных серверов
         if online_servers == 0:
             message += f"{UIEmojis.WARNING} <b>Внимание: Нет доступных серверов!</b>\n"
-            message += f"Бот продолжит работу, но создание новых ключей будет недоступно до восстановления серверов.\n\n"
-        message += f"Клиенты:\n"
-        message += f"   Всего клиентов: {total_clients_all}\n"
-        message += f"   Активных: {active_clients_all}\n"
-        message += f"   Истекших: {expired_clients_all}\n\n"
-        message += f"Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+            message += f"Бот продолжит работу, но создание новых подписок будет недоступно до восстановления серверов.\n\n"
+        
+        # Статистика подписок из БД
+        if sub_stats:
+            message += f"<b>📋 Подписки (из БД):</b>\n"
+            message += f"   Всего подписок: {sub_stats['total_subscriptions']}\n"
+            message += f"   Активных: {sub_stats['active_subscriptions']}\n"
+            message += f"   Истекших: {sub_stats['expired_subscriptions']}\n\n"
+            
+            message += f"<b>👥 Пользователи:</b>\n"
+            message += f"   Всего пользователей: {sub_stats['total_users']}\n"
+            message += f"   С активными подписками: {sub_stats['users_with_active_subs']}\n\n"
+            
+            message += f"<b>🔑 Клиенты на серверах (X-UI):</b>\n"
+            message += f"   Всего клиентов: {sub_stats['total_server_clients']}\n"
+            message += f"   Для активных подписок: {sub_stats['active_server_clients']}\n\n"
+        
+        # Статистика клиентов X-UI (для справки)
+        message += f"<b>ℹ️ Клиенты X-UI на серверах:</b>\n"
+        message += f"   (Все клиенты, включая не связанные с подписками)\n"
+        message += f"   Всего: {total_xui_clients_all}\n"
+        message += f"   Активных: {active_xui_clients_all}\n"
+        message += f"   Истекших: {expired_xui_clients_all}\n\n"
+        
+        message += f"⏰ Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
@@ -260,23 +290,51 @@ async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
                 else:
                     message += f"{status_icon} {server_name}\n"
         
+        # Получаем статистику подписок из БД
+        try:
+            sub_stats = await get_subscription_statistics()
+        except Exception as e:
+            logger.error(f"Ошибка получения статистики подписок: {e}")
+            sub_stats = None
+        
         # Статистика
         total_servers = len(health_results) + len(new_client_health)
         online_servers = sum(1 for is_healthy in list(health_results.values()) + list(new_client_health.values()) if is_healthy)
-        total_clients_all = total_clients_main + total_clients_new
-        active_clients_all = active_clients_main + active_clients_new
-        expired_clients_all = expired_clients_main + expired_clients_new
+        total_xui_clients_all = total_clients_main + total_clients_new
+        active_xui_clients_all = active_clients_main + active_clients_new
+        expired_xui_clients_all = expired_clients_main + expired_clients_new
         
-        message += f"\nСтатистика серверов:\n"
+        message += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        message += f"<b>📊 Общая статистика</b>\n\n"
+        
+        message += f"<b>Серверы:</b>\n"
         message += f"Всего серверов: {total_servers}\n"
         message += f"Онлайн: {online_servers}\n"
         message += f"Офлайн: {total_servers - online_servers}\n"
         message += f"Доступность: {(online_servers/total_servers*100):.1f}%\n\n"
-        message += f"Статистика клиентов:\n"
-        message += f"Всего клиентов: {total_clients_all}\n"
-        message += f"Активных: {active_clients_all}\n"
-        message += f"Истекших: {expired_clients_all}\n\n"
-        message += f"Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+        
+        # Статистика подписок из БД
+        if sub_stats:
+            message += f"<b>📋 Подписки (из БД):</b>\n"
+            message += f"Всего подписок: {sub_stats['total_subscriptions']}\n"
+            message += f"Активных: {sub_stats['active_subscriptions']}\n"
+            message += f"Истекших: {sub_stats['expired_subscriptions']}\n\n"
+            
+            message += f"<b>👥 Пользователи:</b>\n"
+            message += f"Всего пользователей: {sub_stats['total_users']}\n"
+            message += f"С активными подписками: {sub_stats['users_with_active_subs']}\n\n"
+            
+            message += f"<b>🔑 Клиенты на серверах (X-UI):</b>\n"
+            message += f"Всего клиентов: {sub_stats['total_server_clients']}\n"
+            message += f"Для активных подписок: {sub_stats['active_server_clients']}\n\n"
+        
+        message += f"<b>ℹ️ Клиенты X-UI на серверах:</b>\n"
+        message += f"(Все клиенты, включая не связанные с подписками)\n"
+        message += f"Всего: {total_xui_clients_all}\n"
+        message += f"Активных: {active_xui_clients_all}\n"
+        message += f"Истекших: {expired_xui_clients_all}\n\n"
+        
+        message += f"⏰ Время проверки: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         
         await safe_edit_or_reply(update.message, message, parse_mode="HTML")
         

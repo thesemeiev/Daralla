@@ -145,3 +145,27 @@ async def cleanup_expired_pending_payments(minutes_old: int = 60) -> int:
     except Exception as e:
         logger.error(f"CLEANUP_EXPIRED_PENDING_PAYMENTS error: {e}")
         return 0
+
+async def get_payments_by_user(user_id: str, limit: int = 50) -> list:
+    """Возвращает все платежи пользователя"""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+                (user_id, limit)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                result = []
+                for row in rows:
+                    res = dict(row)
+                    if res['meta']:
+                        try:
+                            res['meta'] = json.loads(res['meta'])
+                        except:
+                            res['meta'] = {}
+                    result.append(res)
+                return result
+    except Exception as e:
+        logger.error(f"GET_PAYMENTS_BY_USER error: {e}")
+        return []

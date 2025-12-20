@@ -343,6 +343,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_test_payment', admin_test_payment))
     app.add_handler(CommandHandler('admin_sync', admin_sync))
     app.add_handler(CommandHandler('admin_check_subscription', admin_check_subscription))
+    app.add_handler(CommandHandler('admin_user', admin_search_user))
     app.add_handler(CallbackQueryHandler(test_confirm_payment_callback, pattern="^test_confirm_payment:"))
 
     # Обработчики callback-ов для главного меню и выбора сервера
@@ -387,6 +388,20 @@ if __name__ == '__main__':
     # Глобальный обработчик для кнопки назад в рассылке
     app.add_handler(CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"))
 
+    
+    # Обработчики админ-панели управления пользователями и подписками
+    from .handlers.admin.admin_user_management import (
+        admin_user_subscriptions, admin_user_payments
+    )
+    from .handlers.admin.admin_subscription_manage import (
+        admin_subscription_info, admin_extend_subscription, admin_cancel_subscription
+    )
+    
+    app.add_handler(CallbackQueryHandler(admin_user_subscriptions, pattern="^admin_user_subs:"))
+    app.add_handler(CallbackQueryHandler(admin_user_payments, pattern="^admin_user_payments:"))
+    app.add_handler(CallbackQueryHandler(admin_subscription_info, pattern="^admin_sub_info:"))
+    app.add_handler(CallbackQueryHandler(admin_extend_subscription, pattern="^admin_sub_extend:"))
+    app.add_handler(CallbackQueryHandler(admin_cancel_subscription, pattern="^admin_sub_cancel:"))
     
     # Обработчик текстовых сообщений
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))

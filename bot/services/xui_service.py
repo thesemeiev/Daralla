@@ -100,7 +100,7 @@ class X3:
         self._logged_in = True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name="", inbound_id=None):
+    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name="", inbound_id=None, limit_ip=None):
         """
         Добавляет нового клиента на сервер
         
@@ -112,12 +112,12 @@ class X3:
             hours: Количество часов (для тестовых ключей)
             key_name: Имя ключа или токен подписки (сохраняется в subId)
             inbound_id: ID inbound'а (если None, используется первый доступный)
+            limit_ip: Лимит IP-адресов (если None, используется 1)
         """
         """Добавляет нового клиента на сервер"""
         self._ensure_connected()
         
         # Если inbound_id не указан, получаем первый доступный inbound
-        first_inbound = None
         if inbound_id is None:
             try:
                 inbounds_list = self.list(timeout=timeout)
@@ -135,17 +135,6 @@ class X3:
                 # Fallback: используем 1 (старое поведение)
                 inbound_id = 1
                 logger.warning(f"Используется fallback inbound_id=1")
-        else:
-            # Если inbound_id указан, получаем его настройки для определения flow
-            try:
-                inbounds_list = self.list(timeout=timeout)
-                if inbounds_list.get('success', False) and inbounds_list.get('obj'):
-                    for inbound in inbounds_list['obj']:
-                        if inbound.get('id') == inbound_id:
-                            first_inbound = inbound
-                            break
-            except Exception as e:
-                logger.warning(f"Не удалось получить настройки inbound для определения flow: {e}")
         
         if hours is not None:
             # Для тестовых ключей используем часы
@@ -155,41 +144,20 @@ class X3:
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
         header = {"Accept": "application/json"}
         # Минимальный набор параметров для VLESS клиента
+        # Flow не добавляем, так как его начали блокировать
+        # limitIp используем из параметра или по умолчанию 1
+        limit_ip_value = limit_ip if limit_ip is not None else 1
         client_data = {
             "id": str(uuid.uuid1()),
             "email": str(user_email),
-            "limitIp": 1,
+            "limitIp": limit_ip_value,
             "totalGB": 0,
             "expiryTime": x_time,
             "enable": True,
             "tgId": str(tg_id),
             "subId": key_name,  # Сохраняем имя ключа в поле subId
         }
-        
-        # Автоматическое определение flow на основе настроек inbound'а
-        # Flow нужен ТОЛЬКО для: VLESS + TCP + Reality
-        if first_inbound:
-            try:
-                stream_settings = first_inbound.get('streamSettings')
-                if stream_settings:
-                    # streamSettings может быть строкой JSON или словарем
-                    if isinstance(stream_settings, str):
-                        stream = json.loads(stream_settings)
-                    else:
-                        stream = stream_settings
-                    
-                    protocol = first_inbound.get('protocol', 'vless').lower()
-                    network = stream.get('network', 'tcp').lower()
-                    security = stream.get('security', 'reality').lower()
-                    
-                    # Flow нужен только для VLESS + TCP + Reality
-                    if protocol == 'vless' and network == 'tcp' and security == 'reality':
-                        client_data['flow'] = 'xtls-rprx-vision'
-                        logger.info(f"Добавлен flow=xtls-rprx-vision для клиента {user_email} (VLESS+TCP+Reality)")
-                    else:
-                        logger.debug(f"Flow не требуется для клиента {user_email} (protocol={protocol}, network={network}, security={security})")
-            except Exception as e:
-                logger.warning(f"Ошибка определения flow для клиента {user_email}: {e}, создаем без flow")
+        logger.info(f"Создание клиента {user_email} с limitIp={limit_ip_value}")
         data1 = {
             "id": inbound_id,
             "settings": json.dumps({"clients": [client_data]})
@@ -432,6 +400,95 @@ class X3:
         except Exception as e:
             logger.error(f"Ошибка получения времени истечения клиента {user_email}: {e}")
             return None
+
+    def get_client_info(self, user_email, timeout=15):
+        """
+        Получает полную информацию о клиенте по email.
+        
+        Returns:
+            dict: Информация о клиенте (client_data, inbound_id) или None
+        """
+        self._ensure_connected()
+        try:
+            inbounds_list = self.list(timeout=timeout)
+            if inbounds_list.get('success', False) and inbounds_list.get('obj'):
+                for inbound in inbounds_list['obj']:
+                    settings = json.loads(inbound.get('settings', '{}'))
+                    clients = settings.get('clients', [])
+                    for client in clients:
+                        if client.get('email') == user_email:
+                            return {
+                                'client': client,
+                                'inbound_id': inbound.get('id')
+                            }
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка получения информации о клиенте {user_email}: {e}")
+            return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    def updateClientLimitIp(self, user_email, limit_ip, timeout=15):
+        """
+        Обновляет limitIp клиента.
+        
+        Args:
+            user_email: Email клиента
+            limit_ip: Новое значение limitIp
+            timeout: Таймаут запроса
+        
+        Returns:
+            Response объект или None если клиент не найден
+        """
+        self._ensure_connected()
+        try:
+            client_info = self.get_client_info(user_email, timeout=timeout)
+            if not client_info:
+                logger.warning(f"Клиент {user_email} не найден для обновления limitIp")
+                return None
+            
+            client_data = client_info['client'].copy()
+            inbound_id = client_info['inbound_id']
+            
+            # Обновляем limitIp
+            old_limit_ip = client_data.get('limitIp', 1)
+            if old_limit_ip == limit_ip:
+                logger.debug(f"limitIp для клиента {user_email} уже равен {limit_ip}, обновление не требуется")
+                return None
+            
+            client_data['limitIp'] = limit_ip
+            logger.info(f"Обновление limitIp для клиента {user_email}: {old_limit_ip} -> {limit_ip}")
+            
+            # Обновляем клиента
+            header = {"Accept": "application/json"}
+            data = {
+                "id": inbound_id,
+                "settings": json.dumps({"clients": [client_data]})
+            }
+            
+            response = self.ses.post(
+                f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}',
+                headers=header,
+                json=data,
+                timeout=timeout
+            )
+            logger.info(f"XUI updateClientLimitIp Response - Status: {response.status_code}")
+            
+            # Проверяем JSON ответ
+            try:
+                response_json = response.json()
+                if not response_json.get('success', False):
+                    error_msg = response_json.get('msg', 'Unknown error')
+                    logger.error(f"XUI updateClientLimitIp вернул success=false: {error_msg}")
+                    raise Exception(f"XUI API error: {error_msg}")
+            except (json.JSONDecodeError, ValueError):
+                if response.status_code != 200:
+                    raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении limitIp клиента {user_email}: {e}")
+            raise
 
     def _list_internal(self, timeout=15, skip_health_check=False):
         """Внутренний метод для получения списка inbounds (без retry)"""

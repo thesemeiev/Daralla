@@ -146,6 +146,14 @@ async def get_subscription_by_id(sub_id: int, user_id: str):
             row = await cur.fetchone()
             return dict(row) if row else None
 
+async def get_subscription_by_id_only(sub_id: int):
+    """Получает подписку по ID без проверки user_id (для админ-функций)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT s.*, u.user_id FROM subscriptions s JOIN users u ON s.subscriber_id = u.id WHERE s.id = ?", (sub_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
 async def get_subscription_servers(subscription_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -166,3 +174,85 @@ async def remove_subscription_server(subscription_id: int, server_name: str):
         await db.execute("DELETE FROM subscription_servers WHERE subscription_id = ? AND server_name = ?", (subscription_id, server_name))
         await db.commit()
         return True
+
+async def get_subscription_statistics():
+    """Возвращает статистику по подпискам и пользователям"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Общее количество пользователей
+        async with db.execute("SELECT COUNT(*) as count FROM users") as cur:
+            row = await cur.fetchone()
+            total_users = row['count'] if row else 0
+        
+        # Количество активных подписок
+        async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'active'") as cur:
+            row = await cur.fetchone()
+            active_subscriptions = row['count'] if row else 0
+        
+        # Количество всех подписок (включая истекшие)
+        async with db.execute("SELECT COUNT(*) as count FROM subscriptions") as cur:
+            row = await cur.fetchone()
+            total_subscriptions = row['count'] if row else 0
+        
+        # Количество истекших подписок
+        async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'expired'") as cur:
+            row = await cur.fetchone()
+            expired_subscriptions = row['count'] if row else 0
+        
+        # Количество пользователей с активными подписками
+        async with db.execute("""
+            SELECT COUNT(DISTINCT u.id) as count 
+            FROM users u 
+            JOIN subscriptions s ON u.id = s.subscriber_id 
+            WHERE s.status = 'active'
+        """) as cur:
+            row = await cur.fetchone()
+            users_with_active_subs = row['count'] if row else 0
+        
+        # Количество клиентов на серверах (из subscription_servers)
+        async with db.execute("SELECT COUNT(*) as count FROM subscription_servers") as cur:
+            row = await cur.fetchone()
+            total_server_clients = row['count'] if row else 0
+        
+        # Количество клиентов на серверах для активных подписок
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscription_servers ss
+            JOIN subscriptions s ON ss.subscription_id = s.id
+            WHERE s.status = 'active'
+        """) as cur:
+            row = await cur.fetchone()
+            active_server_clients = row['count'] if row else 0
+        
+        return {
+            'total_users': total_users,
+            'users_with_active_subs': users_with_active_subs,
+            'total_subscriptions': total_subscriptions,
+            'active_subscriptions': active_subscriptions,
+            'expired_subscriptions': expired_subscriptions,
+            'total_server_clients': total_server_clients,
+            'active_server_clients': active_server_clients
+        }
+
+async def get_user_by_id(user_id: str):
+    """Возвращает информацию о пользователе по user_id"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+async def get_all_subscriptions_by_user(user_id: str):
+    """Возвращает все подписки пользователя (включая истекшие и отмененные)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT s.* 
+               FROM subscriptions s 
+               JOIN users u ON s.subscriber_id = u.id 
+               WHERE u.user_id = ?
+               ORDER BY s.created_at DESC""", (user_id,)
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]

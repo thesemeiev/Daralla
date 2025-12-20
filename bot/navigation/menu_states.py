@@ -15,6 +15,11 @@ class NavStates:
     ADMIN_NOTIFICATIONS = 'admin_notifications'
     ADMIN_CHECK_SERVERS = 'admin_check_servers'
     ADMIN_BROADCAST = 'broadcast'
+    ADMIN_SEARCH_USER = 'admin_search_user'
+    ADMIN_USER_INFO = 'admin_user_info'
+    ADMIN_USER_SUBSCRIPTIONS = 'admin_user_subscriptions'
+    ADMIN_USER_PAYMENTS = 'admin_user_payments'
+    ADMIN_SUBSCRIPTION_INFO = 'admin_subscription_info'
 
 class MenuTypes:
     """Типы меню для изображений"""
@@ -38,6 +43,11 @@ class MenuTypes:
     ADMIN_NOTIFICATIONS = 'admin_notifications'
     ADMIN_CHECK_SERVERS = 'admin_check_servers'
     ADMIN_BROADCAST = 'broadcast'
+    ADMIN_SEARCH_USER = 'admin_search_user'
+    ADMIN_USER_INFO = 'admin_user_info'
+    ADMIN_USER_SUBSCRIPTIONS = 'admin_user_subscriptions'
+    ADMIN_USER_PAYMENTS = 'admin_user_payments'
+    ADMIN_SUBSCRIPTION_INFO = 'admin_subscription_info'
 
 class CallbackData:
     """Константы callback_data"""
@@ -79,6 +89,13 @@ class CallbackData:
     ADMIN_NOTIFICATIONS_REFRESH = 'admin_notifications_refresh'
     ADMIN_BROADCAST_SEND = 'admin_broadcast_send'
     ADMIN_BROADCAST_EXPORT = 'admin_broadcast_export'
+    ADMIN_SEARCH_USER = 'admin_search_user'
+    ADMIN_USER_SUBS = 'admin_user_subs:'  # f"admin_user_subs:{user_id}"
+    ADMIN_USER_PAYMENTS = 'admin_user_payments:'  # f"admin_user_payments:{user_id}"
+    ADMIN_USER_MESSAGE = 'admin_user_message:'  # f"admin_user_message:{user_id}"
+    ADMIN_SUB_INFO = 'admin_sub_info:'  # f"admin_sub_info:{sub_id}"
+    ADMIN_SUB_EXTEND = 'admin_sub_extend:'  # f"admin_sub_extend:{sub_id}:{days}"
+    ADMIN_SUB_CANCEL = 'admin_sub_cancel:'  # f"admin_sub_cancel:{sub_id}"
 
 # Маппинг callback_data на состояния
 CALLBACK_TO_STATE = {
@@ -92,6 +109,7 @@ CALLBACK_TO_STATE = {
     CallbackData.ADMIN_NOTIFICATIONS: NavStates.ADMIN_NOTIFICATIONS,
     CallbackData.ADMIN_CHECK_SERVERS: NavStates.ADMIN_CHECK_SERVERS,
     CallbackData.ADMIN_BROADCAST_START: NavStates.ADMIN_BROADCAST,
+    CallbackData.ADMIN_SEARCH_USER: NavStates.ADMIN_SEARCH_USER,
 }
 
 # Маппинг состояний на функции-обработчики
@@ -107,4 +125,9 @@ STATE_TO_HANDLER = {
     NavStates.ADMIN_NOTIFICATIONS: 'admin_menu',
     NavStates.ADMIN_CHECK_SERVERS: 'admin_menu',
     NavStates.ADMIN_BROADCAST: 'admin_menu',
+    NavStates.ADMIN_SEARCH_USER: 'admin_search_user',
+    NavStates.ADMIN_USER_INFO: 'admin_user_info',
+    NavStates.ADMIN_USER_SUBSCRIPTIONS: 'admin_user_subscriptions',
+    NavStates.ADMIN_USER_PAYMENTS: 'admin_user_payments',
+    NavStates.ADMIN_SUBSCRIPTION_INFO: 'admin_subscription_info',
 }

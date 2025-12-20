@@ -119,10 +119,11 @@ class MenuHandlers:
         context.user_data.pop('config_chat_id', None)
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Логи", callback_data=CallbackData.ADMIN_ERRORS)],
-            [InlineKeyboardButton("Проверка серверов", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
-            [InlineKeyboardButton("Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
-            [InlineKeyboardButton("Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
+            [InlineKeyboardButton("🔍 Поиск пользователя", callback_data=CallbackData.ADMIN_SEARCH_USER)],
+            [InlineKeyboardButton("📊 Логи", callback_data=CallbackData.ADMIN_ERRORS)],
+            [InlineKeyboardButton("🖥 Проверка серверов", callback_data=CallbackData.ADMIN_CHECK_SERVERS)],
+            [InlineKeyboardButton("🔔 Уведомления", callback_data=CallbackData.ADMIN_NOTIFICATIONS)],
+            [InlineKeyboardButton("📢 Рассылка", callback_data=CallbackData.ADMIN_BROADCAST_START)],
             [UIButtons.back_button()],
         ])
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -153,6 +154,37 @@ class MenuHandlers:
         """Админ рассылка"""
         from ..handlers.admin import admin_broadcast_start
         await admin_broadcast_start(update, context)
+    
+    async def admin_search_user(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Поиск пользователя"""
+        from ..handlers.admin.admin_user_management import admin_search_user
+        await admin_search_user(update, context)
+    
+    async def admin_user_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Информация о пользователе"""
+        from ..handlers.admin.admin_user_management import show_user_info
+        user_id = context.user_data.get('admin_selected_user_id')
+        if user_id:
+            await show_user_info(update, context, user_id)
+        else:
+            await admin_search_user(update, context)
+    
+    async def admin_user_subscriptions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Подписки пользователя"""
+        from ..handlers.admin.admin_user_management import admin_user_subscriptions
+        user_id = context.user_data.get('admin_selected_user_id')
+        await admin_user_subscriptions(update, context, user_id)
+    
+    async def admin_user_payments(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Платежи пользователя"""
+        from ..handlers.admin.admin_user_management import admin_user_payments
+        user_id = context.user_data.get('admin_selected_user_id')
+        await admin_user_payments(update, context, user_id)
+    
+    async def admin_subscription_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Информация о подписке"""
+        from ..handlers.admin.admin_subscription_manage import admin_subscription_info
+        await admin_subscription_info(update, context)
     
 
 class NavigationCallbacks:

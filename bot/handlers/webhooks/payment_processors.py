@@ -170,20 +170,24 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             successful_extensions = []
             failed_extensions = []
             
+            # Получаем device_limit из подписки для передачи в ensure_client_on_server
+            device_limit = sub.get('device_limit', 1) if sub else 1
+            
             for server_info in servers:
                 server_name = server_info['server_name']
                 client_email = server_info['client_email']
                 
                 try:
                     # Используем ensure_client_on_server с НОВЫМ expires_at
-                    # Он сам проверит время на сервере и синхронизирует его с БД
+                    # Он сам проверит время на сервере и синхронизирует его с БД и limitIp
                     client_exists, client_created = await subscription_manager.ensure_client_on_server(
                         subscription_id=extension_subscription_id,
                         server_name=server_name,
                         client_email=client_email,
                         user_id=user_id,
                         expires_at=new_expires_at,  # Используем НОВОЕ время из БД
-                        token=sub['subscription_token'] if sub else ''
+                        token=sub['subscription_token'] if sub else '',
+                        device_limit=device_limit  # Передаем device_limit для синхронизации limitIp
                     )
                     
                     if client_exists:

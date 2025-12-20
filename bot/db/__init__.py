@@ -21,7 +21,7 @@ SUBSCRIBERS_DB_PATH = DB_PATH
 from .payments_db import (
     init_payments_db, add_payment, get_payment_by_id, update_payment_status,
     update_payment_activation, get_all_pending_payments, get_pending_payment,
-    cleanup_old_payments, cleanup_expired_pending_payments
+    cleanup_old_payments, cleanup_expired_pending_payments, get_payments_by_user
 )
 from .users_db import (
     init_users_db, get_all_user_ids, register_simple_user, is_known_user,
@@ -39,7 +39,8 @@ from .subscribers_db import (
     get_all_active_subscriptions, update_subscription_status, update_subscription_name,
     get_subscription_by_token, get_subscription_servers, add_subscription_server,
     remove_subscription_server, get_all_active_subscriptions_by_user,
-    get_subscription_by_id, update_subscription_expiry
+    get_subscription_by_id, get_subscription_by_id_only, update_subscription_expiry, get_subscription_statistics,
+    get_user_by_id, get_all_subscriptions_by_user
 )
 
 async def init_all_db():
@@ -60,6 +61,7 @@ __all__ = [
     'init_all_db', 'DB_PATH', 'DATA_DIR',
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
+    'get_payments_by_user',
     'get_all_user_ids', 'register_simple_user', 'is_known_user', 'get_config', 'set_config', 'get_all_config',
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
     'get_daily_notification_stats', 'clear_user_notifications', 'get_notification_settings',
@@ -68,5 +70,6 @@ __all__ = [
     'get_or_create_subscriber', 'create_subscription', 'get_all_active_subscriptions',
     'update_subscription_status', 'update_subscription_name', 'get_subscription_by_token',
     'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
-    'get_all_active_subscriptions_by_user', 'get_subscription_by_id', 'update_subscription_expiry'
+    'get_all_active_subscriptions_by_user', 'get_subscription_by_id', 'get_subscription_by_id_only',
+    'update_subscription_expiry', 'get_subscription_statistics', 'get_user_by_id', 'get_all_subscriptions_by_user'
 ]

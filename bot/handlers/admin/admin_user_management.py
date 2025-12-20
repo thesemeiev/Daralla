@@ -1,0 +1,325 @@
+"""
+Админ-панель для управления пользователями и подписками
+"""
+import logging
+import datetime
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ContextTypes
+
+from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal, check_private_chat
+from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
+from ...db import (
+    get_user_by_id, get_all_subscriptions_by_user, get_payments_by_user,
+    get_subscription_servers, update_subscription_status,
+    update_subscription_expiry, get_subscription_by_token
+)
+
+logger = logging.getLogger(__name__)
+
+def get_globals():
+    """Получает глобальные переменные из bot.py"""
+    try:
+        from ... import bot as bot_module
+        return {
+            'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
+            'subscription_manager': getattr(bot_module, 'subscription_manager', None),
+            'server_manager': getattr(bot_module, 'server_manager', None),
+            'nav_system': getattr(bot_module, 'nav_system', None),
+        }
+    except (ImportError, AttributeError):
+        return {
+            'ADMIN_IDS': [],
+            'subscription_manager': None,
+            'server_manager': None,
+            'nav_system': None,
+        }
+
+
+async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Поиск пользователя"""
+    if not await check_private_chat(update):
+        return
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
+    nav_system = globals_dict['nav_system']
+    
+    if update.callback_query and not context.user_data.get('_nav_called', False):
+        from ...utils import safe_answer_callback_query
+        await safe_answer_callback_query(update.callback_query)
+        if nav_system:
+            await nav_system.navigate_to_state(update, context, NavStates.ADMIN_SEARCH_USER)
+            return
+    
+    if update.effective_user.id not in ADMIN_IDS:
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_MENU)
+        return
+    
+    # Если передан user_id как аргумент команды
+    if update.message and context.args and len(context.args) > 0:
+        user_id = context.args[0]
+        await show_user_info(update, context, user_id)
+        return
+    
+    message = (
+        f"{UIStyles.header('🔍 Поиск пользователя')}\n\n"
+        f"{UIStyles.description('Введите Telegram ID пользователя или используйте команду:')}\n"
+        f"<code>/admin_user &lt;user_id&gt;</code>\n\n"
+        f"{UIStyles.description('Пример:')}\n"
+        f"<code>/admin_user 123456789</code>"
+    )
+    
+    keyboard = InlineKeyboardMarkup([
+        [NavigationBuilder.create_back_button()]
+    ])
+    
+    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+
+
+async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str):
+    """Показывает информацию о пользователе"""
+    try:
+        # Получаем информацию о пользователе
+        user = await get_user_by_id(user_id)
+        if not user:
+            message = (
+                f"{UIEmojis.ERROR} <b>Пользователь не найден</b>\n\n"
+                f"Пользователь с ID <code>{user_id}</code> не найден в базе данных."
+            )
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+            await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+            return
+        
+        # Получаем все подписки пользователя
+        subscriptions = await get_all_subscriptions_by_user(user_id)
+        
+        # Получаем платежи пользователя
+        payments = await get_payments_by_user(user_id, limit=10)
+        
+        # Форматируем даты
+        first_seen = datetime.datetime.fromtimestamp(user['first_seen']).strftime('%d.%m.%Y %H:%M:%S')
+        last_seen = datetime.datetime.fromtimestamp(user['last_seen']).strftime('%d.%m.%Y %H:%M:%S')
+        
+        # Статистика подписок
+        active_subs = [s for s in subscriptions if s['status'] == 'active']
+        expired_subs = [s for s in subscriptions if s['status'] == 'expired']
+        canceled_subs = [s for s in subscriptions if s['status'] == 'canceled']
+        
+        message = (
+            f"{UIStyles.header('👤 Информация о пользователе')}\n\n"
+            f"<b>Telegram ID:</b> <code>{user_id}</code>\n"
+            f"<b>Первый запуск:</b> {first_seen}\n"
+            f"<b>Последняя активность:</b> {last_seen}\n\n"
+            f"<b>📋 Подписки:</b>\n"
+            f"   Всего: {len(subscriptions)}\n"
+            f"   {UIEmojis.SUCCESS} Активных: {len(active_subs)}\n"
+            f"   {UIEmojis.ERROR} Истекших: {len(expired_subs)}\n"
+            f"   {UIEmojis.WARNING} Отмененных: {len(canceled_subs)}\n\n"
+            f"<b>💳 Платежи:</b> {len(payments)} (показано последних 10)\n"
+        )
+        
+        # Кнопки действий
+        keyboard_buttons = []
+        
+        if subscriptions:
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    f"📋 Все подписки ({len(subscriptions)})",
+                    callback_data=f"admin_user_subs:{user_id}"
+                )
+            ])
+        
+        if payments:
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    f"💳 История платежей ({len(payments)})",
+                    callback_data=f"admin_user_payments:{user_id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(
+                f"✉️ Отправить сообщение",
+                callback_data=f"admin_user_message:{user_id}"
+            )
+        ])
+        
+        keyboard_buttons.append([NavigationBuilder.create_back_button()])
+        keyboard = InlineKeyboardMarkup(keyboard_buttons)
+        
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
+        
+        # Сохраняем user_id в context для дальнейших операций
+        context.user_data['admin_selected_user_id'] = user_id
+        
+    except Exception as e:
+        logger.exception("Ошибка в show_user_info")
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка: {str(e)}", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+
+
+async def admin_user_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str = None):
+    """Показывает все подписки пользователя"""
+    if not await check_private_chat(update):
+        return
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
+    
+    if update.effective_user.id not in ADMIN_IDS:
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_MENU)
+        return
+    
+    if not user_id:
+        user_id = context.user_data.get('admin_selected_user_id')
+        if not user_id:
+            # Пытаемся извлечь из callback_data
+            if update.callback_query:
+                parts = update.callback_query.data.split(':', 1)
+                if len(parts) > 1:
+                    user_id = parts[1]
+    
+    if not user_id:
+        await safe_edit_or_reply_universal(
+            update.message if update.message else update.callback_query.message,
+            f"{UIEmojis.ERROR} Не указан user_id",
+            menu_type=MenuTypes.ADMIN_SEARCH_USER
+        )
+        return
+    
+    try:
+        subscriptions = await get_all_subscriptions_by_user(user_id)
+        
+        if not subscriptions:
+            message = (
+                f"{UIStyles.header('📋 Подписки пользователя')}\n\n"
+                f"{UIEmojis.WARNING} У пользователя <code>{user_id}</code> нет подписок."
+            )
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+            await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_SUBSCRIPTIONS)
+            return
+        
+        message = f"{UIStyles.header('📋 Подписки пользователя')}\n\n"
+        keyboard_buttons = []
+        
+        for sub in subscriptions[:10]:  # Показываем максимум 10
+            sub_id = sub['id']
+            status = sub['status']
+            name = sub.get('name', f"Подписка {sub_id}")
+            expires_at = datetime.datetime.fromtimestamp(sub['expires_at']).strftime('%d.%m.%Y %H:%M')
+            created_at = datetime.datetime.fromtimestamp(sub['created_at']).strftime('%d.%m.%Y')
+            
+            status_emoji = UIEmojis.SUCCESS if status == 'active' else (UIEmojis.ERROR if status == 'expired' else UIEmojis.WARNING)
+            
+            message += (
+                f"{status_emoji} <b>{name}</b>\n"
+                f"   ID: {sub_id} | Статус: {status}\n"
+                f"   Создана: {created_at} | Истекает: {expires_at}\n\n"
+            )
+            
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    f"{status_emoji} {name[:30]}...",
+                    callback_data=f"admin_sub_info:{sub_id}"
+                )
+            ])
+        
+        if len(subscriptions) > 10:
+            message += f"\n{UIEmojis.WARNING} Показаны первые 10 из {len(subscriptions)} подписок\n"
+        
+        keyboard_buttons.append([NavigationBuilder.create_back_button()])
+        keyboard = InlineKeyboardMarkup(keyboard_buttons)
+        
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_SUBSCRIPTIONS)
+        
+    except Exception as e:
+        logger.exception("Ошибка в admin_user_subscriptions")
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка: {str(e)}", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+
+
+async def admin_user_payments(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str = None):
+    """Показывает платежи пользователя"""
+    if not await check_private_chat(update):
+        return
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
+    
+    if update.effective_user.id not in ADMIN_IDS:
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_MENU)
+        return
+    
+    if not user_id:
+        user_id = context.user_data.get('admin_selected_user_id')
+        if not user_id:
+            if update.callback_query:
+                parts = update.callback_query.data.split(':', 1)
+                if len(parts) > 1:
+                    user_id = parts[1]
+    
+    if not user_id:
+        await safe_edit_or_reply_universal(
+            update.message if update.message else update.callback_query.message,
+            f"{UIEmojis.ERROR} Не указан user_id",
+            menu_type=MenuTypes.ADMIN_SEARCH_USER
+        )
+        return
+    
+    try:
+        payments = await get_payments_by_user(user_id, limit=20)
+        
+        if not payments:
+            message = (
+                f"{UIStyles.header('💳 Платежи пользователя')}\n\n"
+                f"{UIEmojis.WARNING} У пользователя <code>{user_id}</code> нет платежей."
+            )
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+            await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_PAYMENTS)
+            return
+        
+        message = f"{UIStyles.header('💳 Платежи пользователя')}\n\n"
+        
+        for payment in payments:
+            payment_id = payment['payment_id']
+            status = payment['status']
+            created_at = datetime.datetime.fromtimestamp(payment['created_at']).strftime('%d.%m.%Y %H:%M')
+            meta = payment.get('meta', {})
+            period = meta.get('type', 'unknown')
+            price = meta.get('price', '0')
+            
+            status_emoji = UIEmojis.SUCCESS if status == 'succeeded' else (UIEmojis.WARNING if status == 'pending' else UIEmojis.ERROR)
+            
+            message += (
+                f"{status_emoji} <b>{payment_id[:20]}...</b>\n"
+                f"   Статус: {status} | Период: {period} | Цена: {price}₽\n"
+                f"   Создан: {created_at}\n\n"
+            )
+        
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_PAYMENTS)
+        
+    except Exception as e:
+        logger.exception("Ошибка в admin_user_payments")
+        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка: {str(e)}", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+
