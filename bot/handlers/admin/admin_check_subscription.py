@@ -6,16 +6,31 @@ import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from ...bot import ADMIN_IDS
 from ...db.subscribers_db import get_subscription_by_token, get_subscription_servers
 from ...utils import UIEmojis, UIStyles
 
 logger = logging.getLogger(__name__)
 
+# Импортируем глобальные переменные из bot.py
+def get_globals():
+    """Получает глобальные переменные из bot.py"""
+    try:
+        from ... import bot as bot_module
+        return {
+            'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
+        }
+    except (ImportError, AttributeError):
+        return {
+            'ADMIN_IDS': [],
+        }
+
 
 async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет подписку по токену"""
     user = update.effective_user
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
     
     if user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ Нет доступа к этой команде")
