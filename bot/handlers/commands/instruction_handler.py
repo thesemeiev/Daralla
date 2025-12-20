@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from ...utils import (
     UIMessages, safe_edit_or_reply_universal, check_private_chat
 )
-from ...navigation import NavStates, CallbackData, NavigationBuilder
+from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -54,5 +54,5 @@ async def instruction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Используем единый стиль для сообщения
     instruction_text = UIMessages.instruction_menu_message()
-    await safe_edit_or_reply_universal(message, instruction_text, reply_markup=keyboard, parse_mode="HTML", menu_type='instruction_menu')
+    await safe_edit_or_reply_universal(message, instruction_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.INSTRUCTION_MENU)
 

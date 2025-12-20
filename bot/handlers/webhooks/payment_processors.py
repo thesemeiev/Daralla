@@ -11,7 +11,7 @@ from ...utils import (
     UIEmojis, UIStyles, UIMessages,
     safe_edit_message_with_photo, safe_send_message_with_photo
 )
-from ...navigation import NavigationBuilder, CallbackData
+from ...navigation import NavigationBuilder, CallbackData, MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=error_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='payment_success'
+                        menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                 return
             
@@ -315,7 +315,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=extension_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='payment_success'
+                        menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                     logger.info(f"Отредактировано сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
                 else:
@@ -326,7 +326,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=extension_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='payment_success'
+                        menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                     logger.info(f"Отправлено новое сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
                     
@@ -425,7 +425,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     text=error_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='payment'
+                    menu_type=MenuTypes.PAYMENT
                 )
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
@@ -527,7 +527,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     text=error_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='payment'
+                    menu_type=MenuTypes.PAYMENT
                 )
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
@@ -645,7 +645,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         text=subscription_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='payment_success'
+                        menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                     logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о подписке")
                 except Exception as edit_error:
@@ -662,7 +662,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         text=subscription_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type='payment_success'
+                        menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                     logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
             else:
@@ -673,7 +673,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     text=subscription_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='sub_success'
+                    menu_type=MenuTypes.PAYMENT_SUCCESS
                 )
                 logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
                 
@@ -714,7 +714,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
                 text=error_message,
                 reply_markup=keyboard,
                 parse_mode="HTML",
-                menu_type='payment_failed'
+                menu_type=MenuTypes.PAYMENT_FAILED
             )
             logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {user_id}")
                     
@@ -751,7 +751,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                     [NavigationBuilder.create_main_menu_button()]
                 ])
                 
-                menu_type = 'extend_subscription'
+                menu_type = MenuTypes.SUBSCRIPTIONS_MENU
             else:
                 # Ошибка обычной покупки
                 error_message = (
@@ -767,7 +767,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                     [NavigationBuilder.create_main_menu_button()]
                 ])
                 
-                menu_type = 'payment_failed'
+                menu_type = MenuTypes.PAYMENT_FAILED
             
             await safe_edit_message_with_photo(
                 bot_app.bot,

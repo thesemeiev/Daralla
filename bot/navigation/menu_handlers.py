@@ -66,7 +66,7 @@ class MenuHandlers:
         """Меню покупки"""
         # Создаем меню покупки напрямую
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-        from .menu_states import CallbackData
+        from .menu_states import CallbackData, MenuTypes
         from ..utils import UIMessages, safe_edit_or_reply_universal
         
         # Выбираем период (1 или 3 месяца) — 1 подписка = 1 устройство
@@ -82,7 +82,7 @@ class MenuHandlers:
             return
         
         buy_menu_text = UIMessages.buy_menu_message()
-        await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
+        await safe_edit_or_reply_universal(message, buy_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.BUY_MENU)
     
     async def payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Обработка платежа"""
@@ -99,7 +99,7 @@ class MenuHandlers:
         """Админ меню"""
         # Импортируем необходимые функции
         from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-        from .menu_states import CallbackData
+        from .menu_states import CallbackData, MenuTypes
         from ..utils import safe_edit_or_reply, UIMessages, safe_edit_or_reply_universal, UIButtons, check_private_chat
         from ..bot import ADMIN_IDS
         
@@ -132,7 +132,7 @@ class MenuHandlers:
         
         # Используем единый стиль для админ-меню с фото
         admin_menu_text = UIMessages.admin_menu_message()
-        await safe_edit_or_reply_universal(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_menu')
+        await safe_edit_or_reply_universal(message, admin_menu_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_MENU)
     
     async def admin_errors(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Админ логи"""

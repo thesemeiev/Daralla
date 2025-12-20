@@ -10,7 +10,7 @@ from ...utils import (
     safe_edit_message_with_photo, safe_edit_or_reply_universal,
     check_private_chat
 )
-from ...navigation import CallbackData, NavigationBuilder
+from ...navigation import CallbackData, NavigationBuilder, MenuTypes
 from ...db.subscribers_db import update_subscription_name, get_all_active_subscriptions_by_user
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                     text=error_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='subs_menu'
+                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
                 )
             return
         
@@ -114,15 +114,15 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
             ])
-            await safe_edit_message_with_photo(
-                context.bot,
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                menu_type='subs_menu'
-            )
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                )
             return
         
         if not new_name or not new_name.strip():
@@ -134,15 +134,15 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
             ])
-            await safe_edit_message_with_photo(
-                context.bot,
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                menu_type='subs_menu'
-            )
+                await safe_edit_message_with_photo(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
+                )
             return
         
         # Обновляем имя подписки в БД
@@ -173,7 +173,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             text=success_message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type='subs_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         
     except Exception as e:
@@ -196,7 +196,7 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                     text=error_message,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='subs_menu'
+                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
                 )
         except Exception as edit_e:
             logger.error(f"Ошибка редактирования сообщения: {edit_e}")

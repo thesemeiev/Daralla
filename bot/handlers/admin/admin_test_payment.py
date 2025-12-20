@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal
-from ...navigation import NavigationBuilder
+from ...navigation import NavigationBuilder, MenuTypes
 from ...db import get_pending_payment, get_all_pending_payments, get_payment_by_id
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ async def admin_test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 update.message,
                 message,
                 parse_mode="HTML",
-                menu_type='admin_menu'
+                menu_type=MenuTypes.ADMIN_MENU
             )
             return
         
@@ -155,7 +155,7 @@ async def admin_test_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
             message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type='admin_menu'
+            menu_type=MenuTypes.ADMIN_MENU
         )
         
     except Exception as e:

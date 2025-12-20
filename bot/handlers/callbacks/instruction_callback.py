@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ...utils import safe_edit_or_reply_universal, safe_answer_callback_query
-from ...navigation import CallbackData, nav_manager, NavigationBuilder
+from ...navigation import CallbackData, MenuTypes, nav_manager, NavigationBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     nav_system = globals_dict['nav_system']
     
     texts = {
-        "instr_android": (
+        CallbackData.INSTR_ANDROID: (
             "<b>Android (v2RayTun, Hiddify)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">v2RayTun из Google Play</a>\n"
@@ -75,7 +75,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "4. Подключитесь к VPN.\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
-        "instr_ios": (
+        CallbackData.INSTR_IOS: (
             "<b>iPhone (v2RayTun, Hiddify)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone\">v2RayTun из App Store</a>\n"
@@ -86,7 +86,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "5. Выберите добавленный профиль и подключитесь.\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
-        "instr_windows": (
+        CallbackData.INSTR_WINDOWS: (
             "<b>Windows (v2RayTun, Hiddify)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">v2RayTun для Windows</a>\n"
@@ -96,7 +96,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
-        "instr_macos": (
+        CallbackData.INSTR_MACOS: (
             "<b>Mac (v2RayTun, Hiddify)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac\">v2RayTun для Mac</a>\n"
@@ -106,7 +106,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Mac.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
-        "instr_tv": (
+        CallbackData.INSTR_TV: (
             "<b>Android TV (v2RayTun)</b>\n"
             "1. <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">Скачайте v2RayTun для Android TV</a>.\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
@@ -114,7 +114,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Android TV.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
-        "instr_linux": (
+        CallbackData.INSTR_LINUX: (
             "<b>Linux (Hiddify)</b>\n"
             "1. <a href=\"https://app.hiddify.com/linux\">Скачайте Hiddify для Linux</a>.\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
@@ -122,7 +122,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
-        "instr_faq": (
+        CallbackData.INSTR_FAQ: (
             "<b>FAQ - Частые вопросы</b>\n\n"
             "<b>VPN не подключается:</b>\n"
             "• Проверьте интернет\n"
@@ -136,7 +136,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "• Обновите приложение\n\n"
             "<b>Мультисерверность:</b>\n"
             "• Ваша подписка включает все доступные серверы сразу.\n\n"
-            "<b>Нужна помощь?</b>"
+            "<b>Нужна помощь?</b>\n"
             "• Обратитесь в поддержку\n\n"
         )
     }
@@ -145,7 +145,7 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         await nav_manager.handle_back_navigation(update, context)
         return
-    elif data in ["instr_android", "instr_ios", "instr_windows", "instr_macos", "instr_linux", "instr_tv", "instr_faq"]:
+    elif data in [CallbackData.INSTR_ANDROID, CallbackData.INSTR_IOS, CallbackData.INSTR_WINDOWS, CallbackData.INSTR_MACOS, CallbackData.INSTR_LINUX, CallbackData.INSTR_TV, CallbackData.INSTR_FAQ]:
         # === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
         logger.info(f"INSTRUCTION_CALLBACK: Platform selected: {data}")
         from ...navigation import NavStates
@@ -161,16 +161,16 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Определяем menu_type для каждой платформы
         menu_type_map = {
-            "instr_android": "instruction_android",
-            "instr_ios": "instruction_ios", 
-            "instr_windows": "instruction_windows",
-            "instr_macos": "instruction_macos",
-            "instr_linux": "instruction_linux",
-            "instr_tv": "instruction_tv",
-            "instr_faq": "instruction_faq"
+            CallbackData.INSTR_ANDROID: MenuTypes.INSTRUCTION_ANDROID,
+            CallbackData.INSTR_IOS: MenuTypes.INSTRUCTION_IOS, 
+            CallbackData.INSTR_WINDOWS: MenuTypes.INSTRUCTION_WINDOWS,
+            CallbackData.INSTR_MACOS: MenuTypes.INSTRUCTION_MACOS,
+            CallbackData.INSTR_LINUX: MenuTypes.INSTRUCTION_LINUX,
+            CallbackData.INSTR_TV: MenuTypes.INSTRUCTION_TV,
+            CallbackData.INSTR_FAQ: MenuTypes.INSTRUCTION_FAQ
         }
         
-        menu_type = menu_type_map.get(data, 'instruction_platform')
+        menu_type = menu_type_map.get(data, MenuTypes.INSTRUCTION_PLATFORM)
         
         keyboard = InlineKeyboardMarkup([
             [NavigationBuilder.create_back_button()]

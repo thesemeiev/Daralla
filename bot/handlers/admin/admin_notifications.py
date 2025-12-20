@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from ...utils import (
     UIEmojis, UIButtons, safe_edit_or_reply_universal, safe_edit_or_reply, check_private_chat
 )
-from ...navigation import NavStates, CallbackData
+from ...navigation import NavStates, CallbackData, MenuTypes
 from ...services import NotificationManager
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
         
         # Используем фото для уведомлений
-        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_notifications')
+        await safe_edit_or_reply_universal(message_obj, dashboard_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_NOTIFICATIONS)
         
     except Exception as e:
         logger.error(f"Ошибка в admin_notifications: {e}")
@@ -110,5 +110,5 @@ async def admin_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Используем фото для ошибки уведомлений
         error_text = f"{UIEmojis.ERROR} Ошибка загрузки дашборда: {e}"
-        await safe_edit_or_reply_universal(message_obj, error_text, reply_markup=keyboard, menu_type='admin_notifications')
+        await safe_edit_or_reply_universal(message_obj, error_text, reply_markup=keyboard, menu_type=MenuTypes.ADMIN_NOTIFICATIONS)
 

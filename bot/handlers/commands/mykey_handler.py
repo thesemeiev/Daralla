@@ -10,7 +10,7 @@ from ...utils import (
     UIEmojis, UIStyles, safe_edit_or_reply_universal,
     check_private_chat, calculate_time_remaining
 )
-from ...navigation import NavigationBuilder, NavStates, CallbackData
+from ...navigation import NavigationBuilder, NavStates, CallbackData, MenuTypes
 from ...db.subscribers_db import get_all_active_subscriptions_by_user, get_subscription_servers
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ async def show_subscription_details(message, sub: dict, subscription_manager):
         subscription_message,
         reply_markup=keyboard,
         parse_mode="HTML",
-        menu_type='subs_menu'
+        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
     )
 
 
@@ -134,7 +134,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from ...utils import safe_answer_callback_query
         await safe_answer_callback_query(update.callback_query)
         if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.MYKEYS_MENU)
+            await nav_system.navigate_to_state(update, context, NavStates.SUBSCRIPTIONS_MENU)
             return  # navigate_to_state уже вызвал эту функцию через MenuHandlers
     
     user = update.effective_user
@@ -188,7 +188,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 error_message,
                                 reply_markup=keyboard,
                                 parse_mode="HTML",
-                                menu_type='subs_menu'
+                                menu_type=MenuTypes.SUBSCRIPTIONS_MENU
                             )
                             return
                         
@@ -204,7 +204,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             rename_message,
                             reply_markup=keyboard,
                             parse_mode="HTML",
-                            menu_type='subs_menu'
+                            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
                         )
                         return
                 
@@ -249,7 +249,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Кнопка для просмотра деталей подписки
                     keyboard_buttons.append([
                         InlineKeyboardButton(
-                            f"📋 {sub_name}",
+                            f" {sub_name}",
                             callback_data=f"{CallbackData.VIEW_SUB}{sub['id']}"
                         )
                     ])
@@ -285,7 +285,7 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     message_text,
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    menu_type='subs_menu'
+                    menu_type=MenuTypes.SUBSCRIPTIONS_MENU
                 )
                 return
         except Exception as sub_e:
@@ -306,6 +306,6 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         no_subs_message,
         reply_markup=keyboard,
         parse_mode="HTML",
-        menu_type='subs_menu'
+        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
     )
 

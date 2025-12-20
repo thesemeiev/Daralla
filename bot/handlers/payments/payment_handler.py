@@ -12,7 +12,7 @@ from telegram.ext import ContextTypes
 from yookassa import Payment
 
 from ...utils import UIEmojis, safe_edit_or_reply, safe_edit_or_reply_universal
-from ...navigation import NavStates, NavigationBuilder
+from ...navigation import NavStates, NavigationBuilder, MenuTypes
 from ...db import get_pending_payment, add_payment, PAYMENTS_DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ async def handle_payment(update, context, price, period):
                 keyboard = InlineKeyboardMarkup([
                     [NavigationBuilder.create_back_button()]
                 ])
-                await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type='buy_menu')
+                await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.BUY_MENU)
                 return
         except Exception as e:
             logger.error(f"Ошибка проверки доступности серверов: {e}")
@@ -225,7 +225,7 @@ async def handle_payment(update, context, price, period):
                     [NavigationBuilder.create_back_button()]
                 ])
                 
-                await safe_edit_or_reply_universal(message, payment_text, reply_markup=keyboard, parse_mode="HTML", menu_type='payment')
+                await safe_edit_or_reply_universal(message, payment_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.PAYMENT)
                 logger.info(f"Отредактировано сообщение с меню выбора периода на информацию об оплате: message_id={message.message_id}")
             except Exception as e:
                 logger.error(f"Не удалось отредактировать сообщение с меню выбора периода: {e}")

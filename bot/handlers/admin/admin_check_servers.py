@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 from ...utils import (
     UIEmojis, safe_edit_or_reply_universal, safe_edit_or_reply, check_private_chat
 )
-from ...navigation import NavStates, CallbackData, NavigationBuilder
+from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,12 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type='admin_check_servers')
+        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_CHECK_SERVERS)
         return
     
     if not server_manager:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, 'Ошибка: серверы не настроены.', menu_type='admin_check_servers')
+        await safe_edit_or_reply_universal(message_obj, 'Ошибка: серверы не настроены.', menu_type=MenuTypes.ADMIN_CHECK_SERVERS)
         return
     
     try:
@@ -151,14 +151,14 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             [NavigationBuilder.create_back_button()]
         ])
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type='admin_check_servers')
+        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_CHECK_SERVERS)
     except Exception as e:
         logger.exception("Ошибка в admin_check_servers")
         keyboard = InlineKeyboardMarkup([
             [NavigationBuilder.create_back_button()]
         ])
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type='admin_check_servers')
+        await safe_edit_or_reply_universal(message_obj, f'Ошибка при проверке серверов: {e}', reply_markup=keyboard, menu_type=MenuTypes.ADMIN_CHECK_SERVERS)
 
 
 async def force_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -6,7 +6,7 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from ...navigation import NavStates, CallbackData, MenuHandlers
+from ...navigation import NavStates, CallbackData, MenuHandlers, MenuTypes
 from ...utils import UIEmojis, safe_edit_or_reply, safe_answer_callback_query
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -135,11 +135,10 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await nav_system.navigate_to_state(update, context, NavStates.BUY_MENU)
     elif query.data.startswith("select_period_"):
         await select_period_callback(update, context)
-    elif query.data == "mykey":
-        # Используем навигационную систему для перехода к "Мои ключи"
-        # ВАЖНО: "mykeys_menu" обрабатывается через NavigationIntegration, поэтому здесь только "mykey"
+    elif query.data in ["mykey", "my_subs", "subs_menu"]:
+        # Используем навигационную систему для перехода к "Мои подписки"
         if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.MYKEYS_MENU)
+            await nav_system.navigate_to_state(update, context, NavStates.SUBSCRIPTIONS_MENU)
         else:
             from ..commands import mykey
             await mykey(update, context)

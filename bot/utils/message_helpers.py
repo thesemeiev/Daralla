@@ -195,6 +195,7 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
     for attempt in range(max_retries):
         try:
             # Пытаемся отредактировать существующее сообщение
+            logger.info(f"EDIT_MEDIA: attempt {attempt + 1}, photo_path={photo_path}, message_id={message.message_id}")
             with open(photo_path, 'rb') as photo_file:
                 await message.edit_media(
                     media=InputMediaPhoto(
@@ -204,10 +205,33 @@ async def safe_edit_or_reply_photo(message, photo_path, caption, reply_markup=No
                     ),
                     reply_markup=reply_markup
                 )
+            logger.info(f"EDIT_MEDIA: success for message_id={message.message_id}")
             return  # Успешно отправлено
         except telegram.error.BadRequest as e:
-            if "can't be edited" in str(e) and hasattr(message, 'reply_photo'):
+            error_str = str(e).lower()
+            logger.warning(f"EDIT_MEDIA: BadRequest for message_id={message.message_id}: {e}")
+            
+            # Если это "Message is not modified", значит всё уже как надо
+            if "not modified" in error_str:
+                return
+                
+            # Если не удается отредактировать медиа, пробуем отредактировать только текст (caption)
+            # Это может сработать, если медиа по какой-то причине не меняется
+            try:
+                logger.info(f"EDIT_CAPTION: attempt fallback for message_id={message.message_id}")
+                await message.edit_caption(
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode
+                )
+                logger.info(f"EDIT_CAPTION: success for message_id={message.message_id}")
+                return
+            except Exception as e2:
+                logger.warning(f"EDIT_CAPTION: fallback failed: {e2}")
+            
+            if ("can't be edited" in error_str or "message to edit not found" in error_str) and hasattr(message, 'reply_photo'):
                 # Пробуем отправить как новое сообщение с повторными попытками
+                logger.info(f"EDIT_MEDIA: fallback to reply_photo for message_id={message.message_id}")
                 for reply_attempt in range(max_retries):
                     try:
                         with open(photo_path, 'rb') as photo_file:

@@ -193,7 +193,7 @@ class NotificationManager:
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry)
             
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить подписку", callback_data=f"extend_sub:{subscription_id}")],
+                [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{subscription_id}")],
                 [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                 [NavigationBuilder.create_main_menu_button()]
             ])

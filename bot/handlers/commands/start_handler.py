@@ -65,12 +65,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     globals_dict = get_globals()
     nav_system = globals_dict.get('nav_system')
     if nav_system:
-        from ...navigation import nav_manager, NavStates
+        from ...navigation import nav_manager, NavStates, MenuTypes
         nav_manager.clear_stack(context)
         nav_manager.push_state(context, NavStates.MAIN_MENU)
     
     # Отправляем меню с фото
-    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.MAIN_MENU)
 
 
 async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -90,10 +90,12 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("edit_main_menu: message is None")
         return
     
+    from ...navigation import MenuTypes
+    
     logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
     try:
         # Отправляем меню с фото
-        await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type='main_menu')
+        await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.MAIN_MENU)
         logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано")
     except Exception as e:
         logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования сообщения: {e}")

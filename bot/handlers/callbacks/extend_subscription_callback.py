@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from ...utils import (
     UIEmojis, UIStyles, safe_edit_or_reply_universal, safe_answer_callback_query
 )
-from ...navigation import CallbackData, NavigationBuilder
+from ...navigation import CallbackData, NavigationBuilder, MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
             query.message,
             f"{UIEmojis.ERROR} Ошибка: система подписок не настроена",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -79,7 +79,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
             query.message,
             f"{UIEmojis.ERROR} Ошибка: система платежей не настроена",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -90,7 +90,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
             query.message,
             f"{UIEmojis.ERROR} Ошибка: неверный формат данных",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -101,7 +101,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
             query.message,
             f"{UIEmojis.ERROR} Ошибка: неверный ID подписки",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -114,7 +114,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
             query.message,
             f"{UIEmojis.ERROR} Ошибка: подписка не найдена или не принадлежит вам",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -125,7 +125,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
             query.message,
             f"{UIEmojis.ERROR} Ошибка: подписка неактивна или истекла",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -157,7 +157,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
         message_text,
         reply_markup=keyboard,
         parse_mode="HTML",
-        menu_type='extend_key'
+        menu_type=MenuTypes.SUBSCRIPTIONS_MENU
     )
 
 
@@ -179,7 +179,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
             query.message,
             f"{UIEmojis.ERROR} Ошибка: система платежей не настроена",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -190,7 +190,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
             query.message,
             f"{UIEmojis.ERROR} Ошибка: неверный формат данных",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -202,7 +202,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
             query.message,
             f"{UIEmojis.ERROR} Ошибка: неверный ID подписки",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -215,7 +215,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
             query.message,
             f"{UIEmojis.ERROR} Ошибка: подписка не найдена или не принадлежит вам",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -226,7 +226,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
             query.message,
             f"{UIEmojis.ERROR} Ошибка: подписка неактивна или истекла",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
         return
     
@@ -253,6 +253,6 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
             query.message,
             "❌ Ошибка при создании платежа. Попробуйте позже.",
             reply_markup=keyboard,
-            menu_type='mykeys_menu'
+            menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
 

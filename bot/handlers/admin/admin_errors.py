@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from ...utils import (
     UIEmojis, UIButtons, safe_edit_or_reply_universal, check_private_chat
 )
-from ...navigation import NavStates, CallbackData, nav_manager
+from ...navigation import NavStates, CallbackData, nav_manager, MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.effective_user.id not in ADMIN_IDS:
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type='admin_errors')
+        await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_ERRORS)
         return
     
     try:
@@ -84,7 +84,7 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
             escaped = escaped[:max_length] + "\n\n... (логи обрезаны)"
         
         logs_text = f"<b>Последние логи:</b>\n\n<pre><code>{escaped}</code></pre>"
-        await safe_edit_or_reply_universal(message_obj, logs_text, reply_markup=keyboard, parse_mode='HTML', menu_type='admin_errors')
+        await safe_edit_or_reply_universal(message_obj, logs_text, reply_markup=keyboard, parse_mode='HTML', menu_type=MenuTypes.ADMIN_ERRORS)
             
     except Exception as e:
         logger.exception("Ошибка в admin_errors")
@@ -95,5 +95,5 @@ async def admin_errors(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Используем фото для ошибки логов
         error_text = f'{UIEmojis.ERROR} Ошибка при чтении логов: {str(e)}'
-        await safe_edit_or_reply_universal(message_obj, error_text, reply_markup=keyboard, menu_type='admin_errors')
+        await safe_edit_or_reply_universal(message_obj, error_text, reply_markup=keyboard, menu_type=MenuTypes.ADMIN_ERRORS)
 
