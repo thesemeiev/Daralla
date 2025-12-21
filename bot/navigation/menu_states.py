@@ -20,6 +20,7 @@ class NavStates:
     ADMIN_USER_SUBSCRIPTIONS = 'admin_user_subscriptions'
     ADMIN_USER_PAYMENTS = 'admin_user_payments'
     ADMIN_SUBSCRIPTION_INFO = 'admin_subscription_info'
+    ADMIN_SUB_CHANGE_LIMIT = 'admin_sub_change_limit'
     ADMIN_CONFIG = 'admin_config'
     ADMIN_SYNC = 'admin_sync'
     ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'
