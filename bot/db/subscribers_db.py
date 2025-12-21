@@ -128,6 +128,12 @@ async def update_subscription_expiry(subscription_id: int, new_expires_at: int):
         await db.execute("UPDATE subscriptions SET expires_at = ? WHERE id = ?", (new_expires_at, subscription_id))
         await db.commit()
 
+async def update_subscription_device_limit(subscription_id: int, new_device_limit: int):
+    """Обновляет лимит устройств/IP для подписки"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE subscriptions SET device_limit = ? WHERE id = ?", (new_device_limit, subscription_id))
+        await db.commit()
+
 async def get_subscription_by_token(token: str):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row

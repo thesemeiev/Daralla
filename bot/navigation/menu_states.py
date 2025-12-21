@@ -102,6 +102,7 @@ class CallbackData:
     ADMIN_SUB_INFO = 'admin_sub_info:'  # f"admin_sub_info:{sub_id}"
     ADMIN_SUB_EXTEND = 'admin_sub_extend:'  # f"admin_sub_extend:{sub_id}:{days}"
     ADMIN_SUB_CANCEL = 'admin_sub_cancel:'  # f"admin_sub_cancel:{sub_id}"
+    ADMIN_SUB_CHANGE_LIMIT = 'admin_sub_change_limit:'  # f"admin_sub_change_limit:{sub_id}"
     ADMIN_TEST_PAYMENT = 'admin_test_payment'  # Тестовое подтверждение платежей
     ADMIN_CONFIG = 'admin_config'  # Конфигурация
     ADMIN_SYNC = 'admin_sync'  # Синхронизация
@@ -144,6 +145,7 @@ STATE_TO_HANDLER = {
     NavStates.ADMIN_USER_SUBSCRIPTIONS: 'admin_user_subscriptions',
     NavStates.ADMIN_USER_PAYMENTS: 'admin_user_payments',
     NavStates.ADMIN_SUBSCRIPTION_INFO: 'admin_subscription_info',
+    NavStates.ADMIN_SUB_CHANGE_LIMIT: 'admin_sub_change_limit',
     NavStates.ADMIN_CONFIG: 'admin_config',
     NavStates.ADMIN_SYNC: 'admin_sync',
     NavStates.ADMIN_CHECK_SUBSCRIPTION: 'admin_check_subscription',

@@ -108,7 +108,7 @@ async def select_period_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик callback-кнопок для главного меню"""
+    """Обработчик callback-кнопок для главного меню (упрощенная версия)"""
     query = update.callback_query
     
     # Отвечаем на callback query СРАЗУ, до любых долгих операций
@@ -116,40 +116,11 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     logger.info(f"Обработка callback: {query.data}")
     
-    globals_dict = get_globals()
-    nav_system = globals_dict['nav_system']
-    
-    # ВАЖНО: "buy_menu" больше не обрабатывается здесь, так как в UI используется "buy_vpn"
-    # который обрабатывается через NavigationIntegration
-    # Оставляем только специфичные callback'и, которые не обрабатываются навигационной системой
-    if query.data == "buy_menu":
-        # Fallback для старого callback_data (если где-то еще используется)
-        if not nav_system:
-            logger.error("start_callback_handler: nav_system is None при обработке buy_menu (navigation required)")
-            await safe_edit_or_reply(
-                query.message,
-                f"{UIEmojis.ERROR} Внутренняя ошибка навигации. Попробуйте позже."
-            )
-            return
-
-        await nav_system.navigate_to_state(update, context, NavStates.BUY_MENU)
-    elif query.data.startswith("select_period_"):
+    # Обрабатываем только select_period_ callback'и
+    # Все остальные callback'и (buy_menu, my_subs, subs_menu, admin_notifications_refresh, admin_errors_refresh)
+    # обрабатываются через навигационную систему
+    if query.data.startswith("select_period_"):
         await select_period_callback(update, context)
-    elif query.data in ["mykey", "my_subs", "subs_menu"]:
-        # Используем навигационную систему для перехода к "Мои подписки"
-        if nav_system:
-            await nav_system.navigate_to_state(update, context, NavStates.SUBSCRIPTIONS_MENU)
-        else:
-            from ..commands import mykey
-            await mykey(update, context)
-    # ВАЖНО: "instruction" и "mykeys_menu" обрабатываются через NavigationIntegration, поэтому убраны отсюда
-    elif query.data == "admin_notifications_refresh":
-        # Обновляем админ уведомления напрямую
-        from ..admin import admin_notifications
-        await admin_notifications(update, context)
-    elif query.data == "admin_errors_refresh":
-        # Обновляем админ логи напрямую
-        from ..admin import admin_errors
-        await admin_errors(update, context)
-    # Обработка "back" убрана отсюда - она обрабатывается через NavigationIntegration
-    # Это позволяет правильно работать навигационному стеку
+    else:
+        # Если callback не обработан, логируем предупреждение
+        logger.warning(f"start_callback_handler: необработанный callback {query.data} (должен обрабатываться навигационной системой)")

@@ -10,7 +10,8 @@ from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal, check_pri
 from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
 from ...db import (
     get_subscription_servers, update_subscription_status,
-    update_subscription_expiry, get_subscription_by_token
+    update_subscription_expiry, get_subscription_by_token,
+    update_subscription_device_limit
 )
 
 logger = logging.getLogger(__name__)
@@ -159,7 +160,25 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
                 )
             ])
         
-        keyboard_buttons.append([NavigationBuilder.create_back_button()])
+        # Кнопка для изменения лимита IP
+        keyboard_buttons.append([
+            InlineKeyboardButton(
+                f"🔢 Изменить лимит IP",
+                callback_data=f"admin_sub_change_limit:{subscription_id}"
+            )
+        ])
+        
+        # Кнопка "Назад" должна вести на список подписок пользователя, а не в админ панель
+        user_id = sub.get('user_id')
+        if user_id:
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    "← Назад",
+                    callback_data=f"admin_user_subs:{user_id}"
+                )
+            ])
+        else:
+            keyboard_buttons.append([NavigationBuilder.create_back_button()])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)

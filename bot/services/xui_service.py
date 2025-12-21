@@ -157,7 +157,7 @@ class X3:
             "tgId": str(tg_id),
             "subId": key_name,  # Сохраняем имя ключа в поле subId
         }
-        logger.info(f"Создание клиента {user_email} с limitIp={limit_ip_value}")
+        logger.info(f"Создание клиента {user_email} на сервере {self.host} с limitIp={limit_ip_value} (передан limit_ip={limit_ip})")
         data1 = {
             "id": inbound_id,
             "settings": json.dumps({"clients": [client_data]})
@@ -427,6 +427,94 @@ class X3:
             return None
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    def setClientExpiry(self, user_email, expiry_timestamp, timeout=15):
+        """
+        Устанавливает точное время истечения клиента.
+        
+        Args:
+            user_email: Email клиента
+            expiry_timestamp: Unix timestamp в секундах (будет конвертирован в миллисекунды)
+            timeout: Таймаут запроса
+        
+        Returns:
+            Response объект или None если клиент не найден
+        """
+        self._ensure_connected()
+        try:
+            client_info = self.get_client_info(user_email, timeout=timeout)
+            if not client_info:
+                logger.warning(f"Клиент {user_email} не найден для установки времени истечения")
+                return None
+            
+            client_data = client_info['client'].copy()
+            inbound_id = client_info['inbound_id']
+            
+            # Конвертируем timestamp из секунд в миллисекунды (X-UI использует миллисекунды)
+            expiry_time_ms = expiry_timestamp * 1000
+            
+            # Обновляем expiryTime
+            old_expiry = client_data.get('expiryTime', 0)
+            if old_expiry == expiry_time_ms:
+                logger.debug(f"Время истечения для клиента {user_email} уже равно {expiry_timestamp}, обновление не требуется")
+                return None
+            
+            client_data['expiryTime'] = expiry_time_ms
+            logger.info(f"Установка времени истечения для клиента {user_email}: {old_expiry // 1000} -> {expiry_timestamp}")
+            
+            # Обновляем клиента
+            header = {"Accept": "application/json"}
+            data = {
+                "id": inbound_id,
+                "settings": json.dumps({"clients": [client_data]})
+            }
+            
+            response = self.ses.post(
+                f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}',
+                headers=header,
+                json=data,
+                timeout=timeout
+            )
+            logger.info(f"XUI setClientExpiry Response - Status: {response.status_code}")
+            
+            # Проверяем JSON ответ
+            try:
+                response_json = response.json()
+                if not response_json.get('success', False):
+                    error_msg = response_json.get('msg', 'Unknown error')
+                    logger.error(f"XUI setClientExpiry вернул success=false: {error_msg}")
+                    raise Exception(f"XUI API error: {error_msg}")
+            except (json.JSONDecodeError, ValueError):
+                if response.status_code != 200:
+                    raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
+            
+            # Проверяем, не истекла ли сессия
+            if response.status_code == 200 and not response.text.strip():
+                logger.warning("Получен пустой ответ при установке времени истечения, переподключаюсь...")
+                self._reconnect()
+                response = self.ses.post(
+                    f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}',
+                    headers=header,
+                    json=data,
+                    timeout=timeout
+                )
+                logger.info(f"XUI setClientExpiry Response после переподключения - Status: {response.status_code}")
+                
+                try:
+                    response_json = response.json()
+                    if not response_json.get('success', False):
+                        error_msg = response_json.get('msg', 'Unknown error')
+                        logger.error(f"XUI setClientExpiry после переподключения вернул success=false: {error_msg}")
+                        raise Exception(f"XUI API error: {error_msg}")
+                except (json.JSONDecodeError, ValueError):
+                    if response.status_code != 200:
+                        raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Ошибка при установке времени истечения клиента {user_email}: {e}")
+            raise
+
     def updateClientLimitIp(self, user_email, limit_ip, timeout=15):
         """
         Обновляет limitIp клиента.

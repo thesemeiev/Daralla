@@ -39,7 +39,8 @@ from .subscribers_db import (
     get_all_active_subscriptions, update_subscription_status, update_subscription_name,
     get_subscription_by_token, get_subscription_servers, add_subscription_server,
     remove_subscription_server, get_all_active_subscriptions_by_user,
-    get_subscription_by_id, get_subscription_by_id_only, update_subscription_expiry, get_subscription_statistics,
+    get_subscription_by_id, get_subscription_by_id_only, update_subscription_expiry, 
+    update_subscription_device_limit, get_subscription_statistics,
     get_user_by_id, get_all_subscriptions_by_user
 )
 

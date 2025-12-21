@@ -187,28 +187,66 @@ class SubscriptionManager:
                 logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
                 
                 # Проверяем и синхронизируем время истечения
+                # ВАЖНО: БД - источник истины. Мы синхронизируем серверы С БД, но НЕ изменяем БД на основе данных с сервера
                 try:
                     server_expiry = xui.get_client_expiry_time(client_email)
                     current_time = int(time.time())
                     
-                    if server_expiry and server_expiry < expires_at:
-                        # Время на сервере меньше, чем в БД - синхронизируем
-                        days_to_add = (expires_at - server_expiry) // (24 * 60 * 60)
-                        if days_to_add > 0:
-                            logger.info(
-                                f"Синхронизация времени истечения на сервере {server_name}: "
-                                f"добавляем {days_to_add} дней (сервер: {server_expiry}, БД: {expires_at})"
-                            )
-                            response = xui.extendClient(client_email, days_to_add)
-                            if response and response.status_code == 200:
+                    # Допустимая разница в секундах (5 минут) - чтобы не синхронизировать из-за небольших расхождений
+                    tolerance = 5 * 60
+                    
+                    if server_expiry:
+                        # Проверяем разницу между временем на сервере и в БД
+                        time_diff = abs(server_expiry - expires_at)
+                        
+                        if time_diff > tolerance:
+                            # Время отличается значительно - синхронизируем сервер с БД
+                            # БД - источник истины, поэтому мы всегда приводим сервер к значению БД
+                            if server_expiry < expires_at:
+                                # Время на сервере меньше, чем в БД - продлеваем на сервере до значения БД
+                                days_to_add = (expires_at - server_expiry) // (24 * 60 * 60)
+                                if days_to_add > 0:
+                                    logger.info(
+                                        f"Синхронизация времени истечения на сервере {server_name}: "
+                                        f"добавляем {days_to_add} дней (сервер: {server_expiry}, БД: {expires_at})"
+                                    )
+                                    response = xui.extendClient(client_email, days_to_add)
+                                    if response and response.status_code == 200:
+                                        try:
+                                            response_json = response.json()
+                                            if response_json.get('success', False):
+                                                logger.info(f"Время истечения синхронизировано на сервере {server_name} (продлено до значения БД)")
+                                            else:
+                                                logger.warning(f"Не удалось синхронизировать время на сервере {server_name}")
+                                        except (json.JSONDecodeError, ValueError):
+                                            logger.warning(f"Ответ от {server_name} не является валидным JSON при синхронизации")
+                            else:
+                                # Время на сервере больше, чем в БД - устанавливаем точное время из БД
+                                # Это может произойти если админ вручную продлил ключ на сервере
+                                # Но БД остается источником истины, поэтому уменьшаем время на сервере до значения БД
+                                logger.info(
+                                    f"Синхронизация времени истечения на сервере {server_name}: "
+                                    f"устанавливаем точное время из БД (сервер: {server_expiry}, БД: {expires_at})"
+                                )
                                 try:
-                                    response_json = response.json()
-                                    if response_json.get('success', False):
-                                        logger.info(f"Время истечения синхронизировано на сервере {server_name}")
-                                    else:
-                                        logger.warning(f"Не удалось синхронизировать время на сервере {server_name}")
-                                except (json.JSONDecodeError, ValueError):
-                                    logger.warning(f"Ответ от {server_name} не является валидным JSON при синхронизации")
+                                    response = xui.setClientExpiry(client_email, expires_at)
+                                    if response and response.status_code == 200:
+                                        try:
+                                            response_json = response.json()
+                                            if response_json.get('success', False):
+                                                logger.info(f"Время истечения синхронизировано на сервере {server_name} (установлено значение из БД)")
+                                            else:
+                                                logger.warning(f"Не удалось установить точное время на сервере {server_name}")
+                                        except (json.JSONDecodeError, ValueError):
+                                            logger.warning(f"Ответ от {server_name} не является валидным JSON при установке времени")
+                                except Exception as set_expiry_e:
+                                    logger.error(f"Ошибка установки точного времени на сервере {server_name}: {set_expiry_e}")
+                        else:
+                            # Время совпадает (в пределах допуска) - синхронизация не требуется
+                            logger.debug(
+                                f"Время истечения на сервере {server_name} совпадает с БД "
+                                f"(разница: {time_diff} сек, допуск: {tolerance} сек)"
+                            )
                 except Exception as sync_e:
                     logger.warning(f"Ошибка синхронизации времени на сервере {server_name}: {sync_e}")
                 
@@ -216,16 +254,25 @@ class SubscriptionManager:
                 try:
                     client_info = xui.get_client_info(client_email)
                     if client_info:
-                        current_limit_ip = client_info['client'].get('limitIp', 1)
-                        if current_limit_ip != device_limit:
+                        # Получаем текущий limitIp (если не установлен или 0, считаем что нужно установить)
+                        current_limit_ip = client_info['client'].get('limitIp', 0)
+                        # Если limitIp не установлен (0 или отсутствует), или отличается от device_limit - синхронизируем
+                        if current_limit_ip == 0 or current_limit_ip != device_limit:
                             logger.info(
-                                f"Синхронизация limitIp на сервере {server_name}: "
+                                f"Синхронизация limitIp на сервере {server_name} для клиента {client_email}: "
                                 f"{current_limit_ip} -> {device_limit}"
                             )
-                            xui.updateClientLimitIp(client_email, device_limit)
-                            logger.info(f"limitIp синхронизирован на сервере {server_name}")
+                            try:
+                                xui.updateClientLimitIp(client_email, device_limit)
+                                logger.info(f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}")
+                            except Exception as update_e:
+                                logger.error(f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}")
+                        else:
+                            logger.debug(f"limitIp для клиента {client_email} на сервере {server_name} уже равен {device_limit}, синхронизация не требуется")
+                    else:
+                        logger.warning(f"Не удалось получить информацию о клиенте {client_email} на сервере {server_name} для синхронизации limitIp")
                 except Exception as limit_sync_e:
-                    logger.warning(f"Ошибка синхронизации limitIp на сервере {server_name}: {limit_sync_e}")
+                    logger.warning(f"Ошибка синхронизации limitIp на сервере {server_name} для клиента {client_email}: {limit_sync_e}")
                 
                 return True, False  # Клиент существует, не создавали
             else:
@@ -234,6 +281,7 @@ class SubscriptionManager:
                 current_time = int(time.time())
                 days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
                 
+                logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
                 response = xui.addClient(
                     day=days_remaining,
                     tg_id=user_id,

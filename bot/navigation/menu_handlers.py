@@ -194,6 +194,11 @@ class MenuHandlers:
         from ..handlers.admin.admin_subscription_manage import admin_subscription_info
         await admin_subscription_info(update, context)
     
+    async def admin_sub_change_limit(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Изменение лимита IP для подписки"""
+        from ..handlers.admin.admin_subscription_manage import admin_change_device_limit
+        await admin_change_device_limit(update, context)
+    
     async def admin_test_payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Тестовое подтверждение платежей"""
         from ..handlers.admin.admin_test_payment import admin_test_payment
@@ -389,6 +394,15 @@ class NavigationIntegration:
             CallbackQueryHandler(
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_CHECK_SUBSCRIPTION),
                 pattern=f"^{CallbackData.ADMIN_CHECK_SUBSCRIPTION}$"
+            ),
+            # Обновление админских меню (остаются в том же состоянии)
+            CallbackQueryHandler(
+                lambda u, c: self.admin_errors(u, c),
+                pattern=f"^{CallbackData.ADMIN_ERRORS_REFRESH}$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: self.admin_notifications(u, c),
+                pattern=f"^{CallbackData.ADMIN_NOTIFICATIONS_REFRESH}$"
             ),
         ]
 

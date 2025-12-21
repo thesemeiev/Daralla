@@ -42,7 +42,7 @@ from .handlers.payments import handle_payment
 # Экспортируем handle_payment для доступа через get_globals()
 handle_payment = handle_payment
 from .handlers.admin import (
-    admin_errors, admin_notifications, admin_check_servers, force_check_servers, admin_config,
+    admin_errors, admin_notifications, admin_check_servers, admin_config,
     admin_broadcast_start, admin_broadcast_input, admin_broadcast_send,
     admin_broadcast_cancel, admin_broadcast_export,
     admin_test_payment, test_confirm_payment_callback,
@@ -338,7 +338,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler(['mysubs', 'mykey'], mykey))
     app.add_handler(CommandHandler('instruction', instruction))
    
-    app.add_handler(CommandHandler('check_servers', force_check_servers))
     # Эти обработчики остаются, так как они не покрываются навигационной системой
     app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^instr_"))
     app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^back_instr$"))
@@ -356,10 +355,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin_user', admin_search_user))
     app.add_handler(CallbackQueryHandler(test_confirm_payment_callback, pattern="^test_confirm_payment:"))
 
-    # Обработчики callback-ов для главного меню и выбора сервера
-    # ВАЖНО: "back", "instruction", "buy_vpn", "mykeys_menu" убраны из паттерна, так как они обрабатываются через NavigationIntegration
-    # Оставляем только специфичные callback'и, которые не обрабатываются навигационной системой
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^(buy_menu|buy_month|buy_3month|my_subs|admin_notifications_refresh|admin_errors_refresh)$"))
+    # Обработчики callback-ов для главного меню
+    # ВАЖНО: Все callback'и обрабатываются через NavigationIntegration, кроме select_period_
+    # Оставляем только select_period_ callback'и, которые обрабатываются здесь
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^select_period_"))
     # Обработчик для просмотра и переименования подписок
 
     app.add_handler(CallbackQueryHandler(mykey, pattern=f"^({CallbackData.VIEW_SUB}|{CallbackData.RENAME_SUB})"))
@@ -410,6 +409,18 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_user_subscriptions, pattern="^admin_user_subs:"))
     app.add_handler(CallbackQueryHandler(admin_user_payments, pattern="^admin_user_payments:"))
     app.add_handler(CallbackQueryHandler(admin_subscription_info, pattern="^admin_sub_info:"))
+    app.add_handler(CallbackQueryHandler(admin_change_device_limit, pattern="^admin_sub_change_limit:"))
+    app.add_handler(CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:"))
+    
+    # ConversationHandler для изменения лимита IP
+    change_limit_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_change_device_limit, pattern="^admin_sub_change_limit:")],
+        states={
+            ADMIN_SUB_CHANGE_LIMIT_WAITING: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_change_device_limit_input)],
+        },
+        fallbacks=[CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:")],
+    )
+    app.add_handler(change_limit_conv)
     app.add_handler(CallbackQueryHandler(admin_extend_subscription, pattern="^admin_sub_extend:"))
     app.add_handler(CallbackQueryHandler(admin_cancel_subscription, pattern="^admin_sub_cancel:"))
     
