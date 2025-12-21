@@ -26,6 +26,8 @@ __all__ = [
     'admin_test_payment', 'test_confirm_payment_callback',
     'admin_sync', 'admin_check_subscription',
     'admin_search_user', 'admin_user_subscriptions', 'admin_user_payments',
-    'admin_subscription_info', 'admin_extend_subscription', 'admin_cancel_subscription'
+    'admin_subscription_info', 'admin_extend_subscription', 'admin_cancel_subscription',
+    'admin_change_device_limit', 'admin_change_device_limit_input', 'admin_change_device_limit_cancel',
+    'ADMIN_SUB_CHANGE_LIMIT_WAITING'
 ]
 
