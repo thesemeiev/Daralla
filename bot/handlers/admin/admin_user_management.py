@@ -3,6 +3,7 @@
 """
 import logging
 import datetime
+import os
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
@@ -128,10 +129,16 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             ])
             # Используем menu_chat_id и menu_message_id для редактирования, если они есть
             if menu_chat_id and menu_message_id:
+                # Теперь у всех меню есть фото, используем safe_edit_message_with_photo
                 from ...utils.message_helpers import safe_edit_message_with_photo
                 bot = update.message.get_bot() if update.message else (update.callback_query.message.get_bot() if update.callback_query else None)
                 if bot:
-                    await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+                    try:
+                        await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+                    except Exception as e:
+                        logger.error(f"Не удалось отредактировать сообщение через safe_edit_message_with_photo: {e}")
+                        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
                 else:
                     message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
                     await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
@@ -192,10 +199,18 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         
         # Используем menu_chat_id и menu_message_id для редактирования, если они есть
         if menu_chat_id and menu_message_id:
+            # Теперь у всех меню есть фото, используем safe_edit_message_with_photo
             from ...utils.message_helpers import safe_edit_message_with_photo
             bot = update.message.get_bot() if update.message else (update.callback_query.message.get_bot() if update.callback_query else None)
             if bot:
-                await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
+                try:
+                    await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
+                except Exception as e:
+                    logger.error(f"Не удалось отредактировать сообщение через safe_edit_message_with_photo: {e}")
+                    # Fallback: используем обычный метод
+                    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                    if message_obj:
+                        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
             else:
                 message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
                 await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
@@ -212,13 +227,14 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         
         # Используем menu_chat_id и menu_message_id для редактирования, если они есть
         if menu_chat_id and menu_message_id:
+            # Теперь у всех меню есть фото, используем safe_edit_message_with_photo
             from ...utils.message_helpers import safe_edit_message_with_photo
             bot = update.message.get_bot() if update.message else (update.callback_query.message.get_bot() if update.callback_query else None)
             if bot:
                 try:
                     await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, error_message, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
-                except Exception as edit_error:
-                    logger.error(f"Не удалось отредактировать сообщение с ошибкой: {edit_error}")
+                except Exception as e:
+                    logger.error(f"Не удалось отредактировать сообщение с ошибкой через safe_edit_message_with_photo: {e}")
                     # Fallback: отправляем новое сообщение
                     message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
                     if message_obj:
