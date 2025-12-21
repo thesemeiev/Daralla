@@ -4,7 +4,7 @@
 import logging
 import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler
 
 from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal, check_private_chat
 from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
@@ -369,4 +369,250 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logger.exception("Ошибка в admin_cancel_subscription")
         await update.callback_query.answer(f"Ошибка: {str(e)}", show_alert=True)
+
+
+# Константа для состояния ввода нового лимита IP
+ADMIN_SUB_CHANGE_LIMIT_WAITING = 3001
+
+
+async def admin_change_device_limit(update: Update, context: ContextTypes.DEFAULT_TYPE, subscription_id: int = None):
+    """Начинает процесс изменения лимита IP для подписки"""
+    if not await check_private_chat(update):
+        return
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
+    
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.callback_query.answer("Нет доступа", show_alert=True)
+        return
+    
+    if not subscription_id:
+        if update.callback_query:
+            parts = update.callback_query.data.split(':', 1)
+            if len(parts) > 1:
+                try:
+                    subscription_id = int(parts[1])
+                except ValueError:
+                    await update.callback_query.answer("Неверный ID подписки", show_alert=True)
+                    return
+    
+    if not subscription_id:
+        await update.callback_query.answer("Не указан ID подписки", show_alert=True)
+        return
+    
+    try:
+        # Получаем подписку для отображения текущего значения
+        from ...db.subscribers_db import get_all_active_subscriptions
+        all_subs = await get_all_active_subscriptions()
+        sub = next((s for s in all_subs if s['id'] == subscription_id), None)
+        
+        if not sub:
+            # Пробуем найти через поиск по всем пользователям
+            from ...db import get_all_subscriptions_by_user, get_all_user_ids
+            user_ids = await get_all_user_ids()
+            for uid in user_ids[:100]:
+                subs = await get_all_subscriptions_by_user(uid)
+                found = next((s for s in subs if s['id'] == subscription_id), None)
+                if found:
+                    sub = found
+                    break
+        
+        if not sub:
+            await update.callback_query.answer("Подписка не найдена", show_alert=True)
+            return
+        
+        current_limit = sub.get('device_limit', 1)
+        
+        # Сохраняем subscription_id в context для дальнейшего использования
+        context.user_data['admin_change_limit_sub_id'] = subscription_id
+        
+        message = (
+            f"{UIStyles.header('Изменение лимита IP')}\n\n"
+            f"<b>Текущий лимит IP:</b> {current_limit}\n\n"
+            f"{UIStyles.description('Введите новое значение лимита IP (число от 1 до 10):')}\n\n"
+            f"{UIEmojis.WARNING} <i>Это значение будет применено ко всем ключам этой подписки на всех серверах.</i>"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Отмена", callback_data=f"admin_sub_info:{subscription_id}")]
+        ])
+        
+        message_obj = update.callback_query.message if update.callback_query else None
+        await safe_edit_or_reply_universal(
+            message_obj,
+            message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            menu_type=MenuTypes.ADMIN_SUB_CHANGE_LIMIT
+        )
+        
+        # Сохраняем chat_id и message_id для редактирования
+        if message_obj:
+            context.user_data['admin_change_limit_chat_id'] = message_obj.chat_id
+            context.user_data['admin_change_limit_message_id'] = message_obj.message_id
+        
+        return ADMIN_SUB_CHANGE_LIMIT_WAITING
+        
+    except Exception as e:
+        logger.exception("Ошибка в admin_change_device_limit")
+        await update.callback_query.answer(f"Ошибка: {str(e)}", show_alert=True)
+        return ConversationHandler.END
+
+
+async def admin_change_device_limit_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод нового лимита IP"""
+    if not await check_private_chat(update):
+        return ConversationHandler.END
+    
+    globals_dict = get_globals()
+    ADMIN_IDS = globals_dict['ADMIN_IDS']
+    subscription_manager = globals_dict['subscription_manager']
+    
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("Нет доступа")
+        return ConversationHandler.END
+    
+    try:
+        subscription_id = context.user_data.get('admin_change_limit_sub_id')
+        if not subscription_id:
+            await update.message.reply_text(f"{UIEmojis.ERROR} Ошибка: не найден ID подписки")
+            return ConversationHandler.END
+        
+        # Получаем введенное значение
+        text = update.message.text.strip()
+        try:
+            new_limit = int(text)
+            if new_limit < 1 or new_limit > 10:
+                await update.message.reply_text(
+                    f"{UIEmojis.ERROR} Лимит IP должен быть числом от 1 до 10. Попробуйте еще раз:"
+                )
+                return ADMIN_SUB_CHANGE_LIMIT_WAITING
+        except ValueError:
+            await update.message.reply_text(
+                f"{UIEmojis.ERROR} Пожалуйста, введите число от 1 до 10:"
+            )
+            return ADMIN_SUB_CHANGE_LIMIT_WAITING
+        
+        # Удаляем сообщение пользователя
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        
+        # Получаем подписку
+        from ...db.subscribers_db import get_all_active_subscriptions
+        all_subs = await get_all_active_subscriptions()
+        sub = next((s for s in all_subs if s['id'] == subscription_id), None)
+        
+        if not sub:
+            # Пробуем найти через поиск
+            from ...db import get_all_subscriptions_by_user, get_all_user_ids
+            user_ids = await get_all_user_ids()
+            for uid in user_ids[:100]:
+                subs = await get_all_subscriptions_by_user(uid)
+                found = next((s for s in subs if s['id'] == subscription_id), None)
+                if found:
+                    sub = found
+                    break
+        
+        if not sub:
+            message = f"{UIEmojis.ERROR} Подписка не найдена"
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            chat_id = context.user_data.get('admin_change_limit_chat_id')
+            message_id = context.user_data.get('admin_change_limit_message_id')
+            if chat_id and message_id:
+                from ...utils.message_helpers import safe_edit_message_with_photo
+                bot = update.message.get_bot()
+                await safe_edit_message_with_photo(
+                    bot, chat_id, message_id, message, reply_markup=keyboard,
+                    parse_mode="HTML", menu_type=MenuTypes.ADMIN_SUB_CHANGE_LIMIT
+                )
+            else:
+                await safe_edit_or_reply_universal(
+                    update.message, message, reply_markup=keyboard,
+                    parse_mode="HTML", menu_type=MenuTypes.ADMIN_SUB_CHANGE_LIMIT
+                )
+            return ConversationHandler.END
+        
+        old_limit = sub.get('device_limit', 1)
+        
+        # Обновляем device_limit в БД
+        await update_subscription_device_limit(subscription_id, new_limit)
+        
+        # Синхронизируем limitIp на всех серверах
+        if subscription_manager:
+            servers = await get_subscription_servers(subscription_id)
+            for server in servers:
+                try:
+                    await subscription_manager.ensure_client_on_server(
+                        subscription_id=subscription_id,
+                        server_name=server['server_name'],
+                        client_email=server['client_email'],
+                        user_id=sub['user_id'],
+                        expires_at=sub['expires_at'],
+                        token=sub['subscription_token'],
+                        device_limit=new_limit  # Передаем новый лимит
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка синхронизации limitIp на сервере {server['server_name']}: {e}")
+        
+        message = (
+            f"{UIStyles.header('Лимит IP изменен')}\n\n"
+            f"{UIEmojis.SUCCESS} Лимит IP для подписки <b>{sub.get('name', f'#{subscription_id}')}</b> изменен:\n"
+            f"<b>{old_limit}</b> → <b>{new_limit}</b>\n\n"
+            f"{UIStyles.description('Лимит IP синхронизирован на всех серверах.')}"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Информация о подписке", callback_data=f"admin_sub_info:{subscription_id}")],
+            [NavigationBuilder.create_back_button()]
+        ])
+        
+        # Редактируем сообщение
+        chat_id = context.user_data.get('admin_change_limit_chat_id')
+        message_id = context.user_data.get('admin_change_limit_message_id')
+        if chat_id and message_id:
+            from ...utils.message_helpers import safe_edit_message_with_photo
+            bot = update.message.get_bot()
+            await safe_edit_message_with_photo(
+                bot, chat_id, message_id, message, reply_markup=keyboard,
+                parse_mode="HTML", menu_type=MenuTypes.ADMIN_SUBSCRIPTION_INFO
+            )
+        else:
+            await safe_edit_or_reply_universal(
+                update.message, message, reply_markup=keyboard,
+                parse_mode="HTML", menu_type=MenuTypes.ADMIN_SUBSCRIPTION_INFO
+            )
+        
+        # Очищаем данные
+        context.user_data.pop('admin_change_limit_sub_id', None)
+        context.user_data.pop('admin_change_limit_chat_id', None)
+        context.user_data.pop('admin_change_limit_message_id', None)
+        
+        logger.info(f"Админ {update.effective_user.id} изменил device_limit для подписки {subscription_id}: {old_limit} -> {new_limit}")
+        
+        return ConversationHandler.END
+        
+    except Exception as e:
+        logger.exception("Ошибка в admin_change_device_limit_input")
+        await update.message.reply_text(f"{UIEmojis.ERROR} Ошибка: {str(e)}")
+        return ConversationHandler.END
+
+
+async def admin_change_device_limit_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отменяет изменение лимита IP"""
+    if update.callback_query:
+        parts = update.callback_query.data.split(':', 1)
+        if len(parts) > 1:
+            subscription_id = int(parts[1])
+            # Очищаем данные
+            context.user_data.pop('admin_change_limit_sub_id', None)
+            context.user_data.pop('admin_change_limit_chat_id', None)
+            context.user_data.pop('admin_change_limit_message_id', None)
+            # Возвращаемся к информации о подписке
+            await admin_subscription_info(update, context, subscription_id)
+    return ConversationHandler.END
 
