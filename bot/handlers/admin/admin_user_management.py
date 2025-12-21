@@ -74,7 +74,12 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     
     message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+    result = await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+    
+    # Сохраняем message_id меню поиска для дальнейшего редактирования
+    if message_obj:
+        context.user_data['admin_search_menu_message_id'] = message_obj.message_id
+        context.user_data['admin_search_menu_chat_id'] = message_obj.chat.id
     
     return SEARCH_USER_WAITING_ID
 
@@ -98,13 +103,17 @@ async def admin_search_user_input(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logger.warning(f"Не удалось удалить сообщение пользователя: {e}")
     
-    # Показываем информацию о пользователе
-    await show_user_info(update, context, user_id)
+    # Получаем message_id меню поиска из context
+    menu_message_id = context.user_data.get('admin_search_menu_message_id')
+    menu_chat_id = context.user_data.get('admin_search_menu_chat_id')
+    
+    # Передаем информацию о сообщении для редактирования
+    await show_user_info(update, context, user_id, menu_chat_id=menu_chat_id, menu_message_id=menu_message_id)
     
     return ConversationHandler.END
 
 
-async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str):
+async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, menu_chat_id=None, menu_message_id=None):
     """Показывает информацию о пользователе"""
     try:
         # Получаем информацию о пользователе
@@ -117,8 +126,18 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             keyboard = InlineKeyboardMarkup([
                 [NavigationBuilder.create_back_button()]
             ])
-            message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-            await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+            # Используем menu_chat_id и menu_message_id для редактирования, если они есть
+            if menu_chat_id and menu_message_id:
+                from ...utils.message_helpers import safe_edit_message_with_photo
+                bot = update.message.get_bot() if update.message else (update.callback_query.message.get_bot() if update.callback_query else None)
+                if bot:
+                    await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+                else:
+                    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                    await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+            else:
+                message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
             return
         
         # Получаем все подписки пользователя
@@ -171,16 +190,49 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         keyboard_buttons.append([NavigationBuilder.create_back_button()])
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         
-        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
+        # Используем menu_chat_id и menu_message_id для редактирования, если они есть
+        if menu_chat_id and menu_message_id:
+            from ...utils.message_helpers import safe_edit_message_with_photo
+            bot = update.message.get_bot() if update.message else (update.callback_query.message.get_bot() if update.callback_query else None)
+            if bot:
+                await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
+            else:
+                message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
+        else:
+            message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+            await safe_edit_or_reply_universal(message_obj, message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_USER_INFO)
         
         # Сохраняем user_id в context для дальнейших операций
         context.user_data['admin_selected_user_id'] = user_id
         
     except Exception as e:
         logger.exception("Ошибка в show_user_info")
-        message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-        await safe_edit_or_reply_universal(message_obj, f"{UIEmojis.ERROR} Ошибка: {str(e)}", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+        error_message = f"{UIEmojis.ERROR} Ошибка: {str(e)}"
+        
+        # Используем menu_chat_id и menu_message_id для редактирования, если они есть
+        if menu_chat_id and menu_message_id:
+            from ...utils.message_helpers import safe_edit_message_with_photo
+            bot = update.message.get_bot() if update.message else (update.callback_query.message.get_bot() if update.callback_query else None)
+            if bot:
+                try:
+                    await safe_edit_message_with_photo(bot, menu_chat_id, menu_message_id, error_message, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER)
+                except Exception as edit_error:
+                    logger.error(f"Не удалось отредактировать сообщение с ошибкой: {edit_error}")
+                    # Fallback: отправляем новое сообщение
+                    message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                    if message_obj:
+                        await safe_edit_or_reply_universal(message_obj, error_message, menu_type=MenuTypes.ADMIN_SEARCH_USER)
+            else:
+                message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+                if message_obj:
+                    await safe_edit_or_reply_universal(message_obj, error_message, menu_type=MenuTypes.ADMIN_SEARCH_USER)
+        else:
+            message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+            if message_obj:
+                await safe_edit_or_reply_universal(message_obj, error_message, menu_type=MenuTypes.ADMIN_SEARCH_USER)
+            else:
+                logger.error("Не удалось получить message_obj для отправки ошибки")
 
 
 async def admin_user_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str = None):
