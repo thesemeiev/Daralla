@@ -397,11 +397,11 @@ class NavigationIntegration:
             ),
             # Обновление админских меню (остаются в том же состоянии)
             CallbackQueryHandler(
-                lambda u, c: self.admin_errors(u, c),
+                lambda u, c: self.menu_handlers.admin_errors(u, c),
                 pattern=f"^{CallbackData.ADMIN_ERRORS_REFRESH}$"
             ),
             CallbackQueryHandler(
-                lambda u, c: self.admin_notifications(u, c),
+                lambda u, c: self.menu_handlers.admin_notifications(u, c),
                 pattern=f"^{CallbackData.ADMIN_NOTIFICATIONS_REFRESH}$"
             ),
         ]
