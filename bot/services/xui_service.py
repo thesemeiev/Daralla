@@ -538,13 +538,18 @@ class X3:
             inbound_id = client_info['inbound_id']
             
             # Обновляем limitIp
-            old_limit_ip = client_data.get('limitIp', 1)
-            if old_limit_ip == limit_ip:
+            # ВАЖНО: Если limitIp отсутствует в данных клиента, нужно его установить
+            # Проверяем наличие ключа 'limitIp' в данных клиента
+            old_limit_ip = client_data.get('limitIp')
+            # Если limitIp отсутствует (None) или равен 0, или отличается от нужного значения - обновляем
+            if old_limit_ip is None or old_limit_ip == 0 or old_limit_ip != limit_ip:
+                # Нужно обновить
+                old_limit_ip_display = old_limit_ip if old_limit_ip is not None else "не установлен"
+                client_data['limitIp'] = limit_ip
+                logger.info(f"Обновление limitIp для клиента {user_email}: {old_limit_ip_display} -> {limit_ip}")
+            else:
                 logger.debug(f"limitIp для клиента {user_email} уже равен {limit_ip}, обновление не требуется")
                 return None
-            
-            client_data['limitIp'] = limit_ip
-            logger.info(f"Обновление limitIp для клиента {user_email}: {old_limit_ip} -> {limit_ip}")
             
             # Обновляем клиента
             header = {"Accept": "application/json"}

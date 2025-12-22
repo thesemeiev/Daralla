@@ -452,6 +452,7 @@ async def admin_change_device_limit(update: Update, context: ContextTypes.DEFAUL
             context.user_data['admin_change_limit_chat_id'] = message_obj.chat_id
             context.user_data['admin_change_limit_message_id'] = message_obj.message_id
         
+        # Важно: возвращаем состояние для ConversationHandler
         return ADMIN_SUB_CHANGE_LIMIT_WAITING
         
     except Exception as e:
@@ -462,6 +463,8 @@ async def admin_change_device_limit(update: Update, context: ContextTypes.DEFAUL
 
 async def admin_change_device_limit_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает ввод нового лимита IP"""
+    logger.info(f"admin_change_device_limit_input вызвана, текст: {update.message.text if update.message else 'None'}")
+    
     if not await check_private_chat(update):
         return ConversationHandler.END
     
@@ -475,7 +478,9 @@ async def admin_change_device_limit_input(update: Update, context: ContextTypes.
     
     try:
         subscription_id = context.user_data.get('admin_change_limit_sub_id')
+        logger.info(f"Получен subscription_id из context: {subscription_id}")
         if not subscription_id:
+            logger.warning("subscription_id не найден в context.user_data")
             await update.message.reply_text(f"{UIEmojis.ERROR} Ошибка: не найден ID подписки")
             return ConversationHandler.END
         
@@ -538,9 +543,11 @@ async def admin_change_device_limit_input(update: Update, context: ContextTypes.
             return ConversationHandler.END
         
         old_limit = sub.get('device_limit', 1)
+        logger.info(f"Изменение device_limit для подписки {subscription_id}: {old_limit} -> {new_limit}")
         
         # Обновляем device_limit в БД
         await update_subscription_device_limit(subscription_id, new_limit)
+        logger.info(f"device_limit обновлен в БД для подписки {subscription_id}")
         
         # Синхронизируем limitIp на всех серверах
         if subscription_manager:

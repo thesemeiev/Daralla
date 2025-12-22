@@ -413,16 +413,17 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_user_subscriptions, pattern="^admin_user_subs:"))
     app.add_handler(CallbackQueryHandler(admin_user_payments, pattern="^admin_user_payments:"))
     app.add_handler(CallbackQueryHandler(admin_subscription_info, pattern="^admin_sub_info:"))
-    app.add_handler(CallbackQueryHandler(admin_change_device_limit, pattern="^admin_sub_change_limit:"))
-    app.add_handler(CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:"))
     
-    # ConversationHandler для изменения лимита IP
+    # ConversationHandler для изменения лимита IP (должен быть перед другими CallbackQueryHandler)
     change_limit_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_change_device_limit, pattern="^admin_sub_change_limit:")],
         states={
             ADMIN_SUB_CHANGE_LIMIT_WAITING: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_change_device_limit_input)],
         },
-        fallbacks=[CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:")],
+        fallbacks=[
+            CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:"),
+            MessageHandler(filters.COMMAND, admin_change_device_limit_cancel),
+        ],
     )
     app.add_handler(change_limit_conv)
     app.add_handler(CallbackQueryHandler(admin_extend_subscription, pattern="^admin_sub_extend:"))

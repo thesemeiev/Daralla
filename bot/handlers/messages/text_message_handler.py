@@ -43,6 +43,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not await check_private_chat(update):
         return
     
+    # Проверяем, не идет ли изменение лимита IP (это должно обрабатываться ConversationHandler)
+    if context.user_data.get('admin_change_limit_sub_id'):
+        logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_change_device_limit_input")
+        return
+    
     user_id = str(update.message.from_user.id)
     new_name = update.message.text.strip()
     

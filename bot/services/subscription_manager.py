@@ -254,13 +254,15 @@ class SubscriptionManager:
                 try:
                     client_info = xui.get_client_info(client_email)
                     if client_info:
-                        # Получаем текущий limitIp (если не установлен или 0, считаем что нужно установить)
-                        current_limit_ip = client_info['client'].get('limitIp', 0)
-                        # Если limitIp не установлен (0 или отсутствует), или отличается от device_limit - синхронизируем
-                        if current_limit_ip == 0 or current_limit_ip != device_limit:
+                        # Получаем текущий limitIp (если не установлен, получаем None, а не 0)
+                        # Это важно, чтобы правильно определить, нужно ли устанавливать limitIp
+                        current_limit_ip = client_info['client'].get('limitIp')
+                        # Если limitIp отсутствует (None), равен 0, или отличается от device_limit - синхронизируем
+                        if current_limit_ip is None or current_limit_ip == 0 or current_limit_ip != device_limit:
+                            current_limit_display = current_limit_ip if current_limit_ip is not None else "не установлен"
                             logger.info(
                                 f"Синхронизация limitIp на сервере {server_name} для клиента {client_email}: "
-                                f"{current_limit_ip} -> {device_limit}"
+                                f"{current_limit_display} -> {device_limit}"
                             )
                             try:
                                 xui.updateClientLimitIp(client_email, device_limit)
