@@ -24,6 +24,96 @@ class SyncManager:
         self.subscription_manager = subscription_manager
         self.is_running = False
 
+    async def sync_all_subscriptions(self, auto_fix: bool = False):
+        """
+        Полная синхронизация подписок и клиентов.
+
+        Используется /admin_sync. Возвращает статистику для вывода админу.
+
+        auto_fix=True включает автоматическое создание клиентов на новых серверах
+        (используется как флаг --fix).
+        """
+        logger.info("🌀 Запуск sync_all_subscriptions (auto_fix=%s)", auto_fix)
+
+        stats = {
+            "subscriptions_checked": 0,
+            "subscriptions_synced": 0,
+            "total_servers_checked": 0,
+            "total_servers_synced": 0,
+            "total_clients_created": 0,
+            "total_errors": 0,
+            "errors": [],
+        }
+
+        # Шаг 1. Синхронизируем список серверов в подписках с конфигом
+        try:
+            cfg_stats = await self.subscription_manager.sync_servers_with_config(
+                auto_create_clients=auto_fix
+            )
+            if cfg_stats:
+                stats["total_clients_created"] += cfg_stats.get("clients_created", 0)
+                stats["errors"].extend(cfg_stats.get("errors", []))
+        except Exception as e:
+            logger.error("Ошибка sync_servers_with_config: %s", e)
+            stats["errors"].append(f"sync_servers_with_config: {e}")
+
+        # Шаг 2. Синхронизируем expiry и limitIp для каждого клиента
+        active_subs = await get_all_active_subscriptions()
+        stats["subscriptions_checked"] = len(active_subs)
+
+        now = int(time.time())
+        for sub in active_subs:
+            sub_id = sub["id"]
+            expires_at = sub["expires_at"]
+            user_id = sub["user_id"]
+            token = sub["subscription_token"]
+            device_limit = sub.get("device_limit", 1)
+
+            # Пропускаем истекшие (их почистит cleanup)
+            if expires_at < now:
+                continue
+
+            servers = await get_subscription_servers(sub_id)
+            stats["total_servers_checked"] += len(servers)
+
+            synced_for_sub = 0
+            for s_info in servers:
+                server_name = s_info["server_name"]
+                client_email = s_info["client_email"]
+                try:
+                    exists, created = await self.subscription_manager.ensure_client_on_server(
+                        subscription_id=sub_id,
+                        server_name=server_name,
+                        client_email=client_email,
+                        user_id=user_id,
+                        expires_at=expires_at,
+                        token=token,
+                        device_limit=device_limit,
+                    )
+
+                    if exists:
+                        synced_for_sub += 1
+                        stats["total_servers_synced"] += 1
+                    if created:
+                        stats["total_clients_created"] += 1
+                except Exception as e:
+                    err_msg = f"sub {sub_id}, server {server_name}: {e}"
+                    logger.error("Ошибка sync_all_subscriptions: %s", err_msg)
+                    stats["errors"].append(err_msg)
+
+            if servers and synced_for_sub == len(servers):
+                stats["subscriptions_synced"] += 1
+
+        stats["total_errors"] = len(stats["errors"])
+        logger.info(
+            "✅ sync_all_subscriptions завершена: subs=%s, synced=%s, servers=%s, errors=%s",
+            stats["subscriptions_checked"],
+            stats["subscriptions_synced"],
+            stats["total_servers_synced"],
+            stats["total_errors"],
+        )
+        return stats
+
     async def run_sync(self):
         """Запуск полной синхронизации"""
         logger.info("🌀 Запуск полной синхронизации серверов...")
