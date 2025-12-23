@@ -135,7 +135,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
                 except:
                     pass
         
-        message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         message += f"<b>Общая статистика</b>\n\n"
         
         message += f"<b>Серверы:</b>\n"
@@ -168,7 +168,7 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
             message += f"   Для активных подписок: {sub_stats['active_server_clients']}\n\n"
         
         # Статистика клиентов X-UI (для справки)
-        message += f"<b>ℹКлиенты X-UI на серверах:</b>\n"
+        message += f"<b>Клиенты X-UI на серверах:</b>\n"
         message += f"   (Все клиенты, включая не связанные с подписками)\n"
         message += f"   Всего: {total_xui_clients_all}\n"
         message += f"   Активных: {active_xui_clients_all}\n"

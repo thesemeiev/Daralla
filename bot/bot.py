@@ -386,6 +386,18 @@ if __name__ == '__main__':
         },
         fallbacks=[
             CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"),
+            # Обработка навигации назад через универсальную кнопку "back"
+            CallbackQueryHandler(
+                lambda u, c: (
+                    c.user_data.pop('broadcast_text', None),
+                    c.user_data.pop('broadcast_media', None),
+                    c.user_data.pop('broadcast_msg_chat_id', None),
+                    c.user_data.pop('broadcast_msg_id', None),
+                    c.user_data.pop('broadcast_details', None),
+                    admin_broadcast_cancel(u, c)
+                )[5],
+                pattern="^back$"
+            ),
         ],
         per_user=True,
         per_chat=True,
@@ -423,6 +435,16 @@ if __name__ == '__main__':
         fallbacks=[
             CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:"),
             MessageHandler(filters.COMMAND, admin_change_device_limit_cancel),
+            # Обработка навигации назад через универсальную кнопку "back"
+            CallbackQueryHandler(
+                lambda u, c: (
+                    c.user_data.pop('admin_change_limit_sub_id', None),
+                    c.user_data.pop('admin_change_limit_chat_id', None),
+                    c.user_data.pop('admin_change_limit_message_id', None),
+                    nav_manager.handle_back_navigation(u, c)
+                )[3],
+                pattern="^back$"
+            ),
         ],
     )
     app.add_handler(change_limit_conv)
@@ -444,7 +466,15 @@ if __name__ == '__main__':
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(lambda u, c: nav_manager.handle_back_navigation(u, c), pattern="^back$"),
+            # Очищаем данные поиска при выходе через fallback и обрабатываем навигацию назад
+            CallbackQueryHandler(
+                lambda u, c: (
+                    c.user_data.pop('admin_search_menu_message_id', None),
+                    c.user_data.pop('admin_search_menu_chat_id', None),
+                    nav_manager.handle_back_navigation(u, c)
+                )[2],
+                pattern="^back$"
+            ),
         ],
         per_user=True,
         per_chat=True,

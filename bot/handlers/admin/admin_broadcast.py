@@ -59,8 +59,13 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
     
     from ...utils import safe_answer_callback_query
     await safe_answer_callback_query(update.callback_query)
+    
+    # Очищаем старые данные рассылки при новом запуске
+    context.user_data.pop('broadcast_text', None)
+    context.user_data.pop('broadcast_media', None)
+    context.user_data.pop('broadcast_details', None)
+    
     # Сохраняем исходное сообщение для дальнейших редактирований
-    context.user_data['broadcast_text'] = None
     context.user_data['broadcast_msg_chat_id'] = update.callback_query.message.chat_id
     context.user_data['broadcast_msg_id'] = update.callback_query.message.message_id
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.ADMIN_BROADCAST_BACK)]])

@@ -424,6 +424,11 @@ async def admin_change_device_limit(update: Update, context: ContextTypes.DEFAUL
         
         current_limit = sub.get('device_limit', 1)
         
+        # Очищаем старые данные изменения лимита при новом запуске
+        context.user_data.pop('admin_change_limit_sub_id', None)
+        context.user_data.pop('admin_change_limit_chat_id', None)
+        context.user_data.pop('admin_change_limit_message_id', None)
+        
         # Сохраняем subscription_id в context для дальнейшего использования
         context.user_data['admin_change_limit_sub_id'] = subscription_id
         

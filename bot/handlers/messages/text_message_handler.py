@@ -48,6 +48,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_change_device_limit_input")
         return
     
+    # Проверяем, не идет ли поиск пользователя (это должно обрабатываться ConversationHandler)
+    if context.user_data.get('admin_search_menu_message_id') or context.user_data.get('admin_search_menu_chat_id'):
+        logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_search_user_input")
+        return
+    
+    # Проверяем, не идет ли рассылка (это должно обрабатываться ConversationHandler)
+    # BROADCAST_WAITING_TEXT = 1001, BROADCAST_CONFIRM = 1002
+    if context.user_data.get('broadcast_msg_chat_id') or context.user_data.get('broadcast_msg_id'):
+        logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_broadcast_input")
+        return
+    
     user_id = str(update.message.from_user.id)
     new_name = update.message.text.strip()
     

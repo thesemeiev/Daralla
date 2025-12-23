@@ -58,6 +58,10 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_or_reply_universal(message_obj, 'Нет доступа.', menu_type=MenuTypes.ADMIN_MENU)
         return ConversationHandler.END
     
+    # Очищаем старые данные поиска при новом запуске
+    context.user_data.pop('admin_search_menu_message_id', None)
+    context.user_data.pop('admin_search_menu_chat_id', None)
+    
     # Если передан user_id как аргумент команды
     if update.message and context.args and len(context.args) > 0:
         user_id = context.args[0]
@@ -110,6 +114,10 @@ async def admin_search_user_input(update: Update, context: ContextTypes.DEFAULT_
     
     # Передаем информацию о сообщении для редактирования
     await show_user_info(update, context, user_id, menu_chat_id=menu_chat_id, menu_message_id=menu_message_id)
+    
+    # Очищаем данные поиска из context после завершения
+    context.user_data.pop('admin_search_menu_message_id', None)
+    context.user_data.pop('admin_search_menu_chat_id', None)
     
     return ConversationHandler.END
 
