@@ -269,6 +269,10 @@ async def promo_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, promo_code: str, promo_data: dict):
     """Применяет промокод для покупки новой подписки"""
+    # Отвечаем на callback_query, если он есть (для завершения ConversationHandler)
+    if update.callback_query:
+        await safe_answer_callback_query(update.callback_query)
+    
     globals_dict = get_globals()
     subscription_manager = globals_dict['subscription_manager']
     new_client_manager = globals_dict['new_client_manager']
@@ -329,7 +333,6 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
         f"<b>Вам выдана подписка на {period_text}</b>\n\n"
         f"<b>Промокод:</b> <code>{promo_code}</code>\n\n"
         f"Подписка активирована и включает все доступные серверы!\n\n"
-        f"<i>Это сообщение будет удалено через 10 секунд...</i>\n\n"
         f"<b>Наслаждайтесь!</b>"
     )
     
@@ -338,15 +341,22 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
         [NavigationBuilder.create_back_button()]
     ])
     
-    # Обновляем навигационный стек - сохраняем предыдущее состояние
+    # Обновляем навигационный стек - добавляем состояние для сообщения о взломе
     from ...navigation import nav_manager, NavStates
     # Получаем promo_type из контекста
     promo_type_from_context = context.user_data.get('promo_type', 'purchase')
     # Если пользователь пришел из покупки, добавляем BUY_MENU, иначе SUBSCRIPTIONS_MENU
+    # Это нужно для правильной работы кнопки "Назад"
     if promo_type_from_context == 'purchase':
-        nav_manager.push_state(context, NavStates.BUY_MENU)
+        # Убеждаемся, что BUY_MENU в стеке перед добавлением сообщения о взломе
+        current_stack = nav_manager.get_stack(context)
+        if NavStates.BUY_MENU not in current_stack:
+            nav_manager.push_state(context, NavStates.BUY_MENU)
     else:
-        nav_manager.push_state(context, NavStates.SUBSCRIPTIONS_MENU)
+        # Убеждаемся, что SUBSCRIPTIONS_MENU в стеке перед добавлением сообщения о взломе
+        current_stack = nav_manager.get_stack(context)
+        if NavStates.SUBSCRIPTIONS_MENU not in current_stack:
+            nav_manager.push_state(context, NavStates.SUBSCRIPTIONS_MENU)
     
     try:
         await safe_edit_message_with_photo(
@@ -378,10 +388,21 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
                 parse_mode="HTML",
                 menu_type=MenuTypes.PROMO_HACK
             )
+    
+    # ВАЖНО: Очищаем данные ConversationHandler после показа сообщения о взломе
+    # Это гарантирует, что ConversationHandler не будет перехватывать callback'и
+    context.user_data.pop('promo_type', None)
+    context.user_data.pop('promo_subscription_id', None)
+    context.user_data.pop('promo_message_id', None)
+    context.user_data.pop('promo_chat_id', None)
+    context.user_data.pop('created_subscription_id', None)
 
 
 async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, promo_code: str, promo_data: dict, subscription_id: int):
     """Применяет промокод для продления подписки"""
+    # Отвечаем на callback_query, если он есть (для завершения ConversationHandler)
+    if update.callback_query:
+        await safe_answer_callback_query(update.callback_query)
     
     globals_dict = get_globals()
     subscription_manager = globals_dict['subscription_manager']
@@ -454,15 +475,22 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
         [NavigationBuilder.create_back_button()]
     ])
     
-    # Обновляем навигационный стек - сохраняем предыдущее состояние
+    # Обновляем навигационный стек - добавляем состояние для сообщения о взломе
     from ...navigation import nav_manager, NavStates
     # Получаем promo_type из контекста
     promo_type_from_context = context.user_data.get('promo_type', 'purchase')
     # Если пользователь пришел из покупки, добавляем BUY_MENU, иначе SUBSCRIPTIONS_MENU
+    # Это нужно для правильной работы кнопки "Назад"
     if promo_type_from_context == 'purchase':
-        nav_manager.push_state(context, NavStates.BUY_MENU)
+        # Убеждаемся, что BUY_MENU в стеке перед добавлением сообщения о взломе
+        current_stack = nav_manager.get_stack(context)
+        if NavStates.BUY_MENU not in current_stack:
+            nav_manager.push_state(context, NavStates.BUY_MENU)
     else:
-        nav_manager.push_state(context, NavStates.SUBSCRIPTIONS_MENU)
+        # Убеждаемся, что SUBSCRIPTIONS_MENU в стеке перед добавлением сообщения о взломе
+        current_stack = nav_manager.get_stack(context)
+        if NavStates.SUBSCRIPTIONS_MENU not in current_stack:
+            nav_manager.push_state(context, NavStates.SUBSCRIPTIONS_MENU)
     
     try:
         await safe_edit_message_with_photo(
@@ -494,4 +522,12 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
                 parse_mode="HTML",
                 menu_type=MenuTypes.PROMO_HACK
             )
+    
+    # ВАЖНО: Очищаем данные ConversationHandler после показа сообщения о взломе
+    # Это гарантирует, что ConversationHandler не будет перехватывать callback'и
+    context.user_data.pop('promo_type', None)
+    context.user_data.pop('promo_subscription_id', None)
+    context.user_data.pop('promo_message_id', None)
+    context.user_data.pop('promo_chat_id', None)
+    context.user_data.pop('created_subscription_id', None)
 
