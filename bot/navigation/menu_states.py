@@ -24,6 +24,7 @@ class NavStates:
     ADMIN_CONFIG = 'admin_config'
     ADMIN_SYNC = 'admin_sync'
     ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'
+    ADMIN_GIVE_SUBSCRIPTION = 'admin_give_subscription'
 
 class MenuTypes:
     """Типы меню для изображений"""
