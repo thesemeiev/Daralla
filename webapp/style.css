@@ -6,76 +6,44 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
-    color: #e8e8e8;
-    padding: 16px 12px;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    padding: 20px 16px;
     min-height: 100vh;
-    line-height: 1.5;
-    position: relative;
-}
-
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: 
-        radial-gradient(circle at 20% 50%, rgba(100, 100, 100, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(80, 80, 80, 0.1) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: 0;
+    line-height: 1.6;
 }
 
 .container {
     max-width: 600px;
     margin: 0 auto;
-    position: relative;
-    z-index: 1;
 }
 
 header {
     text-align: center;
-    margin-bottom: 24px;
-    padding-bottom: 20px;
-    position: relative;
-}
-
-header::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60px;
-    height: 3px;
-    background: linear-gradient(90deg, transparent, #6a6a6a, transparent);
-    border-radius: 2px;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
 }
 
 h1 {
-    font-size: 26px;
-    font-weight: 700;
-    color: #f0f0f0;
+    font-size: 28px;
+    font-weight: 600;
+    color: #f5f5f5;
     letter-spacing: -0.5px;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .loading {
     text-align: center;
-    padding: 40px 20px;
+    padding: 60px 20px;
 }
 
 .spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid #3a3a3a;
-    border-top-color: #8a8a8a;
+    border: 3px solid #2a2a2a;
+    border-top-color: #6a6a6a;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
-    margin: 0 auto 12px;
-    box-shadow: 0 0 10px rgba(138, 138, 138, 0.3);
+    margin: 0 auto 16px;
 }
 
 @keyframes spin {
@@ -84,331 +52,222 @@ h1 {
 
 .loading p {
     color: #8a8a8a;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .error, .empty {
     text-align: center;
-    padding: 40px 20px;
+    padding: 60px 20px;
 }
 
 .error p, .empty p {
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     color: #8a8a8a;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .error button {
-    background: linear-gradient(135deg, #4a4a4a 0%, #5a5a5a 100%);
-    color: #f0f0f0;
+    background: #3a3a3a;
+    color: #f5f5f5;
     border: none;
-    padding: 10px 20px;
-    border-radius: 10px;
-    font-size: 14px;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 15px;
     cursor: pointer;
     font-weight: 500;
-    margin-top: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease;
+    margin-top: 8px;
+    transition: background 0.2s ease;
 }
 
 .error button:hover {
-    background: linear-gradient(135deg, #5a5a5a 0%, #6a6a6a 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    background: #4a4a4a;
 }
 
 .hint {
-    font-size: 13px;
+    font-size: 14px;
     color: #8a8a8a;
-    line-height: 1.4;
+    line-height: 1.5;
 }
 
 .stats {
     display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-    padding: 18px 16px;
-    background: linear-gradient(135deg, #252525 0%, #2a2a2a 100%);
-    border-radius: 16px;
-    border: 1px solid #333333;
-    box-shadow: 
-        0 4px 20px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 20px;
+    background: #222222;
+    border-radius: 14px;
 }
 
 .stat-item {
     flex: 1;
     text-align: center;
-    position: relative;
-}
-
-.stat-item.active::before {
-    content: '';
-    position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4px;
-    height: 4px;
-    background: #8a8a8a;
-    border-radius: 50%;
-    box-shadow: 0 0 8px rgba(138, 138, 138, 0.6);
 }
 
 .stat-item.active .stat-value {
     color: #b0b0b0;
-    text-shadow: 0 0 10px rgba(176, 176, 176, 0.3);
 }
 
 .stat-label {
     display: block;
-    font-size: 11px;
+    font-size: 12px;
     color: #8a8a8a;
-    margin-bottom: 6px;
-    font-weight: 500;
+    margin-bottom: 8px;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.5px;
 }
 
 .stat-value {
     display: block;
-    font-size: 24px;
-    font-weight: 700;
-    color: #e8e8e8;
+    font-size: 28px;
+    font-weight: 600;
+    color: #e0e0e0;
     letter-spacing: -0.5px;
-    transition: all 0.3s ease;
 }
 
 .subscription-card {
-    background: linear-gradient(135deg, #222222 0%, #252525 100%);
-    border: 1px solid #333333;
-    border-radius: 16px;
-    padding: 16px 18px;
+    background: #222222;
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 20px;
     margin-bottom: 12px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 
-        0 2px 8px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    position: relative;
-    overflow: hidden;
-}
-
-.subscription-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.03), transparent);
-    transition: left 0.5s ease;
-}
-
-.subscription-card:hover::before {
-    left: 100%;
+    transition: all 0.2s ease;
 }
 
 .subscription-card:hover {
-    border-color: #4a4a4a;
-    transform: translateY(-2px);
-    box-shadow: 
-        0 8px 24px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(138, 138, 138, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    border-color: #3a3a3a;
+    background: #252525;
 }
 
 .subscription-card.active {
-    background: linear-gradient(135deg, #2a2a2a 0%, #2f2f2f 100%);
-    border-color: #555555;
-    box-shadow: 
-        0 4px 16px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(138, 138, 138, 0.15),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.subscription-card.active::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 3px;
-    height: 100%;
-    background: linear-gradient(180deg, #6a6a6a, #8a8a8a);
-    border-radius: 16px 0 0 16px;
+    border-color: #4a4a4a;
+    background: #252525;
 }
 
 .subscription-card.expired {
-    opacity: 0.6;
-    background: linear-gradient(135deg, #1f1f1f 0%, #222222 100%);
+    opacity: 0.5;
 }
 
 .subscription-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 
 .subscription-name {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 600;
-    color: #f0f0f0;
+    color: #f5f5f5;
     letter-spacing: -0.3px;
     flex: 1;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .subscription-status {
-    padding: 4px 10px;
+    padding: 5px 12px;
     border-radius: 8px;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    letter-spacing: 0.5px;
 }
 
 .subscription-status.active {
-    background: linear-gradient(135deg, #3a3a3a 0%, #4a4a4a 100%);
-    color: #c0c0c0;
-    box-shadow: 0 2px 8px rgba(192, 192, 192, 0.2);
+    background: #2a2a2a;
+    color: #b0b0b0;
 }
 
 .subscription-status.expired {
-    background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%);
-    color: #c08080;
+    background: #2a1f1f;
+    color: #a08080;
 }
 
 .subscription-status.trial {
-    background: linear-gradient(135deg, #3a3a2a 0%, #4a4a3a 100%);
-    color: #c0a080;
+    background: #2a2a1f;
+    color: #a0a080;
 }
 
 .subscription-info {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    margin-top: 14px;
+    gap: 16px;
+    margin-top: 16px;
 }
 
 .info-item {
     display: flex;
     flex-direction: column;
-    padding: 8px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .info-label {
-    font-size: 10px;
+    font-size: 11px;
     color: #8a8a8a;
     margin-bottom: 6px;
-    font-weight: 500;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.5px;
 }
 
 .info-value {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 500;
     color: #d0d0d0;
 }
 
 .days-remaining {
     color: #b0b0b0;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 16px;
-    text-shadow: 0 0 8px rgba(176, 176, 176, 0.3);
 }
 
 .subscription-actions {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #2a2a2a;
 }
 
 .action-button {
     width: 100%;
     padding: 12px;
     border: none;
-    background: linear-gradient(135deg, #4a4a4a 0%, #5a5a5a 100%);
-    color: #f0f0f0;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 600;
+    background: #3a3a3a;
+    color: #f5f5f5;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    position: relative;
-    overflow: hidden;
-}
-
-.action-button::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-}
-
-.action-button:hover::before {
-    width: 300px;
-    height: 300px;
+    transition: background 0.2s ease;
 }
 
 .action-button:hover {
-    background: linear-gradient(135deg, #5a5a5a 0%, #6a6a6a 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    background: #4a4a4a;
 }
 
 .action-button:active {
-    transform: translateY(0);
+    background: #353535;
 }
 
 .days-badge {
-    margin-top: 14px;
-    padding: 12px;
-    background: linear-gradient(135deg, #2a2a2a 0%, #2f2f2f 100%);
+    margin-top: 16px;
+    padding: 16px;
+    background: #1f1f1f;
     border-radius: 12px;
     text-align: center;
-    border: 1px solid rgba(138, 138, 138, 0.2);
-    box-shadow: 
-        0 2px 8px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    position: relative;
-}
-
-.days-badge::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, #6a6a6a, transparent);
 }
 
 .days-badge .info-label {
-    font-size: 10px;
-    margin-bottom: 4px;
+    font-size: 11px;
+    margin-bottom: 6px;
 }
 
 .days-badge .days-remaining {
-    font-size: 20px;
+    font-size: 24px;
     display: block;
 }
 
 @media (max-width: 480px) {
     body {
-        padding: 12px 10px;
+        padding: 16px 12px;
     }
     
     h1 {
@@ -417,16 +276,16 @@ h1 {
     
     .subscription-info {
         grid-template-columns: 1fr;
-        gap: 10px;
+        gap: 14px;
     }
     
     .stats {
         flex-direction: column;
-        gap: 12px;
+        gap: 16px;
         padding: 16px;
     }
     
     .subscription-card {
-        padding: 14px 16px;
+        padding: 16px;
     }
 }
