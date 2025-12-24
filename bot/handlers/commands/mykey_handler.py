@@ -76,11 +76,10 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
         subscription_url = f"http://localhost:5000/sub/{sub['subscription_token']}"
         logger.warning("⚠️ WEBHOOK_URL не установлен!")
     
-    # Форматируем даты
-    expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
-    expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
-    created_datetime = datetime.datetime.fromtimestamp(sub['created_at'])
-    created_str = created_datetime.strftime('%d.%m.%Y %H:%M')
+    # Форматируем даты в московском времени
+    from ...utils.timezone import format_timestamp_moscow
+    expiry_str = format_timestamp_moscow(expires_at)
+    created_str = format_timestamp_moscow(sub['created_at'])
     
     sub_name = sub.get('name', 'Подписка')
     

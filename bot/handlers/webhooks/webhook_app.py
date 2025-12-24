@@ -522,8 +522,8 @@ def create_webhook_app(bot_app):
                 is_active = sub['status'] == 'active' and expires_at > current_time
                 is_expired = expires_at < current_time
                 
-                expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
-                created_datetime = datetime.datetime.fromtimestamp(sub['created_at'])
+                # Форматируем даты в московском времени
+                from ...utils.timezone import format_timestamp_moscow
                 
                 formatted_subs.append({
                     'id': sub['id'],
@@ -532,9 +532,9 @@ def create_webhook_app(bot_app):
                     'period': sub['period'],
                     'device_limit': sub['device_limit'],
                     'created_at': sub['created_at'],
-                    'created_at_formatted': created_datetime.strftime('%d.%m.%Y %H:%M'),
+                    'created_at_formatted': format_timestamp_moscow(sub['created_at']),
                     'expires_at': expires_at,
-                    'expires_at_formatted': expiry_datetime.strftime('%d.%m.%Y %H:%M'),
+                    'expires_at_formatted': format_timestamp_moscow(expires_at),
                     'price': sub['price'],
                     'token': sub['subscription_token'],
                     'days_remaining': max(0, (expires_at - current_time) // (24 * 60 * 60)) if is_active else 0

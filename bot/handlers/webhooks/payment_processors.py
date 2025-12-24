@@ -550,8 +550,9 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         # Шаг 5: Отправляем информацию о подписке пользователю
         try:
             # Вычисляем время истечения
-            expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
-            expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
+                from ...utils.timezone import get_moscow_time
+                expiry_time = get_moscow_time() + datetime.timedelta(days=days)
+                expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
             expiry_timestamp = int(expiry_time.timestamp())
             
             # Получаем WEBHOOK_URL для формирования полного URL подписки

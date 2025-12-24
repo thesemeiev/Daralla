@@ -20,3 +20,6 @@ tenacity==8.2.3
 
 # Webhook Server
 flask==3.0.0
+
+# Timezone support
+pytz==2024.1
