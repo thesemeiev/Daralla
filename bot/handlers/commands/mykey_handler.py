@@ -140,10 +140,18 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Добавляем состояние в стек только если функция вызывается напрямую (не через навигационную систему)
     # Если функция вызывается через навигационную систему, состояние уже добавлено в стек
+    # Добавляем состояние в стек только если функция вызывается напрямую (не через навигационную систему)
+    # Если функция вызывается через навигационную систему, состояние уже добавлено в стек
+    # НО: для пагинации не нужно вызывать navigate_to_state, так как мы остаемся в том же меню
     if update.callback_query and not context.user_data.get('_nav_called', False):
+        callback_data = update.callback_query.data if update.callback_query.data else ''
         from ...utils import safe_answer_callback_query
         await safe_answer_callback_query(update.callback_query)
-        if nav_system:
+        # Если это пагинация, не вызываем navigate_to_state (остаемся в том же меню)
+        if callback_data.startswith(CallbackData.SUBS_PAGE):
+            # Продолжаем обработку пагинации без вызова navigate_to_state
+            pass
+        elif nav_system:
             await nav_system.navigate_to_state(update, context, NavStates.SUBSCRIPTIONS_MENU)
             return  # navigate_to_state уже вызвал эту функцию через MenuHandlers
     
@@ -245,9 +253,12 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 current_page = 0
                 
                 # Получаем текущую страницу из callback_data
+                # Формат: subs_page_{page} (например, subs_page_0, subs_page_1)
                 if update.callback_query and update.callback_query.data and update.callback_query.data.startswith(CallbackData.SUBS_PAGE):
                     try:
-                        current_page = int(update.callback_query.data.split('_')[2])
+                        # Извлекаем номер страницы после "subs_page_"
+                        page_str = update.callback_query.data.replace(CallbackData.SUBS_PAGE, '')
+                        current_page = int(page_str)
                     except (ValueError, IndexError):
                         current_page = 0
                 

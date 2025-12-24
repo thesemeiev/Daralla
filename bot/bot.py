@@ -110,9 +110,9 @@ IMAGE_PATHS = {
     'instruction_menu': 'images/instruction_menu.jpg',
     'instruction_platform': 'images/instruction_platform.jpg',
     'buy_menu': 'images/buy_menu.jpg',
-    'subs_menu': 'images/mykeys_menu.jpg',
+    'subs_menu': 'images/my_subscriptions.jpg',
     'server_selection': 'images/server_selection.jpg',
-    'extend_sub': 'images/extend_key.jpg',
+    'extend_sub': 'images/extend_subscription.jpg',
     'admin_menu': 'images/admin_menu.jpg',
     'admin_errors': 'images/admin_errors.jpg',
     'admin_notifications': 'images/admin_notifications.jpg',
@@ -136,7 +136,7 @@ IMAGE_PATHS = {
     'instruction_linux': 'images/instruction_linux.jpg',
     'instruction_tv': 'images/instruction_tv.jpg',
     'instruction_faq': 'images/instruction_faq.jpg',
-    'sub_success': 'images/key_success.jpg',
+    'sub_success': 'images/subscription_success.jpg',
     'payment_success': 'images/payment_success.jpg'
 }
 
@@ -361,9 +361,8 @@ if __name__ == '__main__':
     # ВАЖНО: Все callback'и обрабатываются через NavigationIntegration, кроме select_period_
     # Оставляем только select_period_ callback'и, которые обрабатываются здесь
     app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^select_period_"))
-    # Обработчик для просмотра и переименования подписок
-
-    app.add_handler(CallbackQueryHandler(mykey, pattern=f"^({CallbackData.VIEW_SUB}|{CallbackData.RENAME_SUB})"))
+    # Обработчик для просмотра, переименования подписок и пагинации
+    app.add_handler(CallbackQueryHandler(mykey, pattern=f"^({CallbackData.VIEW_SUB}|{CallbackData.RENAME_SUB}|{CallbackData.SUBS_PAGE})"))
  
     
     # Рассылка
