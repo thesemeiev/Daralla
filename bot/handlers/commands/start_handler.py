@@ -9,8 +9,10 @@ from ...utils import (
     UIEmojis, UIStyles, UIButtons, UIMessages,
     safe_edit_or_reply_universal, check_private_chat
 )
-from ...db import register_simple_user
+from ...db import register_simple_user, is_known_user
+from ...db.subscribers_db import get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription
 from ...navigation import NavStates, MenuTypes
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +60,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Теперь, когда все проверки выполнены, регистрируем пользователя
     try:
+        # Проверяем, новый ли пользователь (есть ли он уже в БД)
+        was_known_user = await is_known_user(user_id)
+        
+        # Регистрируем пользователя
         await register_simple_user(user_id)
+        
+        # Если пользователь новый (не был в БД) - создаем пробную подписку на 5 дней
+        if not was_known_user:
+            try:
+                # Проверяем, нет ли уже активных подписок (на всякий случай)
+                existing_subs = await get_all_active_subscriptions_by_user(user_id)
+                if len(existing_subs) == 0:
+                    logger.info(f"Создание пробной подписки для нового пользователя: {user_id}")
+                    subscriber_id = await get_or_create_subscriber(user_id)
+                    now = int(time.time())
+                    expires_at = now + (5 * 24 * 60 * 60)  # 5 дней
+                    
+                    subscription_id, token = await create_subscription(
+                        subscriber_id=subscriber_id,
+                        period='trial',  # Пробный период
+                        device_limit=1,
+                        price=0.0,  # Бесплатно
+                        expires_at=expires_at,
+                        name="Пробная подписка"
+                    )
+                    logger.info(f"✅ Пробная подписка создана для пользователя {user_id}: subscription_id={subscription_id}, token={token}, expires_at={expires_at}")
+                else:
+                    logger.info(f"Пользователь {user_id} новый, но уже есть подписки, пробная не создается")
+            except Exception as trial_e:
+                logger.error(f"Ошибка создания пробной подписки для {user_id}: {trial_e}", exc_info=True)
     except Exception as e:
-        logger.error(f"Register user failed: {e}")
+        logger.error(f"Register user failed: {e}", exc_info=True)
     
     # Добавляем главное меню в навигационный стек при старте
     globals_dict = get_globals()
