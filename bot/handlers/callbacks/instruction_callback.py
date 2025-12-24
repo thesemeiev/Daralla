@@ -107,10 +107,12 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Mac.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
         CallbackData.INSTR_TV: (
-            "<b>Android TV (v2RayTun)</b>\n"
-            "1. <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">Скачайте v2RayTun для Android TV</a>.\n"
+            "<b>Android TV (v2RayTun, Happ)</b>\n"
+            "1. Выберите приложение:\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">v2RayTun для Android TV</a>\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=com.happ.vpn\">Happ для Android TV</a>\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
-            "3. В v2RayTun нажмите + → Добавить из буфера обмена.\n"
+            "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Android TV.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
