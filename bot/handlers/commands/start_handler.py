@@ -43,23 +43,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = str(update.effective_user.id)
     
-    # Используем единый стиль для приветственного сообщения
-    welcome_text = UIMessages.welcome_message()
-    
-    # Создаем кнопки главного меню используя единый стиль
-    is_admin = update.effective_user.id in ADMIN_IDS
-    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
-    keyboard = InlineKeyboardMarkup(buttons)
-    
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     if message is None:
         logger.error("main_menu: message is None")
         return
     
-    # Дополнительное логирование для отладки
-    logger.info(f"START_MESSAGE: message={message}, welcome_text_length={len(welcome_text) if welcome_text else 0}")
-
     # Теперь, когда все проверки выполнены, регистрируем пользователя
+    trial_created = False
     try:
         # Проверяем, новый ли пользователь (есть ли он уже в БД)
         was_known_user = await is_known_user(user_id)
@@ -154,6 +144,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         failed_servers.append(server_name)
                                 
                                 logger.info(f"Пробная подписка: успешно создано на {len(successful_servers)} серверах, ошибок: {len(failed_servers)}")
+                                trial_created = True
                             else:
                                 logger.warning(f"Нет серверов в конфигурации для создания пробной подписки")
                         except Exception as client_e:
@@ -166,6 +157,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Ошибка создания пробной подписки для {user_id}: {trial_e}", exc_info=True)
     except Exception as e:
         logger.error(f"Register user failed: {e}", exc_info=True)
+    
+    # Формируем приветственное сообщение
+    welcome_text = UIMessages.welcome_message()
+    
+    # Если создана пробная подписка - добавляем информацию о ней
+    if trial_created:
+        trial_info = (
+            f"\n\n{UIStyles.success_message('🎁 Вам выдана пробная подписка на 5 дней!')}\n"
+            f"{UIStyles.description('Вы можете протестировать VPN прямо сейчас. Перейдите в «Мои подписки» для получения ключей.')}"
+        )
+        welcome_text += trial_info
+    
+    # Создаем кнопки главного меню используя единый стиль
+    is_admin = update.effective_user.id in ADMIN_IDS
+    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
+    keyboard = InlineKeyboardMarkup(buttons)
     
     # Добавляем главное меню в навигационный стек при старте
     globals_dict = get_globals()
