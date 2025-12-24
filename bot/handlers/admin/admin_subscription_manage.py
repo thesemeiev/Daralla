@@ -67,27 +67,9 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         return
     
     try:
-        # Получаем подписку (нужен user_id для проверки)
-        # Для админа получаем через токен или напрямую из БД
-        from ...db.subscribers_db import get_all_active_subscriptions
-        all_subs = await get_all_active_subscriptions()
-        sub = next((s for s in all_subs if s['id'] == subscription_id), None)
-        
-        if not sub:
-            # Пробуем получить все подписки (включая истекшие)
-            from ...db import get_all_subscriptions_by_user
-            # Нужно найти через поиск по всем пользователям
-            async def find_subscription():
-                from ...db import get_all_user_ids
-                user_ids = await get_all_user_ids()
-                for uid in user_ids[:100]:  # Ограничиваем поиск
-                    subs = await get_all_subscriptions_by_user(uid)
-                    found = next((s for s in subs if s['id'] == subscription_id), None)
-                    if found:
-                        return found
-                return None
-            
-            sub = await find_subscription()
+        # Получаем подписку (используем get_subscription_by_id_only, чтобы найти даже неактивные)
+        from ...db import get_subscription_by_id_only
+        sub = await get_subscription_by_id_only(subscription_id)
         
         if not sub:
             message = (
@@ -114,11 +96,14 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         status_emoji = UIEmojis.SUCCESS if is_active else (UIEmojis.ERROR if is_expired else UIEmojis.WARNING)
         status_text = "Активна" if is_active else f"Неактивна (status: {sub['status']}, expired: {is_expired})"
         
+        # Безопасно получаем user_id (может отсутствовать, если пользователь удален)
+        user_id = sub.get('user_id', 'Неизвестно')
+        
         message = (
             f"{UIStyles.header('Информация о подписке')}\n\n"
             f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
             f"<b>ID подписки:</b> {sub['id']}\n"
-            f"<b>Пользователь:</b> <code>{sub['user_id']}</code>\n"
+            f"<b>Пользователь:</b> <code>{user_id}</code>\n"
             f"<b>Название:</b> {sub.get('name', 'Без названия')}\n"
             f"<b>Токен:</b> <code>{sub['subscription_token']}</code>\n"
             f"<b>Устройств:</b> {sub['device_limit']}\n\n"
@@ -167,8 +152,8 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         ])
         
         # Кнопка "Назад" должна вести на список подписок пользователя, а не в админ панель
-        user_id = sub.get('user_id')
-        if user_id:
+        # Используем user_id, который мы уже получили выше
+        if user_id and user_id != 'Неизвестно':
             keyboard_buttons.append([
                 InlineKeyboardButton(
                     "← Назад",
