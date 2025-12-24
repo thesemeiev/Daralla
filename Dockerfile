@@ -20,10 +20,6 @@ COPY bot/ ./bot/
 # Копируем изображения для меню
 COPY images/ ./images/
 
-# Копируем скрипты
-COPY start_with_ngrok.sh setup_webhook.py ./
-RUN chmod +x start_with_ngrok.sh
-
 # Создаем пользователя для безопасности
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app
