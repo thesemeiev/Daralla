@@ -58,6 +58,7 @@ jobs:
         echo "TEST_SERVER_PASSWORD: ${{ secrets.TEST_SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
         echo "TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
         echo "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN != '' && 'SET' || 'NOT SET' }}"
+        echo "WEBHOOK_DOMAIN: ${{ secrets.WEBHOOK_DOMAIN != '' && 'SET' || 'NOT SET' }}"
 
     - name: Deploy to test server
       uses: appleboy/ssh-action@v1.0.3
@@ -96,16 +97,44 @@ jobs:
 
           # Database backup - ПЕРЕД удалением папки!
           echo "Creating database backup..."
+          BACKUP_SUCCESS=false
           if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
             echo "Found databases for backup:"
             ls -l data/*.db
-            sudo tar -czf "/root/backups/data/backup_${timestamp}.tar.gz" data/*.db
-            echo "Database backup created: /root/backups/data/backup_${timestamp}.tar.gz"
             
-            # Keep only 5 latest backups
-            ls -t /root/backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
+            # Create backup with verification
+            if sudo tar -czf "/root/backups/data/backup_${timestamp}.tar.gz" data/*.db; then
+              # Verify backup integrity
+              if sudo tar -tzf "/root/backups/data/backup_${timestamp}.tar.gz" > /dev/null 2>&1; then
+                BACKUP_SIZE=$(sudo stat -c%s "/root/backups/data/backup_${timestamp}.tar.gz" 2>/dev/null || echo "0")
+                if [ "$BACKUP_SIZE" -gt 1000 ]; then
+                  echo "✅ Database backup created and verified: /root/backups/data/backup_${timestamp}.tar.gz (size: ${BACKUP_SIZE} bytes)"
+                  BACKUP_SUCCESS=true
+                else
+                  echo "❌ ERROR: Backup file is too small (${BACKUP_SIZE} bytes), may be corrupted!"
+                  sudo rm -f "/root/backups/data/backup_${timestamp}.tar.gz"
+                fi
+              else
+                echo "❌ ERROR: Backup file is corrupted or invalid!"
+                sudo rm -f "/root/backups/data/backup_${timestamp}.tar.gz"
+              fi
+            else
+              echo "❌ ERROR: Failed to create backup!"
+            fi
+            
+            # Keep only 5 latest backups (only if backup was successful)
+            if [ "$BACKUP_SUCCESS" = true ]; then
+              ls -t /root/backups/data/backup_*.tar.gz | tail -n +6 | xargs -r sudo rm -f
+            fi
           else
             echo "No databases found to backup"
+            BACKUP_SUCCESS=true  # No backup needed, but not an error
+          fi
+          
+          # CRITICAL: Stop deployment if backup failed
+          if [ "$BACKUP_SUCCESS" != true ]; then
+            echo "❌ CRITICAL ERROR: Database backup failed! Deployment aborted to prevent data loss."
+            exit 1
           fi
 
           # .env backup - ПЕРЕД удалением папки!
@@ -154,6 +183,15 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq git sqlite3
           
           # Clone directly to working directory
+          # IMPORTANT: Backup is already created above, safe to remove
+          # But keep a safety copy just in case
+          if [ -d "data" ] && [ -n "$(ls -A data/*.db 2>/dev/null)" ]; then
+            echo "Creating safety copy before removal..."
+            sudo mkdir -p /root/backups/safety
+            sudo cp -r data/*.db /root/backups/safety/ 2>/dev/null || true
+            echo "Safety copy created in /root/backups/safety/"
+          fi
+          
           sudo rm -rf /root/Daralla
           sudo mkdir -p /root/Daralla
           cd /root
@@ -176,21 +214,73 @@ jobs:
           latest_db_backup=$(ls -t /root/backups/data/backup_*.tar.gz 2>/dev/null | head -n1)
           if [ -n "$latest_db_backup" ]; then
             echo "Restoring databases from $latest_db_backup..."
-            sudo mkdir -p data
-            sudo tar -xzf "$latest_db_backup" -C .
-            echo "Databases restored from $latest_db_backup"
             
-            # Verify restoration
-            echo "Verifying database restoration..."
+            # Verify backup file before restoration
+            if ! sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
+              echo "❌ ERROR: Backup file is corrupted or invalid: $latest_db_backup"
+              echo "⚠️  Attempting to use previous backup..."
+              # Try previous backup
+              latest_db_backup=$(ls -t /root/backups/data/backup_*.tar.gz 2>/dev/null | head -n2 | tail -n1)
+              if [ -z "$latest_db_backup" ] || ! sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
+                echo "❌ ERROR: All backup files are corrupted or missing!"
+                echo "⚠️  daralla.db will be created on startup (data loss possible)"
+                sudo mkdir -p data
+              else
+                echo "✅ Using previous backup: $latest_db_backup"
+              fi
+            fi
+            
+            if [ -n "$latest_db_backup" ] && sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
+              sudo mkdir -p data
+              if sudo tar -xzf "$latest_db_backup" -C .; then
+                echo "✅ Databases restored from $latest_db_backup"
+              else
+                echo "❌ ERROR: Failed to extract backup!"
+                # Try safety copy as last resort
+                if [ -d "/root/backups/safety" ] && [ -n "$(ls -A /root/backups/safety/*.db 2>/dev/null)" ]; then
+                  echo "⚠️  Attempting to restore from safety copy..."
+                  sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy also failed, daralla.db will be created on startup"
+                else
+                  echo "⚠️  daralla.db will be created on startup (data loss possible)"
+                fi
+              fi
+            else
+              sudo mkdir -p data
+              # Try safety copy as last resort
+              if [ -d "/root/backups/safety" ] && [ -n "$(ls -A /root/backups/safety/*.db 2>/dev/null)" ]; then
+                echo "⚠️  Attempting to restore from safety copy..."
+                sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy failed, daralla.db will be created on startup"
+              fi
+            fi
+            
+            # Clean up old database files (from old architecture)
+            echo "Cleaning up old database files..."
+            cd data
+            for old_db in vpn_keys.db users.db subscribers.db notifications.db payments.db; do
+              if [ -f "$old_db" ]; then
+                echo "Removing old database file: $old_db"
+                sudo rm -f "$old_db"
+              fi
+            done
+            cd ..
+            
+            # Verify daralla.db exists and is valid
+            echo "Verifying daralla.db..."
             if [ -f "data/daralla.db" ]; then
               echo "Checking daralla.db content..."
-              sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read daralla.db"
+              if sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
+                echo "✅ daralla.db is valid"
+                sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+              else
+                echo "⚠️  daralla.db exists but is invalid or empty, will be recreated on startup"
+                sudo rm -f data/daralla.db
+              fi
+            else
+              echo "⚠️  daralla.db not found in backup, will be created on startup"
             fi
           else
-            echo "Database backups not found - creating empty databases"
+            echo "Database backups not found - daralla.db will be created on startup"
             sudo mkdir -p data
-            sudo touch data/daralla.db
-            echo "Empty databases created"
           fi
 
           # Restore .env
@@ -211,7 +301,6 @@ jobs:
               echo "YOOKASSA_SHOP_ID=" | sudo tee -a .env > /dev/null
               echo "YOOKASSA_SECRET_KEY=" | sudo tee -a .env > /dev/null
               echo "# Webhook Configuration" | sudo tee -a .env > /dev/null
-              echo "NGROK_AUTH_TOKEN=" | sudo tee -a .env > /dev/null
               echo "WEBHOOK_URL=" | sudo tee -a .env > /dev/null
               echo "# X-UI Server Configuration" | sudo tee -a .env > /dev/null
               echo "XUI_HOST_LATVIA_1=" | sudo tee -a .env > /dev/null
@@ -224,13 +313,15 @@ jobs:
 
           # Check restoration
           echo "Checking restored files..."
-          echo "Databases:"
-          ls -lh data/*.db || echo "Databases not found"
+          echo "Databases in data directory:"
+          ls -lh data/*.db 2>/dev/null || echo "No database files found (will be created on startup)"
           
-          # Verify database content
+          # Verify daralla.db structure
           if [ -f "data/daralla.db" ]; then
-            echo "Checking daralla.db content..."
-            sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table';" || echo "Cannot read daralla.db"
+            echo "Checking daralla.db structure..."
+            sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;" || echo "Cannot read daralla.db"
+          else
+            echo "ℹ️  daralla.db will be created automatically on first bot startup"
           fi
           
           # Fix permissions after restoration
@@ -246,6 +337,41 @@ jobs:
           sudo chown -R 1000:1000 data/
           sudo chmod -R 666 data/*.db
           sudo chmod 755 data/
+          
+          # Configure webhook URL
+          # Check if domain is configured (Nginx with SSL)
+          echo "Checking webhook configuration..."
+          
+          # Try to detect domain from Nginx config or use provided
+          WEBHOOK_DOMAIN="${{ secrets.WEBHOOK_DOMAIN }}"
+          if [ -z "$WEBHOOK_DOMAIN" ]; then
+            # Try to detect from Nginx config
+            if [ -f "/etc/nginx/sites-enabled/ghosttunnel.space" ] || [ -f "/etc/nginx/sites-available/ghosttunnel.space" ]; then
+              WEBHOOK_DOMAIN="ghosttunnel.space"
+              echo "✅ Detected domain from Nginx config: $WEBHOOK_DOMAIN"
+            else
+              # Check for any SSL-enabled domain
+              SSL_DOMAIN=$(sudo grep -r "ssl_certificate" /etc/nginx/sites-enabled/ 2>/dev/null | head -1 | grep -oP 'ssl_certificate.*live/\K[^/]+' || echo "")
+              if [ -n "$SSL_DOMAIN" ]; then
+                WEBHOOK_DOMAIN="$SSL_DOMAIN"
+                echo "✅ Detected domain from SSL config: $WEBHOOK_DOMAIN"
+              else
+                echo "⚠️  No domain configured. Webhook URL will not be set."
+                echo "   Set WEBHOOK_DOMAIN in GitHub Secrets or configure Nginx with SSL"
+                WEBHOOK_DOMAIN=""
+              fi
+            fi
+          fi
+          
+          # Set webhook URL if domain is available
+          if [ -n "$WEBHOOK_DOMAIN" ]; then
+            WEBHOOK_URL="https://${WEBHOOK_DOMAIN}/webhook/yookassa"
+            echo "✅ Webhook URL: $WEBHOOK_URL"
+            echo "WEBHOOK_URL=$WEBHOOK_URL" | sudo tee -a .env
+          else
+            echo "⚠️  Webhook URL not set. Configure domain and SSL first."
+            echo "WEBHOOK_URL=" | sudo tee -a .env
+          fi
           
           # Return to project directory
           cd /root/Daralla
@@ -304,9 +430,17 @@ jobs:
           
           # Final verification of data
           echo "Final data verification..."
+          sleep 3  # Wait for bot to initialize database
           if [ -f "data/daralla.db" ]; then
             echo "Final daralla.db check:"
-            sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+            if sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
+              echo "✅ daralla.db is valid and initialized"
+              sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+            else
+              echo "⚠️  daralla.db exists but may not be initialized yet (check bot logs)"
+            fi
+          else
+            echo "⚠️  daralla.db not found - check bot logs for initialization errors"
           fi
           
           echo "✅ Deployment to TEST server completed!"

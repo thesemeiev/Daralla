@@ -466,7 +466,6 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
         f"<b>Ваша подписка продлена на {period_text}</b>\n\n"
         f"<b>Промокод:</b> <code>{promo_code}</code>\n\n"
         f"Подписка обновлена на всех серверах!\n\n"
-        f"<i>Это сообщение будет удалено через 10 секунд...</i>\n\n"
         f"<b>Наслаждайтесь!</b>"
     )
     
