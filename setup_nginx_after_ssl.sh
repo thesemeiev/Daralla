@@ -148,8 +148,8 @@ fi
 # 5. Открытие портов в firewall (если используется UFW)
 if command -v ufw &> /dev/null; then
     echo "🔥 Настройка firewall..."
-    ufw allow 80/tcp comment "HTTP for Let's Encrypt"
-    ufw allow 443/tcp comment "HTTPS for webhooks"
+    ufw allow 80/tcp 2>/dev/null || true
+    ufw allow 443/tcp 2>/dev/null || true
     echo "✅ Порты открыты"
 fi
 
