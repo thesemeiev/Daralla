@@ -61,8 +61,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not was_known_user:
             try:
                 # Проверяем, нет ли уже активных подписок (на всякий случай)
+                # Фильтруем только действительно активные (не истекшие по времени)
                 existing_subs = await get_all_active_subscriptions_by_user(user_id)
-                if len(existing_subs) == 0:
+                now = int(time.time())
+                active_subs = [sub for sub in existing_subs if sub.get('status') == 'active' and sub.get('expires_at', 0) > now]
+                
+                if len(active_subs) == 0:
                     logger.info(f"Создание пробной подписки для нового пользователя: {user_id}")
                     subscriber_id = await get_or_create_subscriber(user_id)
                     now = int(time.time())
