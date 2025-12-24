@@ -848,7 +848,7 @@ class X3:
 
     def link(self, user_id: str, server_name: str = None):
         """
-        Генерирует VLESS ссылку для клиента
+        Генерирует ссылку для клиента (VLESS или TROJAN в зависимости от протокола inbound'а)
         
         Args:
             user_id: Email клиента
@@ -864,6 +864,9 @@ class X3:
             if not client:
                 continue
 
+            # Определяем протокол inbound'а
+            protocol = inbounds.get('protocol', 'vless').lower()
+            
             # Используем vpn_host если указан, иначе берем из host панели
             if self.vpn_host:
                 # Если vpn_host указан, используем его
@@ -907,45 +910,72 @@ class X3:
             short_ids = reality.get('shortIds', [''])
             sid = short_ids[0] if isinstance(short_ids, list) and short_ids else (short_ids if isinstance(short_ids, str) else '')
 
-            # Строго в правильном порядке, включая новые параметры
-            params = [
-                ("type", network),
-            ]
-            
-            # Добавляем параметры XHTTP если это XHTTP
-            if network == "xhttp":
-                params.append(("encryption", "none"))
-                if path:
-                    params.append(("path", quote(path)))
-                if xhttp_host:
-                    params.append(("host", xhttp_host))
-                if mode:
-                    params.append(("mode", mode))
-            
-            # Добавляем остальные параметры
-            params.extend([
-                ("security", security),
-                ("pbk", pbk),
-                ("fp", fingerprint),
-                ("sni", sni),
-                ("sid", sid),
-                ("spx", quote(spx)),
-            ])
-            
-            query = "&".join(f"{k}={v}" for k, v in params)
             # Используем название сервера в tag, если указано, иначе используем user_id
             # Tag должен быть URL-encoded для правильной работы в VPN клиентах
             tag = quote(server_name, safe='') if server_name else f"Daralla-{user_id}"
 
-            vless_link = f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
-            
-            # Логируем сгенерированную ссылку для отладки
-            logger.info(f"Сгенерирована VLESS ссылка для {user_id}: tag='{tag}', server_name='{server_name}'")
-            logger.info(f"Полная VLESS ссылка (первые 200 символов): {vless_link[:200]}...")
-            logger.debug(f"Полная VLESS ссылка: {vless_link}")
-            logger.debug(f"Параметры ссылки: host={host}, port={port}, network={network}, security={security}")
-            
-            return vless_link
+            # Генерируем ссылку в зависимости от протокола
+            if protocol == 'trojan':
+                # TROJAN TCP Reality
+                # Для TROJAN password может быть в client['password'] или client['id']
+                password = client.get('password') or client.get('id', '')
+                
+                # Параметры для TROJAN Reality
+                params = [
+                    ("security", security),
+                    ("pbk", pbk),
+                    ("fp", fingerprint),
+                    ("sni", sni),
+                    ("sid", sid),
+                    ("spx", quote(spx)),
+                ]
+                
+                query = "&".join(f"{k}={v}" for k, v in params if v)  # Пропускаем пустые значения
+                trojan_link = f"trojan://{quote(password)}@{host}:{port}?{query}#{tag}"
+                
+                logger.info(f"Сгенерирована TROJAN ссылка для {user_id}: tag='{tag}', server_name='{server_name}'")
+                logger.info(f"Полная TROJAN ссылка (первые 200 символов): {trojan_link[:200]}...")
+                logger.debug(f"Полная TROJAN ссылка: {trojan_link}")
+                logger.debug(f"Параметры ссылки: host={host}, port={port}, network={network}, security={security}")
+                
+                return trojan_link
+            else:
+                # VLESS (по умолчанию)
+                # Строго в правильном порядке, включая новые параметры
+                params = [
+                    ("type", network),
+                ]
+                
+                # Добавляем параметры XHTTP если это XHTTP
+                if network == "xhttp":
+                    params.append(("encryption", "none"))
+                    if path:
+                        params.append(("path", quote(path)))
+                    if xhttp_host:
+                        params.append(("host", xhttp_host))
+                    if mode:
+                        params.append(("mode", mode))
+                
+                # Добавляем остальные параметры
+                params.extend([
+                    ("security", security),
+                    ("pbk", pbk),
+                    ("fp", fingerprint),
+                    ("sni", sni),
+                    ("sid", sid),
+                    ("spx", quote(spx)),
+                ])
+                
+                query = "&".join(f"{k}={v}" for k, v in params)
+                vless_link = f"vless://{client['id']}@{host}:{port}?{query}#{tag}"
+                
+                # Логируем сгенерированную ссылку для отладки
+                logger.info(f"Сгенерирована VLESS ссылка для {user_id}: tag='{tag}', server_name='{server_name}'")
+                logger.info(f"Полная VLESS ссылка (первые 200 символов): {vless_link[:200]}...")
+                logger.debug(f"Полная VLESS ссылка: {vless_link}")
+                logger.debug(f"Параметры ссылки: host={host}, port={port}, network={network}, security={security}")
+                
+                return vless_link
 
         return 'Клиент не найден.'
     
