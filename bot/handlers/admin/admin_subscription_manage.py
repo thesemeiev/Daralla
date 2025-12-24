@@ -135,10 +135,19 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
                 )
             ])
         
+        # Показываем кнопку отмены для активных подписок
+        # И кнопку "Завершить отмену" для отмененных подписок, у которых еще есть серверы
         if sub['status'] != 'canceled':
             keyboard_buttons.append([
                 InlineKeyboardButton(
                     f"Отменить подписку",
+                    callback_data=f"admin_sub_cancel:{subscription_id}"
+                )
+            ])
+        elif servers:  # Если подписка отменена, но серверы еще привязаны
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    f"Завершить отмену (удалить клиентов)",
                     callback_data=f"admin_sub_cancel:{subscription_id}"
                 )
             ])
@@ -360,8 +369,10 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
             except Exception as e:
                 logger.error(f"Ошибка удаления связи подписки {subscription_id} с сервером {server_info['server_name']}: {e}")
         
-        # 3. Обновляем статус подписки на 'canceled'
-        await update_subscription_status(subscription_id, 'canceled')
+        # 3. Обновляем статус подписки на 'canceled' (если еще не отменена)
+        # Это позволяет повторно отменять подписки, которые были отменены до исправления функции
+        if sub.get('status') != 'canceled':
+            await update_subscription_status(subscription_id, 'canceled')
         
         # Формируем сообщение с результатами
         message = (
