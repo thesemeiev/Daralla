@@ -550,17 +550,16 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         # Шаг 5: Отправляем информацию о подписке пользователю
         try:
             # Вычисляем время истечения
-                from ...utils.timezone import get_moscow_time
-                expiry_time = get_moscow_time() + datetime.timedelta(days=days)
-                expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
+            expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
+            expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
             expiry_timestamp = int(expiry_time.timestamp())
-            
+
             # Получаем WEBHOOK_URL для формирования полного URL подписки
             # WEBHOOK_URL должен быть публичным URL вашего webhook сервера (например, через ngrok или домен)
             # Формат: http://your-domain.com или https://your-domain.com
             import os
             webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
-            
+
             # Получаем главное название VPN для параметра в URL
             try:
                 from ... import bot as bot_module
