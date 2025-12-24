@@ -560,6 +560,90 @@ def create_webhook_app(bot_app):
                 "Content-Type": "application/json"
             }
     
+    # API endpoint для получения статуса серверов (для Telegram Mini App)
+    @app.route('/api/servers', methods=['GET', 'OPTIONS'])
+    def api_servers():
+        """API endpoint для получения статуса серверов через Telegram Mini App"""
+        # Обрабатываем OPTIONS запрос (CORS preflight)
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            # Получаем initData из query параметров
+            init_data = request.args.get('initData')
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            # Проверяем initData от Telegram
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                return jsonify({'error': 'Invalid initData'}), 401
+            
+            # Получаем server_manager из bot_app
+            def get_server_manager():
+                """Получает server_manager из bot.py"""
+                try:
+                    from ... import bot as bot_module
+                    return getattr(bot_module, 'server_manager', None)
+                except (ImportError, AttributeError):
+                    return None
+            
+            server_manager = get_server_manager()
+            if not server_manager:
+                return jsonify({'error': 'Server manager not available'}), 503
+            
+            # Получаем статус серверов
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Проверяем здоровье всех серверов
+                health_results = server_manager.check_all_servers_health(force_check=False)
+                health_status = server_manager.get_server_health_status()
+                
+                # Формируем список серверов
+                servers = []
+                for server in server_manager.servers:
+                    server_name = server["name"]
+                    is_healthy = health_results.get(server_name, False)
+                    status_info = health_status.get(server_name, {})
+                    
+                    # Форматируем дату последней проверки
+                    last_check = None
+                    if status_info.get('last_check'):
+                        import datetime
+                        if isinstance(status_info['last_check'], (int, float)):
+                            last_check = datetime.datetime.fromtimestamp(status_info['last_check']).strftime('%d.%m.%Y %H:%M')
+                        else:
+                            last_check = str(status_info['last_check'])
+                    
+                    servers.append({
+                        'name': server_name,
+                        'status': 'online' if is_healthy else 'offline',
+                        'last_check': last_check
+                    })
+                
+                return jsonify({
+                    'success': True,
+                    'servers': servers
+                }), 200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                }
+            finally:
+                loop.close()
+            
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/servers: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+    
     # Endpoint для обслуживания веб-приложения
     @app.route('/webapp/', methods=['GET'])
     @app.route('/webapp/index.html', methods=['GET'])

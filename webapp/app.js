@@ -9,6 +9,111 @@ tg.expand();
 tg.setHeaderColor('#1a1a1a');
 tg.setBackgroundColor('#1a1a1a');
 
+// Текущая страница
+let currentPage = 'subscriptions';
+
+// Функция переключения страниц
+function showPage(pageName) {
+    // Скрываем все страницы
+    document.querySelectorAll('.page').forEach(page => {
+        page.style.display = 'none';
+    });
+    
+    // Показываем нужную страницу
+    const pageEl = document.getElementById(`page-${pageName}`);
+    if (pageEl) {
+        pageEl.style.display = 'block';
+        pageEl.classList.add('active');
+    }
+    
+    // Обновляем навигацию
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Активируем нужный пункт навигации (если это не детальная страница)
+    if (pageName !== 'subscription-detail') {
+        const navItems = document.querySelectorAll('.nav-item');
+        if (pageName === 'subscriptions') {
+            navItems[0]?.classList.add('active');
+        } else if (pageName === 'servers') {
+            navItems[1]?.classList.add('active');
+        } else if (pageName === 'about') {
+            navItems[2]?.classList.add('active');
+        }
+    }
+    
+    currentPage = pageName;
+    
+    // Загружаем данные для страницы
+    if (pageName === 'subscriptions') {
+        loadSubscriptions();
+    } else if (pageName === 'servers') {
+        loadServers();
+    }
+}
+
+// Функция показа детальной информации о подписке
+function showSubscriptionDetail(sub) {
+    const pageEl = document.getElementById('page-subscription-detail');
+    const nameEl = document.getElementById('detail-subscription-name');
+    const contentEl = document.getElementById('subscription-detail-content');
+    
+    nameEl.textContent = escapeHtml(sub.name);
+    
+    const statusClass = sub.status === 'active' ? 'active' : 'expired';
+    const statusText = sub.status === 'active' ? 'Активна' : 
+                      sub.status === 'expired' ? 'Истекла' : 
+                      sub.status === 'trial' ? 'Пробная' : sub.status;
+    
+    contentEl.innerHTML = `
+        <div class="detail-card">
+            <div class="detail-header">
+                <div class="detail-status ${statusClass}">${statusText}</div>
+            </div>
+            
+            <div class="detail-info-grid">
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Название</div>
+                    <div class="detail-info-value">${escapeHtml(sub.name)}</div>
+                </div>
+                
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Устройств</div>
+                    <div class="detail-info-value">${sub.device_limit}</div>
+                </div>
+                
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Создана</div>
+                    <div class="detail-info-value">${sub.created_at_formatted}</div>
+                </div>
+                
+                <div class="detail-info-item">
+                    <div class="detail-info-label">${sub.status === 'active' ? 'Истекает' : 'Истекла'}</div>
+                    <div class="detail-info-value">${sub.expires_at_formatted}</div>
+                </div>
+                
+                ${sub.status === 'active' && sub.days_remaining > 0 ? `
+                    <div class="detail-info-item full-width">
+                        <div class="detail-info-label">Осталось дней</div>
+                        <div class="detail-info-value days-highlight">${sub.days_remaining}</div>
+                    </div>
+                ` : ''}
+            </div>
+            
+            ${sub.status === 'active' ? `
+                <div class="detail-actions">
+                    <button class="action-button" onclick="copySubscriptionLink('${sub.token}')">
+                        Копировать ссылку подписки
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    showPage('subscription-detail');
+}
+
 // Функция загрузки подписок
 async function loadSubscriptions() {
     const loadingEl = document.getElementById('loading');
@@ -81,6 +186,8 @@ function renderSubscriptions(subscriptions) {
 function createSubscriptionCard(sub) {
     const card = document.createElement('div');
     card.className = `subscription-card ${sub.status}`;
+    card.style.cursor = 'pointer';
+    card.onclick = () => showSubscriptionDetail(sub);
     
     const statusClass = sub.status === 'active' ? 'active' : 'expired';
     const statusText = sub.status === 'active' ? 'Активна' : 
@@ -115,16 +222,87 @@ function createSubscriptionCard(sub) {
             </div>
         ` : ''}
         
-        ${sub.status === 'active' ? `
-            <div class="subscription-actions">
-                <button class="action-button" onclick="copySubscriptionLink('${sub.token}')">
-                    Копировать ссылку
-                </button>
-            </div>
-        ` : ''}
+        <div class="card-arrow">→</div>
     `;
     
     return card;
+}
+
+// Функция загрузки серверов
+async function loadServers() {
+    const loadingEl = document.getElementById('servers-loading');
+    const errorEl = document.getElementById('servers-error');
+    const contentEl = document.getElementById('servers-content');
+    const listEl = document.getElementById('servers-list');
+    
+    loadingEl.style.display = 'block';
+    errorEl.style.display = 'none';
+    contentEl.style.display = 'none';
+    
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            throw new Error('initData не доступен');
+        }
+        
+        const response = await fetch(`/api/servers?initData=${encodeURIComponent(initData)}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Ошибка получения данных');
+        }
+        
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        
+        if (!data.servers || data.servers.length === 0) {
+            listEl.innerHTML = '<div class="empty"><p>Серверы не найдены</p></div>';
+        } else {
+            renderServers(data.servers);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки серверов:', error);
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+    }
+}
+
+// Функция отображения серверов
+function renderServers(servers) {
+    const listEl = document.getElementById('servers-list');
+    listEl.innerHTML = '';
+    
+    servers.forEach(server => {
+        const card = document.createElement('div');
+        card.className = `server-card ${server.status === 'online' ? 'online' : 'offline'}`;
+        
+        const statusText = server.status === 'online' ? 'Онлайн' : 'Офлайн';
+        const statusIcon = server.status === 'online' ? '🟢' : '🔴';
+        
+        card.innerHTML = `
+            <div class="server-header">
+                <div class="server-name">${escapeHtml(server.name)}</div>
+                <div class="server-status ${server.status}">
+                    <span class="status-icon">${statusIcon}</span>
+                    <span>${statusText}</span>
+                </div>
+            </div>
+            ${server.last_check ? `
+                <div class="server-info">
+                    <div class="info-label">Последняя проверка</div>
+                    <div class="info-value">${escapeHtml(server.last_check)}</div>
+                </div>
+            ` : ''}
+        `;
+        
+        listEl.appendChild(card);
+    });
 }
 
 // Функция копирования ссылки подписки
@@ -167,13 +345,5 @@ function escapeHtml(text) {
 
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
-    loadSubscriptions();
+    showPage('subscriptions');
 });
-
-// Обновляем подписки при возврате на страницу (если Telegram Web App поддерживает)
-if (tg.onEvent) {
-    tg.onEvent('viewportChanged', () => {
-        // Можно добавить логику обновления при изменении viewport
-    });
-}
-
