@@ -117,6 +117,8 @@ class X3:
         """Добавляет нового клиента на сервер"""
         self._ensure_connected()
         
+        # Определяем протокол и inbound_id
+        protocol = None
         # Если inbound_id не указан, получаем первый доступный inbound
         if inbound_id is None:
             try:
@@ -127,14 +129,31 @@ class X3:
                 # Берем первый inbound из списка
                 first_inbound = inbounds_list['obj'][0]
                 inbound_id = first_inbound.get('id')
+                protocol = first_inbound.get('protocol', 'vless').lower()
                 if not inbound_id:
                     raise Exception("Не найден ID у первого inbound")
-                logger.info(f"Используется inbound_id={inbound_id} для добавления клиента {user_email}")
+                logger.info(f"Используется inbound_id={inbound_id}, protocol={protocol} для добавления клиента {user_email}")
             except Exception as e:
                 logger.error(f"Ошибка получения inbound_id: {e}")
                 # Fallback: используем 1 (старое поведение)
                 inbound_id = 1
-                logger.warning(f"Используется fallback inbound_id=1")
+                protocol = 'vless'  # По умолчанию VLESS
+                logger.warning(f"Используется fallback inbound_id=1, protocol={protocol}")
+        else:
+            # Если inbound_id указан, получаем протокол из inbound'а
+            try:
+                inbounds_list = self.list(timeout=timeout)
+                if inbounds_list.get('success', False) and inbounds_list.get('obj'):
+                    for inbound in inbounds_list['obj']:
+                        if inbound.get('id') == inbound_id:
+                            protocol = inbound.get('protocol', 'vless').lower()
+                            break
+                if not protocol:
+                    protocol = 'vless'  # По умолчанию VLESS
+                    logger.warning(f"Не удалось определить протокол для inbound_id={inbound_id}, используем {protocol}")
+            except Exception as e:
+                logger.warning(f"Ошибка определения протокола для inbound_id={inbound_id}: {e}, используем vless")
+                protocol = 'vless'
         
         if hours is not None:
             # Для тестовых ключей используем часы
@@ -143,20 +162,39 @@ class X3:
             # Для обычных ключей используем дни
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
         header = {"Accept": "application/json"}
-        # Минимальный набор параметров для VLESS клиента
-        # Flow не добавляем, так как его начали блокировать
         # limitIp используем из параметра или по умолчанию 1
         limit_ip_value = limit_ip if limit_ip is not None else 1
-        client_data = {
-            "id": str(uuid.uuid1()),
-            "email": str(user_email),
-            "limitIp": limit_ip_value,
-            "totalGB": 0,
-            "expiryTime": x_time,
-            "enable": True,
-            "tgId": str(tg_id),
-            "subId": key_name,  # Сохраняем имя ключа в поле subId
-        }
+        
+        # Генерируем UUID для id/password
+        client_uuid = str(uuid.uuid1())
+        
+        # Формируем данные клиента в зависимости от протокола
+        if protocol == 'trojan':
+            # Для TROJAN нужен password вместо id
+            client_data = {
+                "password": client_uuid,  # Для TROJAN используется password
+                "email": str(user_email),
+                "limitIp": limit_ip_value,
+                "totalGB": 0,
+                "expiryTime": x_time,
+                "enable": True,
+                "tgId": str(tg_id),
+                "subId": key_name,  # Сохраняем имя ключа в поле subId
+            }
+            logger.info(f"Создание TROJAN клиента {user_email} с password={client_uuid[:8]}...")
+        else:
+            # Для VLESS и других протоколов используется id
+            client_data = {
+                "id": client_uuid,  # Для VLESS используется id
+                "email": str(user_email),
+                "limitIp": limit_ip_value,
+                "totalGB": 0,
+                "expiryTime": x_time,
+                "enable": True,
+                "tgId": str(tg_id),
+                "subId": key_name,  # Сохраняем имя ключа в поле subId
+            }
+            logger.info(f"Создание {protocol.upper()} клиента {user_email} с id={client_uuid[:8]}...")
         logger.info(f"Создание клиента {user_email} на сервере {self.host} с limitIp={limit_ip_value} (передан limit_ip={limit_ip})")
         data1 = {
             "id": inbound_id,
