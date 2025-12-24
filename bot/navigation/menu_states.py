@@ -56,6 +56,7 @@ class MenuTypes:
     ADMIN_CONFIG = 'admin_config'
     ADMIN_SYNC = 'admin_sync'
     ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'
+    PROMO_HACK = 'promo_hack'
 
 class CallbackData:
     """Константы callback_data"""

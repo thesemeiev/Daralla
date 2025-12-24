@@ -60,7 +60,7 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Показываем активный промокод
         message += "\n" + "="*30 + "\n\n"
-        message += "<b>🎁 Активный промокод:</b>\n"
+        message += "<b>Активный промокод:</b>\n"
         if active_promo_code:
             promo_info = await get_promo_code(active_promo_code)
             if promo_info:

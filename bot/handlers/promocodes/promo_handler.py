@@ -69,7 +69,7 @@ async def promo_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['promo_chat_id'] = message.chat_id
     
     text = (
-        f"{UIEmojis.GIFT} <b>Введите промокод</b>\n\n"
+        f"<b>Введите промокод</b>\n\n"
         f"Отправьте промокод для {'покупки' if promo_type == 'purchase' else 'продления'} подписки."
     )
     
@@ -302,7 +302,7 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
             text=hack_message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type=MenuTypes.PAYMENT_SUCCESS
+            menu_type=MenuTypes.PROMO_HACK
         )
     except Exception as e:
         logger.error(f"Ошибка редактирования сообщения: {e}")
@@ -311,7 +311,7 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
             hack_message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type=MenuTypes.PAYMENT_SUCCESS
+            menu_type=MenuTypes.PROMO_HACK
         )
 
 
@@ -396,7 +396,7 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
             text=hack_message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type=MenuTypes.PAYMENT_SUCCESS
+            menu_type=MenuTypes.PROMO_HACK
         )
     except Exception as e:
         logger.error(f"Ошибка редактирования сообщения: {e}")
@@ -405,6 +405,6 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
             hack_message,
             reply_markup=keyboard,
             parse_mode="HTML",
-            menu_type=MenuTypes.PAYMENT_SUCCESS
+            menu_type=MenuTypes.PROMO_HACK
         )
 

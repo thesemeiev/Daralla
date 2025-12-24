@@ -77,7 +77,7 @@ class MenuHandlers:
         keyboard = NavigationBuilder.create_keyboard_with_back([
             [InlineKeyboardButton("1 месяц — 150₽", callback_data=CallbackData.SELECT_PERIOD_MONTH)],
             [InlineKeyboardButton("3 месяца — 350₽", callback_data=CallbackData.SELECT_PERIOD_3MONTH)],
-            [InlineKeyboardButton("🎁 Промокод", callback_data=CallbackData.PROMO_PURCHASE)],
+            [InlineKeyboardButton("Промокод", callback_data=CallbackData.PROMO_PURCHASE)],
         ])
         
         # Используем существующий стиль сообщения

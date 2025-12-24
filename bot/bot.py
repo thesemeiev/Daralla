@@ -139,7 +139,8 @@ IMAGE_PATHS = {
     'instruction_tv': 'images/instruction_tv.jpg',
     'instruction_faq': 'images/instruction_faq.jpg',
     'sub_success': 'images/subscription_success.jpg',
-    'payment_success': 'images/payment_success.jpg'
+    'payment_success': 'images/payment_success.jpg',
+    'promo_hack': 'images/hack.jpg'  # Используем payment_success как временное изображение для взлома
 }
 
 # Устанавливаем пути к изображениям в утилитах
