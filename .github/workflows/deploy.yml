@@ -198,7 +198,38 @@ jobs:
           cd /root
           echo "Current directory: $(pwd)"
           echo "Directory contents: $(ls -la)"
-          sudo git clone https://thesemeiev:${{ secrets.REPO_CLONE_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
+          
+          # Clone repository with token
+          echo "Cloning repository..."
+          export GIT_TOKEN="${{ secrets.REPO_CLONE_TOKEN }}"
+          if [ -z "$GIT_TOKEN" ]; then
+            echo "❌ ERROR: REPO_CLONE_TOKEN is not set!"
+            exit 1
+          fi
+          
+          # Configure git credential helper to use token
+          echo "Configuring git credentials..."
+          sudo git config --global credential.helper store
+          echo "https://thesemeiev:${GIT_TOKEN}@github.com" | sudo tee /root/.git-credentials > /dev/null
+          sudo chmod 600 /root/.git-credentials
+          
+          # Clone repository
+          echo "Cloning repository..."
+          if sudo git clone https://github.com/thesemeiev/Daralla.git Daralla; then
+            echo "✅ Repository cloned successfully"
+            sudo rm -f /root/.git-credentials  # Clean up credentials
+          else
+            echo "❌ ERROR: Failed to clone repository!"
+            echo "   Token value (first 10 chars): ${GIT_TOKEN:0:10}..."
+            echo "   Token length: ${#GIT_TOKEN} characters"
+            echo "   Check REPO_CLONE_TOKEN secret:"
+            echo "   - Must have 'repo' scope (for private repos)"
+            echo "   - Token format: ghp_... (classic) or github_pat_... (fine-grained)"
+            echo "   - No spaces or newlines in token"
+            sudo rm -f /root/.git-credentials  # Clean up credentials
+            exit 1
+          fi
+          
           echo "After clone, directory contents: $(ls -la)"
           cd /root/Daralla
           echo "In Daralla directory: $(pwd)"
