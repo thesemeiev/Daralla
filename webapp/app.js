@@ -109,16 +109,16 @@ function createSubscriptionCard(sub) {
         </div>
         
         ${sub.status === 'active' && sub.days_remaining > 0 ? `
-            <div style="margin-top: 12px; padding: 8px; background: var(--tg-theme-secondary-bg-color, #f0f0f0); border-radius: 8px; text-align: center;">
-                <span class="info-label">Осталось дней:</span>
+            <div class="days-badge">
+                <span class="info-label">Осталось дней</span>
                 <span class="days-remaining">${sub.days_remaining}</span>
             </div>
         ` : ''}
         
         ${sub.status === 'active' ? `
             <div class="subscription-actions">
-                <button class="action-button primary" onclick="copySubscriptionLink('${sub.token}')">
-                     Копировать ссылку
+                <button class="action-button" onclick="copySubscriptionLink('${sub.token}')">
+                    Копировать ссылку
                 </button>
             </div>
         ` : ''}
