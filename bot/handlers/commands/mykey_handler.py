@@ -57,7 +57,18 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
     # Формируем URL подписки
     subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
     webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
-    base_url = subscription_base_url if subscription_base_url else webhook_url
+    
+    # Если SUBSCRIPTION_URL не установлен, извлекаем базовый URL из WEBHOOK_URL
+    # (убираем путь /webhook/yookassa, оставляем только домен)
+    if subscription_base_url:
+        base_url = subscription_base_url
+    elif webhook_url:
+        # Извлекаем базовый URL (домен) из WEBHOOK_URL
+        from urllib.parse import urlparse
+        parsed = urlparse(webhook_url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+    else:
+        base_url = None
     
     if base_url:
         subscription_url = f"{base_url}/sub/{sub['subscription_token']}"

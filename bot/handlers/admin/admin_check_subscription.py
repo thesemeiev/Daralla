@@ -110,8 +110,20 @@ async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT
         # Проверяем доступность subscription URL
         import os
         webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
-        if webhook_url:
-            subscription_url = f"{webhook_url}/sub/{token}"
+        subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
+        
+        # Если SUBSCRIPTION_URL не установлен, извлекаем базовый URL из WEBHOOK_URL
+        if subscription_base_url:
+            base_url = subscription_base_url
+        elif webhook_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(webhook_url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            base_url = None
+        
+        if base_url:
+            subscription_url = f"{base_url}/sub/{token}"
             message += f"\n<b>Subscription URL:</b>\n<code>{subscription_url}</code>"
         else:
             message += f"\n{UIEmojis.WARNING} <b>WEBHOOK_URL не установлен!</b>"
