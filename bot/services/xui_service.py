@@ -959,7 +959,9 @@ class X3:
                 password = client.get('password') or client.get('id', '')
                 
                 # Параметры для TROJAN Reality
+                # V2RayTun требует параметр type (transport method)
                 params = [
+                    ("type", network),  # Добавляем type для совместимости с V2RayTun
                     ("security", security),
                     ("pbk", pbk),
                     ("fp", fingerprint),
