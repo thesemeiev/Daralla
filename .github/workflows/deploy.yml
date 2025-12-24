@@ -60,6 +60,7 @@ jobs:
         echo "SERVER_USER: ${{ secrets.SERVER_USER != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
         echo "SERVER_PORT: ${{ secrets.SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
+        echo "REPO_CLONE_TOKEN: ${{ secrets.REPO_CLONE_TOKEN != '' && 'SET' || 'NOT SET' }}"
         echo "WEBHOOK_DOMAIN: ${{ secrets.WEBHOOK_DOMAIN != '' && 'SET' || 'NOT SET' }}"
 
     - name: Deploy to server
@@ -81,7 +82,14 @@ jobs:
           
           # Stop old bot
           echo "Stopping old bot..."
-          sudo docker-compose down || true
+          # Use docker compose (new) or docker-compose (old)
+          if docker compose version &> /dev/null 2>&1; then
+            sudo docker compose down || true
+          elif command -v docker-compose &> /dev/null; then
+            sudo docker-compose down || true
+          else
+            echo "Docker Compose not available yet, will be installed later"
+          fi
           
           # Create backup structure
           echo "Preparing backup..."
@@ -137,6 +145,39 @@ jobs:
             # Keep only 5 latest .env copies
             ls -t /root/backups/env/env_* | tail -n +6 | xargs -r sudo rm -f
           fi
+          
+          # Install Docker and Docker Compose if not installed
+          echo "Checking Docker installation..."
+          if ! command -v docker &> /dev/null; then
+            echo "Installing Docker..."
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            echo "Docker installed successfully"
+          else
+            echo "Docker is already installed"
+          fi
+          
+          # Install Docker Compose (standalone) if not available
+          if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+            echo "Installing Docker Compose..."
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            echo "Docker Compose installed successfully"
+          else
+            echo "Docker Compose is already installed"
+          fi
+          
+          # Verify installations
+          echo "Verifying installations..."
+          docker --version || echo "Docker check failed"
+          docker-compose --version || docker compose version || echo "Docker Compose check failed"
           
           # Download code directly to working directory
           echo "Downloading code..."
@@ -325,7 +366,14 @@ jobs:
           # Clean up old logs and containers (safe approach)
           echo "Cleaning up old logs and containers..."
           # Stop and remove old containers
-          sudo docker-compose down || true
+          # Use docker compose (new) or docker-compose (old)
+          if docker compose version &> /dev/null 2>&1; then
+            sudo docker compose down || true
+          elif command -v docker-compose &> /dev/null; then
+            sudo docker-compose down || true
+          else
+            echo "Docker Compose not available, skipping cleanup"
+          fi
           # Remove only dangling images (safer)
           timeout 30 sudo docker image prune -f || echo "Image prune timed out, continuing..."
           # Clean up build cache
@@ -334,16 +382,36 @@ jobs:
           # Start bot
           echo "Starting bot..."
           # Build containers on server
-          sudo docker-compose build --no-cache
+          if docker compose version &> /dev/null 2>&1; then
+            sudo docker compose build --no-cache
+          elif command -v docker-compose &> /dev/null; then
+            sudo docker-compose build --no-cache
+          else
+            echo "ERROR: Docker Compose not available!"
+            exit 1
+          fi
           
           # Start with environment variables
           echo "Starting bot with environment variables..."
-          WEBHOOK_URL="$WEBHOOK_URL" sudo docker-compose up -d
+          if docker compose version &> /dev/null 2>&1; then
+            sudo docker compose up -d
+          elif command -v docker-compose &> /dev/null; then
+            sudo docker-compose up -d
+          else
+            echo "ERROR: Docker Compose not available!"
+            exit 1
+          fi
           
           # Check status
           echo "Checking status..."
           sleep 5
-          sudo docker-compose ps
+          if docker compose version &> /dev/null 2>&1; then
+            sudo docker compose ps
+          elif command -v docker-compose &> /dev/null; then
+            sudo docker-compose ps
+          else
+            echo "WARNING: Cannot check status - Docker Compose not available"
+          fi
           
           # Final verification of data
           echo "Final data verification..."
