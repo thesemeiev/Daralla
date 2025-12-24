@@ -78,6 +78,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     logger.info(f"✅ Пробная подписка создана в БД для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
                     
+                    # Устанавливаем trial_created сразу после создания подписки в БД
+                    trial_created = True
+                    
                     # Создаем клиентов на всех серверах для пробной подписки
                     globals_dict = get_globals()
                     subscription_manager = globals_dict.get('subscription_manager')
@@ -144,15 +147,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         failed_servers.append(server_name)
                                 
                                 logger.info(f"Пробная подписка: успешно создано на {len(successful_servers)} серверах, ошибок: {len(failed_servers)}")
-                                trial_created = True
                             else:
-                                logger.warning(f"Нет серверов в конфигурации для создания пробной подписки")
+                                logger.warning(f"Нет серверов в конфигурации для создания пробной подписки, но подписка создана в БД")
                         except Exception as client_e:
                             logger.error(f"Ошибка создания клиентов для пробной подписки {subscription_id}: {client_e}", exc_info=True)
+                            logger.info(f"Пробная подписка создана в БД, но клиенты будут созданы при синхронизации")
                     else:
-                        logger.warning(f"SubscriptionManager или NewClientManager недоступен, клиенты не созданы")
+                        logger.warning(f"SubscriptionManager или NewClientManager недоступен, клиенты не созданы, но подписка создана в БД")
                 else:
-                    logger.info(f"Пользователь {user_id} новый, но уже есть подписки, пробная не создается")
+                    logger.info(f"Пользователь {user_id} новый, но уже есть {len(existing_subs)} подписок, пробная не создается")
             except Exception as trial_e:
                 logger.error(f"Ошибка создания пробной подписки для {user_id}: {trial_e}", exc_info=True)
     except Exception as e:
