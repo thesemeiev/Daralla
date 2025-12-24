@@ -88,16 +88,22 @@ server {
     
     # Проксирование на webhook сервер (порт 5000)
     location / {
-        proxy_pass http://localhost:$WEBHOOK_PORT;
+        proxy_pass http://127.0.0.1:$WEBHOOK_PORT;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-Port \$server_port;
         
         # Таймауты для долгих запросов
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
+        
+        # Буферизация
+        proxy_buffering off;
+        proxy_request_buffering off;
         
         # Обработка ошибок (если бот еще не запущен)
         proxy_next_upstream error timeout invalid_header http_500 http_502 http_503;
