@@ -126,7 +126,7 @@ function createSubscriptionCard(sub) {
         ${sub.status === 'active' ? `
             <div class="subscription-actions">
                 <button class="action-button primary" onclick="copySubscriptionLink('${sub.token}')">
-                    📋 Копировать ссылку
+                     Копировать ссылку
                 </button>
             </div>
         ` : ''}
