@@ -221,8 +221,6 @@ function createSubscriptionCard(sub) {
                 <span class="days-remaining">${sub.days_remaining}</span>
             </div>
         ` : ''}
-        
-        <div class="card-arrow">→</div>
     `;
     
     return card;
