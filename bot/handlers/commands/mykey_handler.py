@@ -65,14 +65,11 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
         subscription_url = f"http://localhost:5000/sub/{sub['subscription_token']}"
         logger.warning("⚠️ WEBHOOK_URL не установлен!")
     
-    # Форматируем дату
+    # Форматируем даты
     expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
     expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
-    # Определяем текст периода (пробная подписка имеет period='month', но название "Пробная подписка")
-    if sub.get('name', '').lower() == 'пробная подписка':
-        period_text = "Пробная (5 дней)"
-    else:
-        period_text = "3 месяца" if sub["period"] == "3month" else "1 месяц"
+    created_datetime = datetime.datetime.fromtimestamp(sub['created_at'])
+    created_str = created_datetime.strftime('%d.%m.%Y %H:%M')
     
     sub_name = sub.get('name', 'Подписка')
     
@@ -82,7 +79,8 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
         subscription_message = (
             f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
             f"<b>Подписка активна</b> {UIEmojis.SUCCESS}\n\n"
-            f"<b>Окончание:</b> {expiry_str}\n"
+            f"<b>Создана:</b> {created_str}\n"
+            f"<b>Истекает:</b> {expiry_str}\n"
             f"<b>Осталось:</b> {time_remaining}\n"
             f"<b>Устройств:</b> {sub['device_limit']}\n\n"
             f"{UIStyles.subheader('Ссылка на подписку:')}\n"
@@ -99,7 +97,8 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
         subscription_message = (
             f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
             f"{UIEmojis.ERROR} <b>Подписка истекла</b>\n\n"
-            f"<b>Окончание:</b> {expiry_str}\n"
+            f"<b>Создана:</b> {created_str}\n"
+            f"<b>Истекла:</b> {expiry_str}\n"
             f"<b>Серверов:</b> {server_count}\n"
             f"<b>Устройств:</b> {sub['device_limit']}\n\n"
             f"{UIStyles.description('Ваша подписка истекла. Продлите её для продолжения использования.')}"

@@ -87,9 +87,6 @@ function createSubscriptionCard(sub) {
                       sub.status === 'expired' ? 'Истекла' : 
                       sub.status === 'trial' ? 'Пробная' : sub.status;
     
-    const periodText = sub.period === '3month' ? '3 месяца' : 
-                      sub.period === 'month' ? '1 месяц' : 
-                      sub.period === 'trial' ? 'Пробная' : sub.period;
     
     card.innerHTML = `
         <div class="subscription-header">

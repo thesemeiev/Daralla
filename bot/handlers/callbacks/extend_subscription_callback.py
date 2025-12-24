@@ -139,8 +139,6 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
         [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
     ])
     
-    period_text = "3 месяца" if sub['period'] == "3month" else "1 месяц"
-    
     # Получаем количество серверов подписки
     from ...db.subscribers_db import get_subscription_servers
     servers = await get_subscription_servers(subscription_id)
@@ -148,7 +146,8 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     
     message_text = (
         f"{UIStyles.header('Продление подписки')}\n\n"
-        f"<b>Текущий период:</b> {period_text}\n"
+        f"<b>Подписка:</b> {sub.get('name', 'Подписка')}\n"
+        f"<b>Истекает:</b> {expiry_str}\n"
         f"<b>Серверов:</b> {server_count}\n\n"
         f"{UIStyles.description('Выберите период продления:')}"
     )
