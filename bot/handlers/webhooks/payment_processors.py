@@ -16,6 +16,17 @@ from ...navigation import NavigationBuilder, CallbackData, MenuTypes
 logger = logging.getLogger(__name__)
 
 
+def cleanup_extension_message_for_payment(payment_id):
+    """Вспомогательная функция для очистки extension_messages"""
+    try:
+        from ... import bot as bot_module
+        from ...utils.extension_messages_cleanup import cleanup_extension_messages
+        if hasattr(bot_module, 'extension_messages'):
+            cleanup_extension_messages(bot_module.extension_messages, payment_id)
+    except Exception as e:
+        logger.debug(f"Ошибка очистки extension_messages для payment_id={payment_id}: {e}")
+
+
 def get_globals():
     """Получает глобальные переменные из bot.py"""
     try:
@@ -116,6 +127,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             if not extension_subscription_id:
                 logger.error(f"Не найден subscription_id для продления в meta: {meta}")
                 await update_payment_status(payment_id, 'failed')
+                cleanup_extension_message_for_payment(payment_id)
                 return
             
             # Получаем глобальные переменные
@@ -126,6 +138,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             if not subscription_manager or not new_client_manager:
                 logger.error("subscription_manager или new_client_manager не доступен")
                 await update_payment_status(payment_id, 'failed')
+                cleanup_extension_message_for_payment(payment_id)
                 return
             
             # Проверяем, что подписка принадлежит пользователю
@@ -135,6 +148,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             if not sub:
                 logger.error(f"Попытка продлить чужую подписку: user_id={user_id}, subscription_id={extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
+                cleanup_extension_message_for_payment(payment_id)
                 return
             
             # Получаем информацию о подписке
@@ -143,6 +157,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             if not servers:
                 logger.error(f"Не найдены серверы для подписки {extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
+                cleanup_extension_message_for_payment(payment_id)
                 return
             
             # Шаг 1: Вычисляем новое время истечения и обновляем БД
@@ -208,6 +223,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             if not successful_extensions:
                 logger.error(f"Не удалось синхронизировать клиентов ни на одном сервере для подписки {extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
+                cleanup_extension_message_for_payment(payment_id)
                 # Уведомляем пользователя
                 if message_id:
                     error_message = (
@@ -242,6 +258,15 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             
             await update_payment_status(payment_id, 'succeeded')
             await update_payment_activation(payment_id, 1)
+            
+            # Очищаем запись из extension_messages после успешной обработки
+            try:
+                from ... import bot as bot_module
+                from ...utils.extension_messages_cleanup import cleanup_extension_messages
+                if hasattr(bot_module, 'extension_messages'):
+                    cleanup_extension_messages(bot_module.extension_messages, payment_id)
+            except Exception as e:
+                logger.warning(f"Ошибка очистки extension_messages для payment_id={payment_id}: {e}")
             
             # Записываем факт продления подписки для анализа эффективности уведомлений
             try:

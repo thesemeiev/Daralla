@@ -135,7 +135,6 @@ async def admin_check_servers(update: Update, context: ContextTypes.DEFAULT_TYPE
                 except:
                     pass
         
-        message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         message += f"<b>Общая статистика</b>\n\n"
         
         message += f"<b>Серверы:</b>\n"

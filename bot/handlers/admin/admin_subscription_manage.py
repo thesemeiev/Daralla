@@ -11,7 +11,7 @@ from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
 from ...db import (
     get_subscription_servers, update_subscription_status,
     update_subscription_expiry, get_subscription_by_token,
-    update_subscription_device_limit
+    update_subscription_device_limit, remove_subscription_server
 )
 
 logger = logging.getLogger(__name__)
@@ -121,9 +121,7 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
             f"<b>Пользователь:</b> <code>{sub['user_id']}</code>\n"
             f"<b>Название:</b> {sub.get('name', 'Без названия')}\n"
             f"<b>Токен:</b> <code>{sub['subscription_token']}</code>\n"
-            f"<b>Период:</b> {sub['period']}\n"
-            f"<b>Устройств:</b> {sub['device_limit']}\n"
-            f"<b>Цена:</b> {sub['price']}₽\n\n"
+            f"<b>Устройств:</b> {sub['device_limit']}\n\n"
             f"<b>Создана:</b> {created_at}\n"
             f"<b>Истекает:</b> {expires_at}\n"
             f"<b>Текущее время:</b> {current_time.strftime('%d.%m.%Y %H:%M:%S')}\n\n"
@@ -141,13 +139,13 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         if is_active:
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    f"⏰ Продлить на 30 дней",
+                    f"Продлить на 30 дней",
                     callback_data=f"admin_sub_extend:{subscription_id}:30"
                 )
             ])
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    f"⏰ Продлить на 90 дней",
+                    f"Продлить на 90 дней",
                     callback_data=f"admin_sub_extend:{subscription_id}:90"
                 )
             ])
@@ -163,7 +161,7 @@ async def admin_subscription_info(update: Update, context: ContextTypes.DEFAULT_
         # Кнопка для изменения лимита IP
         keyboard_buttons.append([
             InlineKeyboardButton(
-                f"🔢 Изменить лимит IP",
+                f"Изменить лимит IP",
                 callback_data=f"admin_sub_change_limit:{subscription_id}"
             )
         ])
@@ -322,10 +320,9 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
     try:
         await update.callback_query.answer("Отменяю подписку...", show_alert=False)
         
-        # Получаем подписку
-        from ...db.subscribers_db import get_all_active_subscriptions
-        all_subs = await get_all_active_subscriptions()
-        sub = next((s for s in all_subs if s['id'] == subscription_id), None)
+        # Получаем подписку (используем get_subscription_by_id_only, чтобы найти даже неактивные)
+        from ...db import get_subscription_by_id_only
+        sub = await get_subscription_by_id_only(subscription_id)
         
         if not sub:
             message_obj = update.callback_query.message if update.callback_query else None
@@ -341,14 +338,59 @@ async def admin_cancel_subscription(update: Update, context: ContextTypes.DEFAUL
             )
             return
         
-        # Обновляем статус
+        # Получаем все серверы подписки
+        servers = await get_subscription_servers(subscription_id)
+        
+        # Получаем менеджеры из globals
+        subscription_manager = globals_dict.get('subscription_manager')
+        server_manager = globals_dict.get('server_manager')
+        
+        deleted_servers = []
+        failed_servers = []
+        
+        # 1. Удаляем клиентов со всех серверов
+        if server_manager and servers:
+            for server_info in servers:
+                server_name = server_info['server_name']
+                client_email = server_info['client_email']
+                
+                try:
+                    xui, _ = server_manager.get_server_by_name(server_name)
+                    if xui:
+                        xui.deleteClient(client_email)
+                        deleted_servers.append(server_name)
+                        logger.info(f"Удален клиент {client_email} с сервера {server_name} при отмене подписки {subscription_id}")
+                    else:
+                        failed_servers.append(server_name)
+                        logger.warning(f"Сервер {server_name} не найден в server_manager")
+                except Exception as e:
+                    failed_servers.append(server_name)
+                    logger.error(f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}")
+        
+        # 2. Удаляем связи подписки с серверами из БД
+        for server_info in servers:
+            try:
+                await remove_subscription_server(subscription_id, server_info['server_name'])
+                logger.debug(f"Удалена связь подписки {subscription_id} с сервером {server_info['server_name']}")
+            except Exception as e:
+                logger.error(f"Ошибка удаления связи подписки {subscription_id} с сервером {server_info['server_name']}: {e}")
+        
+        # 3. Обновляем статус подписки на 'canceled'
         await update_subscription_status(subscription_id, 'canceled')
         
+        # Формируем сообщение с результатами
         message = (
             f"{UIStyles.header('Подписка отменена')}\n\n"
             f"{UIEmojis.SUCCESS} Подписка <b>{sub.get('name', f'#{subscription_id}')}</b> отменена.\n\n"
-            f"{UIStyles.description('Статус подписки изменен на canceled.')}"
         )
+        
+        if deleted_servers:
+            message += f"<b>Клиенты удалены с серверов:</b> {', '.join(deleted_servers)}\n\n"
+        
+        if failed_servers:
+            message += f"{UIEmojis.WARNING} <b>Не удалось удалить с серверов:</b> {', '.join(failed_servers)}\n\n"
+        
+        message += f"{UIStyles.description('Статус подписки изменен на canceled. Клиенты удалены с серверов.')}"
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("Информация о подписке", callback_data=f"{CallbackData.ADMIN_SUB_INFO}{subscription_id}")],

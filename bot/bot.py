@@ -263,7 +263,8 @@ app = None
 
 
 # Глобальный словарь для хранения сообщений продления
-# Ключ: payment_id, Значение: (chat_id, message_id)
+# Ключ: payment_id, Значение: {'chat_id': int, 'message_id': int, 'timestamp': float}
+# TTL: 7 дней (604800 секунд)
 extension_messages = {}
 
 import traceback

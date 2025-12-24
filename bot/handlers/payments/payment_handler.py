@@ -205,7 +205,12 @@ async def handle_payment(update, context, price, period):
             
             # Для продления сохраняем информацию о сообщении для последующего редактирования
             if period.startswith('extend_') or period.startswith('extend_sub_'):
-                extension_messages[payment.id] = (message.chat_id, message.message_id)
+                import time
+                extension_messages[payment.id] = {
+                    'chat_id': message.chat_id,
+                    'message_id': message.message_id,
+                    'timestamp': time.time()
+                }
                 logger.info(f"Сохранена информация о сообщении продления: payment_id={payment.id}, chat_id={message.chat_id}, message_id={message.message_id}")
             
             # Редактируем сообщение с меню выбора периода на информацию об оплате
