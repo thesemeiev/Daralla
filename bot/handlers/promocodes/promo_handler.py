@@ -255,11 +255,17 @@ async def promo_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('promo_chat_id', None)
     
     # Возвращаемся в соответствующее меню
-    from ...navigation.menu_handlers import MenuHandlers
-    menu_handlers = MenuHandlers()
+    globals_dict = get_globals()
+    nav_system = globals_dict.get('nav_system')
     
     if promo_type == 'purchase':
-        await menu_handlers.buy_menu(update, context)
+        if nav_system and nav_system.menu_handlers:
+            await nav_system.menu_handlers.buy_menu(update, context)
+        else:
+            # Fallback: используем прямой вызов обработчика
+            from ...handlers.payments.payment_handler import handle_payment
+            from ...navigation import nav_manager, NavStates
+            await nav_manager.navigate_to_state(update, context, NavStates.BUY_MENU)
     else:
         from ...handlers.commands.mykey_handler import mykey
         await mykey(update, context)
