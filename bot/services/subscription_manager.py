@@ -298,6 +298,28 @@ class SubscriptionManager:
                         response_json = response.json()
                         if response_json.get('success', False):
                             logger.info(f"Клиент {client_email} успешно создан на сервере {server_name}")
+                            
+                            # ВАЖНО: Устанавливаем точное время истечения из БД
+                            # addClient использует округление до дней, что может давать неточное время
+                            # Поэтому после создания устанавливаем точное время из expires_at
+                            try:
+                                logger.info(f"Установка точного времени истечения для клиента {client_email} на сервере {server_name}: {expires_at}")
+                                expiry_response = xui.setClientExpiry(client_email, expires_at)
+                                if expiry_response and expiry_response.status_code == 200:
+                                    try:
+                                        expiry_json = expiry_response.json()
+                                        if expiry_json.get('success', False):
+                                            logger.info(f"Точное время истечения установлено для клиента {client_email} на сервере {server_name}")
+                                        else:
+                                            logger.warning(f"Не удалось установить точное время истечения для клиента {client_email} на сервере {server_name}")
+                                    except (json.JSONDecodeError, ValueError):
+                                        logger.warning(f"Ответ при установке времени истечения не является валидным JSON для клиента {client_email} на сервере {server_name}")
+                                else:
+                                    logger.warning(f"Ошибка установки точного времени истечения для клиента {client_email} на сервере {server_name}: HTTP {expiry_response.status_code if expiry_response else 'None'}")
+                            except Exception as set_expiry_e:
+                                logger.warning(f"Ошибка установки точного времени истечения для клиента {client_email} на сервере {server_name}: {set_expiry_e}")
+                                # Не критично - клиент создан, время будет синхронизировано при следующей синхронизации
+                            
                             return True, True  # Клиент создан
                         else:
                             error_msg = response_json.get('msg', 'Unknown error')
@@ -310,6 +332,16 @@ class SubscriptionManager:
                     except (json.JSONDecodeError, ValueError):
                         # Если ответ не JSON, но статус 200, считаем успехом
                         logger.info(f"Клиент {client_email} создан на сервере {server_name} (статус 200, не JSON)")
+                        
+                        # Все равно пытаемся установить точное время истечения
+                        try:
+                            logger.info(f"Установка точного времени истечения для клиента {client_email} на сервере {server_name}: {expires_at}")
+                            expiry_response = xui.setClientExpiry(client_email, expires_at)
+                            if expiry_response and expiry_response.status_code == 200:
+                                logger.info(f"Точное время истечения установлено для клиента {client_email} на сервере {server_name}")
+                        except Exception as set_expiry_e:
+                            logger.warning(f"Ошибка установки точного времени истечения для клиента {client_email} на сервере {server_name}: {set_expiry_e}")
+                        
                         return True, True
                 else:
                     logger.error(f"Ошибка создания клиента на сервере {server_name}: HTTP {response.status_code if response else 'None'}")
