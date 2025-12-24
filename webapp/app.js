@@ -6,8 +6,8 @@ tg.ready();
 tg.expand();
 
 // Устанавливаем цветовую схему
-tg.setHeaderColor('#3390ec');
-tg.setBackgroundColor('#ffffff');
+tg.setHeaderColor('#1a1a1a');
+tg.setBackgroundColor('#1a1a1a');
 
 // Функция загрузки подписок
 async function loadSubscriptions() {
