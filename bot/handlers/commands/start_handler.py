@@ -25,6 +25,7 @@ def get_globals():
         return {
             'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
             'new_client_manager': getattr(bot_module, 'new_client_manager', None),
+            'subscription_manager': getattr(bot_module, 'subscription_manager', None),
         }
     except (ImportError, AttributeError):
         # Fallback если модуль еще не загружен
@@ -85,7 +86,80 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         expires_at=expires_at,
                         name="Пробная подписка"
                     )
-                    logger.info(f"✅ Пробная подписка создана для пользователя {user_id}: subscription_id={subscription_id}, token={token}, expires_at={expires_at}")
+                    logger.info(f"✅ Пробная подписка создана в БД для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
+                    
+                    # Создаем клиентов на всех серверах для пробной подписки
+                    globals_dict = get_globals()
+                    subscription_manager = globals_dict.get('subscription_manager')
+                    new_client_manager = globals_dict.get('new_client_manager')
+                    
+                    if subscription_manager and new_client_manager:
+                        try:
+                            # Генерируем уникальный email для клиента
+                            import uuid
+                            unique_email = f"{user_id}_{subscription_id}"
+                            
+                            # Получаем все серверы из конфигурации
+                            all_configured_servers = []
+                            for server in new_client_manager.servers:
+                                server_name = server["name"]
+                                if server.get("x3") is not None:
+                                    all_configured_servers.append(server_name)
+                            
+                            if all_configured_servers:
+                                logger.info(f"Создание клиентов на {len(all_configured_servers)} серверах для пробной подписки {subscription_id}")
+                                
+                                # Привязываем все серверы к подписке в БД
+                                for server_name in all_configured_servers:
+                                    try:
+                                        await subscription_manager.attach_server_to_subscription(
+                                            subscription_id=subscription_id,
+                                            server_name=server_name,
+                                            client_email=unique_email,
+                                            client_id=None,
+                                        )
+                                        logger.info(f"Сервер {server_name} привязан к пробной подписке {subscription_id}")
+                                    except Exception as attach_e:
+                                        if "UNIQUE constraint" in str(attach_e) or "already exists" in str(attach_e).lower():
+                                            logger.info(f"Сервер {server_name} уже привязан к подписке {subscription_id}")
+                                        else:
+                                            logger.error(f"Ошибка привязки сервера {server_name}: {attach_e}")
+                                
+                                # Создаем клиентов на всех серверах
+                                successful_servers = []
+                                failed_servers = []
+                                for server_name in all_configured_servers:
+                                    try:
+                                        client_exists, client_created = await subscription_manager.ensure_client_on_server(
+                                            subscription_id=subscription_id,
+                                            server_name=server_name,
+                                            client_email=unique_email,
+                                            user_id=user_id,
+                                            expires_at=expires_at,
+                                            token=token,
+                                            device_limit=1
+                                        )
+                                        
+                                        if client_exists:
+                                            successful_servers.append(server_name)
+                                            if client_created:
+                                                logger.info(f"✅ Клиент создан на сервере {server_name} для пробной подписки")
+                                            else:
+                                                logger.info(f"Клиент уже существует на сервере {server_name}")
+                                        else:
+                                            failed_servers.append(server_name)
+                                            logger.warning(f"Не удалось создать клиента на сервере {server_name} (будет создан при синхронизации)")
+                                    except Exception as e:
+                                        logger.error(f"Ошибка создания клиента на сервере {server_name}: {e}")
+                                        failed_servers.append(server_name)
+                                
+                                logger.info(f"Пробная подписка: успешно создано на {len(successful_servers)} серверах, ошибок: {len(failed_servers)}")
+                            else:
+                                logger.warning(f"Нет серверов в конфигурации для создания пробной подписки")
+                        except Exception as client_e:
+                            logger.error(f"Ошибка создания клиентов для пробной подписки {subscription_id}: {client_e}", exc_info=True)
+                    else:
+                        logger.warning(f"SubscriptionManager или NewClientManager недоступен, клиенты не созданы")
                 else:
                     logger.info(f"Пользователь {user_id} новый, но уже есть подписки, пробная не создается")
             except Exception as trial_e:
