@@ -9,9 +9,10 @@ from telegram.ext import ContextTypes
 from ...utils import UIEmojis, safe_edit_or_reply_universal, safe_answer_callback_query, safe_edit_message_with_photo
 from ...navigation import NavigationBuilder, MenuTypes, CallbackData
 from ...db.subscribers_db import (
-    check_promo_code_valid, use_promo_code, get_or_create_subscriber, 
+    use_promo_code, get_or_create_subscriber, 
     create_subscription, get_subscription_servers, update_subscription_expiry, get_subscription_by_id
 )
+from ...db import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ async def promo_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = (
         f"<b>Введите промокод</b>\n\n"
-        f"Отправьте промокод для {'покупки' if promo_type == 'purchase' else 'продления'} подписки."
+        f"Отправьте промокод для {'покупки' if promo_type == 'purchase' else 'продления'} подписки.\n\n"
+        f"<i>Один промокод можно использовать для покупки и продления.</i>"
     )
     
     keyboard = InlineKeyboardMarkup([
@@ -105,10 +107,22 @@ async def promo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = context.user_data.get('promo_message_id')
     chat_id = context.user_data.get('promo_chat_id')
     
-    # Проверяем промокод
-    is_valid, error_msg, promo_data = await check_promo_code_valid(promo_code, user_id, promo_type)
+    # Проверяем активный промокод из конфигурации
+    active_promo_code = await get_config('active_promo_code', None)
+    active_promo_period = await get_config('active_promo_period', 'month')
     
-    if not is_valid:
+    # Проверяем, совпадает ли введенный промокод с активным
+    if not active_promo_code or promo_code.upper() != active_promo_code.upper():
+        error_msg = "Промокод не найден или не активен"
+    else:
+        error_msg = None
+        # Создаем promo_data из конфигурации (тип не нужен, промокод универсальный)
+        promo_data = {
+            'code': active_promo_code,
+            'period': active_promo_period
+        }
+    
+    if error_msg:
         text = (
             f"{UIEmojis.ERROR} <b>Промокод недействителен</b>\n\n"
             f"{error_msg}\n\n"
@@ -116,7 +130,7 @@ async def promo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.BUY_MENU if promo_type == 'purchase' else CallbackData.SUBSCRIPTIONS_MENU)]
+            [NavigationBuilder.create_back_button()]
         ])
         
         try:
@@ -131,13 +145,24 @@ async def promo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
-            await safe_edit_or_reply_universal(
-                update.message,
-                text,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                menu_type=MenuTypes.BUY_MENU if promo_type == 'purchase' else MenuTypes.SUBSCRIPTIONS_MENU
-            )
+            # Fallback: пытаемся отредактировать как текст
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+            except Exception as e2:
+                logger.error(f"Ошибка редактирования как текст: {e2}")
+                await safe_edit_or_reply_universal(
+                    update.message,
+                    text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type=MenuTypes.BUY_MENU if promo_type == 'purchase' else MenuTypes.SUBSCRIPTIONS_MENU
+                )
         
         # Очищаем контекст
         context.user_data.pop('promo_type', None)
@@ -156,7 +181,7 @@ async def promo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Продлеваем существующую подписку
             await apply_promo_extension(update, context, user_id, promo_code, promo_data, subscription_id)
         
-        # Отмечаем промокод как использованный
+        # Отмечаем промокод как использованный (увеличиваем счетчик, но не проверяем повторное использование)
         subscription_id_for_use = context.user_data.get('created_subscription_id') if promo_type == 'purchase' else subscription_id
         await use_promo_code(promo_code, user_id, subscription_id_for_use)
         
@@ -168,21 +193,39 @@ async def promo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.BUY_MENU if promo_type == 'purchase' else CallbackData.SUBSCRIPTIONS_MENU)]
+            [NavigationBuilder.create_back_button()]
         ])
         
-        from ...utils import safe_edit_message_with_photo
         try:
             await safe_edit_message_with_photo(
+                context.bot,
                 chat_id=chat_id,
                 message_id=message_id,
                 text=text,
                 reply_markup=keyboard,
                 parse_mode="HTML",
-                photo_path=None
+                menu_type=MenuTypes.BUY_MENU if promo_type == 'purchase' else MenuTypes.SUBSCRIPTIONS_MENU
             )
         except Exception as e:
             logger.error(f"Ошибка редактирования сообщения: {e}")
+            # Fallback: пытаемся отредактировать как текст
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+            except Exception as e2:
+                logger.error(f"Ошибка редактирования как текст: {e2}")
+                await safe_edit_or_reply_universal(
+                    update.message,
+                    text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    menu_type=MenuTypes.BUY_MENU if promo_type == 'purchase' else MenuTypes.SUBSCRIPTIONS_MENU
+                )
     
     # Очищаем контекст
     context.user_data.pop('promo_type', None)
@@ -291,8 +334,19 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
+        [NavigationBuilder.create_back_button()]
     ])
+    
+    # Обновляем навигационный стек - сохраняем предыдущее состояние
+    from ...navigation import nav_manager, NavStates
+    # Получаем promo_type из контекста
+    promo_type_from_context = context.user_data.get('promo_type', 'purchase')
+    # Если пользователь пришел из покупки, добавляем BUY_MENU, иначе SUBSCRIPTIONS_MENU
+    if promo_type_from_context == 'purchase':
+        nav_manager.push_state(context, NavStates.BUY_MENU)
+    else:
+        nav_manager.push_state(context, NavStates.SUBSCRIPTIONS_MENU)
     
     try:
         await safe_edit_message_with_photo(
@@ -306,13 +360,24 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
         )
     except Exception as e:
         logger.error(f"Ошибка редактирования сообщения: {e}")
-        await safe_edit_or_reply_universal(
-            update.message,
-            hack_message,
-            reply_markup=keyboard,
-            parse_mode="HTML",
-            menu_type=MenuTypes.PROMO_HACK
-        )
+        # Fallback: пытаемся отредактировать как текст
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=hack_message,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as e2:
+            logger.error(f"Ошибка редактирования как текст: {e2}")
+            await safe_edit_or_reply_universal(
+                update.message,
+                hack_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.PROMO_HACK
+            )
 
 
 async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, promo_code: str, promo_data: dict, subscription_id: int):
@@ -385,8 +450,19 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
     )
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
+        [NavigationBuilder.create_back_button()]
     ])
+    
+    # Обновляем навигационный стек - сохраняем предыдущее состояние
+    from ...navigation import nav_manager, NavStates
+    # Получаем promo_type из контекста
+    promo_type_from_context = context.user_data.get('promo_type', 'purchase')
+    # Если пользователь пришел из покупки, добавляем BUY_MENU, иначе SUBSCRIPTIONS_MENU
+    if promo_type_from_context == 'purchase':
+        nav_manager.push_state(context, NavStates.BUY_MENU)
+    else:
+        nav_manager.push_state(context, NavStates.SUBSCRIPTIONS_MENU)
     
     try:
         await safe_edit_message_with_photo(
@@ -400,11 +476,22 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
         )
     except Exception as e:
         logger.error(f"Ошибка редактирования сообщения: {e}")
-        await safe_edit_or_reply_universal(
-            update.message,
-            hack_message,
-            reply_markup=keyboard,
-            parse_mode="HTML",
-            menu_type=MenuTypes.PROMO_HACK
-        )
+        # Fallback: пытаемся отредактировать как текст
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=hack_message,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as e2:
+            logger.error(f"Ошибка редактирования как текст: {e2}")
+            await safe_edit_or_reply_universal(
+                update.message,
+                hack_message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+                menu_type=MenuTypes.PROMO_HACK
+            )
 

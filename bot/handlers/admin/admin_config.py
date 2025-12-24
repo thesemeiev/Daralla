@@ -48,7 +48,6 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Получаем активный промокод из конфигурации
         active_promo_code = await get_config('active_promo_code', None)
-        active_promo_type = await get_config('active_promo_type', 'purchase')
         active_promo_period = await get_config('active_promo_period', 'month')
         
         message = "<b>Конфигурация</b>\n\n"
@@ -64,13 +63,12 @@ async def admin_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if active_promo_code:
             promo_info = await get_promo_code(active_promo_code)
             if promo_info:
-                promo_type_text = "Покупка" if active_promo_type == 'purchase' else "Продление"
                 period_text = "1 месяц" if active_promo_period == 'month' else "3 месяца"
                 uses_info = f"{promo_info['uses_count']}/{promo_info['max_uses']}" if promo_info['max_uses'] > 0 else f"{promo_info['uses_count']}/∞"
                 message += f"• <b>Код:</b> <code>{active_promo_code}</code>\n"
-                message += f"• <b>Тип:</b> {promo_type_text}\n"
                 message += f"• <b>Период:</b> {period_text}\n"
                 message += f"• <b>Использований:</b> {uses_info}\n"
+                message += f"• <b>Применение:</b> Покупка и продление\n"
             else:
                 message += f"• <b>Код:</b> <code>{active_promo_code}</code> (не найден в БД)\n"
         else:
@@ -108,13 +106,13 @@ async def admin_config_change_promo_start(update: Update, context: ContextTypes.
     message = (
         f"<b>Изменение промокода</b>\n\n"
         f"Введите новый промокод в формате:\n"
-        f"<code>КОД ТИП ПЕРИОД</code>\n\n"
+        f"<code>КОД ПЕРИОД</code>\n\n"
         f"<b>Примеры:</b>\n"
-        f"• <code>PROMO2024 purchase month</code> - для покупки на 1 месяц\n"
-        f"• <code>PROMO2024 extension 3month</code> - для продления на 3 месяца\n\n"
-        f"<b>Типы:</b> <code>purchase</code> или <code>extension</code>\n"
+        f"• <code>PROMO2024 month</code> - на 1 месяц\n"
+        f"• <code>PROMO2024 3month</code> - на 3 месяца\n\n"
         f"<b>Периоды:</b> <code>month</code> или <code>3month</code>\n\n"
-        f"<i>Старый промокод будет удален из БД.</i>"
+        f"<i>Промокод будет работать для покупки и продления.\n"
+        f"Старый промокод будет удален из БД.</i>"
     )
     
     keyboard = InlineKeyboardMarkup([
@@ -154,12 +152,12 @@ async def admin_config_change_promo_input(update: Update, context: ContextTypes.
     
     # Парсим ввод
     parts = update.message.text.strip().split()
-    if len(parts) < 3:
+    if len(parts) < 2:
         error_message = (
             f"<b>Ошибка</b>\n\n"
             f"Неверный формат. Используйте:\n"
-            f"<code>КОД ТИП ПЕРИОД</code>\n\n"
-            f"Пример: <code>PROMO2024 purchase month</code>"
+            f"<code>КОД ПЕРИОД</code>\n\n"
+            f"Пример: <code>PROMO2024 month</code>"
         )
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="admin_config")]
@@ -185,36 +183,7 @@ async def admin_config_change_promo_input(update: Update, context: ContextTypes.
         return -1
     
     promo_code = parts[0].upper()
-    promo_type = parts[1].lower()
-    promo_period = parts[2].lower()
-    
-    # Валидация
-    if promo_type not in ['purchase', 'extension']:
-        error_message = (
-            f"<b>Ошибка</b>\n\n"
-            f"Неверный тип. Используйте: <code>purchase</code> или <code>extension</code>"
-        )
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data="admin_config")]
-        ])
-        
-        from ...utils import safe_edit_message_with_photo
-        try:
-            await safe_edit_message_with_photo(
-                context.bot,
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                menu_type=MenuTypes.ADMIN_MENU
-            )
-        except Exception as e:
-            logger.error(f"Ошибка редактирования сообщения: {e}")
-        
-        context.user_data.pop('admin_config_message_id', None)
-        context.user_data.pop('admin_config_chat_id', None)
-        return -1
+    promo_period = parts[1].lower()
     
     if promo_period not in ['month', '3month']:
         error_message = (
@@ -252,18 +221,17 @@ async def admin_config_change_promo_input(update: Update, context: ContextTypes.
             await delete_promo_code(old_promo_code)
             logger.info(f"Удален старый промокод: {old_promo_code}")
         
-        # Создаем новый промокод в БД (безлимитный, без срока действия)
+        # Создаем новый промокод в БД для покупки (безлимитный, без срока действия)
         await create_promo_code(
             code=promo_code,
-            promo_type=promo_type,
+            promo_type='purchase',  # Создаем для покупки, но промокод будет работать и для продления
             period=promo_period,
             max_uses=0,  # Безлимитный
             expires_at=None  # Без срока действия
         )
         
-        # Обновляем конфигурацию
+        # Обновляем конфигурацию (убираем тип, так как промокод универсальный)
         await set_config('active_promo_code', promo_code, 'Активный промокод')
-        await set_config('active_promo_type', promo_type, 'Тип активного промокода')
         await set_config('active_promo_period', promo_period, 'Период активного промокода')
         
         logger.info(f"Активный промокод изменен: {old_promo_code} -> {promo_code}")
@@ -272,8 +240,8 @@ async def admin_config_change_promo_input(update: Update, context: ContextTypes.
         success_message = (
             f"<b>✅ Промокод изменен</b>\n\n"
             f"<b>Новый промокод:</b> <code>{promo_code}</code>\n"
-            f"<b>Тип:</b> {'Покупка' if promo_type == 'purchase' else 'Продление'}\n"
-            f"<b>Период:</b> {'1 месяц' if promo_period == 'month' else '3 месяца'}\n\n"
+            f"<b>Период:</b> {'1 месяц' if promo_period == 'month' else '3 месяца'}\n"
+            f"<b>Применение:</b> Покупка и продление\n\n"
             f"{'Старый промокод удален из БД.' if old_promo_code else ''}"
         )
         

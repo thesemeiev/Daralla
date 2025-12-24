@@ -304,15 +304,14 @@ async def check_promo_code_valid(code: str, user_id: str, promo_type: str):
     """
     Проверяет валидность промокода для пользователя
     Returns: (is_valid: bool, error_message: str, promo_data: dict)
+    
+    УСТАРЕЛО: Теперь используется проверка активного промокода из конфигурации.
+    Оставлено для обратной совместимости.
     """
     promo = await get_promo_code(code)
     
     if not promo:
         return False, "Промокод не найден", None
-    
-    # Проверяем тип
-    if promo['type'] != promo_type:
-        return False, f"Этот промокод предназначен для {'покупки' if promo['type'] == 'purchase' else 'продления'}", None
     
     # Проверяем срок действия
     if promo['expires_at'] and promo['expires_at'] < int(datetime.datetime.now().timestamp()):
@@ -322,32 +321,29 @@ async def check_promo_code_valid(code: str, user_id: str, promo_type: str):
     if promo['max_uses'] > 0 and promo['uses_count'] >= promo['max_uses']:
         return False, "Промокод уже использован максимальное количество раз", None
     
-    # Проверяем, использовал ли уже этот пользователь этот промокод
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("""
-            SELECT COUNT(*) as count FROM promo_code_uses 
-            WHERE promo_code_id = ? AND user_id = ?
-        """, (promo['id'], user_id)) as cur:
-            row = await cur.fetchone()
-            if row and row[0] > 0:
-                return False, "Вы уже использовали этот промокод", None
+    # УБРАНО: Проверка на повторное использование одним пользователем
     
     return True, None, dict(promo)
 
 async def use_promo_code(code: str, user_id: str, subscription_id: int = None):
-    """Отмечает промокод как использованный"""
+    """
+    Отмечает промокод как использованный.
+    Увеличивает счетчик использований, но не блокирует повторное использование одним пользователем.
+    """
     promo = await get_promo_code(code)
     if not promo:
+        # Промокод не найден в БД - это нормально, если он только в конфигурации
+        logger.warning(f"Промокод {code} не найден в БД при попытке отметить использование")
         return False
     
     now = int(datetime.datetime.now().timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
-        # Увеличиваем счетчик использований
+        # Увеличиваем счетчик использований (не проверяем лимит - промокод может использоваться многократно)
         await db.execute("""
             UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?
         """, (promo['id'],))
         
-        # Записываем использование
+        # Записываем использование (для статистики, но не блокируем повторное использование)
         await db.execute("""
             INSERT INTO promo_code_uses (promo_code_id, user_id, subscription_id, used_at)
             VALUES (?, ?, ?, ?)
