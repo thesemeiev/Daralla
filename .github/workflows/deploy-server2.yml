@@ -57,7 +57,7 @@ jobs:
         echo "TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER != '' && 'SET' || 'NOT SET' }}"
         echo "TEST_SERVER_PASSWORD: ${{ secrets.TEST_SERVER_PASSWORD != '' && 'SET' || 'NOT SET' }}"
         echo "TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT != '' && 'SET' || 'NOT SET' }}"
-        echo "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN != '' && 'SET' || 'NOT SET' }}"
+        echo "REPO_CLONE_TOKEN: ${{ secrets.REPO_CLONE_TOKEN != '' && 'SET' || 'NOT SET' }}"
         echo "WEBHOOK_DOMAIN: ${{ secrets.WEBHOOK_DOMAIN != '' && 'SET' || 'NOT SET' }}"
 
     - name: Deploy to test server
@@ -197,7 +197,7 @@ jobs:
           cd /root
           echo "Current directory: $(pwd)"
           echo "Directory contents: $(ls -la)"
-          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
+          sudo git clone https://thesemeiev:${{ secrets.REPO_CLONE_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
           echo "After clone, directory contents: $(ls -la)"
           cd /root/Daralla
           echo "In Daralla directory: $(pwd)"

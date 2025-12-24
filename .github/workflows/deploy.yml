@@ -157,7 +157,7 @@ jobs:
           cd /root
           echo "Current directory: $(pwd)"
           echo "Directory contents: $(ls -la)"
-          sudo git clone https://thesemeiev:${{ secrets.GITHUB_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
+          sudo git clone https://thesemeiev:${{ secrets.REPO_CLONE_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
           echo "After clone, directory contents: $(ls -la)"
           cd /root/Daralla
           echo "In Daralla directory: $(pwd)"
