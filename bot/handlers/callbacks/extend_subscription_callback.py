@@ -145,8 +145,9 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     server_count = len(servers)
     
     # Форматируем дату истечения
-    from ...utils.timezone import format_timestamp_moscow
-    expiry_str = format_timestamp_moscow(sub['expires_at'])
+    import datetime
+    expiry_datetime = datetime.datetime.fromtimestamp(sub['expires_at'])
+    expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
     
     message_text = (
         f"{UIStyles.header('Продление подписки')}\n\n"

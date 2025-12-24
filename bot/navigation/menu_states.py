@@ -56,6 +56,7 @@ class MenuTypes:
     ADMIN_CONFIG = 'admin_config'
     ADMIN_SYNC = 'admin_sync'
     ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'
+    ADMIN_GIVE_SUBSCRIPTION = 'admin_give_subscription'
     PROMO_HACK = 'promo_hack'
 
 class CallbackData:
@@ -113,6 +114,7 @@ class CallbackData:
     ADMIN_CONFIG = 'admin_config'  # Конфигурация
     ADMIN_SYNC = 'admin_sync'  # Синхронизация
     ADMIN_CHECK_SUBSCRIPTION = 'admin_check_subscription'  # Проверка подписки по токену
+    ADMIN_GIVE_SUBSCRIPTION = 'admin_give_subscription'  # Выдача подписки пользователю
 
 # Маппинг callback_data на состояния
 CALLBACK_TO_STATE = {
@@ -131,6 +133,7 @@ CALLBACK_TO_STATE = {
     CallbackData.ADMIN_CONFIG: NavStates.ADMIN_CONFIG,
     CallbackData.ADMIN_SYNC: NavStates.ADMIN_SYNC,
     CallbackData.ADMIN_CHECK_SUBSCRIPTION: NavStates.ADMIN_CHECK_SUBSCRIPTION,
+    CallbackData.ADMIN_GIVE_SUBSCRIPTION: NavStates.ADMIN_GIVE_SUBSCRIPTION,
 }
 
 # Маппинг состояний на функции-обработчики
@@ -155,4 +158,5 @@ STATE_TO_HANDLER = {
     NavStates.ADMIN_CONFIG: 'admin_config',
     NavStates.ADMIN_SYNC: 'admin_sync',
     NavStates.ADMIN_CHECK_SUBSCRIPTION: 'admin_check_subscription',
+    NavStates.ADMIN_GIVE_SUBSCRIPTION: 'admin_give_subscription',
 }

@@ -45,6 +45,7 @@ class MenuHandlers:
         nav_manager.register_handler(NavStates.ADMIN_CONFIG, self.admin_config)
         nav_manager.register_handler(NavStates.ADMIN_SYNC, self.admin_sync)
         nav_manager.register_handler(NavStates.ADMIN_CHECK_SUBSCRIPTION, self.admin_check_subscription)
+        nav_manager.register_handler(NavStates.ADMIN_GIVE_SUBSCRIPTION, self.admin_give_subscription)
     
     async def main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
         """Главное меню"""
@@ -133,6 +134,7 @@ class MenuHandlers:
             [InlineKeyboardButton("Конфигурация", callback_data=CallbackData.ADMIN_CONFIG)],
             [InlineKeyboardButton("Синхронизация", callback_data=CallbackData.ADMIN_SYNC)],
             [InlineKeyboardButton("Проверка подписки", callback_data=CallbackData.ADMIN_CHECK_SUBSCRIPTION)],
+            [InlineKeyboardButton("Выдать подписку", callback_data=CallbackData.ADMIN_GIVE_SUBSCRIPTION)],
             [UIButtons.back_button()],
         ])
         message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
@@ -241,6 +243,21 @@ class MenuHandlers:
         """Проверка подписки по токену"""
         from ..handlers.admin.admin_check_subscription import admin_check_subscription
         await admin_check_subscription(update, context)
+    
+    async def admin_give_subscription(self, update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs):
+        """Выдача подписки пользователю"""
+        from ..handlers.admin.admin_give_subscription import admin_give_subscription
+        await admin_give_subscription(update, context)
+    
+    async def admin_give_subscription_period(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка выбора периода подписки"""
+        from ..handlers.admin.admin_give_subscription import admin_give_subscription_period
+        await admin_give_subscription_period(update, context)
+    
+    async def admin_give_subscription_continue(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Продолжение выдачи подписки для несуществующего пользователя"""
+        from ..handlers.admin.admin_give_subscription import admin_give_subscription_continue
+        await admin_give_subscription_continue(update, context)
     
 
 class NavigationCallbacks:
@@ -395,6 +412,20 @@ class NavigationIntegration:
             CallbackQueryHandler(
                 lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_CHECK_SUBSCRIPTION),
                 pattern=f"^{CallbackData.ADMIN_CHECK_SUBSCRIPTION}$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: self.nav_callbacks.handle_state_callback(u, c, NavStates.ADMIN_GIVE_SUBSCRIPTION),
+                pattern=f"^{CallbackData.ADMIN_GIVE_SUBSCRIPTION}$"
+            ),
+            # Callback для выбора периода подписки
+            CallbackQueryHandler(
+                lambda u, c: self.menu_handlers.admin_give_subscription_period(u, c),
+                pattern=r"^admin_give_sub_period:"
+            ),
+            # Callback для продолжения выдачи подписки несуществующему пользователю
+            CallbackQueryHandler(
+                lambda u, c: self.menu_handlers.admin_give_subscription_continue(u, c),
+                pattern=r"^admin_give_sub_continue:"
             ),
             # Обновление админских меню (остаются в том же состоянии)
             CallbackQueryHandler(

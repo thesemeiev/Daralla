@@ -21,6 +21,10 @@ from .admin_subscription_manage import (
     admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
     ADMIN_SUB_CHANGE_LIMIT_WAITING
 )
+from .admin_give_subscription import (
+    admin_give_subscription, admin_give_subscription_input_user, admin_give_subscription_continue,
+    admin_give_subscription_period, admin_give_subscription_cancel, GIVE_SUB_WAITING_USER_ID
+)
 
 __all__ = [
     'admin_errors', 'admin_notifications', 'admin_check_servers', 'admin_config',
@@ -33,6 +37,8 @@ __all__ = [
     'admin_search_user', 'admin_user_subscriptions', 'admin_user_payments',
     'admin_subscription_info', 'admin_extend_subscription', 'admin_cancel_subscription',
     'admin_change_device_limit', 'admin_change_device_limit_input', 'admin_change_device_limit_cancel',
-    'ADMIN_SUB_CHANGE_LIMIT_WAITING'
+    'ADMIN_SUB_CHANGE_LIMIT_WAITING',
+    'admin_give_subscription', 'admin_give_subscription_input_user', 'admin_give_subscription_continue',
+    'admin_give_subscription_period', 'admin_give_subscription_cancel', 'GIVE_SUB_WAITING_USER_ID'
 ]
 

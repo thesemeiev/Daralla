@@ -52,7 +52,9 @@ from .handlers.admin import (
     admin_search_user, admin_user_subscriptions, admin_user_payments,
     admin_subscription_info, admin_extend_subscription, admin_cancel_subscription,
     admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
-    ADMIN_SUB_CHANGE_LIMIT_WAITING
+    ADMIN_SUB_CHANGE_LIMIT_WAITING,
+    admin_give_subscription, admin_give_subscription_input_user, admin_give_subscription_continue,
+    admin_give_subscription_period, admin_give_subscription_cancel, GIVE_SUB_WAITING_USER_ID
 )
 from .handlers.admin.admin_broadcast import BROADCAST_WAITING_TEXT, BROADCAST_CONFIRM
 
@@ -484,6 +486,27 @@ if __name__ == '__main__':
         per_message=False
     )
     app.add_handler(admin_search_user_conv)
+    
+    # ConversationHandler для выдачи подписки
+    admin_give_sub_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(admin_give_subscription, pattern="^admin_give_subscription$"),
+            CommandHandler("admin_give_subscription", admin_give_subscription)
+        ],
+        states={
+            GIVE_SUB_WAITING_USER_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_give_subscription_input_user)
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(admin_give_subscription_cancel, pattern="^back$"),
+            MessageHandler(filters.COMMAND, admin_give_subscription_cancel),
+        ],
+        per_user=True,
+        per_chat=True,
+        per_message=False
+    )
+    app.add_handler(admin_give_sub_conv)
     
     # ConversationHandler для изменения промокода в конфигурации
     admin_config_promo_conv = ConversationHandler(
