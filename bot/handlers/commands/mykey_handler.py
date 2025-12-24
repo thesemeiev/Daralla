@@ -68,7 +68,11 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
     # Форматируем дату
     expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
     expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
-    period_text = "3 месяца" if sub["period"] == "3month" else "1 месяц"
+    # Определяем текст периода (пробная подписка имеет period='month', но название "Пробная подписка")
+    if sub.get('name', '').lower() == 'пробная подписка':
+        period_text = "Пробная (5 дней)"
+    else:
+        period_text = "3 месяца" if sub["period"] == "3month" else "1 месяц"
     
     sub_name = sub.get('name', 'Подписка')
     

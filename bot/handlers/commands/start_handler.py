@@ -70,7 +70,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     subscription_id, token = await create_subscription(
                         subscriber_id=subscriber_id,
-                        period='trial',  # Пробный период
+                        period='month',  # Обычная подписка (можно продлить)
                         device_limit=1,
                         price=0.0,  # Бесплатно
                         expires_at=expires_at,
