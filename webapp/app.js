@@ -202,10 +202,6 @@ function createSubscriptionCard(sub) {
         
         <div class="subscription-info">
             <div class="info-item">
-                <div class="info-label">Устройств</div>
-                <div class="info-value">${sub.device_limit}</div>
-            </div>
-            <div class="info-item">
                 <div class="info-label">Создана</div>
                 <div class="info-value">${sub.created_at_formatted}</div>
             </div>
@@ -215,10 +211,10 @@ function createSubscriptionCard(sub) {
             </div>
         </div>
         
-        ${sub.status === 'active' && sub.days_remaining > 0 ? `
+        ${sub.status === 'active' && sub.expires_at ? `
             <div class="days-badge">
-                <span class="info-label">Осталось дней</span>
-                <span class="days-remaining">${sub.days_remaining}</span>
+                <span class="info-label">Осталось</span>
+                <span class="days-remaining">${formatTimeRemaining(sub.expires_at)}</span>
             </div>
         ` : ''}
     `;
@@ -339,6 +335,25 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Функция форматирования оставшегося времени
+function formatTimeRemaining(expiresAt) {
+    const now = Math.floor(Date.now() / 1000);
+    const remaining = expiresAt - now;
+    
+    if (remaining <= 0) {
+        return 'Истекла';
+    }
+    
+    const days = Math.floor(remaining / (24 * 60 * 60));
+    const hours = Math.floor((remaining % (24 * 60 * 60)) / (60 * 60));
+    
+    if (days > 0) {
+        return `${days} дн. ${hours} ч.`;
+    } else {
+        return `${hours} ч.`;
+    }
 }
 
 // Загружаем подписки при загрузке страницы
