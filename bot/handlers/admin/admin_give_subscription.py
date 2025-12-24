@@ -284,7 +284,7 @@ async def create_subscription_for_user(update: Update, context: ContextTypes.DEF
         # Показываем сообщение о процессе
         process_msg = (
             f"{UIStyles.header('Создание подписки')}\n\n"
-            f"{UIEmojis.LOADING} Создание подписки для пользователя <code>{user_id}</code>...\n"
+            f"{UIEmojis.INFO} Создание подписки для пользователя <code>{user_id}</code>...\n"
             f"Период: {period}"
         )
         message_obj = update.message if update.message else (update.callback_query.message if update.callback_query else None)
