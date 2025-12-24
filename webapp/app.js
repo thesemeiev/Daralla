@@ -87,7 +87,6 @@ function createSubscriptionCard(sub) {
                       sub.status === 'expired' ? 'Истекла' : 
                       sub.status === 'trial' ? 'Пробная' : sub.status;
     
-    
     card.innerHTML = `
         <div class="subscription-header">
             <div class="subscription-name">${escapeHtml(sub.name)}</div>
@@ -95,10 +94,6 @@ function createSubscriptionCard(sub) {
         </div>
         
         <div class="subscription-info">
-            <div class="info-item">
-                <div class="info-label">Период</div>
-                <div class="info-value">${periodText}</div>
-            </div>
             <div class="info-item">
                 <div class="info-label">Устройств</div>
                 <div class="info-value">${sub.device_limit}</div>
