@@ -575,9 +575,16 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             # Проверяем, есть ли специальный URL для подписок (поддомен)
             subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
             
-            # Если SUBSCRIPTION_URL не установлен, используем WEBHOOK_URL
-            # SUBSCRIPTION_URL должен быть поддоменом для Happ (например: https://daralla-vpn.ghosttunnel.space)
-            base_url = subscription_base_url if subscription_base_url else webhook_url
+            # Если SUBSCRIPTION_URL не установлен, извлекаем базовый URL из WEBHOOK_URL
+            # (убираем путь /webhook/yookassa, оставляем только домен)
+            if subscription_base_url:
+                base_url = subscription_base_url
+            elif webhook_url:
+                # Извлекаем базовый URL (домен) из WEBHOOK_URL
+                parsed = urllib.parse.urlparse(webhook_url)
+                base_url = f"{parsed.scheme}://{parsed.netloc}"
+            else:
+                base_url = None
             
             if base_url:
                 # Для Happ клиента используем поддомен в URL (например: daralla-vpn.ghosttunnel.space)
