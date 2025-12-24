@@ -200,12 +200,12 @@ SERVERS_BY_LOCATION = {
     ],
             "Latvia ": [
         {
-            "name": "Latvia-2",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇱🇻  Latvia - 2",  # Красивое название для VPN клиента (опционально)
-            "host": os.getenv("XUI_HOST_LATVIA_2"),
-            "login": os.getenv("XUI_LOGIN_LATVIA_2"),
-            "password": os.getenv("XUI_PASSWORD_LATVIA_2"),
-            "vpn_host": os.getenv("XUI_VPN_HOST_LATVIA_2")  # IP/домен VPN сервера (если отличается от панели)
+            "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
+            "display_name": "🇱🇻  Latvia - 1",  # Красивое название для VPN клиента (опционально)
+            "host": os.getenv("XUI_HOST_LATVIA_1"),
+            "login": os.getenv("XUI_LOGIN_LATVIA_1"),
+            "password": os.getenv("XUI_PASSWORD_LATVIA_1"),
+            "vpn_host": os.getenv("XUI_VPN_HOST_LATVIA_1")  # IP/домен VPN сервера (если отличается от панели)
         },
     ],
 }
