@@ -567,14 +567,17 @@ def create_webhook_app(bot_app):
         """Отдает HTML страницу веб-приложения"""
         try:
             import os
-            webapp_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'webapp', 'index.html')
+            # Путь: bot/handlers/webhooks/webhook_app.py -> поднимаемся на 4 уровня до /app/, затем webapp/
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            webapp_path = os.path.join(base_dir, 'webapp', 'index.html')
             if os.path.exists(webapp_path):
                 with open(webapp_path, 'r', encoding='utf-8') as f:
                     return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
             else:
+                logger.warning(f"Web app not found at: {webapp_path}")
                 return "Web app not found", 404
         except Exception as e:
-            logger.error(f"Ошибка при загрузке webapp: {e}")
+            logger.error(f"Ошибка при загрузке webapp: {e}", exc_info=True)
             return "Error loading web app", 500
     
     # Endpoint для статических файлов (CSS, JS)
@@ -583,11 +586,16 @@ def create_webhook_app(bot_app):
         """Отдает статические файлы веб-приложения"""
         try:
             import os
-            webapp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'webapp')
+            # Путь: bot/handlers/webhooks/webhook_app.py -> поднимаемся на 4 уровня до /app/, затем webapp/
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            webapp_dir = os.path.join(base_dir, 'webapp')
             file_path = os.path.join(webapp_dir, filename)
             
             # Проверка безопасности (только файлы из webapp директории)
-            if not file_path.startswith(os.path.abspath(webapp_dir)):
+            webapp_dir_abs = os.path.abspath(webapp_dir)
+            file_path_abs = os.path.abspath(file_path)
+            if not file_path_abs.startswith(webapp_dir_abs):
+                logger.warning(f"Forbidden file access attempt: {file_path}")
                 return "Forbidden", 403
             
             if os.path.exists(file_path) and os.path.isfile(file_path):
