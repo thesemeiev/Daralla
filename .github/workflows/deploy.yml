@@ -207,26 +207,54 @@ jobs:
             exit 1
           fi
           
-          # Configure git credential helper to use token
-          echo "Configuring git credentials..."
-          sudo git config --global credential.helper store
-          echo "https://thesemeiev:${GIT_TOKEN}@github.com" | sudo tee /root/.git-credentials > /dev/null
-          sudo chmod 600 /root/.git-credentials
+          echo "Token info: length=${#GIT_TOKEN}, starts with: ${GIT_TOKEN:0:7}..."
           
-          # Clone repository
-          echo "Cloning repository..."
-          if sudo git clone https://github.com/thesemeiev/Daralla.git Daralla; then
-            echo "✅ Repository cloned successfully"
-            sudo rm -f /root/.git-credentials  # Clean up credentials
+          # Try multiple methods to clone
+          CLONE_SUCCESS=false
+          
+          # Method 1: Direct URL with token (URL encoded)
+          echo "Trying method 1: Direct URL with token..."
+          if sudo git clone "https://thesemeiev:${GIT_TOKEN}@github.com/thesemeiev/Daralla.git" Daralla 2>&1; then
+            echo "✅ Repository cloned successfully (method 1)"
+            CLONE_SUCCESS=true
           else
-            echo "❌ ERROR: Failed to clone repository!"
-            echo "   Token value (first 10 chars): ${GIT_TOKEN:0:10}..."
-            echo "   Token length: ${#GIT_TOKEN} characters"
-            echo "   Check REPO_CLONE_TOKEN secret:"
-            echo "   - Must have 'repo' scope (for private repos)"
-            echo "   - Token format: ghp_... (classic) or github_pat_... (fine-grained)"
-            echo "   - No spaces or newlines in token"
-            sudo rm -f /root/.git-credentials  # Clean up credentials
+            echo "Method 1 failed, trying method 2..."
+            
+            # Method 2: Using credential helper
+            echo "Trying method 2: Credential helper..."
+            sudo git config --global credential.helper store
+            echo "https://thesemeiev:${GIT_TOKEN}@github.com" | sudo tee /root/.git-credentials > /dev/null
+            sudo chmod 600 /root/.git-credentials
+            
+            if sudo git clone https://github.com/thesemeiev/Daralla.git Daralla 2>&1; then
+              echo "✅ Repository cloned successfully (method 2)"
+              CLONE_SUCCESS=true
+              sudo rm -f /root/.git-credentials
+            else
+              echo "Method 2 failed, trying method 3..."
+              
+              # Method 3: Try without authentication (if repo is public)
+              if sudo git clone https://github.com/thesemeiev/Daralla.git Daralla 2>&1; then
+                echo "✅ Repository cloned successfully (method 3 - public repo)"
+                CLONE_SUCCESS=true
+              else
+                echo "All methods failed!"
+              fi
+              sudo rm -f /root/.git-credentials
+            fi
+          fi
+          
+          if [ "$CLONE_SUCCESS" != true ]; then
+            echo "❌ ERROR: Failed to clone repository with all methods!"
+            echo "   Token info: length=${#GIT_TOKEN}, starts with: ${GIT_TOKEN:0:7}..."
+            echo "   Possible issues:"
+            echo "   1. Token doesn't have 'repo' scope (needed for private repos)"
+            echo "   2. Token expired or revoked"
+            echo "   3. Repository is private and token lacks access"
+            echo "   Solution:"
+            echo "   - Go to: https://github.com/settings/tokens"
+            echo "   - Create new token with 'repo' scope (full control)"
+            echo "   - Update REPO_CLONE_TOKEN secret"
             exit 1
           fi
           

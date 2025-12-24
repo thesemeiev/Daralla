@@ -20,6 +20,9 @@ COPY bot/ ./bot/
 # Копируем изображения для меню
 COPY images/ ./images/
 
+# Копируем веб-приложение
+COPY webapp/ ./webapp/
+
 # Создаем пользователя для безопасности
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app

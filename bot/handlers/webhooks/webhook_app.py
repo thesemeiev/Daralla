@@ -478,5 +478,228 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в эндпоинте /sub/<token>: {e}")
             return ("Internal server error", 500)
     
+    # API endpoint для получения подписок пользователя (для Telegram Mini App)
+    @app.route('/api/subscriptions', methods=['GET', 'OPTIONS'])
+    def api_subscriptions():
+        """API endpoint для получения подписок пользователя через Telegram Mini App"""
+        # Обрабатываем OPTIONS запрос (CORS preflight)
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            # Получаем initData из query параметров
+            init_data = request.args.get('initData')
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            # Проверяем initData от Telegram
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                logger.warning("Invalid initData from Telegram Mini App")
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            # Получаем подписки пользователя
+            from ...db.subscribers_db import get_all_subscriptions_by_user
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id))
+            finally:
+                loop.close()
+            
+            # Форматируем данные для ответа
+            import time
+            import datetime
+            current_time = int(time.time())
+            
+            formatted_subs = []
+            for sub in subscriptions:
+                expires_at = sub['expires_at']
+                is_active = sub['status'] == 'active' and expires_at > current_time
+                is_expired = expires_at < current_time
+                
+                expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
+                created_datetime = datetime.datetime.fromtimestamp(sub['created_at'])
+                
+                formatted_subs.append({
+                    'id': sub['id'],
+                    'name': sub.get('name', f"Подписка {sub['id']}"),
+                    'status': 'active' if is_active else ('expired' if is_expired else sub['status']),
+                    'period': sub['period'],
+                    'device_limit': sub['device_limit'],
+                    'created_at': sub['created_at'],
+                    'created_at_formatted': created_datetime.strftime('%d.%m.%Y %H:%M'),
+                    'expires_at': expires_at,
+                    'expires_at_formatted': expiry_datetime.strftime('%d.%m.%Y %H:%M'),
+                    'price': sub['price'],
+                    'token': sub['subscription_token'],
+                    'days_remaining': max(0, (expires_at - current_time) // (24 * 60 * 60)) if is_active else 0
+                })
+            
+            # Сортируем: сначала активные, потом по дате создания
+            formatted_subs.sort(key=lambda x: (x['status'] != 'active', -x['created_at']))
+            
+            return jsonify({
+                'success': True,
+                'subscriptions': formatted_subs,
+                'total': len(formatted_subs),
+                'active': len([s for s in formatted_subs if s['status'] == 'active'])
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/subscriptions: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+    
+    # Endpoint для обслуживания веб-приложения
+    @app.route('/webapp/', methods=['GET'])
+    @app.route('/webapp/index.html', methods=['GET'])
+    def webapp_index():
+        """Отдает HTML страницу веб-приложения"""
+        try:
+            import os
+            webapp_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'webapp', 'index.html')
+            if os.path.exists(webapp_path):
+                with open(webapp_path, 'r', encoding='utf-8') as f:
+                    return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
+            else:
+                return "Web app not found", 404
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке webapp: {e}")
+            return "Error loading web app", 500
+    
+    # Endpoint для статических файлов (CSS, JS)
+    @app.route('/webapp/<path:filename>', methods=['GET'])
+    def webapp_static(filename):
+        """Отдает статические файлы веб-приложения"""
+        try:
+            import os
+            webapp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'webapp')
+            file_path = os.path.join(webapp_dir, filename)
+            
+            # Проверка безопасности (только файлы из webapp директории)
+            if not file_path.startswith(os.path.abspath(webapp_dir)):
+                return "Forbidden", 403
+            
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                # Определяем Content-Type по расширению
+                content_type = 'text/plain'
+                if filename.endswith('.css'):
+                    content_type = 'text/css'
+                elif filename.endswith('.js'):
+                    content_type = 'application/javascript'
+                elif filename.endswith('.json'):
+                    content_type = 'application/json'
+                
+                with open(file_path, 'rb') as f:
+                    return f.read(), 200, {'Content-Type': content_type}
+            else:
+                return "File not found", 404
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке статического файла: {e}")
+            return "Error loading file", 500
+    
     return app
+
+
+def verify_telegram_init_data(init_data: str) -> str:
+    """
+    Проверяет initData от Telegram Web App и возвращает user_id если валидно.
+    
+    Args:
+        init_data: Строка initData от Telegram (формат: hash=...&user=...&auth_date=...)
+    
+    Returns:
+        user_id: ID пользователя Telegram, или None если данные невалидны
+    """
+    try:
+        import os
+        import hmac
+        import hashlib
+        import urllib.parse
+        import json
+        import time
+        
+        TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+        if not TELEGRAM_TOKEN:
+            logger.error("TELEGRAM_TOKEN не найден")
+            return None
+        
+        # Парсим initData
+        parsed_data = urllib.parse.parse_qs(init_data)
+        
+        # Извлекаем hash
+        if 'hash' not in parsed_data or not parsed_data['hash']:
+            logger.warning("Hash не найден в initData")
+            return None
+        
+        received_hash = parsed_data['hash'][0]
+        
+        # Извлекаем auth_date
+        if 'auth_date' not in parsed_data or not parsed_data['auth_date']:
+            logger.warning("auth_date не найден в initData")
+            return None
+        
+        auth_date = int(parsed_data['auth_date'][0])
+        
+        # Проверяем, что данные не старше 24 часов
+        current_time = int(time.time())
+        if current_time - auth_date > 24 * 60 * 60:
+            logger.warning(f"initData устарел: auth_date={auth_date}, current={current_time}")
+            return None
+        
+        # Создаем секретный ключ из токена бота
+        secret_key = hmac.new(
+            b"WebAppData",
+            TELEGRAM_TOKEN.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
+        
+        # Формируем строку для проверки (все параметры кроме hash, отсортированные)
+        data_check_string_parts = []
+        for key in sorted(parsed_data.keys()):
+            if key != 'hash':
+                data_check_string_parts.append(f"{key}={parsed_data[key][0]}")
+        
+        data_check_string = "\n".join(data_check_string_parts)
+        
+        # Вычисляем hash
+        calculated_hash = hmac.new(
+            secret_key,
+            data_check_string.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Сравниваем хеши
+        if calculated_hash != received_hash:
+            logger.warning("Неверный hash в initData")
+            return None
+        
+        # Извлекаем user_id из user
+        if 'user' not in parsed_data or not parsed_data['user']:
+            logger.warning("user не найден в initData")
+            return None
+        
+        user_data = json.loads(parsed_data['user'][0])
+        user_id = str(user_data.get('id'))
+        
+        if not user_id:
+            logger.warning("user_id не найден в user данных")
+            return None
+        
+        logger.info(f"Успешная проверка initData для user_id={user_id}")
+        return user_id
+        
+    except Exception as e:
+        logger.error(f"Ошибка при проверке initData: {e}", exc_info=True)
+        return None
 
