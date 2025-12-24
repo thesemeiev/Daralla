@@ -66,20 +66,20 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     texts = {
         CallbackData.INSTR_ANDROID: (
-            "<b>Android (v2RayTun, Hiddify)</b>\n"
+            "<b>Android (v2RayTun, Happ)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">v2RayTun из Google Play</a>\n"
-            "   • <a href=\"https://play.google.com/store/apps/details?id=app.hiddify.com\">Hiddify из Google Play</a>\n"
+            "   • <a href=\"https://play.google.com/store/apps/details?id=com.happ.vpn\">Happ из Google Play</a>\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
             "3. В приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Подключитесь к VPN.\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
         CallbackData.INSTR_IOS: (
-            "<b>iPhone (v2RayTun, Hiddify)</b>\n"
+            "<b>iPhone (v2RayTun, Happ)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone\">v2RayTun из App Store</a>\n"
-            "   • <a href=\"https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone\">Hiddify из App Store</a>\n"
+            "   • <a href=\"https://apps.apple.com/ru/app/happ/id1635156981\">Happ из App Store</a>\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
             "3. Откройте выбранное приложение.\n"
             "4. Нажмите + → Добавить из буфера обмена.\n"
@@ -87,20 +87,20 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
         CallbackData.INSTR_WINDOWS: (
-            "<b>Windows (v2RayTun, Hiddify)</b>\n"
+            "<b>Windows (v2RayTun, Happ)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">v2RayTun для Windows</a>\n"
-            "   • <a href=\"https://app.hiddify.com/windows\">Hiddify для Windows</a>\n"
+            "   • <a href=\"https://happvpn.help/download-pc/\">Happ для Windows</a>\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
             "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
         CallbackData.INSTR_MACOS: (
-            "<b>Mac (v2RayTun, Hiddify)</b>\n"
+            "<b>Mac (v2RayTun, Happ)</b>\n"
             "1. Выберите приложение:\n"
             "   • <a href=\"https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac\">v2RayTun для Mac</a>\n"
-            "   • <a href=\"https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone\">Hiddify для Mac</a>\n"
+            "   • <a href=\"https://happvpn.help/download-pc/\">Happ для Mac</a>\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
             "3. В выбранном приложении нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
@@ -115,10 +115,10 @@ async def instruction_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или Android TV.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
         CallbackData.INSTR_LINUX: (
-            "<b>Linux (Hiddify)</b>\n"
-            "1. <a href=\"https://app.hiddify.com/linux\">Скачайте Hiddify для Linux</a>.\n"
+            "<b>Linux (Happ)</b>\n"
+            "1. <a href=\"https://happvpn.help/download-pc/\">Скачайте Happ для Linux</a>.\n"
             "2. В боте нажмите 'Мои подписки' и скопируйте ссылку на подписку.\n"
-            "3. В Hiddify нажмите + → Добавить из буфера обмена.\n"
+            "3. В Happ нажмите + → Добавить из буфера обмена.\n"
             "4. Включите профиль (нажмите на переключатель или кнопку 'Включить').\n"
             "\n<b>Советы:</b>\n- Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.\n- Используйте только одну VPN-программу одновременно.\n\n<b>Безопасность:</b> Не делитесь своей ссылкой с другими!"
         ),
