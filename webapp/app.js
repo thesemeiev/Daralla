@@ -93,10 +93,10 @@ function showSubscriptionDetail(sub) {
                     <div class="detail-info-value">${sub.expires_at_formatted}</div>
                 </div>
                 
-                ${sub.status === 'active' && sub.days_remaining > 0 ? `
+                ${sub.status === 'active' && sub.expires_at ? `
                     <div class="detail-info-item full-width">
-                        <div class="detail-info-label">Осталось дней</div>
-                        <div class="detail-info-value days-highlight">${sub.days_remaining}</div>
+                        <div class="detail-info-label">Осталось</div>
+                        <div class="detail-info-value days-highlight">${formatTimeRemaining(sub.expires_at)}</div>
                     </div>
                 ` : ''}
             </div>
