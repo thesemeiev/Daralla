@@ -76,7 +76,11 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if stats.get('total_clients_created', 0) > 0:
             report += f"\n<b>Восстановлено клиентов:</b> {stats['total_clients_created']}\n"
         
-        report += f"<b>Ошибок:</b> {stats['total_errors']}\n"
+        if stats.get('orphaned_clients_deleted', 0) > 0:
+            report += f"\n{UIEmojis.SUCCESS} <b>Удалено сиротских клиентов:</b> {stats['orphaned_clients_deleted']}\n"
+            report += f"<i>Клиенты, не связанные с активными подписками</i>\n"
+        
+        report += f"\n<b>Ошибок:</b> {stats['total_errors']}\n"
         
         if stats['errors']:
             report += f"\n{UIEmojis.WARNING} <b>Ошибки:</b>\n"
@@ -84,16 +88,6 @@ async def admin_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 report += f"• {error}\n"
             if len(stats['errors']) > 10:
                 report += f"\n... и еще {len(stats['errors']) - 10} ошибок"
-        
-        # Ищем orphaned клиентов
-        try:
-            orphaned = await sync_manager.find_orphaned_clients()
-            if orphaned:
-                report += f"\n\n{UIEmojis.WARNING} <b>Найдено orphaned клиентов:</b> {len(orphaned)}\n"
-                report += "<i>Клиенты на серверах без записи в БД подписок</i>\n"
-                report += f"\n<i>Используйте /admin_sync --fix для автоматического восстановления отсутствующих клиентов</i>"
-        except Exception as e:
-            logger.error(f"Ошибка поиска orphaned клиентов: {e}")
         
         keyboard = InlineKeyboardMarkup([
             [NavigationBuilder.create_back_button()]

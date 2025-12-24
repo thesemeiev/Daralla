@@ -83,6 +83,9 @@ class CallbackData:
     # Покупка
     SELECT_PERIOD_MONTH = 'select_period_month'
     SELECT_PERIOD_3MONTH = 'select_period_3month'
+    PROMO_PURCHASE = 'promo_purchase'
+    PROMO_EXTEND = 'promo_extend:'  # Используется как f"promo_extend:{subscription_id}"
+    PROMO_CANCEL = 'promo_cancel'
     
     # Подписки (паттерны для динамических callback_data)
     VIEW_SUB = 'view_sub:'  # Используется как f"view_sub:{id}"

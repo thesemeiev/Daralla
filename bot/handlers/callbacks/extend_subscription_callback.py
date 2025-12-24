@@ -135,6 +135,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("1 месяц - 150₽", callback_data=f"{CallbackData.EXT_SUB_PER}month:{subscription_id}")],
         [InlineKeyboardButton("3 месяца - 350₽", callback_data=f"{CallbackData.EXT_SUB_PER}3month:{subscription_id}")],
+        [InlineKeyboardButton("🎁 Промокод", callback_data=f"{CallbackData.PROMO_EXTEND}:{subscription_id}")],
         [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
     ])
     

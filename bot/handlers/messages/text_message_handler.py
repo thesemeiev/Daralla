@@ -59,6 +59,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_broadcast_input")
         return
     
+    # Проверяем, не идет ли ввод промокода (это должно обрабатываться ConversationHandler)
+    if context.user_data.get('promo_type') or context.user_data.get('promo_message_id'):
+        logger.debug("Сообщение пропущено handle_text_message - обрабатывается promo_input")
+        return
+    
+    # Проверяем, не идет ли изменение промокода в конфигурации (это должно обрабатываться ConversationHandler)
+    if context.user_data.get('admin_config_message_id') or context.user_data.get('admin_config_chat_id'):
+        logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_config_change_promo_input")
+        return
+    
     user_id = str(update.message.from_user.id)
     new_name = update.message.text.strip()
     

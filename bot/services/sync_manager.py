@@ -2,6 +2,7 @@
 Менеджер синхронизации данных между БД и серверами X-UI
 """
 import asyncio
+import json
 import logging
 import time
 from typing import List, Dict, Any
@@ -104,12 +105,23 @@ class SyncManager:
             if servers and synced_for_sub == len(servers):
                 stats["subscriptions_synced"] += 1
 
+        # Шаг 3. Очистка сиротских клиентов (не связанных с активными подписками)
+        try:
+            orphaned_stats = await self.cleanup_orphaned_clients()
+            stats["orphaned_clients_deleted"] = orphaned_stats.get("deleted_count", 0)
+            if orphaned_stats.get("errors"):
+                stats["errors"].extend(orphaned_stats["errors"])
+        except Exception as e:
+            logger.error("Ошибка cleanup_orphaned_clients: %s", e)
+            stats["errors"].append(f"cleanup_orphaned_clients: {e}")
+
         stats["total_errors"] = len(stats["errors"])
         logger.info(
-            "✅ sync_all_subscriptions завершена: subs=%s, synced=%s, servers=%s, errors=%s",
+            "✅ sync_all_subscriptions завершена: subs=%s, synced=%s, servers=%s, orphaned=%s, errors=%s",
             stats["subscriptions_checked"],
             stats["subscriptions_synced"],
             stats["total_servers_synced"],
+            stats.get("orphaned_clients_deleted", 0),
             stats["total_errors"],
         )
         return stats
@@ -126,6 +138,11 @@ class SyncManager:
         
         # 3. Проверка консистентности времени и наличия клиентов
         await self.sync_all_clients_states()
+        
+        # 4. Очистка сиротских клиентов (не связанных с активными подписками)
+        orphaned_stats = await self.cleanup_orphaned_clients()
+        if orphaned_stats['deleted_count'] > 0:
+            logger.info(f"🧹 Удалено {orphaned_stats['deleted_count']} сиротских клиентов")
         
         logger.info("✅ Синхронизация завершена")
 
@@ -227,3 +244,91 @@ class SyncManager:
                     token=token,
                     device_limit=device_limit  # Передаем device_limit напрямую
                 )
+    
+    async def cleanup_orphaned_clients(self):
+        """
+        Удаляет клиентов на серверах, которые не связаны ни с одной активной подпиской.
+        
+        Логика:
+        1. Получаем все активные подписки
+        2. Собираем все client_email из subscription_servers
+        3. Для каждого сервера:
+           - Получаем список всех клиентов через X-UI API
+           - Для каждого клиента проверяем, есть ли он в списке активных подписок
+           - Если клиента нет в списке - удаляем его
+        
+        Returns:
+            dict со статистикой: {'deleted_count': int, 'servers_checked': int, 'errors': list}
+        """
+        logger.info("🧹 Начало очистки сиротских клиентов")
+        
+        stats = {
+            'deleted_count': 0,
+            'servers_checked': 0,
+            'errors': []
+        }
+        
+        # Получаем все активные подписки и их клиентов
+        active_subs = await get_all_active_subscriptions()
+        active_client_emails = set()
+        
+        for sub in active_subs:
+            servers = await get_subscription_servers(sub['id'])
+            for s_info in servers:
+                active_client_emails.add(s_info['client_email'])
+        
+        logger.info(f"Найдено {len(active_client_emails)} активных клиентов в БД")
+        
+        # Проверяем каждый сервер
+        for server in self.server_manager.servers:
+            server_name = server["name"]
+            xui = server.get("x3")
+            
+            if not xui:
+                logger.warning(f"Сервер {server_name} недоступен, пропускаем")
+                continue
+            
+            stats['servers_checked'] += 1
+            
+            try:
+                # Получаем всех клиентов на сервере
+                response = xui.list()
+                if 'obj' not in response:
+                    logger.warning(f"Неожиданный формат ответа XUI для сервера {server_name}")
+                    continue
+                
+                for inbound in response['obj']:
+                    try:
+                        settings = json.loads(inbound['settings'])
+                        clients = settings.get("clients", [])
+                        
+                        for client in clients:
+                            client_email = client.get('email')
+                            if not client_email:
+                                continue
+                            
+                            # Если клиент не в списке активных - удаляем
+                            if client_email not in active_client_emails:
+                                try:
+                                    xui.deleteClient(client_email)
+                                    stats['deleted_count'] += 1
+                                    logger.info(f"Удален сиротский клиент {client_email} с сервера {server_name}")
+                                except Exception as e:
+                                    error_msg = f"Ошибка удаления клиента {client_email} с {server_name}: {e}"
+                                    logger.error(error_msg)
+                                    stats['errors'].append(error_msg)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id', 'unknown')} на сервере {server_name}: {e}")
+                        continue
+                    except Exception as e:
+                        error_msg = f"Ошибка обработки inbound на сервере {server_name}: {e}"
+                        logger.error(error_msg)
+                        stats['errors'].append(error_msg)
+            
+            except Exception as e:
+                error_msg = f"Ошибка проверки сервера {server_name}: {e}"
+                logger.error(error_msg)
+                stats['errors'].append(error_msg)
+        
+        logger.info(f"✅ Очистка завершена: удалено {stats['deleted_count']} сиротских клиентов с {stats['servers_checked']} серверов")
+        return stats

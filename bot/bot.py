@@ -43,6 +43,8 @@ from .handlers.payments import handle_payment
 handle_payment = handle_payment
 from .handlers.admin import (
     admin_errors, admin_notifications, admin_check_servers, admin_config,
+    admin_config_change_promo_start, admin_config_change_promo_input,
+    admin_config_change_promo_cancel, ADMIN_CONFIG_PROMO_WAITING,
     admin_broadcast_start, admin_broadcast_input, admin_broadcast_send,
     admin_broadcast_cancel, admin_broadcast_export,
     admin_test_payment, test_confirm_payment_callback,
@@ -481,6 +483,78 @@ if __name__ == '__main__':
         per_message=False
     )
     app.add_handler(admin_search_user_conv)
+    
+    # ConversationHandler для изменения промокода в конфигурации
+    admin_config_promo_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(admin_config_change_promo_start, pattern="^admin_config_change_promo$")
+        ],
+        states={
+            ADMIN_CONFIG_PROMO_WAITING: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_config_change_promo_input)
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(admin_config_change_promo_cancel, pattern="^admin_config_change_promo_cancel$"),
+            MessageHandler(filters.COMMAND, admin_config_change_promo_cancel),
+            # Обработка навигации назад через универсальную кнопку "back"
+            CallbackQueryHandler(
+                lambda u, c: (
+                    c.user_data.pop('admin_config_message_id', None),
+                    c.user_data.pop('admin_config_chat_id', None),
+                    admin_config_change_promo_cancel(u, c)
+                )[2],
+                pattern="^back$"
+            ),
+        ],
+        per_user=True,
+        per_chat=True,
+        per_message=False
+    )
+    app.add_handler(admin_config_promo_conv)
+    
+    # Глобальный обработчик для кнопки изменения промокода
+    app.add_handler(CallbackQueryHandler(admin_config_change_promo_start, pattern="^admin_config_change_promo$"))
+    
+    # ConversationHandler для промокодов
+    from .handlers.promocodes.promo_handler import (
+        promo_start, promo_input, promo_cancel, PROMO_WAITING_CODE
+    )
+    
+    promo_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(promo_start, pattern="^promo_purchase$"),
+            CallbackQueryHandler(promo_start, pattern="^promo_extend:")
+        ],
+        states={
+            PROMO_WAITING_CODE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, promo_input)
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(promo_cancel, pattern="^promo_cancel$"),
+            MessageHandler(filters.COMMAND, promo_cancel),
+            # Обработка навигации назад через универсальную кнопку "back"
+            CallbackQueryHandler(
+                lambda u, c: (
+                    c.user_data.pop('promo_type', None),
+                    c.user_data.pop('promo_subscription_id', None),
+                    c.user_data.pop('promo_message_id', None),
+                    c.user_data.pop('promo_chat_id', None),
+                    promo_cancel(u, c)
+                )[4],
+                pattern="^back$"
+            ),
+        ],
+        per_user=True,
+        per_chat=True,
+        per_message=False
+    )
+    app.add_handler(promo_conv)
+    
+    # Глобальный обработчик для кнопок промокодов (на случай если ConversationHandler заблокирован)
+    app.add_handler(CallbackQueryHandler(promo_start, pattern="^promo_purchase$"))
+    app.add_handler(CallbackQueryHandler(promo_start, pattern="^promo_extend:"))
     
     # Обработчик текстовых сообщений
     # (должен быть после ConversationHandler)
