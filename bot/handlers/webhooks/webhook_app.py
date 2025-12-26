@@ -1345,8 +1345,9 @@ def create_webhook_app(bot_app):
                             except Exception as e:
                                 failed_servers.append(server_name)
                                 logger.error(f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}")
+                    return deleted_servers, failed_servers
                 
-                loop.run_until_complete(delete_clients_from_servers())
+                deleted_servers, failed_servers = loop.run_until_complete(delete_clients_from_servers())
                 
                 # 2. Удаляем связи подписки с серверами из БД
                 for server_info in servers:
