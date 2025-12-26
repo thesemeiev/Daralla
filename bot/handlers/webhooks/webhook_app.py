@@ -1322,12 +1322,10 @@ def create_webhook_app(bot_app):
                 managers = get_managers()
                 server_manager = managers.get('server_manager')
                 
-                deleted_servers = []
-                failed_servers = []
-                
                 # 1. Удаляем клиентов со всех серверов
                 async def delete_clients_from_servers():
-                    nonlocal deleted_servers, failed_servers
+                    deleted = []
+                    failed = []
                     if server_manager and servers:
                         for server_info in servers:
                             server_name = server_info['server_name']
@@ -1337,15 +1335,20 @@ def create_webhook_app(bot_app):
                                 xui, _ = server_manager.get_server_by_name(server_name)
                                 if xui:
                                     xui.deleteClient(client_email)
-                                    deleted_servers.append(server_name)
-                                    logger.info(f"Удален клиент {client_email} с сервера {server_name} при удалении подписки {sub_id}")
+                                    deleted.append(server_name)
+                                    logger.info(
+                                        f"Удален клиент {client_email} с сервера {server_name} "
+                                        f"при удалении подписки {sub_id}"
+                                    )
                                 else:
-                                    failed_servers.append(server_name)
+                                    failed.append(server_name)
                                     logger.warning(f"Сервер {server_name} не найден в server_manager")
                             except Exception as e:
-                                failed_servers.append(server_name)
-                                logger.error(f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}")
-                    return deleted_servers, failed_servers
+                                failed.append(server_name)
+                                logger.error(
+                                    f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}"
+                                )
+                    return deleted, failed
                 
                 deleted_servers, failed_servers = loop.run_until_complete(delete_clients_from_servers())
                 
