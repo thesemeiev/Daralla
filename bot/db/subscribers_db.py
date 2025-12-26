@@ -525,6 +525,12 @@ async def get_server_load_data():
             averages = await get_server_load_averages(period_hours=24)
             server_avg = averages.get(server_name, {})
             
+            # Рассчитываем процент загрузки (если есть лимит активных клиентов)
+            # Для capacity planning можно использовать total_active как максимальную емкость
+            load_percentage = 0
+            if total_active > 0:
+                load_percentage = round((server_avg.get('avg_online', 0) / total_active) * 100, 1)
+            
             server_data.append({
                 'server_name': server_name,
                 'online_clients': online_count,  # Текущее значение
@@ -533,7 +539,8 @@ async def get_server_load_data():
                 'avg_online_24h': server_avg.get('avg_online', 0),  # Среднее за 24 часа
                 'max_online_24h': server_avg.get('max_online', 0),  # Максимум за 24 часа
                 'min_online_24h': server_avg.get('min_online', 0),  # Минимум за 24 часа
-                'samples_24h': server_avg.get('samples', 0)  # Количество измерений
+                'samples_24h': server_avg.get('samples', 0),  # Количество измерений
+                'load_percentage': load_percentage  # Процент загрузки канала
             })
         except Exception as e:
             logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}", exc_info=True)

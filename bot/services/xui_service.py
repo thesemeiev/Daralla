@@ -41,10 +41,6 @@ class X3:
         # Это позволяет боту запускаться мгновенно даже если серверы недоступны
         logger.debug(f"XUI объект создан для {host} (подключение будет выполнено при первом использовании)")
         
-        # Кэш для хранения предыдущих значений трафика (для определения онлайн по движению трафика)
-        # Формат: {email: {'upload': int, 'download': int, 'timestamp': float}}
-        self._traffic_cache = {}
-        self._traffic_cache_ttl = 300  # Время жизни кэша в секундах (5 минут)
     
     def _login(self):
         """Выполняет вход в XUI панель"""
@@ -464,70 +460,38 @@ class X3:
             logger.debug(f"Ошибка получения IP-адресов для клиента {client_id}: {e}")
             return []
     
-    def _is_traffic_changed(self, email, current_upload, current_download):
+    def _has_active_traffic(self, upload, download):
         """
-        Проверяет, изменился ли трафик клиента по сравнению с предыдущим запросом
-        Если трафик увеличился (upload или download), клиент считается онлайн
+        Проверяет, есть ли у клиента активный трафик (нагружает ли он канал)
+        
+        Логика: если upload > 0 ИЛИ download > 0, значит клиент передает/принимает данные
+        и нагружает канал сервера
         
         Args:
-            email: Email клиента
-            current_upload: Текущее значение upload
-            current_download: Текущее значение download
+            upload: Текущее значение upload (байты)
+            download: Текущее значение download (байты)
             
         Returns:
-            bool: True если трафик изменился (клиент онлайн), False если нет
+            bool: True если есть трафик (клиент нагружает канал), False если нет
         """
-        import time
-        current_time = time.time()
-        
-        # Очищаем устаревшие записи из кэша
-        expired_emails = [
-            email for email, data in self._traffic_cache.items()
-            if current_time - data.get('timestamp', 0) > self._traffic_cache_ttl
-        ]
-        for expired_email in expired_emails:
-            del self._traffic_cache[expired_email]
-        
-        # Проверяем, есть ли предыдущие значения
-        if email not in self._traffic_cache:
-            # Первый раз видим этого клиента - сохраняем текущие значения
-            self._traffic_cache[email] = {
-                'upload': current_upload,
-                'download': current_download,
-                'timestamp': current_time
-            }
-            # Если есть трафик, считаем что клиент активен (использовал VPN)
-            return current_upload > 0 or current_download > 0
-        
-        # Сравниваем с предыдущими значениями
-        prev_data = self._traffic_cache[email]
-        prev_upload = prev_data.get('upload', 0)
-        prev_download = prev_data.get('download', 0)
-        
-        # Если трафик увеличился - клиент онлайн (передает/принимает данные)
-        upload_changed = current_upload > prev_upload
-        download_changed = current_download > prev_download
-        
-        # Обновляем кэш
-        self._traffic_cache[email] = {
-            'upload': current_upload,
-            'download': current_download,
-            'timestamp': current_time
-        }
-        
-        return upload_changed or download_changed
+        # Если есть upload или download, клиент нагружает канал
+        return upload > 0 or download > 0
     
-    def get_online_clients_count(self, timeout=15, use_traffic_movement=True):
+    def get_online_clients_count(self, timeout=15):
         """
-        Подсчитывает количество клиентов в онлайне
+        Подсчитывает количество клиентов, которые нагружают канал (имеют активный трафик)
         
         Метод определения онлайн-статуса:
-        - По движению трафика: если upload или download увеличились с предыдущего запроса,
-          клиент считается онлайн (передает/принимает данные)
+        - Если у клиента upload > 0 ИЛИ download > 0, значит он передает/принимает данные
+          и нагружает канал сервера
+        
+        Это правильный подход для capacity planning:
+        - Каждый снимок показывает количество клиентов с активным трафиком в момент времени
+        - Среднее значение = сумма всех снимков / количество снимков
+        - Это показывает типичную нагрузку на канал
         
         Args:
             timeout: Таймаут запроса
-            use_traffic_movement: Использовать ли определение онлайн по движению трафика (True - по умолчанию)
         
         Returns:
             tuple: (total_active, online_count, offline_count)
@@ -606,22 +570,17 @@ class X3:
                             
                             is_online = False
                             
-                            # Определяем онлайн-статус по движению трафика
-                            if use_traffic_movement and has_client_stats and email and email in client_stats_map:
+                            # Определяем онлайн-статус по наличию активного трафика
+                            # Если upload > 0 ИЛИ download > 0, клиент нагружает канал
+                            if has_client_stats and email and email in client_stats_map:
                                 traffic = client_stats_map[email]
                                 current_upload = traffic.get('upload', 0)
                                 current_download = traffic.get('download', 0)
                                 
-                                # Проверяем, изменился ли трафик (увеличился upload или download)
-                                if self._is_traffic_changed(email, current_upload, current_download):
+                                # Проверяем наличие активного трафика
+                                if self._has_active_traffic(current_upload, current_download):
                                     is_online = True
-                                    logger.debug(f"Клиент {email} онлайн (трафик изменился: upload={current_upload}, download={current_download})")
-                            elif has_client_stats and email and email in client_stats_map:
-                                # Fallback: если нет движения трафика, но есть общий трафик
-                                traffic = client_stats_map[email]
-                                if traffic['total'] > 0:
-                                    # Считаем офлайн, так как трафик не изменился
-                                    is_online = False
+                                    logger.debug(f"Клиент {email} нагружает канал (upload={current_upload}, download={current_download})")
                             
                             if is_online:
                                 online_count += 1
@@ -634,7 +593,7 @@ class X3:
                     logger.warning(f"Ошибка обработки inbound {inbound.get('id')}: {e}")
                     continue
             
-            logger.info(f"Сервер {self.host}: активных={total_active}, онлайн={online_count}, офлайн={offline_count} (метод: движение трафика)")
+            logger.info(f"Сервер {self.host}: активных={total_active}, нагружают канал={online_count}, не нагружают={offline_count}")
             return total_active, online_count, offline_count
         except Exception as e:
             logger.error(f"Ошибка при подсчете онлайн клиентов на {self.host}: {e}", exc_info=True)
