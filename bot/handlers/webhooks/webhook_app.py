@@ -707,8 +707,24 @@ def create_webhook_app(bot_app):
         try:
             from ... import bot as bot_module
             ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
-            return user_id in ADMIN_IDS
-        except (ImportError, AttributeError):
+            
+            # Логируем для отладки
+            logger.info(f"Проверка прав админа для user_id={user_id}, ADMIN_IDS={ADMIN_IDS}")
+            
+            # Преобразуем user_id в строку для сравнения
+            user_id_str = str(user_id)
+            
+            # Проверяем, является ли user_id админом
+            # ADMIN_IDS может быть списком строк или чисел
+            for admin_id in ADMIN_IDS:
+                if str(admin_id) == user_id_str:
+                    logger.info(f"Пользователь {user_id} является админом")
+                    return True
+            
+            logger.info(f"Пользователь {user_id} НЕ является админом")
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка при проверке прав админа: {e}", exc_info=True)
             return False
     
     @app.route('/api/admin/check', methods=['POST', 'OPTIONS'])
