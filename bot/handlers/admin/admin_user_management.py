@@ -61,6 +61,7 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Очищаем старые данные поиска при новом запуске
     context.user_data.pop('admin_search_menu_message_id', None)
     context.user_data.pop('admin_search_menu_chat_id', None)
+    context.user_data.pop('admin_search_timestamp', None)
     
     # Если передан user_id как аргумент команды
     if update.message and context.args and len(context.args) > 0:
@@ -85,6 +86,9 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message_obj:
         context.user_data['admin_search_menu_message_id'] = message_obj.message_id
         context.user_data['admin_search_menu_chat_id'] = message_obj.chat.id
+        # Сохраняем timestamp для проверки "застрявших" состояний
+        import time
+        context.user_data['admin_search_timestamp'] = time.time()
     
     return SEARCH_USER_WAITING_ID
 
@@ -92,32 +96,94 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_search_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает ввод user_id для поиска пользователя"""
     if not await check_private_chat(update):
+        # Очищаем состояние при выходе
+        context.user_data.pop('admin_search_menu_message_id', None)
+        context.user_data.pop('admin_search_menu_chat_id', None)
         return ConversationHandler.END
     
     globals_dict = get_globals()
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     
     if update.effective_user.id not in ADMIN_IDS:
+        # Очищаем состояние при отсутствии доступа
+        context.user_data.pop('admin_search_menu_message_id', None)
+        context.user_data.pop('admin_search_menu_chat_id', None)
         return ConversationHandler.END
     
-    user_id = update.message.text.strip()
-    
-    # Удаляем сообщение пользователя с ID
     try:
-        await update.message.delete()
+        user_id = update.message.text.strip()
+        
+        # Валидация: проверяем, что это число
+        if not user_id.isdigit():
+            from ...utils import safe_edit_or_reply_universal
+            from ...navigation import NavigationBuilder, MenuTypes
+            error_message = (
+                f"{UIStyles.header('Поиск пользователя')}\n\n"
+                f"{UIEmojis.ERROR} <b>Ошибка:</b> ID должен быть числом!\n\n"
+                f"{UIStyles.description('Введите корректный Telegram ID (например: 123456789)')}"
+            )
+            keyboard = InlineKeyboardMarkup([
+                [NavigationBuilder.create_back_button()]
+            ])
+            menu_message_id = context.user_data.get('admin_search_menu_message_id')
+            menu_chat_id = context.user_data.get('admin_search_menu_chat_id')
+            if menu_chat_id and menu_message_id:
+                from ...utils import safe_edit_message_with_photo
+                await safe_edit_message_with_photo(
+                    context.bot, menu_chat_id, menu_message_id, error_message, 
+                    reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER
+                )
+            else:
+                await safe_edit_or_reply_universal(
+                    update.message, error_message, reply_markup=keyboard, 
+                    parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER
+                )
+            # НЕ очищаем состояние, чтобы пользователь мог попробовать снова
+            return SEARCH_USER_WAITING_ID
+        
+        # Удаляем сообщение пользователя с ID
+        try:
+            await update.message.delete()
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение пользователя: {e}")
+        
+        # Получаем message_id меню поиска из context
+        menu_message_id = context.user_data.get('admin_search_menu_message_id')
+        menu_chat_id = context.user_data.get('admin_search_menu_chat_id')
+        
+        # Передаем информацию о сообщении для редактирования
+        await show_user_info(update, context, user_id, menu_chat_id=menu_chat_id, menu_message_id=menu_message_id)
+        
     except Exception as e:
-        logger.warning(f"Не удалось удалить сообщение пользователя: {e}")
-    
-    # Получаем message_id меню поиска из context
-    menu_message_id = context.user_data.get('admin_search_menu_message_id')
-    menu_chat_id = context.user_data.get('admin_search_menu_chat_id')
-    
-    # Передаем информацию о сообщении для редактирования
-    await show_user_info(update, context, user_id, menu_chat_id=menu_chat_id, menu_message_id=menu_message_id)
-    
-    # Очищаем данные поиска из context после завершения
-    context.user_data.pop('admin_search_menu_message_id', None)
-    context.user_data.pop('admin_search_menu_chat_id', None)
+        logger.error(f"Ошибка в admin_search_user_input: {e}", exc_info=True)
+        from ...utils import safe_edit_or_reply_universal
+        from ...navigation import NavigationBuilder, MenuTypes
+        error_message = (
+            f"{UIStyles.header('Поиск пользователя')}\n\n"
+            f"{UIEmojis.ERROR} <b>Ошибка:</b> {str(e)}\n\n"
+            f"{UIStyles.description('Попробуйте еще раз или вернитесь назад.')}"
+        )
+        keyboard = InlineKeyboardMarkup([
+            [NavigationBuilder.create_back_button()]
+        ])
+        menu_message_id = context.user_data.get('admin_search_menu_message_id')
+        menu_chat_id = context.user_data.get('admin_search_menu_chat_id')
+        if menu_chat_id and menu_message_id:
+            from ...utils import safe_edit_message_with_photo
+            await safe_edit_message_with_photo(
+                context.bot, menu_chat_id, menu_message_id, error_message, 
+                reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER
+            )
+        else:
+            await safe_edit_or_reply_universal(
+                update.message, error_message, reply_markup=keyboard, 
+                parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER
+            )
+    finally:
+        # ВСЕГДА очищаем данные поиска из context после завершения
+        context.user_data.pop('admin_search_menu_message_id', None)
+        context.user_data.pop('admin_search_menu_chat_id', None)
+        context.user_data.pop('admin_search_timestamp', None)
     
     return ConversationHandler.END
 

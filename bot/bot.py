@@ -470,6 +470,18 @@ if __name__ == '__main__':
     from .handlers.admin.admin_user_management import (
         admin_search_user, admin_search_user_input, SEARCH_USER_WAITING_ID
     )
+    # Функция для очистки состояния поиска
+    def clear_search_state(context):
+        """Очищает состояние поиска пользователя"""
+        context.user_data.pop('admin_search_menu_message_id', None)
+        context.user_data.pop('admin_search_menu_chat_id', None)
+        context.user_data.pop('admin_search_timestamp', None)
+    
+    async def admin_search_user_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Fallback для сброса состояния поиска при команде или другом событии"""
+        clear_search_state(context)
+        return ConversationHandler.END
+    
     admin_search_user_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(admin_search_user, pattern="^admin_search_user$"),
@@ -484,12 +496,15 @@ if __name__ == '__main__':
             # Очищаем данные поиска при выходе через fallback и обрабатываем навигацию назад
             CallbackQueryHandler(
                 lambda u, c: (
-                    c.user_data.pop('admin_search_menu_message_id', None),
-                    c.user_data.pop('admin_search_menu_chat_id', None),
+                    clear_search_state(c),
                     nav_manager.handle_back_navigation(u, c)
-                )[2],
+                )[1],
                 pattern="^back$"
             ),
+            # Сбрасываем состояние при любой команде
+            MessageHandler(filters.COMMAND, admin_search_user_fallback),
+            # Сбрасываем состояние при callback query (кроме back)
+            CallbackQueryHandler(admin_search_user_fallback),
         ],
         per_user=True,
         per_chat=True,

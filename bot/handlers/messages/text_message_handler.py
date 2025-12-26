@@ -49,9 +49,23 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     # Проверяем, не идет ли поиск пользователя (это должно обрабатываться ConversationHandler)
-    if context.user_data.get('admin_search_menu_message_id') or context.user_data.get('admin_search_menu_chat_id'):
-        logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_search_user_input")
-        return
+    # Но также проверяем, не "застряло" ли состояние (если прошло больше 5 минут, очищаем)
+    search_menu_id = context.user_data.get('admin_search_menu_message_id')
+    search_chat_id = context.user_data.get('admin_search_menu_chat_id')
+    if search_menu_id or search_chat_id:
+        # Проверяем время последнего обновления (если есть)
+        search_timestamp = context.user_data.get('admin_search_timestamp', 0)
+        import time
+        current_time = time.time()
+        # Если прошло больше 5 минут (300 секунд), очищаем состояние
+        if search_timestamp and (current_time - search_timestamp) > 300:
+            logger.warning(f"Обнаружено 'застрявшее' состояние поиска пользователя, очищаем (прошло {current_time - search_timestamp:.0f} сек)")
+            context.user_data.pop('admin_search_menu_message_id', None)
+            context.user_data.pop('admin_search_menu_chat_id', None)
+            context.user_data.pop('admin_search_timestamp', None)
+        else:
+            logger.debug("Сообщение пропущено handle_text_message - обрабатывается admin_search_user_input")
+            return
     
     # Проверяем, не идет ли рассылка (это должно обрабатываться ConversationHandler)
     # BROADCAST_WAITING_TEXT = 1001, BROADCAST_CONFIRM = 1002
