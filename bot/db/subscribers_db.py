@@ -343,12 +343,47 @@ async def get_server_load_data():
     def get_server_manager():
         """Получает server_manager из bot.py"""
         try:
-            from ... import bot as bot_module
-            server_mgr = getattr(bot_module, 'server_manager', None)
-            logger.info(f"server_manager получен: {server_mgr is not None}")
-            if server_mgr:
-                logger.info(f"Количество серверов: {len(server_mgr.servers) if hasattr(server_mgr, 'servers') else 0}")
-            return server_mgr
+            import sys
+            import importlib
+            
+            # Пробуем разные способы получения модуля bot
+            bot_module = None
+            
+            # Способ 1: Через sys.modules (самый надежный)
+            if 'bot.bot' in sys.modules:
+                bot_module = sys.modules['bot.bot']
+                logger.debug("Найден bot.bot в sys.modules")
+            elif 'bot' in sys.modules:
+                bot_module = sys.modules['bot']
+                if hasattr(bot_module, 'bot'):
+                    bot_module = bot_module.bot
+                    logger.debug("Найден bot через sys.modules['bot']")
+            
+            # Способ 2: Абсолютный импорт
+            if not bot_module:
+                try:
+                    import bot.bot as bot_module
+                    logger.debug("Импортирован bot.bot через абсолютный импорт")
+                except ImportError as e:
+                    logger.debug(f"Не удалось импортировать bot.bot: {e}")
+            
+            # Способ 3: Динамический импорт
+            if not bot_module:
+                try:
+                    bot_module = importlib.import_module('bot.bot')
+                    logger.debug("Импортирован bot.bot через importlib")
+                except ImportError as e:
+                    logger.debug(f"Не удалось импортировать через importlib: {e}")
+            
+            if bot_module:
+                server_mgr = getattr(bot_module, 'server_manager', None)
+                logger.info(f"server_manager получен: {server_mgr is not None}")
+                if server_mgr:
+                    logger.info(f"Количество серверов: {len(server_mgr.servers) if hasattr(server_mgr, 'servers') else 0}")
+                return server_mgr
+            else:
+                logger.warning("Не удалось найти модуль bot.bot")
+                return None
         except Exception as e:
             logger.error(f"Ошибка получения server_manager: {e}", exc_info=True)
             return None
