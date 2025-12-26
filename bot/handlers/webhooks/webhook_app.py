@@ -1202,6 +1202,7 @@ def create_webhook_app(bot_app):
                         client_email = server_info['client_email']
                         
                         try:
+                            # Синхронизируем основные данные (expires_at, device_limit)
                             await subscription_manager.ensure_client_on_server(
                                 subscription_id=sub_id,
                                 server_name=server_name,
@@ -1211,6 +1212,32 @@ def create_webhook_app(bot_app):
                                 token=sub['subscription_token'],
                                 device_limit=sub['device_limit']
                             )
+                            
+                            # Синхронизируем имя подписки (name -> subId на сервере)
+                            # Получаем имя подписки из БД
+                            subscription_name = sub.get('name', sub['subscription_token'])
+                            
+                            # Получаем X-UI сервер для обновления имени
+                            xui, resolved_name = subscription_manager.server_manager.get_server_by_name(server_name)
+                            if xui:
+                                try:
+                                    # Проверяем текущее имя на сервере
+                                    client_info = xui.get_client_info(client_email)
+                                    if client_info:
+                                        current_sub_id = client_info['client'].get('subId', '')
+                                        # Если имя отличается, синхронизируем
+                                        if current_sub_id != subscription_name:
+                                            logger.info(
+                                                f"Синхронизация имени подписки на сервере {server_name}: "
+                                                f"'{current_sub_id}' -> '{subscription_name}'"
+                                            )
+                                            xui.updateClientName(client_email, subscription_name)
+                                            logger.info(f"Имя подписки синхронизировано на сервере {server_name}")
+                                        else:
+                                            logger.debug(f"Имя подписки на сервере {server_name} уже совпадает: '{subscription_name}'")
+                                except Exception as name_sync_e:
+                                    logger.warning(f"Ошибка синхронизации имени подписки на сервере {server_name}: {name_sync_e}")
+                            
                             sync_results.append({
                                 'server': server_name,
                                 'status': 'success'
