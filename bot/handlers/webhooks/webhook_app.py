@@ -925,12 +925,30 @@ def create_webhook_app(bot_app):
             # Форматируем платежи
             formatted_payments = []
             for payment in payments:
+                # Безопасно получаем данные из payment
+                payment_id = payment.get('payment_id') or payment.get('id', 'N/A')
+                status = payment.get('status', 'unknown')
+                created_at = payment.get('created_at', 0)
+                
+                # amount может быть в meta или отсутствовать
+                amount = 0
+                meta = payment.get('meta', {})
+                if isinstance(meta, dict):
+                    amount = meta.get('amount', 0)
+                elif isinstance(meta, str):
+                    try:
+                        import json
+                        meta_dict = json.loads(meta)
+                        amount = meta_dict.get('amount', 0)
+                    except:
+                        amount = 0
+                
                 formatted_payments.append({
-                    'id': payment['id'],
-                    'amount': payment['amount'],
-                    'status': payment['status'],
-                    'created_at': payment['created_at'],
-                    'created_at_formatted': datetime.datetime.fromtimestamp(payment['created_at']).strftime('%d.%m.%Y %H:%M')
+                    'id': payment_id,
+                    'amount': amount,
+                    'status': status,
+                    'created_at': created_at,
+                    'created_at_formatted': datetime.datetime.fromtimestamp(created_at).strftime('%d.%m.%Y %H:%M') if created_at else 'N/A'
                 })
             
             return jsonify({
