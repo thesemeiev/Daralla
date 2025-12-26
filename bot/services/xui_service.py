@@ -40,6 +40,11 @@ class X3:
         # Подключение произойдет только при первом реальном использовании через _ensure_connected()
         # Это позволяет боту запускаться мгновенно даже если серверы недоступны
         logger.debug(f"XUI объект создан для {host} (подключение будет выполнено при первом использовании)")
+        
+        # Кэш для хранения предыдущих значений трафика (для определения онлайн по движению трафика)
+        # Формат: {email: {'upload': int, 'download': int, 'timestamp': float}}
+        self._traffic_cache = {}
+        self._traffic_cache_ttl = 300  # Время жизни кэша в секундах (5 минут)
     
     def _login(self):
         """Выполняет вход в XUI панель"""
@@ -412,80 +417,227 @@ class X3:
             logger.error(f"Ошибка при подсчете статуса клиентов на {self.host}: {e}")
             return 0, 0, 0
     
-    def get_online_clients_count(self, timeout=15):
+    def get_client_ips(self, client_id, inbound_id, timeout=15):
         """
-        Подсчитывает количество клиентов в онлайне (использовали трафик недавно)
-        Клиент считается онлайн, если:
-        1. Он активен (не истек срок)
-        2. У него есть статистика трафика (upload + download > 0)
+        Получает список IP-адресов подключенных клиентов через API 3x-ui
+        Если у клиента есть активные IP-адреса, значит он онлайн
+        
+        Args:
+            client_id: ID клиента (id для VLESS, password для TROJAN)
+            inbound_id: ID inbound'а
+            timeout: Таймаут запроса
+            
+        Returns:
+            list: Список IP-адресов или пустой список
+        """
+        self._ensure_connected()
+        try:
+            # Пробуем разные варианты endpoint'ов
+            endpoints = [
+                f'{self.host}/panel/api/inbounds/listClientIps/{inbound_id}?clientId={client_id}',
+                f'{self.host}/panel/api/inbounds/getClientIps/{inbound_id}/{client_id}',
+                f'{self.host}/panel/api/inbounds/{inbound_id}/listClientIps/{client_id}',
+            ]
+            
+            for url in endpoints:
+                try:
+                    response = self.ses.get(url, timeout=timeout)
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Разные форматы ответа
+                        if isinstance(data, dict):
+                            ips = data.get('obj', data.get('ips', data.get('data', [])))
+                        elif isinstance(data, list):
+                            ips = data
+                        else:
+                            ips = []
+                        
+                        if ips and isinstance(ips, list) and len(ips) > 0:
+                            logger.debug(f"Найдено {len(ips)} IP-адресов для клиента {client_id}")
+                            return ips
+                except Exception as e:
+                    logger.debug(f"Endpoint {url} не сработал: {e}")
+                    continue
+            
+            return []
+        except Exception as e:
+            logger.debug(f"Ошибка получения IP-адресов для клиента {client_id}: {e}")
+            return []
+    
+    def _is_traffic_changed(self, email, current_upload, current_download):
+        """
+        Проверяет, изменился ли трафик клиента по сравнению с предыдущим запросом
+        Если трафик увеличился (upload или download), клиент считается онлайн
+        
+        Args:
+            email: Email клиента
+            current_upload: Текущее значение upload
+            current_download: Текущее значение download
+            
+        Returns:
+            bool: True если трафик изменился (клиент онлайн), False если нет
+        """
+        import time
+        current_time = time.time()
+        
+        # Очищаем устаревшие записи из кэша
+        expired_emails = [
+            email for email, data in self._traffic_cache.items()
+            if current_time - data.get('timestamp', 0) > self._traffic_cache_ttl
+        ]
+        for expired_email in expired_emails:
+            del self._traffic_cache[expired_email]
+        
+        # Проверяем, есть ли предыдущие значения
+        if email not in self._traffic_cache:
+            # Первый раз видим этого клиента - сохраняем текущие значения
+            self._traffic_cache[email] = {
+                'upload': current_upload,
+                'download': current_download,
+                'timestamp': current_time
+            }
+            # Если есть трафик, считаем что клиент активен (использовал VPN)
+            return current_upload > 0 or current_download > 0
+        
+        # Сравниваем с предыдущими значениями
+        prev_data = self._traffic_cache[email]
+        prev_upload = prev_data.get('upload', 0)
+        prev_download = prev_data.get('download', 0)
+        
+        # Если трафик увеличился - клиент онлайн (передает/принимает данные)
+        upload_changed = current_upload > prev_upload
+        download_changed = current_download > prev_download
+        
+        # Обновляем кэш
+        self._traffic_cache[email] = {
+            'upload': current_upload,
+            'download': current_download,
+            'timestamp': current_time
+        }
+        
+        return upload_changed or download_changed
+    
+    def get_online_clients_count(self, timeout=15, use_traffic_movement=True):
+        """
+        Подсчитывает количество клиентов в онлайне
+        
+        Метод определения онлайн-статуса:
+        - По движению трафика: если upload или download увеличились с предыдущего запроса,
+          клиент считается онлайн (передает/принимает данные)
+        
+        Args:
+            timeout: Таймаут запроса
+            use_traffic_movement: Использовать ли определение онлайн по движению трафика (True - по умолчанию)
         
         Returns:
             tuple: (total_active, online_count, offline_count)
         """
         try:
+            logger.debug(f"Получение списка клиентов с сервера {self.host}")
             response_data = self.list(timeout=timeout)
+            
+            if not response_data:
+                logger.warning(f"Пустой ответ от сервера {self.host}")
+                return 0, 0, 0
+                
             if 'obj' not in response_data:
-                logger.error(f"Неожиданный формат ответа XUI: {response_data}")
+                logger.error(f"Неожиданный формат ответа XUI: ключи={list(response_data.keys())}")
                 return 0, 0, 0
             
             inbounds = response_data['obj']
+            if not inbounds:
+                logger.warning(f"Нет inbounds на сервере {self.host}")
+                return 0, 0, 0
+            
+            logger.debug(f"Найдено {len(inbounds)} inbounds на сервере {self.host}")
+            
             total_active = 0
             online_count = 0
             offline_count = 0
             current_time = int(datetime.datetime.now().timestamp() * 1000)
             
-            # Получаем статистику трафика для всех клиентов
+            # Получаем статистику трафика для всех клиентов (если доступна)
             client_stats_map = {}
+            has_client_stats = False
             for inbound in inbounds:
-                client_stats = inbound.get('clientStats', [])
-                if isinstance(client_stats, list):
-                    for stat in client_stats:
-                        email = stat.get('email')
-                        if email:
-                            upload = stat.get('up', 0) or stat.get('upload', 0)
-                            download = stat.get('down', 0) or stat.get('download', 0)
-                            client_stats_map[email] = {
-                                'upload': upload,
-                                'download': download,
-                                'total': upload + download
-                            }
-                elif isinstance(client_stats, dict):
-                    for email, stat in client_stats.items():
-                        upload = stat.get('up', 0) or stat.get('upload', 0)
-                        download = stat.get('down', 0) or stat.get('download', 0)
-                        client_stats_map[email] = {
-                            'upload': upload,
-                            'download': download,
-                            'total': upload + download
-                        }
+                client_stats = inbound.get('clientStats')
+                if client_stats is not None:
+                    has_client_stats = True
+                    if isinstance(client_stats, list):
+                        for stat in client_stats:
+                            email = stat.get('email')
+                            if email:
+                                upload = stat.get('up', 0) or stat.get('upload', 0)
+                                download = stat.get('down', 0) or stat.get('download', 0)
+                                client_stats_map[email] = {
+                                    'upload': upload,
+                                    'download': download,
+                                    'total': upload + download
+                                }
+                    elif isinstance(client_stats, dict):
+                        for email, stat in client_stats.items():
+                            if isinstance(stat, dict):
+                                upload = stat.get('up', 0) or stat.get('upload', 0)
+                                download = stat.get('down', 0) or stat.get('download', 0)
+                                client_stats_map[email] = {
+                                    'upload': upload,
+                                    'download': download,
+                                    'total': upload + download
+                                }
+            
+            logger.debug(f"clientStats доступен: {has_client_stats}, найдено {len(client_stats_map)} клиентов со статистикой")
             
             # Подсчитываем клиентов
             for inbound in inbounds:
-                settings = json.loads(inbound.get('settings', '{}'))
-                clients = settings.get("clients", [])
-                
-                for client in clients:
-                    # Проверяем, активен ли клиент (не истек ли срок)
-                    expiry_time = client.get('expiryTime', 0)
-                    if expiry_time == 0 or current_time < expiry_time:
-                        total_active += 1
-                        email = client.get('email')
-                        
-                        # Проверяем, есть ли статистика трафика (клиент использовал VPN)
-                        if email and email in client_stats_map:
-                            traffic = client_stats_map[email]
-                            # Если есть трафик (upload или download > 0), считаем онлайн
-                            if traffic['total'] > 0:
+                try:
+                    inbound_id = inbound.get('id')
+                    settings_str = inbound.get('settings', '{}')
+                    if not settings_str:
+                        continue
+                    settings = json.loads(settings_str)
+                    clients = settings.get("clients", [])
+                    
+                    for client in clients:
+                        # Проверяем, активен ли клиент (не истек ли срок)
+                        expiry_time = client.get('expiryTime', 0)
+                        if expiry_time == 0 or current_time < expiry_time:
+                            total_active += 1
+                            email = client.get('email')
+                            
+                            is_online = False
+                            
+                            # Определяем онлайн-статус по движению трафика
+                            if use_traffic_movement and has_client_stats and email and email in client_stats_map:
+                                traffic = client_stats_map[email]
+                                current_upload = traffic.get('upload', 0)
+                                current_download = traffic.get('download', 0)
+                                
+                                # Проверяем, изменился ли трафик (увеличился upload или download)
+                                if self._is_traffic_changed(email, current_upload, current_download):
+                                    is_online = True
+                                    logger.debug(f"Клиент {email} онлайн (трафик изменился: upload={current_upload}, download={current_download})")
+                            elif has_client_stats and email and email in client_stats_map:
+                                # Fallback: если нет движения трафика, но есть общий трафик
+                                traffic = client_stats_map[email]
+                                if traffic['total'] > 0:
+                                    # Считаем офлайн, так как трафик не изменился
+                                    is_online = False
+                            
+                            if is_online:
                                 online_count += 1
                             else:
                                 offline_count += 1
-                        else:
-                            # Если нет статистики, считаем офлайн
-                            offline_count += 1
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id')}: {e}")
+                    continue
+                except Exception as e:
+                    logger.warning(f"Ошибка обработки inbound {inbound.get('id')}: {e}")
+                    continue
             
+            logger.info(f"Сервер {self.host}: активных={total_active}, онлайн={online_count}, офлайн={offline_count} (метод: движение трафика)")
             return total_active, online_count, offline_count
         except Exception as e:
-            logger.error(f"Ошибка при подсчете онлайн клиентов на {self.host}: {e}")
+            logger.error(f"Ошибка при подсчете онлайн клиентов на {self.host}: {e}", exc_info=True)
             return 0, 0, 0
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))

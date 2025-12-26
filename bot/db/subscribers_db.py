@@ -344,8 +344,13 @@ async def get_server_load_data():
         """Получает server_manager из bot.py"""
         try:
             from ... import bot as bot_module
-            return getattr(bot_module, 'server_manager', None)
-        except (ImportError, AttributeError):
+            server_mgr = getattr(bot_module, 'server_manager', None)
+            logger.info(f"server_manager получен: {server_mgr is not None}")
+            if server_mgr:
+                logger.info(f"Количество серверов: {len(server_mgr.servers) if hasattr(server_mgr, 'servers') else 0}")
+            return server_mgr
+        except Exception as e:
+            logger.error(f"Ошибка получения server_manager: {e}", exc_info=True)
             return None
     
     server_manager = get_server_manager()
@@ -353,15 +358,23 @@ async def get_server_load_data():
         logger.warning("server_manager недоступен, возвращаем пустые данные")
         return []
     
+    if not hasattr(server_manager, 'servers') or not server_manager.servers:
+        logger.warning("server_manager.servers пуст или недоступен")
+        return []
+    
     server_data = []
     
     # Проходим по всем серверам
+    logger.info(f"Обработка {len(server_manager.servers)} серверов")
     for server in server_manager.servers:
-        server_name = server["name"]
+        server_name = server.get("name", "Unknown")
         xui = server.get("x3")
+        
+        logger.debug(f"Обработка сервера {server_name}, xui доступен: {xui is not None}")
         
         if not xui:
             # Сервер недоступен
+            logger.warning(f"Сервер {server_name}: XUI объект недоступен")
             server_data.append({
                 'server_name': server_name,
                 'online_clients': 0,
@@ -372,7 +385,10 @@ async def get_server_load_data():
         
         try:
             # Получаем количество онлайн клиентов с сервера
+            logger.debug(f"Получение данных о нагрузке с сервера {server_name}")
             total_active, online_count, offline_count = xui.get_online_clients_count()
+            
+            logger.info(f"Сервер {server_name}: активных={total_active}, онлайн={online_count}, офлайн={offline_count}")
             
             server_data.append({
                 'server_name': server_name,
@@ -381,7 +397,7 @@ async def get_server_load_data():
                 'offline_clients': offline_count
             })
         except Exception as e:
-            logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}")
+            logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}", exc_info=True)
             server_data.append({
                 'server_name': server_name,
                 'online_clients': 0,
@@ -389,6 +405,7 @@ async def get_server_load_data():
                 'offline_clients': 0
             })
     
+    logger.info(f"Возвращаем данные для {len(server_data)} серверов")
     # Сортируем по количеству онлайн клиентов
     server_data.sort(key=lambda x: x['online_clients'], reverse=True)
     

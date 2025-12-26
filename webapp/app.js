@@ -1218,12 +1218,19 @@ async function loadServerLoadChart() {
         }
         
         const result = await response.json();
-        if (!result.success || !result.data) {
+        if (!result.success) {
+            console.error('Ошибка в ответе API:', result);
+            return;
+        }
+        
+        if (!result.data) {
+            console.warn('Нет данных в ответе API');
             return;
         }
         
         const ctx = document.getElementById('server-load-chart');
         if (!ctx) {
+            console.error('Canvas элемент не найден');
             return;
         }
         
@@ -1235,6 +1242,27 @@ async function loadServerLoadChart() {
         // Подготавливаем данные
         const serverData = result.data.servers || [];
         const locationData = result.data.locations || [];
+        
+        console.log('Данные серверов для графика:', serverData);
+        
+        if (serverData.length === 0) {
+            console.warn('Нет данных о серверах для отображения');
+            // Показываем сообщение об отсутствии данных, но сохраняем canvas
+            const parent = ctx.parentElement;
+            const message = document.createElement('p');
+            message.style.cssText = 'text-align: center; color: #999; padding: 20px;';
+            message.textContent = 'Нет данных о нагрузке на серверы';
+            parent.innerHTML = '';
+            parent.appendChild(message);
+            return;
+        }
+        
+        // Восстанавливаем canvas, если он был удален
+        if (!ctx || !ctx.getContext) {
+            const parent = document.getElementById('server-load-chart').parentElement;
+            parent.innerHTML = '<canvas id="server-load-chart"></canvas>';
+            ctx = document.getElementById('server-load-chart');
+        }
         
         // Создаем график по серверам
         const serverLabels = serverData.map(item => item.display_name || item.server_name);

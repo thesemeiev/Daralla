@@ -1599,8 +1599,24 @@ def create_webhook_app(bot_app):
             asyncio.set_event_loop(loop)
             try:
                 server_load_data = loop.run_until_complete(get_server_load_data())
+                logger.info(f"Получены данные о нагрузке для {len(server_load_data)} серверов")
+                if server_load_data:
+                    logger.debug(f"Пример данных: {server_load_data[0]}")
             finally:
                 loop.close()
+            
+            if not server_load_data:
+                logger.warning("server_load_data пуст, возвращаем пустой ответ")
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'servers': [],
+                        'locations': []
+                    }
+                }), 200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                }
             
             # Получаем информацию о серверах (display_name, location) из конфигурации
             def get_server_info():
