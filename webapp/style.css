@@ -563,3 +563,322 @@ h1 {
         grid-template-columns: 1fr;
     }
 }
+
+/* ==================== АДМИН-ПАНЕЛЬ ==================== */
+
+.admin-search-box {
+    margin-bottom: 20px;
+}
+
+.admin-search-box input {
+    width: 100%;
+    padding: 12px 16px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.admin-search-box input:focus {
+    border-color: #6a6a6a;
+}
+
+.admin-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 12px;
+    background: #2a2a2a;
+    border-radius: 8px;
+}
+
+.admin-user-card {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.admin-user-card:active {
+    transform: scale(0.98);
+    background: #2f2f2f;
+}
+
+.admin-user-card:hover {
+    border-color: #4a4a4a;
+}
+
+.admin-user-id {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f5f5f5;
+    margin-bottom: 8px;
+}
+
+.admin-user-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 14px;
+    color: #a0a0a0;
+}
+
+.admin-user-subscriptions {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #6a6a6a;
+}
+
+.admin-user-detail-section {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.admin-user-detail-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f5f5f5;
+    margin-bottom: 12px;
+}
+
+.admin-detail-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.admin-detail-item:last-child {
+    border-bottom: none;
+}
+
+.admin-detail-label {
+    color: #a0a0a0;
+    font-size: 14px;
+}
+
+.admin-detail-value {
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.admin-subscription-card {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.admin-subscription-card:active {
+    transform: scale(0.98);
+}
+
+.admin-subscription-card:hover {
+    border-color: #4a4a4a;
+}
+
+.admin-subscription-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f5f5f5;
+    margin-bottom: 8px;
+}
+
+.admin-subscription-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.admin-subscription-status.active {
+    background: #2d5a2d;
+    color: #7fcf7f;
+}
+
+.admin-subscription-status.expired {
+    background: #5a2d2d;
+    color: #cf7f7f;
+}
+
+.admin-subscription-status.canceled {
+    background: #4a4a4a;
+    color: #a0a0a0;
+}
+
+.admin-subscription-info {
+    font-size: 14px;
+    color: #a0a0a0;
+    line-height: 1.8;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px 16px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    border-color: #6a6a6a;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-sync {
+    flex: 1;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: #4a4a4a;
+    color: #f5f5f5;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+    background: #3a3a3a;
+}
+
+.btn-secondary {
+    background: #2a2a2a;
+    color: #a0a0a0;
+    border: 1px solid #3a3a3a;
+}
+
+.btn-secondary:active {
+    transform: scale(0.98);
+}
+
+.btn-sync {
+    background: #2d4a5a;
+    color: #7fcfef;
+    margin-top: 12px;
+}
+
+.btn-sync:active {
+    transform: scale(0.98);
+    background: #1d3a4a;
+}
+
+.sync-section {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #3a3a3a;
+}
+
+.sync-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f5f5f5;
+    margin-bottom: 8px;
+}
+
+.sync-section .hint {
+    font-size: 14px;
+    color: #a0a0a0;
+    margin-bottom: 12px;
+}
+
+#sync-results {
+    margin-top: 16px;
+    padding: 12px;
+    background: #2a2a2a;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.sync-result-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.sync-result-item:last-child {
+    border-bottom: none;
+}
+
+.sync-result-success {
+    color: #7fcf7f;
+}
+
+.sync-result-error {
+    color: #cf7f7f;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 24px;
+    padding: 16px 0;
+}
+
+.pagination button {
+    padding: 8px 12px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pagination button:active {
+    transform: scale(0.95);
+}
+
+.pagination button.active {
+    background: #4a4a4a;
+    border-color: #6a6a6a;
+}
+
+.pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

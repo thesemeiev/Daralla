@@ -700,6 +700,507 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка при загрузке статического файла: {e}")
             return "Error loading file", 500
     
+    # ==================== АДМИН API ====================
+    
+    def check_admin_access(user_id: str) -> bool:
+        """Проверяет, является ли пользователь админом"""
+        try:
+            from ... import bot as bot_module
+            ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
+            return user_id in ADMIN_IDS
+        except (ImportError, AttributeError):
+            return False
+    
+    @app.route('/api/admin/check', methods=['POST', 'OPTIONS'])
+    def api_admin_check():
+        """Проверка прав админа"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            is_admin = check_admin_access(user_id)
+            
+            return jsonify({
+                'success': True,
+                'is_admin': is_admin
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/check: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/users', methods=['POST', 'OPTIONS'])
+    def api_admin_users():
+        """Список пользователей с поиском и пагинацией"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            search = data.get('search', '').strip()
+            page = int(data.get('page', 1))
+            limit = int(data.get('limit', 20))
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(user_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import DB_PATH
+            import aiosqlite
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                async def get_users():
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        db.row_factory = aiosqlite.Row
+                        
+                        # Базовый запрос
+                        query = "SELECT * FROM users WHERE 1=1"
+                        params = []
+                        
+                        # Поиск по user_id
+                        if search:
+                            query += " AND user_id LIKE ?"
+                            params.append(f"%{search}%")
+                        
+                        # Подсчет общего количества
+                        count_query = f"SELECT COUNT(*) as count FROM ({query})"
+                        async with db.execute(count_query, params) as cur:
+                            row = await cur.fetchone()
+                            total = row['count'] if row else 0
+                        
+                        # Получение данных с пагинацией
+                        query += " ORDER BY last_seen DESC LIMIT ? OFFSET ?"
+                        params.extend([limit, (page - 1) * limit])
+                        
+                        async with db.execute(query, params) as cur:
+                            rows = await cur.fetchall()
+                            users = []
+                            for row in rows:
+                                # Получаем количество подписок для каждого пользователя
+                                async with db.execute(
+                                    "SELECT COUNT(*) as count FROM subscriptions s JOIN users u ON s.subscriber_id = u.id WHERE u.user_id = ?",
+                                    (row['user_id'],)
+                                ) as sub_cur:
+                                    sub_row = await sub_cur.fetchone()
+                                    sub_count = sub_row['count'] if sub_row else 0
+                                
+                                users.append({
+                                    'id': row['id'],
+                                    'user_id': row['user_id'],
+                                    'first_seen': row['first_seen'],
+                                    'last_seen': row['last_seen'],
+                                    'subscriptions_count': sub_count
+                                })
+                            
+                            return users, total
+                
+                users, total = loop.run_until_complete(get_users())
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'users': users,
+                'total': total,
+                'page': page,
+                'limit': limit,
+                'pages': (total + limit - 1) // limit if limit > 0 else 0
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/users: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/user/<user_id_param>', methods=['POST', 'OPTIONS'])
+    def api_admin_user_info(user_id_param):
+        """Информация о пользователе"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_user_by_id, get_all_subscriptions_by_user
+            from ...db.payments_db import get_payments_by_user
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id_param))
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id_param))
+                payments = loop.run_until_complete(get_payments_by_user(user_id_param, limit=10))
+            finally:
+                loop.close()
+            
+            import datetime
+            import time
+            current_time = int(time.time())
+            
+            # Форматируем подписки
+            formatted_subs = []
+            for sub in subscriptions:
+                expires_at = sub['expires_at']
+                is_active = sub['status'] == 'active' and expires_at > current_time
+                
+                formatted_subs.append({
+                    'id': sub['id'],
+                    'name': sub.get('name', f"Подписка {sub['id']}"),
+                    'status': sub['status'],
+                    'is_active': is_active,
+                    'period': sub['period'],
+                    'device_limit': sub['device_limit'],
+                    'created_at': sub['created_at'],
+                    'created_at_formatted': datetime.datetime.fromtimestamp(sub['created_at']).strftime('%d.%m.%Y %H:%M'),
+                    'expires_at': expires_at,
+                    'expires_at_formatted': datetime.datetime.fromtimestamp(expires_at).strftime('%d.%m.%Y %H:%M'),
+                    'price': sub['price'],
+                    'token': sub['subscription_token']
+                })
+            
+            # Форматируем платежи
+            formatted_payments = []
+            for payment in payments:
+                formatted_payments.append({
+                    'id': payment['id'],
+                    'amount': payment['amount'],
+                    'status': payment['status'],
+                    'created_at': payment['created_at'],
+                    'created_at_formatted': datetime.datetime.fromtimestamp(payment['created_at']).strftime('%d.%m.%Y %H:%M')
+                })
+            
+            return jsonify({
+                'success': True,
+                'user': {
+                    'user_id': user['user_id'],
+                    'first_seen': user['first_seen'],
+                    'first_seen_formatted': datetime.datetime.fromtimestamp(user['first_seen']).strftime('%d.%m.%Y %H:%M'),
+                    'last_seen': user['last_seen'],
+                    'last_seen_formatted': datetime.datetime.fromtimestamp(user['last_seen']).strftime('%d.%m.%Y %H:%M')
+                },
+                'subscriptions': formatted_subs,
+                'payments': formatted_payments
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/user: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/subscription/<int:sub_id>', methods=['POST', 'OPTIONS'])
+    def api_admin_subscription_info(sub_id):
+        """Информация о подписке"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
+                if not sub:
+                    return jsonify({'error': 'Subscription not found'}), 404
+                
+                servers = loop.run_until_complete(get_subscription_servers(sub_id))
+            finally:
+                loop.close()
+            
+            import datetime
+            
+            return jsonify({
+                'success': True,
+                'subscription': {
+                    'id': sub['id'],
+                    'name': sub.get('name', f"Подписка {sub['id']}"),
+                    'status': sub['status'],
+                    'period': sub['period'],
+                    'device_limit': sub['device_limit'],
+                    'created_at': sub['created_at'],
+                    'created_at_formatted': datetime.datetime.fromtimestamp(sub['created_at']).strftime('%d.%m.%Y %H:%M'),
+                    'expires_at': sub['expires_at'],
+                    'expires_at_formatted': datetime.datetime.fromtimestamp(sub['expires_at']).strftime('%d.%m.%Y %H:%M'),
+                    'price': sub['price'],
+                    'token': sub['subscription_token']
+                },
+                'servers': servers
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/subscription: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/subscription/<int:sub_id>/update', methods=['POST', 'OPTIONS'])
+    def api_admin_subscription_update(sub_id):
+        """Обновление подписки"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            # Получаем данные для обновления
+            updates = {}
+            if 'name' in data:
+                updates['name'] = data['name']
+            if 'expires_at' in data:
+                updates['expires_at'] = int(data['expires_at'])
+            if 'device_limit' in data:
+                updates['device_limit'] = int(data['device_limit'])
+            if 'status' in data:
+                updates['status'] = data['status']
+            
+            if not updates:
+                return jsonify({'error': 'No fields to update'}), 400
+            
+            from ...db.subscribers_db import get_subscription_by_id_only, update_subscription_name, update_subscription_expiry, update_subscription_status, DB_PATH
+            import aiosqlite
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Проверяем существование подписки
+                sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
+                if not sub:
+                    return jsonify({'error': 'Subscription not found'}), 404
+                
+                # Обновляем поля
+                if 'name' in updates:
+                    loop.run_until_complete(update_subscription_name(sub_id, updates['name']))
+                
+                if 'expires_at' in updates:
+                    loop.run_until_complete(update_subscription_expiry(sub_id, updates['expires_at']))
+                
+                if 'device_limit' in updates:
+                    async def update_device_limit():
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "UPDATE subscriptions SET device_limit = ? WHERE id = ?",
+                                (updates['device_limit'], sub_id)
+                            )
+                            await db.commit()
+                    loop.run_until_complete(update_device_limit())
+                
+                if 'status' in updates:
+                    loop.run_until_complete(update_subscription_status(sub_id, updates['status']))
+                
+                # Получаем обновленную подписку
+                updated_sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
+            finally:
+                loop.close()
+            
+            import datetime
+            
+            return jsonify({
+                'success': True,
+                'subscription': {
+                    'id': updated_sub['id'],
+                    'name': updated_sub.get('name', f"Подписка {updated_sub['id']}"),
+                    'status': updated_sub['status'],
+                    'period': updated_sub['period'],
+                    'device_limit': updated_sub['device_limit'],
+                    'created_at': updated_sub['created_at'],
+                    'created_at_formatted': datetime.datetime.fromtimestamp(updated_sub['created_at']).strftime('%d.%m.%Y %H:%M'),
+                    'expires_at': updated_sub['expires_at'],
+                    'expires_at_formatted': datetime.datetime.fromtimestamp(updated_sub['expires_at']).strftime('%d.%m.%Y %H:%M'),
+                    'price': updated_sub['price'],
+                    'token': updated_sub['subscription_token']
+                }
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/subscription/update: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/subscription/<int:sub_id>/sync', methods=['POST', 'OPTIONS'])
+    def api_admin_subscription_sync(sub_id):
+        """Синхронизация подписки с X-UI серверами"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
+                if not sub:
+                    return jsonify({'error': 'Subscription not found'}), 404
+                
+                servers = loop.run_until_complete(get_subscription_servers(sub_id))
+                
+                # Получаем subscription_manager
+                def get_subscription_manager():
+                    try:
+                        from ... import bot as bot_module
+                        return getattr(bot_module, 'subscription_manager', None)
+                    except (ImportError, AttributeError):
+                        return None
+                
+                subscription_manager = get_subscription_manager()
+                if not subscription_manager:
+                    return jsonify({'error': 'Subscription manager not available'}), 503
+                
+                # Получаем user_id из подписки
+                async def get_user_id_from_sub():
+                    import aiosqlite
+                    from ...db.subscribers_db import DB_PATH
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        db.row_factory = aiosqlite.Row
+                        async with db.execute(
+                            "SELECT u.user_id FROM users u JOIN subscriptions s ON u.id = s.subscriber_id WHERE s.id = ?",
+                            (sub_id,)
+                        ) as cur:
+                            row = await cur.fetchone()
+                            return row['user_id'] if row else ''
+                
+                user_id = loop.run_until_complete(get_user_id_from_sub())
+                
+                # Синхронизируем с каждым сервером
+                sync_results = []
+                for server_info in servers:
+                    server_name = server_info['server_name']
+                    client_email = server_info['client_email']
+                    
+                    try:
+                        loop.run_until_complete(subscription_manager.ensure_client_on_server(
+                            subscription_id=sub_id,
+                            server_name=server_name,
+                            client_email=client_email,
+                            user_id=user_id,
+                            expires_at=sub['expires_at'],
+                            token=sub['subscription_token'],
+                            device_limit=sub['device_limit']
+                        ))
+                        sync_results.append({
+                            'server': server_name,
+                            'status': 'success'
+                        })
+                    except Exception as e:
+                        logger.error(f"Ошибка синхронизации с сервером {server_name}: {e}")
+                        sync_results.append({
+                            'server': server_name,
+                            'status': 'error',
+                            'error': str(e)
+                        })
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'sync_results': sync_results
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/subscription/sync: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     return app
 
 

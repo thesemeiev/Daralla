@@ -32,7 +32,7 @@ function showPage(pageName) {
     });
     
     // Активируем нужный пункт навигации (если это не детальная страница)
-    if (pageName !== 'subscription-detail') {
+    if (pageName !== 'subscription-detail' && pageName !== 'admin-user-detail' && pageName !== 'admin-subscription-edit') {
         const navItems = document.querySelectorAll('.nav-item');
         if (pageName === 'subscriptions') {
             navItems[0]?.classList.add('active');
@@ -40,6 +40,8 @@ function showPage(pageName) {
             navItems[1]?.classList.add('active');
         } else if (pageName === 'about') {
             navItems[2]?.classList.add('active');
+        } else if (pageName === 'admin-users' && document.getElementById('admin-nav-button')) {
+            document.getElementById('admin-nav-button').classList.add('active');
         }
     }
     
@@ -50,6 +52,8 @@ function showPage(pageName) {
         loadSubscriptions();
     } else if (pageName === 'servers') {
         loadServers();
+    } else if (pageName === 'admin-users') {
+        loadAdminUsers(1, currentAdminUserSearch);
     }
 }
 
@@ -356,7 +360,476 @@ function formatTimeRemaining(expiresAt) {
     }
 }
 
+// ==================== АДМИН-ПАНЕЛЬ ====================
+
+let isAdmin = false;
+let currentAdminUserPage = 1;
+let currentAdminUserSearch = '';
+let currentEditingSubscriptionId = null;
+let previousAdminPage = 'admin-users';
+
+// Проверка прав админа
+async function checkAdminAccess() {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            return false;
+        }
+        
+        const response = await fetch(`/api/admin/check?initData=${encodeURIComponent(initData)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            isAdmin = data.is_admin || false;
+            
+            // Добавляем кнопку "Админ-панель" в навигацию, если админ
+            if (isAdmin) {
+                addAdminNavButton();
+            }
+            
+            return isAdmin;
+        }
+        return false;
+    } catch (error) {
+        console.error('Ошибка проверки прав админа:', error);
+        return false;
+    }
+}
+
+// Добавление кнопки "Админ-панель" в навигацию
+function addAdminNavButton() {
+    const nav = document.querySelector('.bottom-nav');
+    if (!nav) return;
+    
+    // Проверяем, не добавлена ли уже кнопка
+    if (document.getElementById('admin-nav-button')) return;
+    
+    const adminButton = document.createElement('button');
+    adminButton.id = 'admin-nav-button';
+    adminButton.className = 'nav-item';
+    adminButton.onclick = () => showPage('admin-users');
+    adminButton.innerHTML = '<span class="nav-label">Админ</span>';
+    
+    nav.appendChild(adminButton);
+}
+
+// Загрузка списка пользователей
+async function loadAdminUsers(page = 1, search = '') {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            showError('admin-users-error', 'Ошибка авторизации');
+            return;
+        }
+        
+        document.getElementById('admin-users-loading').style.display = 'block';
+        document.getElementById('admin-users-error').style.display = 'none';
+        document.getElementById('admin-users-content').style.display = 'none';
+        
+        const response = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                page,
+                limit: 20,
+                search
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки пользователей');
+        }
+        
+        const data = await response.json();
+        
+        document.getElementById('admin-users-loading').style.display = 'none';
+        document.getElementById('admin-users-content').style.display = 'block';
+        
+        // Обновляем статистику
+        document.getElementById('admin-total-users').textContent = data.total || 0;
+        
+        // Отображаем список пользователей
+        const listEl = document.getElementById('admin-users-list');
+        listEl.innerHTML = '';
+        
+        if (data.users && data.users.length > 0) {
+            data.users.forEach(user => {
+                const card = document.createElement('div');
+                card.className = 'admin-user-card';
+                card.onclick = () => showAdminUserDetail(user.user_id);
+                
+                const firstSeen = new Date(user.first_seen * 1000).toLocaleDateString('ru-RU');
+                const lastSeen = new Date(user.last_seen * 1000).toLocaleDateString('ru-RU');
+                
+                card.innerHTML = `
+                    <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
+                    <div class="admin-user-meta">
+                        <span>Создан: ${firstSeen}</span>
+                        <span>Активен: ${lastSeen}</span>
+                    </div>
+                    <div class="admin-user-subscriptions">Подписок: ${user.subscriptions_count || 0}</div>
+                `;
+                
+                listEl.appendChild(card);
+            });
+            
+            // Отображаем пагинацию
+            if (data.pages > 1) {
+                showAdminPagination(data.page, data.pages);
+            } else {
+                document.getElementById('admin-users-pagination').style.display = 'none';
+            }
+        } else {
+            listEl.innerHTML = '<div class="empty"><p>Пользователи не найдены</p></div>';
+            document.getElementById('admin-users-pagination').style.display = 'none';
+        }
+        
+        currentAdminUserPage = page;
+        currentAdminUserSearch = search;
+    } catch (error) {
+        console.error('Ошибка загрузки пользователей:', error);
+        document.getElementById('admin-users-loading').style.display = 'none';
+        showError('admin-users-error', 'Ошибка загрузки пользователей');
+    }
+}
+
+// Поиск пользователей
+let searchTimeout;
+function handleAdminUserSearch() {
+    clearTimeout(searchTimeout);
+    const searchInput = document.getElementById('admin-user-search');
+    const search = searchInput.value.trim();
+    
+    searchTimeout = setTimeout(() => {
+        loadAdminUsers(1, search);
+    }, 500);
+}
+
+// Пагинация
+function showAdminPagination(currentPage, totalPages) {
+    const paginationEl = document.getElementById('admin-users-pagination');
+    paginationEl.style.display = 'flex';
+    paginationEl.innerHTML = '';
+    
+    // Кнопка "Назад"
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '←';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => loadAdminUsers(currentPage - 1, currentAdminUserSearch);
+    paginationEl.appendChild(prevBtn);
+    
+    // Номера страниц
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.textContent = i;
+        pageBtn.className = i === currentPage ? 'active' : '';
+        pageBtn.onclick = () => loadAdminUsers(i, currentAdminUserSearch);
+        paginationEl.appendChild(pageBtn);
+    }
+    
+    // Кнопка "Вперед"
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '→';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => loadAdminUsers(currentPage + 1, currentAdminUserSearch);
+    paginationEl.appendChild(nextBtn);
+}
+
+// Показать детальную информацию о пользователе
+async function showAdminUserDetail(userId) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        previousAdminPage = 'admin-users';
+        showPage('admin-user-detail');
+        
+        document.getElementById('admin-user-detail-loading').style.display = 'block';
+        document.getElementById('admin-user-detail-content').innerHTML = '';
+        
+        const response = await fetch(`/api/admin/user/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки информации о пользователе');
+        }
+        
+        const data = await response.json();
+        
+        document.getElementById('admin-user-detail-loading').style.display = 'none';
+        document.getElementById('admin-user-detail-title').textContent = `Пользователь ${userId}`;
+        
+        const contentEl = document.getElementById('admin-user-detail-content');
+        
+        // Информация о пользователе
+        contentEl.innerHTML = `
+            <div class="admin-user-detail-section">
+                <h3>Информация</h3>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label">Telegram ID</span>
+                    <span class="admin-detail-value">${escapeHtml(data.user.user_id)}</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label">Первый запуск</span>
+                    <span class="admin-detail-value">${escapeHtml(data.user.first_seen_formatted)}</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label">Последняя активность</span>
+                    <span class="admin-detail-value">${escapeHtml(data.user.last_seen_formatted)}</span>
+                </div>
+            </div>
+            
+            <div class="admin-user-detail-section">
+                <h3>Подписки (${data.subscriptions.length})</h3>
+                ${data.subscriptions.length > 0 ? 
+                    data.subscriptions.map(sub => `
+                        <div class="admin-subscription-card" onclick="showAdminSubscriptionEdit(${sub.id})">
+                            <div class="admin-subscription-name">${escapeHtml(sub.name)}</div>
+                            <div class="admin-subscription-status ${sub.status}">${sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : 'Отменена'}</div>
+                            <div class="admin-subscription-info">
+                                <div>Создана: ${escapeHtml(sub.created_at_formatted)}</div>
+                                <div>Истекает: ${escapeHtml(sub.expires_at_formatted)}</div>
+                                <div>Устройств: ${sub.device_limit}</div>
+                            </div>
+                        </div>
+                    `).join('') :
+                    '<p style="color: #a0a0a0; padding: 16px;">Нет подписок</p>'
+                }
+            </div>
+            
+            ${data.payments && data.payments.length > 0 ? `
+                <div class="admin-user-detail-section">
+                    <h3>Платежи (${data.payments.length})</h3>
+                    ${data.payments.map(payment => `
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">${escapeHtml(payment.created_at_formatted)}</span>
+                            <span class="admin-detail-value">${payment.amount} ₽ (${payment.status})</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        `;
+    } catch (error) {
+        console.error('Ошибка загрузки информации о пользователе:', error);
+        document.getElementById('admin-user-detail-loading').style.display = 'none';
+        document.getElementById('admin-user-detail-content').innerHTML = 
+            '<div class="error"><p>Ошибка загрузки информации</p></div>';
+    }
+}
+
+// Показать форму редактирования подписки
+async function showAdminSubscriptionEdit(subId) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        previousAdminPage = 'admin-user-detail';
+        currentEditingSubscriptionId = subId;
+        showPage('admin-subscription-edit');
+        
+        document.getElementById('admin-subscription-edit-loading').style.display = 'block';
+        document.getElementById('admin-subscription-edit-content').style.display = 'none';
+        
+        const response = await fetch(`/api/admin/subscription/${subId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки подписки');
+        }
+        
+        const data = await response.json();
+        const sub = data.subscription;
+        
+        document.getElementById('admin-subscription-edit-loading').style.display = 'none';
+        document.getElementById('admin-subscription-edit-content').style.display = 'block';
+        
+        // Заполняем форму
+        document.getElementById('sub-name').value = sub.name || '';
+        document.getElementById('sub-device-limit').value = sub.device_limit || 1;
+        document.getElementById('sub-status').value = sub.status || 'active';
+        
+        // Конвертируем timestamp в datetime-local формат
+        const expiresDate = new Date(sub.expires_at * 1000);
+        const year = expiresDate.getFullYear();
+        const month = String(expiresDate.getMonth() + 1).padStart(2, '0');
+        const day = String(expiresDate.getDate()).padStart(2, '0');
+        const hours = String(expiresDate.getHours()).padStart(2, '0');
+        const minutes = String(expiresDate.getMinutes()).padStart(2, '0');
+        document.getElementById('sub-expires-at').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (error) {
+        console.error('Ошибка загрузки подписки:', error);
+        document.getElementById('admin-subscription-edit-loading').style.display = 'none';
+        alert('Ошибка загрузки подписки');
+    }
+}
+
+// Сохранение изменений подписки
+async function saveSubscriptionChanges(event) {
+    event.preventDefault();
+    
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        if (!currentEditingSubscriptionId) {
+            alert('Ошибка: ID подписки не найден');
+            return;
+        }
+        
+        const form = event.target;
+        const formData = {
+            name: form.name.value,
+            device_limit: parseInt(form.device_limit.value),
+            status: form.status.value,
+            expires_at: Math.floor(new Date(form.expires_at.value).getTime() / 1000)
+        };
+        
+        const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                ...formData
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка сохранения');
+        }
+        
+        const data = await response.json();
+        
+        alert('Изменения сохранены!');
+        
+        // Возвращаемся назад
+        goBackFromSubscriptionEdit();
+    } catch (error) {
+        console.error('Ошибка сохранения подписки:', error);
+        alert('Ошибка сохранения: ' + error.message);
+    }
+}
+
+// Синхронизация подписки
+async function syncSubscription() {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        if (!currentEditingSubscriptionId) {
+            alert('Ошибка: ID подписки не найден');
+            return;
+        }
+        
+        const syncBtn = document.querySelector('.btn-sync');
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Синхронизация...';
+        
+        const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/sync`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка синхронизации');
+        }
+        
+        const data = await response.json();
+        
+        // Отображаем результаты
+        const resultsEl = document.getElementById('sync-results');
+        resultsEl.style.display = 'block';
+        resultsEl.innerHTML = '<h4>Результаты синхронизации:</h4>' +
+            data.sync_results.map(result => `
+                <div class="sync-result-item">
+                    <span>${escapeHtml(result.server)}: </span>
+                    <span class="${result.status === 'success' ? 'sync-result-success' : 'sync-result-error'}">
+                        ${result.status === 'success' ? '✓ Успешно' : '✗ Ошибка: ' + escapeHtml(result.error || 'Неизвестная ошибка')}
+                    </span>
+                </div>
+            `).join('');
+        
+        syncBtn.disabled = false;
+        syncBtn.textContent = 'Синхронизировать';
+    } catch (error) {
+        console.error('Ошибка синхронизации:', error);
+        alert('Ошибка синхронизации: ' + error.message);
+        const syncBtn = document.querySelector('.btn-sync');
+        syncBtn.disabled = false;
+        syncBtn.textContent = 'Синхронизировать';
+    }
+}
+
+// Возврат назад из редактирования подписки
+function goBackFromSubscriptionEdit() {
+    if (previousAdminPage === 'admin-user-detail') {
+        // Нужно перезагрузить информацию о пользователе
+        const titleEl = document.getElementById('admin-user-detail-title');
+        if (titleEl) {
+            const userId = titleEl.textContent.replace('Пользователь ', '');
+            showAdminUserDetail(userId);
+        } else {
+            showPage('admin-users');
+        }
+    } else {
+        showPage('admin-users');
+    }
+    currentEditingSubscriptionId = null;
+}
+
+// Вспомогательная функция для отображения ошибок
+function showError(elementId, message) {
+    const errorEl = document.getElementById(elementId);
+    if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerHTML = `<p>${escapeHtml(message)}</p>`;
+    }
+}
+
+
 // Загружаем подписки при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     showPage('subscriptions');
+    
+    // Проверяем права админа
+    await checkAdminAccess();
 });
