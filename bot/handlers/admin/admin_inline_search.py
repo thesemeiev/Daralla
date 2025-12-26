@@ -29,12 +29,15 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обработчик inline query для быстрого поиска пользователей"""
     query = update.inline_query.query.strip()
     
+    logger.info(f"Inline query received: '{query}' from user {update.inline_query.from_user.id}")
+    
     # Проверяем права доступа
     globals_dict = get_globals()
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     
     if update.inline_query.from_user.id not in ADMIN_IDS:
         # Для не-админов показываем пустой результат
+        logger.warning(f"Non-admin user {update.inline_query.from_user.id} tried to use inline query")
         await update.inline_query.answer([])
         return
     
