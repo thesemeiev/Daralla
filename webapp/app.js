@@ -673,6 +673,10 @@ async function showAdminUserDetail(userId) {
                     `).join('')}
                 </div>
             ` : ''}
+            
+            <div class="create-subscription-section" style="margin-top: 24px;">
+                <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')" style="width: 100%;">Создать подписку</button>
+            </div>
         `;
     } catch (error) {
         console.error('Ошибка загрузки информации о пользователе:', error);
