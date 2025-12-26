@@ -171,7 +171,7 @@ SERVERS_BY_LOCATION = {
     "Poland": [
         {
             "name": "Poland-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇵🇱  Poland - 1",  # Красивое название для VPN клиента (опционально)
+            "display_name": "🇵🇱  Poland - 1",  
             "host": os.getenv("XUI_HOST_POLAND_1"),
             "login": os.getenv("XUI_LOGIN_POLAND_1"),
             "password": os.getenv("XUI_PASSWORD_POLAND_1"),
@@ -181,7 +181,7 @@ SERVERS_BY_LOCATION = {
     "Netherlands": [
         {
             "name": "Netherlands-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇳🇱  Netherlands - 1",  # Красивое название для VPN клиента (опционально)
+            "display_name": "🇳🇱  Netherlands - 1",  
             "host": os.getenv("XUI_HOST_NETHERLANDS_1"),
             "login": os.getenv("XUI_LOGIN_NETHERLANDS_1"),
             "password": os.getenv("XUI_PASSWORD_NETHERLANDS_1"),
@@ -191,7 +191,7 @@ SERVERS_BY_LOCATION = {
         "Russia": [
         {
             "name": "Russia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇷🇺  Антиглушилка - 1",  # Красивое название для VPN клиента (опционально)
+            "display_name": "🇷🇺  Антиглушилка - 1",  
             "host": os.getenv("XUI_HOST_RUSSIA_1"),
             "login": os.getenv("XUI_LOGIN_RUSSIA_1"),
             "password": os.getenv("XUI_PASSWORD_RUSSIA_1"),
@@ -201,7 +201,7 @@ SERVERS_BY_LOCATION = {
             "Latvia ": [
         {
             "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇱🇻  Latvia - 1",  # Красивое название для VPN клиента (опционально)
+            "display_name": "🇱🇻  Latvia - 1",  
             "host": os.getenv("XUI_HOST_LATVIA_1"),
             "login": os.getenv("XUI_LOGIN_LATVIA_1"),
             "password": os.getenv("XUI_PASSWORD_LATVIA_1"),

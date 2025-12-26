@@ -289,6 +289,83 @@ async def get_user_by_id(user_id: str):
             row = await cur.fetchone()
             return dict(row) if row else None
 
+async def get_user_growth_data(days: int = 30):
+    """
+    Возвращает данные роста пользователей по дням за указанный период
+    Возвращает список словарей с ключами: date (YYYY-MM-DD), count (количество новых пользователей), cumulative (накопительное количество)
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Вычисляем начальную дату
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Получаем количество пользователей до начала периода (для правильного накопительного подсчета)
+        async with db.execute("SELECT COUNT(*) as count FROM users WHERE first_seen < ?", (start_timestamp,)) as cur:
+            row = await cur.fetchone()
+            users_before_period = row['count'] if row else 0
+        
+        # Получаем данные о регистрации пользователей по дням
+        query = """
+            SELECT 
+                DATE(first_seen, 'unixepoch') as date,
+                COUNT(*) as count
+            FROM users
+            WHERE first_seen >= ?
+            GROUP BY DATE(first_seen, 'unixepoch')
+            ORDER BY date ASC
+        """
+        
+        async with db.execute(query, (start_timestamp,)) as cur:
+            rows = await cur.fetchall()
+            
+            # Преобразуем в список словарей
+            daily_data = []
+            cumulative = users_before_period
+            for row in rows:
+                cumulative += row['count']
+                daily_data.append({
+                    'date': row['date'],
+                    'count': row['count'],
+                    'cumulative': cumulative
+                })
+            
+            return daily_data
+
+async def get_server_load_data():
+    """
+    Возвращает данные о нагрузке на серверы (количество активных клиентов на каждом сервере)
+    Возвращает список словарей с ключами: server_name, active_clients
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Получаем количество активных клиентов на каждом сервере
+        query = """
+            SELECT 
+                ss.server_name,
+                COUNT(*) as active_clients
+            FROM subscription_servers ss
+            JOIN subscriptions s ON ss.subscription_id = s.id
+            WHERE s.status = 'active'
+            GROUP BY ss.server_name
+            ORDER BY active_clients DESC
+        """
+        
+        async with db.execute(query) as cur:
+            rows = await cur.fetchall()
+            
+            # Преобразуем в список словарей
+            server_data = []
+            for row in rows:
+                server_data.append({
+                    'server_name': row['server_name'],
+                    'active_clients': row['active_clients']
+                })
+            
+            return server_data
+
 # ==================== ПРОМОКОДЫ ====================
 
 async def create_promo_code(code: str, promo_type: str, period: str, max_uses: int = 1, expires_at: int = None):

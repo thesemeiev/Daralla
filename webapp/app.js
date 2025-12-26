@@ -1073,11 +1073,256 @@ async function loadAdminStats() {
         document.getElementById('stats-canceled-subs').textContent = data.stats.subscriptions.canceled || 0;
         document.getElementById('stats-revenue').textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
         document.getElementById('stats-succeeded-payments').textContent = data.stats.payments.succeeded || 0;
+        
+        // Загружаем графики
+        await loadUserGrowthChart();
+        await loadServerLoadChart();
     } catch (error) {
         console.error('Ошибка загрузки статистики:', error);
         document.getElementById('admin-stats-loading').style.display = 'none';
         showError('admin-stats-error', 'Ошибка загрузки статистики');
     }
+}
+
+// Переменные для хранения экземпляров графиков
+let userGrowthChart = null;
+let serverLoadChart = null;
+
+// Загрузка графика роста пользователей
+async function loadUserGrowthChart(days = 30) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            return;
+        }
+        
+        const response = await fetch('/api/admin/charts/user-growth', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData, days: days })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных графика');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            return;
+        }
+        
+        const ctx = document.getElementById('user-growth-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        // Уничтожаем предыдущий график, если он существует
+        if (userGrowthChart) {
+            userGrowthChart.destroy();
+        }
+        
+        // Подготавливаем данные
+        const labels = result.data.map(item => {
+            const date = new Date(item.date);
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        const counts = result.data.map(item => item.count);
+        const cumulative = result.data.map(item => item.cumulative);
+        
+        // Создаем график
+        userGrowthChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Новых пользователей',
+                        data: counts,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Всего пользователей (накопительно)',
+                        data: cumulative,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Новых пользователей'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Всего пользователей'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика роста пользователей:', error);
+    }
+}
+
+// Загрузка графика нагрузки на серверы
+async function loadServerLoadChart() {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            return;
+        }
+        
+        const response = await fetch('/api/admin/charts/server-load', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных графика');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            return;
+        }
+        
+        const ctx = document.getElementById('server-load-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        // Уничтожаем предыдущий график, если он существует
+        if (serverLoadChart) {
+            serverLoadChart.destroy();
+        }
+        
+        // Подготавливаем данные
+        const serverData = result.data.servers || [];
+        const locationData = result.data.locations || [];
+        
+        // Создаем график по серверам
+        const serverLabels = serverData.map(item => item.display_name || item.server_name);
+        const serverClients = serverData.map(item => item.active_clients);
+        
+        // Цвета для графика
+        const colors = [
+            'rgba(255, 99, 132, 0.8)',
+            'rgba(54, 162, 235, 0.8)',
+            'rgba(255, 206, 86, 0.8)',
+            'rgba(75, 192, 192, 0.8)',
+            'rgba(153, 102, 255, 0.8)',
+            'rgba(255, 159, 64, 0.8)',
+            'rgba(199, 199, 199, 0.8)',
+            'rgba(83, 102, 255, 0.8)',
+            'rgba(255, 99, 255, 0.8)',
+            'rgba(99, 255, 132, 0.8)'
+        ];
+        
+        serverLoadChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: serverLabels,
+                datasets: [{
+                    label: 'Активных клиентов',
+                    data: serverClients,
+                    backgroundColor: serverClients.map((_, i) => colors[i % colors.length]),
+                    borderColor: serverClients.map((_, i) => colors[i % colors.length].replace('0.8', '1')),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Количество активных клиентов на серверах',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const index = context.dataIndex;
+                                const item = serverData[index];
+                                if (item && item.location) {
+                                    return `Локация: ${item.location}`;
+                                }
+                                return '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Количество активных клиентов'
+                        },
+                        ticks: {
+                            stepSize: 1
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика нагрузки на серверы:', error);
+    }
+}
+
+// Изменение периода для графика роста пользователей
+function changeUserGrowthPeriod() {
+    const select = document.getElementById('user-growth-period');
+    const days = parseInt(select.value);
+    loadUserGrowthChart(days);
 }
 
 // Загружаем подписки при загрузке страницы

@@ -1523,6 +1523,151 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/stats: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/charts/user-growth', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_user_growth():
+        """Данные для графика роста пользователей"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            days = int(data.get('days', 30))  # По умолчанию 30 дней
+            
+            from ...db.subscribers_db import get_user_growth_data
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                growth_data = loop.run_until_complete(get_user_growth_data(days))
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'data': growth_data
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/user-growth: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/charts/server-load', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_server_load():
+        """Данные для графика нагрузки на серверы"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_server_load_data
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                server_load_data = loop.run_until_complete(get_server_load_data())
+            finally:
+                loop.close()
+            
+            # Получаем информацию о серверах (display_name, location) из конфигурации
+            def get_server_info():
+                try:
+                    from ... import bot as bot_module
+                    server_manager = getattr(bot_module, 'server_manager', None)
+                    if not server_manager:
+                        return {}
+                    
+                    server_info_map = {}
+                    for location, servers in server_manager.servers_by_location.items():
+                        for server in servers:
+                            server_name = server['name']
+                            display_name = server['config'].get('display_name', server_name)
+                            server_info_map[server_name] = {
+                                'display_name': display_name,
+                                'location': location
+                            }
+                    return server_info_map
+                except (ImportError, AttributeError):
+                    return {}
+            
+            server_info_map = get_server_info()
+            
+            # Обогащаем данные информацией о серверах
+            enriched_data = []
+            for item in server_load_data:
+                server_name = item['server_name']
+                info = server_info_map.get(server_name, {})
+                enriched_data.append({
+                    'server_name': server_name,
+                    'display_name': info.get('display_name', server_name),
+                    'location': info.get('location', 'Unknown'),
+                    'active_clients': item['active_clients']
+                })
+            
+            # Группируем по локациям для дополнительной статистики
+            location_stats = {}
+            for item in enriched_data:
+                location = item['location']
+                if location not in location_stats:
+                    location_stats[location] = {
+                        'location': location,
+                        'total_clients': 0,
+                        'servers': []
+                    }
+                location_stats[location]['total_clients'] += item['active_clients']
+                location_stats[location]['servers'].append({
+                    'server_name': item['server_name'],
+                    'display_name': item['display_name'],
+                    'active_clients': item['active_clients']
+                })
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'servers': enriched_data,
+                    'locations': list(location_stats.values())
+                }
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/server-load: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     return app
 
 
