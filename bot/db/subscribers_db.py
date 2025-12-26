@@ -352,6 +352,83 @@ async def get_user_growth_data(days: int = 30):
             
             return daily_data
 
+async def save_server_load_snapshot(server_name: str, online_clients: int, total_active: int, offline_clients: int):
+    """
+    Сохраняет снимок текущей нагрузки на сервер в историю
+    Вызывается периодически (например, каждые 5-10 минут) для накопления данных
+    """
+    now = int(datetime.datetime.now().timestamp())
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("""
+                INSERT OR REPLACE INTO server_load_history 
+                (server_name, online_clients, total_active, offline_clients, recorded_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (server_name, online_clients, total_active, offline_clients, now))
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Ошибка сохранения снимка нагрузки для {server_name}: {e}")
+
+async def get_server_load_averages(period_hours: int = 24):
+    """
+    Возвращает средние значения нагрузки на серверы за указанный период
+    
+    Args:
+        period_hours: Период в часах для расчета среднего (по умолчанию 24 часа)
+    
+    Returns:
+        dict: {server_name: {'avg_online': float, 'avg_total': float, 'max_online': int, 'min_online': int, 'samples': int}}
+    """
+    now = int(datetime.datetime.now().timestamp())
+    period_seconds = period_hours * 3600
+    start_timestamp = now - period_seconds
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT 
+                server_name,
+                AVG(online_clients) as avg_online,
+                AVG(total_active) as avg_total,
+                MAX(online_clients) as max_online,
+                MIN(online_clients) as min_online,
+                COUNT(*) as samples
+            FROM server_load_history
+            WHERE recorded_at >= ?
+            GROUP BY server_name
+        """, (start_timestamp,)) as cur:
+            rows = await cur.fetchall()
+            
+            result = {}
+            for row in rows:
+                result[row['server_name']] = {
+                    'avg_online': round(row['avg_online'] or 0, 1),
+                    'avg_total': round(row['avg_total'] or 0, 1),
+                    'max_online': row['max_online'] or 0,
+                    'min_online': row['min_online'] or 0,
+                    'samples': row['samples'] or 0
+                }
+            
+            return result
+
+async def cleanup_old_server_load_history(days: int = 7):
+    """
+    Удаляет старые записи истории нагрузки (старше указанного количества дней)
+    Вызывается периодически для очистки БД
+    """
+    now = int(datetime.datetime.now().timestamp())
+    cutoff_timestamp = now - (days * 24 * 3600)
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            async with db.execute("DELETE FROM server_load_history WHERE recorded_at < ?", (cutoff_timestamp,)) as cur:
+                deleted = cur.rowcount
+            await db.commit()
+            if deleted > 0:
+                logger.info(f"Удалено {deleted} старых записей истории нагрузки (старше {days} дней)")
+        except Exception as e:
+            logger.error(f"Ошибка очистки истории нагрузки: {e}")
+
 async def get_server_load_data():
     """
     Возвращает данные о нагрузке на серверы (количество онлайн клиентов на каждом сервере)
