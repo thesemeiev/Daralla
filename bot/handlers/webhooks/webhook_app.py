@@ -1161,32 +1161,36 @@ def create_webhook_app(bot_app):
                 user_id = loop.run_until_complete(get_user_id_from_sub())
                 
                 # Синхронизируем с каждым сервером
-                sync_results = []
-                for server_info in servers:
-                    server_name = server_info['server_name']
-                    client_email = server_info['client_email']
-                    
-                    try:
-                        loop.run_until_complete(subscription_manager.ensure_client_on_server(
-                            subscription_id=sub_id,
-                            server_name=server_name,
-                            client_email=client_email,
-                            user_id=user_id,
-                            expires_at=sub['expires_at'],
-                            token=sub['subscription_token'],
-                            device_limit=sub['device_limit']
-                        ))
-                        sync_results.append({
-                            'server': server_name,
-                            'status': 'success'
-                        })
-                    except Exception as e:
-                        logger.error(f"Ошибка синхронизации с сервером {server_name}: {e}")
-                        sync_results.append({
-                            'server': server_name,
-                            'status': 'error',
-                            'error': str(e)
-                        })
+                async def sync_all_servers():
+                    sync_results = []
+                    for server_info in servers:
+                        server_name = server_info['server_name']
+                        client_email = server_info['client_email']
+                        
+                        try:
+                            await subscription_manager.ensure_client_on_server(
+                                subscription_id=sub_id,
+                                server_name=server_name,
+                                client_email=client_email,
+                                user_id=user_id,
+                                expires_at=sub['expires_at'],
+                                token=sub['subscription_token'],
+                                device_limit=sub['device_limit']
+                            )
+                            sync_results.append({
+                                'server': server_name,
+                                'status': 'success'
+                            })
+                        except Exception as e:
+                            logger.error(f"Ошибка синхронизации с сервером {server_name}: {e}")
+                            sync_results.append({
+                                'server': server_name,
+                                'status': 'error',
+                                'error': str(e)
+                            })
+                    return sync_results
+                
+                sync_results = loop.run_until_complete(sync_all_servers())
             finally:
                 loop.close()
             
