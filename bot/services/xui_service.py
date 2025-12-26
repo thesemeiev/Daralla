@@ -267,6 +267,7 @@ class X3:
             client_found = False
             client_data = None
             inbound_id = None
+            protocol = None
             
             # Ищем клиента по email
             for inbound in inbounds_data.get('obj', []):
@@ -278,6 +279,7 @@ class X3:
                         client_found = True
                         client_data = client.copy()
                         inbound_id = inbound.get('id')
+                        protocol = inbound.get('protocol', 'vless').lower()
                         
                         # Вычисляем новое время истечения
                         current_expiry = int(client.get('expiryTime', 0))
@@ -298,6 +300,15 @@ class X3:
             if not client_found:
                 raise Exception(f"Клиент с email {user_email} не найден")
             
+            # Для TROJAN используем password, для других протоколов - id
+            if protocol == 'trojan':
+                client_identifier = client_data.get('password') or client_data.get('id')
+            else:
+                client_identifier = client_data.get('id')
+            
+            if not client_identifier:
+                raise KeyError(f"Не найден идентификатор клиента (id/password) для протокола {protocol}")
+            
             # Обновляем клиента
             header = {"Accept": "application/json"}
             data = {
@@ -306,7 +317,7 @@ class X3:
             }
             
             logger.info(f"Продление клиента: {user_email} на сервере {self.host} на {extend_days} дней")
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
+            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                    headers=header, json=data, timeout=timeout)
             
             logger.info(f"XUI extendClient Response - Status: {response.status_code}")
@@ -328,7 +339,7 @@ class X3:
             if response.status_code == 200 and not response.text.strip():
                 logger.warning("Получен пустой ответ при продлении, переподключаюсь...")
                 self._reconnect()
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
+                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                        headers=header, json=data, timeout=timeout)
                 logger.info(f"XUI extendClient Response после переподключения - Status: {response.status_code}")
                 
@@ -444,7 +455,7 @@ class X3:
         Получает полную информацию о клиенте по email.
         
         Returns:
-            dict: Информация о клиенте (client_data, inbound_id) или None
+            dict: Информация о клиенте (client_data, inbound_id, protocol) или None
         """
         self._ensure_connected()
         try:
@@ -455,9 +466,11 @@ class X3:
                     clients = settings.get('clients', [])
                     for client in clients:
                         if client.get('email') == user_email:
+                            protocol = inbound.get('protocol', 'vless').lower()
                             return {
                                 'client': client,
-                                'inbound_id': inbound.get('id')
+                                'inbound_id': inbound.get('id'),
+                                'protocol': protocol
                             }
             return None
         except Exception as e:
@@ -486,6 +499,16 @@ class X3:
             
             client_data = client_info['client'].copy()
             inbound_id = client_info['inbound_id']
+            protocol = client_info.get('protocol', 'vless').lower()
+            
+            # Для TROJAN используем password, для других протоколов - id
+            if protocol == 'trojan':
+                client_identifier = client_data.get('password') or client_data.get('id')
+            else:
+                client_identifier = client_data.get('id')
+            
+            if not client_identifier:
+                raise KeyError(f"Не найден идентификатор клиента (id/password) для протокола {protocol}")
             
             # Конвертируем timestamp из секунд в миллисекунды (X-UI использует миллисекунды)
             expiry_time_ms = expiry_timestamp * 1000
@@ -507,7 +530,7 @@ class X3:
             }
             
             response = self.ses.post(
-                f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}',
+                f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                 headers=header,
                 json=data,
                 timeout=timeout
@@ -530,7 +553,7 @@ class X3:
                 logger.warning("Получен пустой ответ при установке времени истечения, переподключаюсь...")
                 self._reconnect()
                 response = self.ses.post(
-                    f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}',
+                    f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                     headers=header,
                     json=data,
                     timeout=timeout
@@ -574,6 +597,16 @@ class X3:
             
             client_data = client_info['client'].copy()
             inbound_id = client_info['inbound_id']
+            protocol = client_info.get('protocol', 'vless').lower()
+            
+            # Для TROJAN используем password, для других протоколов - id
+            if protocol == 'trojan':
+                client_identifier = client_data.get('password') or client_data.get('id')
+            else:
+                client_identifier = client_data.get('id')
+            
+            if not client_identifier:
+                raise KeyError(f"Не найден идентификатор клиента (id/password) для протокола {protocol}")
             
             # Обновляем limitIp
             # ВАЖНО: Если limitIp отсутствует в данных клиента, нужно его установить
@@ -597,7 +630,7 @@ class X3:
             }
             
             response = self.ses.post(
-                f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}',
+                f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                 headers=header,
                 json=data,
                 timeout=timeout
@@ -811,6 +844,7 @@ class X3:
             client_found = False
             client_data = None
             inbound_id = None
+            protocol = None
             
             # Ищем клиента по email
             for inbound in inbounds_data.get('obj', []):
@@ -822,6 +856,7 @@ class X3:
                         client_found = True
                         client_data = client.copy()
                         inbound_id = inbound.get('id')
+                        protocol = inbound.get('protocol', 'vless').lower()
                         
                         # Обновляем имя ключа в поле subId
                         client_data['subId'] = new_name
@@ -835,6 +870,15 @@ class X3:
             if not client_found:
                 raise Exception(f"Клиент с email {user_email} не найден")
             
+            # Для TROJAN используем password, для других протоколов - id
+            if protocol == 'trojan':
+                client_identifier = client_data.get('password') or client_data.get('id')
+            else:
+                client_identifier = client_data.get('id')
+            
+            if not client_identifier:
+                raise KeyError(f"Не найден идентификатор клиента (id/password) для протокола {protocol}")
+            
             # Обновляем клиента
             header = {"Accept": "application/json"}
             data = {
@@ -842,7 +886,7 @@ class X3:
                 "settings": json.dumps({"clients": [client_data]})
             }
             
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', headers=header, json=data, timeout=timeout)
+            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', headers=header, json=data, timeout=timeout)
             logger.info(f"XUI updateClientName Response - Status: {response.status_code}")
             logger.info(f"XUI updateClientName Response - Text: {response.text[:200]}...")
             
@@ -862,7 +906,7 @@ class X3:
             if response.status_code == 200 and not response.text.strip():
                 logger.warning("Получен пустой ответ при обновлении имени, переподключаюсь...")
                 self._reconnect()
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_data["id"]}', 
+                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                        headers=header, json=data, timeout=timeout)
                 logger.info(f"XUI updateClientName Response после переподключения - Status: {response.status_code}")
                 
