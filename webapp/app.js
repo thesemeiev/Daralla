@@ -371,10 +371,29 @@ let previousAdminPage = 'admin-users';
 // Проверка прав админа
 async function checkAdminAccess() {
     try {
-        const initData = tg.initData;
+        // Пробуем получить initData разными способами
+        let initData = tg.initData;
+        
+        // Если initData нет, пробуем получить из initDataUnsafe
+        if (!initData && tg.initDataUnsafe) {
+            // Формируем initData из initDataUnsafe
+            const user = tg.initDataUnsafe.user;
+            if (user) {
+                const authDate = Math.floor(Date.now() / 1000);
+                initData = `user=${JSON.stringify(user)}&auth_date=${authDate}`;
+            }
+        }
+        
         if (!initData) {
+            console.warn('initData недоступен, пробуем позже...');
+            // Пробуем еще раз через небольшую задержку
+            setTimeout(async () => {
+                await checkAdminAccess();
+            }, 1000);
             return false;
         }
+        
+        console.log('Проверка прав админа, initData:', initData.substring(0, 50) + '...');
         
         const response = await fetch(`/api/admin/check?initData=${encodeURIComponent(initData)}`, {
             method: 'POST',
@@ -388,12 +407,18 @@ async function checkAdminAccess() {
             const data = await response.json();
             isAdmin = data.is_admin || false;
             
+            console.log('Результат проверки прав админа:', isAdmin);
+            
             // Добавляем кнопку "Админ-панель" в навигацию, если админ
             if (isAdmin) {
+                console.log('Добавляем кнопку админ-панели');
                 addAdminNavButton();
             }
             
             return isAdmin;
+        } else {
+            const errorText = await response.text();
+            console.error('Ошибка ответа от сервера:', response.status, errorText);
         }
         return false;
     } catch (error) {
@@ -405,18 +430,34 @@ async function checkAdminAccess() {
 // Добавление кнопки "Админ-панель" в навигацию
 function addAdminNavButton() {
     const nav = document.querySelector('.bottom-nav');
-    if (!nav) return;
+    if (!nav) {
+        console.warn('Навигация не найдена, пробуем позже...');
+        // Пробуем еще раз через небольшую задержку
+        setTimeout(() => {
+            addAdminNavButton();
+        }, 500);
+        return;
+    }
     
     // Проверяем, не добавлена ли уже кнопка
-    if (document.getElementById('admin-nav-button')) return;
+    if (document.getElementById('admin-nav-button')) {
+        console.log('Кнопка админ-панели уже добавлена');
+        return;
+    }
+    
+    console.log('Добавляем кнопку админ-панели в навигацию');
     
     const adminButton = document.createElement('button');
     adminButton.id = 'admin-nav-button';
     adminButton.className = 'nav-item';
-    adminButton.onclick = () => showPage('admin-users');
+    adminButton.onclick = () => {
+        console.log('Переход в админ-панель');
+        showPage('admin-users');
+    };
     adminButton.innerHTML = '<span class="nav-label">Админ</span>';
     
     nav.appendChild(adminButton);
+    console.log('Кнопка админ-панели успешно добавлена');
 }
 
 // Загрузка списка пользователей
