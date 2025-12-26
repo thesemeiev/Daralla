@@ -1034,6 +1034,51 @@ function showError(elementId, message) {
     }
 }
 
+// Загрузка статистики
+async function loadAdminStats() {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            showError('admin-stats-error', 'Ошибка авторизации');
+            return;
+        }
+        
+        document.getElementById('admin-stats-loading').style.display = 'block';
+        document.getElementById('admin-stats-error').style.display = 'none';
+        document.getElementById('admin-stats-content').style.display = 'none';
+        
+        const response = await fetch('/api/admin/stats', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки статистики');
+        }
+        
+        const data = await response.json();
+        
+        document.getElementById('admin-stats-loading').style.display = 'none';
+        document.getElementById('admin-stats-content').style.display = 'block';
+        
+        // Обновляем статистику
+        document.getElementById('stats-total-users').textContent = data.stats.users.total || 0;
+        document.getElementById('stats-new-users-30d').textContent = data.stats.users.new_30d || 0;
+        document.getElementById('stats-active-subs').textContent = data.stats.subscriptions.active || 0;
+        document.getElementById('stats-total-subs').textContent = data.stats.subscriptions.total || 0;
+        document.getElementById('stats-expired-subs').textContent = data.stats.subscriptions.expired || 0;
+        document.getElementById('stats-canceled-subs').textContent = data.stats.subscriptions.canceled || 0;
+        document.getElementById('stats-revenue').textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
+        document.getElementById('stats-succeeded-payments').textContent = data.stats.payments.succeeded || 0;
+    } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        document.getElementById('admin-stats-loading').style.display = 'none';
+        showError('admin-stats-error', 'Ошибка загрузки статистики');
+    }
+}
 
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
