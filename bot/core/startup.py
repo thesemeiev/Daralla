@@ -145,7 +145,7 @@ async def on_startup(app):
         
         # 3. Запуск фоновых задач (единый цикл)
         from .tasks import start_background_tasks
-        await start_background_tasks(sync_manager, subscription_manager, notification_manager)
+        await start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager)
         
         # 4. Запуск мониторинга здоровья серверов
         asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))

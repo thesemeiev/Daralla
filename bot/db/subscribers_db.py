@@ -78,6 +78,25 @@ async def init_subscribers_db():
             )
         """)
         
+        # Таблица истории нагрузки на серверы (для расчета средних значений)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS server_load_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                server_name TEXT NOT NULL,
+                online_clients INTEGER NOT NULL,
+                total_active INTEGER NOT NULL,
+                offline_clients INTEGER NOT NULL,
+                recorded_at INTEGER NOT NULL,
+                UNIQUE(server_name, recorded_at)
+            )
+        """)
+        
+        # Индекс для быстрого поиска по серверу и времени
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_server_load_server_time 
+            ON server_load_history(server_name, recorded_at DESC)
+        """)
+        
         await db.commit()
 
 async def get_or_create_subscriber(user_id: str) -> int:
@@ -425,11 +444,19 @@ async def get_server_load_data():
             
             logger.info(f"Сервер {server_name}: активных={total_active}, онлайн={online_count}, офлайн={offline_count}")
             
+            # Получаем средние значения за последние 24 часа
+            averages = await get_server_load_averages(period_hours=24)
+            server_avg = averages.get(server_name, {})
+            
             server_data.append({
                 'server_name': server_name,
-                'online_clients': online_count,
+                'online_clients': online_count,  # Текущее значение
                 'total_active': total_active,
-                'offline_clients': offline_count
+                'offline_clients': offline_count,
+                'avg_online_24h': server_avg.get('avg_online', 0),  # Среднее за 24 часа
+                'max_online_24h': server_avg.get('max_online', 0),  # Максимум за 24 часа
+                'min_online_24h': server_avg.get('min_online', 0),  # Минимум за 24 часа
+                'samples_24h': server_avg.get('samples', 0)  # Количество измерений
             })
         except Exception as e:
             logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}", exc_info=True)

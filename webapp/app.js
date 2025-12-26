@@ -1265,9 +1265,18 @@ async function loadServerLoadChart() {
         }
         
         // Создаем график по серверам
+        // Используем среднее значение за 24 часа для более стабильной картины нагрузки
         const serverLabels = serverData.map(item => item.display_name || item.server_name);
-        const serverOnlineClients = serverData.map(item => item.online_clients || 0);
+        const serverOnlineClients = serverData.map(item => {
+            // Используем среднее за 24 часа, если есть данные, иначе текущее значение
+            const avg = item.avg_online_24h || 0;
+            const current = item.online_clients || 0;
+            // Если есть достаточно измерений (больше 5), используем среднее, иначе текущее
+            return (item.samples_24h > 5 && avg > 0) ? Math.round(avg) : current;
+        });
         const serverTotalActive = serverData.map(item => item.total_active || 0);
+        const serverCurrentOnline = serverData.map(item => item.online_clients || 0);
+        const serverAvgOnline = serverData.map(item => item.avg_online_24h || 0);
         
         // Цвета для графика
         const colors = [
@@ -1287,13 +1296,23 @@ async function loadServerLoadChart() {
             type: 'bar',
             data: {
                 labels: serverLabels,
-                datasets: [{
-                    label: 'Клиентов в онлайне',
-                    data: serverOnlineClients,
-                    backgroundColor: serverOnlineClients.map((_, i) => colors[i % colors.length]),
-                    borderColor: serverOnlineClients.map((_, i) => colors[i % colors.length].replace('0.8', '1')),
-                    borderWidth: 1
-                }]
+                datasets: [
+                    {
+                        label: 'Среднее за 24ч',
+                        data: serverAvgOnline,
+                        backgroundColor: serverAvgOnline.map((_, i) => colors[i % colors.length]),
+                        borderColor: serverAvgOnline.map((_, i) => colors[i % colors.length].replace('0.8', '1')),
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Текущее',
+                        data: serverCurrentOnline,
+                        backgroundColor: serverCurrentOnline.map((_, i) => colors[(i + 5) % colors.length].replace('0.8', '0.5')),
+                        borderColor: serverCurrentOnline.map((_, i) => colors[(i + 5) % colors.length]),
+                        borderWidth: 1,
+                        borderDash: [5, 5]
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -1304,7 +1323,7 @@ async function loadServerLoadChart() {
                     },
                     title: {
                         display: true,
-                        text: 'Количество клиентов в онлайне на серверах',
+                        text: 'Нагрузка на серверы (среднее за 24ч и текущее)',
                         font: {
                             size: 16
                         }
@@ -1314,8 +1333,17 @@ async function loadServerLoadChart() {
                             label: function(context) {
                                 const index = context.dataIndex;
                                 const item = serverData[index];
-                                let label = `Онлайн: ${context.parsed.y}`;
-                                if (item && item.total_active !== undefined) {
+                                const datasetLabel = context.dataset.label;
+                                let label = `${datasetLabel}: ${context.parsed.y}`;
+                                
+                                if (datasetLabel === 'Среднее за 24ч' && item) {
+                                    if (item.max_online_24h !== undefined && item.min_online_24h !== undefined) {
+                                        label += ` (мин: ${item.min_online_24h}, макс: ${item.max_online_24h})`;
+                                    }
+                                    if (item.samples_24h) {
+                                        label += ` [${item.samples_24h} измерений]`;
+                                    }
+                                } else if (datasetLabel === 'Текущее' && item && item.total_active !== undefined) {
                                     label += ` из ${item.total_active} активных`;
                                 }
                                 return label;
@@ -1329,6 +1357,10 @@ async function loadServerLoadChart() {
                                 return '';
                             }
                         }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
                     }
                 },
                 scales: {
@@ -1340,7 +1372,8 @@ async function loadServerLoadChart() {
                         },
                         ticks: {
                             stepSize: 1
-                        }
+                        },
+                        stacked: false
                     },
                     x: {
                         ticks: {

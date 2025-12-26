@@ -1650,9 +1650,13 @@ def create_webhook_app(bot_app):
                     'server_name': server_name,
                     'display_name': info.get('display_name', server_name),
                     'location': info.get('location', 'Unknown'),
-                    'online_clients': item.get('online_clients', 0),
+                    'online_clients': item.get('online_clients', 0),  # Текущее значение
                     'total_active': item.get('total_active', 0),
-                    'offline_clients': item.get('offline_clients', 0)
+                    'offline_clients': item.get('offline_clients', 0),
+                    'avg_online_24h': item.get('avg_online_24h', 0),  # Среднее за 24 часа
+                    'max_online_24h': item.get('max_online_24h', 0),  # Максимум за 24 часа
+                    'min_online_24h': item.get('min_online_24h', 0),  # Минимум за 24 часа
+                    'samples_24h': item.get('samples_24h', 0)  # Количество измерений
                 })
             
             # Группируем по локациям для дополнительной статистики
