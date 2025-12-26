@@ -78,7 +78,7 @@ else:
 from urllib.parse import quote
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, InlineQueryHandler
 from telegram.request import HTTPXRequest
 from yookassa import Payment, Configuration
 Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
@@ -608,6 +608,10 @@ if __name__ == '__main__':
     # Обработчик текстовых сообщений
     # (должен быть после ConversationHandler)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    # Обработчик inline query для быстрого поиска пользователей
+    from .handlers.admin.admin_inline_search import inline_query_handler
+    app.add_handler(InlineQueryHandler(inline_query_handler))
     
     # === НОВЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ ===
     app.add_handlers(nav_integration.get_handlers())
