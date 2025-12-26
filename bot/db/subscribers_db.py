@@ -335,36 +335,64 @@ async def get_user_growth_data(days: int = 30):
 
 async def get_server_load_data():
     """
-    Возвращает данные о нагрузке на серверы (количество активных клиентов на каждом сервере)
-    Возвращает список словарей с ключами: server_name, active_clients
+    Возвращает данные о нагрузке на серверы (количество онлайн клиентов на каждом сервере)
+    Использует X-UI API для получения реальных данных о количестве клиентов в онлайне
+    Возвращает список словарей с ключами: server_name, online_clients, total_active, offline_clients
     """
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    # Получаем server_manager для доступа к XUI объектам
+    def get_server_manager():
+        """Получает server_manager из bot.py"""
+        try:
+            from ... import bot as bot_module
+            return getattr(bot_module, 'server_manager', None)
+        except (ImportError, AttributeError):
+            return None
+    
+    server_manager = get_server_manager()
+    if not server_manager:
+        logger.warning("server_manager недоступен, возвращаем пустые данные")
+        return []
+    
+    server_data = []
+    
+    # Проходим по всем серверам
+    for server in server_manager.servers:
+        server_name = server["name"]
+        xui = server.get("x3")
         
-        # Получаем количество активных клиентов на каждом сервере
-        query = """
-            SELECT 
-                ss.server_name,
-                COUNT(*) as active_clients
-            FROM subscription_servers ss
-            JOIN subscriptions s ON ss.subscription_id = s.id
-            WHERE s.status = 'active'
-            GROUP BY ss.server_name
-            ORDER BY active_clients DESC
-        """
+        if not xui:
+            # Сервер недоступен
+            server_data.append({
+                'server_name': server_name,
+                'online_clients': 0,
+                'total_active': 0,
+                'offline_clients': 0
+            })
+            continue
         
-        async with db.execute(query) as cur:
-            rows = await cur.fetchall()
+        try:
+            # Получаем количество онлайн клиентов с сервера
+            total_active, online_count, offline_count = xui.get_online_clients_count()
             
-            # Преобразуем в список словарей
-            server_data = []
-            for row in rows:
-                server_data.append({
-                    'server_name': row['server_name'],
-                    'active_clients': row['active_clients']
-                })
-            
-            return server_data
+            server_data.append({
+                'server_name': server_name,
+                'online_clients': online_count,
+                'total_active': total_active,
+                'offline_clients': offline_count
+            })
+        except Exception as e:
+            logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}")
+            server_data.append({
+                'server_name': server_name,
+                'online_clients': 0,
+                'total_active': 0,
+                'offline_clients': 0
+            })
+    
+    # Сортируем по количеству онлайн клиентов
+    server_data.sort(key=lambda x: x['online_clients'], reverse=True)
+    
+    return server_data
 
 # ==================== ПРОМОКОДЫ ====================
 

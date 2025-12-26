@@ -1238,20 +1238,21 @@ async function loadServerLoadChart() {
         
         // Создаем график по серверам
         const serverLabels = serverData.map(item => item.display_name || item.server_name);
-        const serverClients = serverData.map(item => item.active_clients);
+        const serverOnlineClients = serverData.map(item => item.online_clients || 0);
+        const serverTotalActive = serverData.map(item => item.total_active || 0);
         
         // Цвета для графика
         const colors = [
-            'rgba(255, 99, 132, 0.8)',
-            'rgba(54, 162, 235, 0.8)',
-            'rgba(255, 206, 86, 0.8)',
-            'rgba(75, 192, 192, 0.8)',
-            'rgba(153, 102, 255, 0.8)',
-            'rgba(255, 159, 64, 0.8)',
-            'rgba(199, 199, 199, 0.8)',
-            'rgba(83, 102, 255, 0.8)',
-            'rgba(255, 99, 255, 0.8)',
-            'rgba(99, 255, 132, 0.8)'
+            'rgba(75, 192, 192, 0.8)',   // Зеленый для онлайн
+            'rgba(54, 162, 235, 0.8)',   // Синий
+            'rgba(255, 206, 86, 0.8)',   // Желтый
+            'rgba(255, 99, 132, 0.8)',   // Красный
+            'rgba(153, 102, 255, 0.8)',  // Фиолетовый
+            'rgba(255, 159, 64, 0.8)',   // Оранжевый
+            'rgba(199, 199, 199, 0.8)',  // Серый
+            'rgba(83, 102, 255, 0.8)',   // Синий темный
+            'rgba(255, 99, 255, 0.8)',   // Розовый
+            'rgba(99, 255, 132, 0.8)'    // Зеленый светлый
         ];
         
         serverLoadChart = new Chart(ctx, {
@@ -1259,10 +1260,10 @@ async function loadServerLoadChart() {
             data: {
                 labels: serverLabels,
                 datasets: [{
-                    label: 'Активных клиентов',
-                    data: serverClients,
-                    backgroundColor: serverClients.map((_, i) => colors[i % colors.length]),
-                    borderColor: serverClients.map((_, i) => colors[i % colors.length].replace('0.8', '1')),
+                    label: 'Клиентов в онлайне',
+                    data: serverOnlineClients,
+                    backgroundColor: serverOnlineClients.map((_, i) => colors[i % colors.length]),
+                    borderColor: serverOnlineClients.map((_, i) => colors[i % colors.length].replace('0.8', '1')),
                     borderWidth: 1
                 }]
             },
@@ -1275,13 +1276,22 @@ async function loadServerLoadChart() {
                     },
                     title: {
                         display: true,
-                        text: 'Количество активных клиентов на серверах',
+                        text: 'Количество клиентов в онлайне на серверах',
                         font: {
                             size: 16
                         }
                     },
                     tooltip: {
                         callbacks: {
+                            label: function(context) {
+                                const index = context.dataIndex;
+                                const item = serverData[index];
+                                let label = `Онлайн: ${context.parsed.y}`;
+                                if (item && item.total_active !== undefined) {
+                                    label += ` из ${item.total_active} активных`;
+                                }
+                                return label;
+                            },
                             afterLabel: function(context) {
                                 const index = context.dataIndex;
                                 const item = serverData[index];
@@ -1298,7 +1308,7 @@ async function loadServerLoadChart() {
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Количество активных клиентов'
+                            text: 'Количество клиентов в онлайне'
                         },
                         ticks: {
                             stepSize: 1

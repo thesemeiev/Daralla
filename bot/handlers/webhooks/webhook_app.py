@@ -1634,7 +1634,9 @@ def create_webhook_app(bot_app):
                     'server_name': server_name,
                     'display_name': info.get('display_name', server_name),
                     'location': info.get('location', 'Unknown'),
-                    'active_clients': item['active_clients']
+                    'online_clients': item.get('online_clients', 0),
+                    'total_active': item.get('total_active', 0),
+                    'offline_clients': item.get('offline_clients', 0)
                 })
             
             # Группируем по локациям для дополнительной статистики
@@ -1644,14 +1646,17 @@ def create_webhook_app(bot_app):
                 if location not in location_stats:
                     location_stats[location] = {
                         'location': location,
-                        'total_clients': 0,
+                        'total_online': 0,
+                        'total_active': 0,
                         'servers': []
                     }
-                location_stats[location]['total_clients'] += item['active_clients']
+                location_stats[location]['total_online'] += item['online_clients']
+                location_stats[location]['total_active'] += item['total_active']
                 location_stats[location]['servers'].append({
                     'server_name': item['server_name'],
                     'display_name': item['display_name'],
-                    'active_clients': item['active_clients']
+                    'online_clients': item['online_clients'],
+                    'total_active': item['total_active']
                 })
             
             return jsonify({

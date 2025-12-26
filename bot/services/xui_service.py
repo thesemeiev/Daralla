@@ -411,6 +411,82 @@ class X3:
         except Exception as e:
             logger.error(f"Ошибка при подсчете статуса клиентов на {self.host}: {e}")
             return 0, 0, 0
+    
+    def get_online_clients_count(self, timeout=15):
+        """
+        Подсчитывает количество клиентов в онлайне (использовали трафик недавно)
+        Клиент считается онлайн, если:
+        1. Он активен (не истек срок)
+        2. У него есть статистика трафика (upload + download > 0)
+        
+        Returns:
+            tuple: (total_active, online_count, offline_count)
+        """
+        try:
+            response_data = self.list(timeout=timeout)
+            if 'obj' not in response_data:
+                logger.error(f"Неожиданный формат ответа XUI: {response_data}")
+                return 0, 0, 0
+            
+            inbounds = response_data['obj']
+            total_active = 0
+            online_count = 0
+            offline_count = 0
+            current_time = int(datetime.datetime.now().timestamp() * 1000)
+            
+            # Получаем статистику трафика для всех клиентов
+            client_stats_map = {}
+            for inbound in inbounds:
+                client_stats = inbound.get('clientStats', [])
+                if isinstance(client_stats, list):
+                    for stat in client_stats:
+                        email = stat.get('email')
+                        if email:
+                            upload = stat.get('up', 0) or stat.get('upload', 0)
+                            download = stat.get('down', 0) or stat.get('download', 0)
+                            client_stats_map[email] = {
+                                'upload': upload,
+                                'download': download,
+                                'total': upload + download
+                            }
+                elif isinstance(client_stats, dict):
+                    for email, stat in client_stats.items():
+                        upload = stat.get('up', 0) or stat.get('upload', 0)
+                        download = stat.get('down', 0) or stat.get('download', 0)
+                        client_stats_map[email] = {
+                            'upload': upload,
+                            'download': download,
+                            'total': upload + download
+                        }
+            
+            # Подсчитываем клиентов
+            for inbound in inbounds:
+                settings = json.loads(inbound.get('settings', '{}'))
+                clients = settings.get("clients", [])
+                
+                for client in clients:
+                    # Проверяем, активен ли клиент (не истек ли срок)
+                    expiry_time = client.get('expiryTime', 0)
+                    if expiry_time == 0 or current_time < expiry_time:
+                        total_active += 1
+                        email = client.get('email')
+                        
+                        # Проверяем, есть ли статистика трафика (клиент использовал VPN)
+                        if email and email in client_stats_map:
+                            traffic = client_stats_map[email]
+                            # Если есть трафик (upload или download > 0), считаем онлайн
+                            if traffic['total'] > 0:
+                                online_count += 1
+                            else:
+                                offline_count += 1
+                        else:
+                            # Если нет статистики, считаем офлайн
+                            offline_count += 1
+            
+            return total_active, online_count, offline_count
+        except Exception as e:
+            logger.error(f"Ошибка при подсчете онлайн клиентов на {self.host}: {e}")
+            return 0, 0, 0
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def client_exists(self, user_email):
