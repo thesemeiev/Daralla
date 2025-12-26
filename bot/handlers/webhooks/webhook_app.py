@@ -1467,11 +1467,19 @@ def create_webhook_app(bot_app):
                                 if row['meta']:
                                     try:
                                         import json
-                                        meta = json.loads(row['meta'])
-                                        amount = meta.get('amount', 0)
-                                        if isinstance(amount, (int, float)):
+                                        meta = json.loads(row['meta']) if isinstance(row['meta'], str) else row['meta']
+                                        # Пробуем получить amount или price
+                                        amount = meta.get('amount') or meta.get('price', 0)
+                                        if isinstance(amount, str):
+                                            # Если это строка, пытаемся преобразовать
+                                            try:
+                                                amount = float(amount)
+                                            except (ValueError, TypeError):
+                                                amount = 0
+                                        if isinstance(amount, (int, float)) and amount > 0:
                                             total_revenue += amount
-                                    except:
+                                    except Exception as e:
+                                        logger.debug(f"Ошибка парсинга meta платежа для дохода: {e}")
                                         pass
                         
                         return total_payments, succeeded_payments, total_revenue
@@ -1488,9 +1496,9 @@ def create_webhook_app(bot_app):
                         'new_30d': new_users_30d
                     },
                     'subscriptions': {
-                        'total': stats.get('total', 0),
-                        'active': stats.get('active', 0),
-                        'expired': stats.get('expired', 0),
+                        'total': stats.get('total', stats.get('total_subscriptions', 0)),
+                        'active': stats.get('active', stats.get('active_subscriptions', 0)),
+                        'expired': stats.get('expired', stats.get('expired_subscriptions', 0)),
                         'canceled': stats.get('canceled', 0),
                         'trial': stats.get('trial', 0)
                     },
