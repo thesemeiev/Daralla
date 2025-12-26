@@ -115,6 +115,55 @@
             </div>
         </div>
 
+        <!-- АДМИН-ПАНЕЛЬ: Раздел Статистика -->
+        <div id="page-admin-stats" class="page" style="display: none;">
+            <header>
+                <h1>Статистика</h1>
+            </header>
+            
+            <div id="admin-stats-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка статистики...</p>
+            </div>
+            
+            <div id="admin-stats-error" class="error" style="display: none;">
+                <p>Ошибка загрузки данных</p>
+                <button onclick="loadAdminStats()">Повторить</button>
+            </div>
+            
+            <div id="admin-stats-content" style="display: none;">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-title">Пользователи</div>
+                        <div class="stat-card-value" id="stats-total-users">0</div>
+                        <div class="stat-card-subtitle">Новых за 30 дней: <span id="stats-new-users-30d">0</span></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Активные подписки</div>
+                        <div class="stat-card-value active" id="stats-active-subs">0</div>
+                        <div class="stat-card-subtitle">Всего: <span id="stats-total-subs">0</span></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Истекшие</div>
+                        <div class="stat-card-value expired" id="stats-expired-subs">0</div>
+                        <div class="stat-card-subtitle">Отмененных: <span id="stats-canceled-subs">0</span></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Доход</div>
+                        <div class="stat-card-value revenue" id="stats-revenue">0 ₽</div>
+                        <div class="stat-card-subtitle">Успешных платежей: <span id="stats-succeeded-payments">0</span></div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 24px;">
+                    <button class="btn-primary" onclick="showPage('admin-users')" style="width: 100%;">Перейти к пользователям</button>
+                </div>
+            </div>
+        </div>
+
         <!-- АДМИН-ПАНЕЛЬ: Раздел Список пользователей -->
         <div id="page-admin-users" class="page" style="display: none;">
             <header>
