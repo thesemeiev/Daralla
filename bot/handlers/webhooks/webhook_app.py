@@ -930,17 +930,24 @@ def create_webhook_app(bot_app):
                 status = payment.get('status', 'unknown')
                 created_at = payment.get('created_at', 0)
                 
-                # amount может быть в meta или отсутствовать
+                # amount может быть в meta (как price или amount) или отсутствовать
                 amount = 0
                 meta = payment.get('meta', {})
                 if isinstance(meta, dict):
-                    amount = meta.get('amount', 0)
+                    amount = meta.get('price') or meta.get('amount', 0)
                 elif isinstance(meta, str):
                     try:
                         import json
                         meta_dict = json.loads(meta)
-                        amount = meta_dict.get('amount', 0)
+                        amount = meta_dict.get('price') or meta_dict.get('amount', 0)
                     except:
+                        amount = 0
+                
+                # Преобразуем строку в число, если нужно
+                if isinstance(amount, str):
+                    try:
+                        amount = float(amount)
+                    except (ValueError, TypeError):
                         amount = 0
                 
                 formatted_payments.append({

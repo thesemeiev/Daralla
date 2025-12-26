@@ -668,7 +668,7 @@ async function showAdminUserDetail(userId) {
                     ${data.payments.map(payment => `
                         <div class="admin-detail-item">
                             <span class="admin-detail-label">${escapeHtml(payment.created_at_formatted)}</span>
-                            <span class="admin-detail-value">${payment.amount} ₽ (${payment.status})</span>
+                            <span class="admin-detail-value">${(payment.amount || 0).toLocaleString('ru-RU')} ₽ (${escapeHtml(payment.status)})</span>
                         </div>
                     `).join('')}
                 </div>
