@@ -1266,6 +1266,244 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/subscription/sync: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/subscription/<int:sub_id>/delete', methods=['POST', 'OPTIONS'])
+    def api_admin_subscription_delete(sub_id):
+        """Удаление подписки"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            confirm = data.get('confirm', False)  # Требуем подтверждение
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            if not confirm:
+                return jsonify({'error': 'Confirmation required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, remove_subscription_server, DB_PATH
+            import aiosqlite
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Проверяем существование подписки
+                sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
+                if not sub:
+                    return jsonify({'error': 'Subscription not found'}), 404
+                
+                # Получаем все серверы подписки
+                servers = loop.run_until_complete(get_subscription_servers(sub_id))
+                
+                # Получаем менеджеры
+                def get_managers():
+                    try:
+                        from ... import bot as bot_module
+                        return {
+                            'subscription_manager': getattr(bot_module, 'subscription_manager', None),
+                            'server_manager': getattr(bot_module, 'server_manager', None)
+                        }
+                    except (ImportError, AttributeError):
+                        return {'subscription_manager': None, 'server_manager': None}
+                
+                managers = get_managers()
+                server_manager = managers.get('server_manager')
+                
+                deleted_servers = []
+                failed_servers = []
+                
+                # 1. Удаляем клиентов со всех серверов
+                async def delete_clients_from_servers():
+                    nonlocal deleted_servers, failed_servers
+                    if server_manager and servers:
+                        for server_info in servers:
+                            server_name = server_info['server_name']
+                            client_email = server_info['client_email']
+                            
+                            try:
+                                xui, _ = server_manager.get_server_by_name(server_name)
+                                if xui:
+                                    xui.deleteClient(client_email)
+                                    deleted_servers.append(server_name)
+                                    logger.info(f"Удален клиент {client_email} с сервера {server_name} при удалении подписки {sub_id}")
+                                else:
+                                    failed_servers.append(server_name)
+                                    logger.warning(f"Сервер {server_name} не найден в server_manager")
+                            except Exception as e:
+                                failed_servers.append(server_name)
+                                logger.error(f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}")
+                
+                loop.run_until_complete(delete_clients_from_servers())
+                
+                # 2. Удаляем связи подписки с серверами из БД
+                for server_info in servers:
+                    try:
+                        loop.run_until_complete(remove_subscription_server(sub_id, server_info['server_name']))
+                    except Exception as e:
+                        logger.error(f"Ошибка удаления связи подписки {sub_id} с сервером {server_info['server_name']}: {e}")
+                
+                # 3. Удаляем подписку из БД
+                async def delete_subscription():
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute("DELETE FROM subscriptions WHERE id = ?", (sub_id,))
+                        await db.commit()
+                
+                loop.run_until_complete(delete_subscription())
+                
+                logger.info(f"Админ {admin_id} удалил подписку {sub_id}")
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Подписка удалена',
+                'deleted_servers': deleted_servers,
+                'failed_servers': failed_servers
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/subscription/delete: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/stats', methods=['POST', 'OPTIONS'])
+    def api_admin_stats():
+        """Статистика для админ-панели"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import DB_PATH, get_subscription_statistics
+            import aiosqlite
+            import time
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Получаем статистику подписок
+                stats = loop.run_until_complete(get_subscription_statistics())
+                
+                # Получаем общую статистику пользователей
+                async def get_user_stats():
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        db.row_factory = aiosqlite.Row
+                        # Всего пользователей
+                        async with db.execute("SELECT COUNT(*) as count FROM users") as cur:
+                            row = await cur.fetchone()
+                            total_users = row['count'] if row else 0
+                        
+                        # Пользователей за последние 30 дней
+                        thirty_days_ago = int(time.time()) - (30 * 24 * 60 * 60)
+                        async with db.execute(
+                            "SELECT COUNT(*) as count FROM users WHERE first_seen >= ?",
+                            (thirty_days_ago,)
+                        ) as cur:
+                            row = await cur.fetchone()
+                            new_users_30d = row['count'] if row else 0
+                        
+                        return total_users, new_users_30d
+                
+                total_users, new_users_30d = loop.run_until_complete(get_user_stats())
+                
+                # Получаем статистику платежей
+                async def get_payment_stats():
+                    from ...db.payments_db import get_all_pending_payments
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        db.row_factory = aiosqlite.Row
+                        # Всего платежей
+                        async with db.execute("SELECT COUNT(*) as count FROM payments") as cur:
+                            row = await cur.fetchone()
+                            total_payments = row['count'] if row else 0
+                        
+                        # Успешных платежей
+                        async with db.execute(
+                            "SELECT COUNT(*) as count FROM payments WHERE status = 'succeeded'"
+                        ) as cur:
+                            row = await cur.fetchone()
+                            succeeded_payments = row['count'] if row else 0
+                        
+                        # Сумма успешных платежей (из meta)
+                        async with db.execute(
+                            "SELECT meta FROM payments WHERE status = 'succeeded'"
+                        ) as cur:
+                            rows = await cur.fetchall()
+                            total_revenue = 0
+                            for row in rows:
+                                if row['meta']:
+                                    try:
+                                        import json
+                                        meta = json.loads(row['meta'])
+                                        amount = meta.get('amount', 0)
+                                        if isinstance(amount, (int, float)):
+                                            total_revenue += amount
+                                    except:
+                                        pass
+                        
+                        return total_payments, succeeded_payments, total_revenue
+                
+                total_payments, succeeded_payments, total_revenue = loop.run_until_complete(get_payment_stats())
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'stats': {
+                    'users': {
+                        'total': total_users,
+                        'new_30d': new_users_30d
+                    },
+                    'subscriptions': {
+                        'total': stats.get('total', 0),
+                        'active': stats.get('active', 0),
+                        'expired': stats.get('expired', 0),
+                        'canceled': stats.get('canceled', 0),
+                        'trial': stats.get('trial', 0)
+                    },
+                    'payments': {
+                        'total': total_payments,
+                        'succeeded': succeeded_payments,
+                        'revenue': round(total_revenue, 2)
+                    }
+                }
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/stats: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     return app
 
 

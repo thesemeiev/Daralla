@@ -214,6 +214,12 @@
                     <button class="btn-sync" onclick="syncSubscription()">Синхронизировать</button>
                     <div id="sync-results" style="display: none;"></div>
                 </div>
+                
+                <div class="delete-section">
+                    <h3>Удаление подписки</h3>
+                    <p class="hint warning">Внимание! Это действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.</p>
+                    <button class="btn-danger" onclick="confirmDeleteSubscription()">Удалить подписку</button>
+                </div>
             </div>
         </div>
     </div>

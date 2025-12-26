@@ -40,6 +40,8 @@ function showPage(pageName) {
             navItems[1]?.classList.add('active');
         } else if (pageName === 'about') {
             navItems[2]?.classList.add('active');
+        } else if (pageName === 'admin-stats' && document.getElementById('admin-nav-button')) {
+            document.getElementById('admin-nav-button').classList.add('active');
         } else if (pageName === 'admin-users' && document.getElementById('admin-nav-button')) {
             document.getElementById('admin-nav-button').classList.add('active');
         }
@@ -54,6 +56,8 @@ function showPage(pageName) {
         loadServers();
     } else if (pageName === 'admin-users') {
         loadAdminUsers(1, currentAdminUserSearch);
+    } else if (pageName === 'admin-stats') {
+        loadAdminStats();
     }
 }
 
@@ -452,7 +456,7 @@ function addAdminNavButton() {
     adminButton.className = 'nav-item';
     adminButton.onclick = () => {
         console.log('Переход в админ-панель');
-        showPage('admin-users');
+        showPage('admin-stats');
     };
     adminButton.innerHTML = '<span class="nav-label">Админ</span>';
     
@@ -855,6 +859,166 @@ function goBackFromSubscriptionEdit() {
         showPage('admin-users');
     }
     currentEditingSubscriptionId = null;
+}
+
+// Показать форму создания подписки
+function showCreateSubscriptionForm(userId) {
+    currentCreatingSubscriptionUserId = userId;
+    previousAdminPage = 'admin-user-detail';
+    showPage('admin-create-subscription');
+    
+    // Очищаем форму
+    document.getElementById('create-sub-name').value = '';
+    document.getElementById('create-sub-expires-at').value = '';
+    document.getElementById('create-sub-device-limit').value = '1';
+    document.getElementById('create-sub-period').value = 'month';
+}
+
+// Возврат назад из создания подписки
+function goBackFromCreateSubscription() {
+    if (previousAdminPage === 'admin-user-detail' && currentCreatingSubscriptionUserId) {
+        showAdminUserDetail(currentCreatingSubscriptionUserId);
+    } else {
+        showPage('admin-users');
+    }
+    currentCreatingSubscriptionUserId = null;
+}
+
+// Возврат назад из детальной информации о пользователе
+function goBackFromUserDetail() {
+    showPage('admin-users');
+}
+
+// Создание подписки
+async function createSubscription(event) {
+    event.preventDefault();
+    
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        if (!currentCreatingSubscriptionUserId) {
+            alert('Ошибка: ID пользователя не найден');
+            return;
+        }
+        
+        const form = event.target;
+        const formData = {
+            period: form.period.value,
+            device_limit: parseInt(form.device_limit.value),
+            name: form.name.value.trim() || null
+        };
+        
+        // Если указана дата истечения, добавляем её
+        if (form.expires_at.value) {
+            formData.expires_at = Math.floor(new Date(form.expires_at.value).getTime() / 1000);
+        }
+        
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Создание...';
+        
+        const response = await fetch(`/api/admin/user/${currentCreatingSubscriptionUserId}/create-subscription`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                ...formData
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка создания подписки');
+        }
+        
+        const data = await response.json();
+        
+        let message = 'Подписка успешно создана!';
+        if (data.failed_servers && data.failed_servers.length > 0) {
+            message += `\n\nПредупреждение: не удалось создать клиентов на серверах: ${data.failed_servers.map(s => s.server).join(', ')}`;
+        }
+        
+        alert(message);
+        
+        // Возвращаемся назад и обновляем информацию о пользователе
+        goBackFromCreateSubscription();
+    } catch (error) {
+        console.error('Ошибка создания подписки:', error);
+        alert('Ошибка создания: ' + error.message);
+        const form = event.target;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Создать';
+    }
+}
+
+// Подтверждение удаления подписки
+function confirmDeleteSubscription() {
+    if (!currentEditingSubscriptionId) {
+        alert('Ошибка: ID подписки не найден');
+        return;
+    }
+    
+    const subscriptionName = document.getElementById('sub-name').value || `Подписка ${currentEditingSubscriptionId}`;
+    
+    if (confirm(`Вы уверены, что хотите удалить подписку "${subscriptionName}"?\n\nЭто действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.`)) {
+        deleteSubscription();
+    }
+}
+
+// Удаление подписки
+async function deleteSubscription() {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        if (!currentEditingSubscriptionId) {
+            alert('Ошибка: ID подписки не найден');
+            return;
+        }
+        
+        const deleteBtn = document.querySelector('.btn-danger');
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Удаление...';
+        
+        const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                confirm: true
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка удаления');
+        }
+        
+        const data = await response.json();
+        
+        alert('Подписка успешно удалена!');
+        
+        // Возвращаемся назад
+        goBackFromSubscriptionEdit();
+    } catch (error) {
+        console.error('Ошибка удаления подписки:', error);
+        alert('Ошибка удаления: ' + error.message);
+        const deleteBtn = document.querySelector('.btn-danger');
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Удалить подписку';
+    }
 }
 
 // Вспомогательная функция для отображения ошибок
