@@ -178,9 +178,6 @@ async function loadSubscriptions() {
             // Показываем подписки
             subscriptionsEl.style.display = 'block';
             renderSubscriptions(data.subscriptions);
-            
-            // Загружаем карту серверов
-            loadServerMap();
         }
         
     } catch (error) {
@@ -273,6 +270,9 @@ async function loadServers() {
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
+        // Загружаем карту серверов
+        loadServerMap();
+        
         if (!data.servers || data.servers.length === 0) {
             listEl.innerHTML = '<div class="empty"><p>Серверы не найдены</p></div>';
         } else {
@@ -297,7 +297,8 @@ class CustomGlobe {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.servers = servers;
-        this.rotation = 0;
+        this.rotation = 0; // Горизонтальное вращение (yaw)
+        this.pitch = 0; // Вертикальное вращение (pitch) - наклон вверх/вниз
         this.isDragging = false;
         this.lastX = 0;
         this.lastY = 0;
@@ -354,7 +355,14 @@ class CustomGlobe {
         const currentY = e.clientY - rect.top;
         
         const deltaX = currentX - this.lastX;
+        const deltaY = currentY - this.lastY;
+        
+        // Горизонтальное вращение (влево-вправо)
         this.rotation += deltaX * 0.01;
+        
+        // Вертикальное вращение (вверх-вниз) - ограничиваем угол наклона
+        this.pitch += deltaY * 0.01;
+        this.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.pitch)); // Ограничиваем от -90 до 90 градусов
         
         this.lastX = currentX;
         this.lastY = currentY;
@@ -365,16 +373,36 @@ class CustomGlobe {
         this.isDragging = false;
     }
     
-    // Преобразование координат в проекцию глобуса
+    // Преобразование координат в проекцию глобуса с учетом наклона
     latLngToXY(lat, lng) {
-        const phi = (90 - lat) * Math.PI / 180;
-        const theta = (lng + 180 + this.rotation * 180 / Math.PI) * Math.PI / 180;
+        // Преобразуем широту и долготу в сферические координаты
+        const phi = (90 - lat) * Math.PI / 180; // Угол от северного полюса
+        const theta = (lng + 180) * Math.PI / 180; // Долгота
         
-        const x = this.centerX + this.radius * Math.sin(phi) * Math.cos(theta) * this.zoom;
-        const y = this.centerY + this.radius * Math.cos(phi) * this.zoom;
+        // Применяем горизонтальное вращение
+        const rotatedTheta = theta + this.rotation;
         
-        return { x, y, visible: Math.abs(x - this.centerX) < this.canvas.width / 2 && 
-                                Math.abs(y - this.centerY) < this.canvas.height / 2 };
+        // Вычисляем 3D координаты на сфере
+        const x3d = Math.sin(phi) * Math.cos(rotatedTheta);
+        const y3d = Math.cos(phi);
+        const z3d = Math.sin(phi) * Math.sin(rotatedTheta);
+        
+        // Применяем вертикальное вращение (pitch) - поворот вокруг оси X
+        const cosPitch = Math.cos(this.pitch);
+        const sinPitch = Math.sin(this.pitch);
+        const yRotated = y3d * cosPitch - z3d * sinPitch;
+        const zRotated = y3d * sinPitch + z3d * cosPitch;
+        
+        // Ортографическая проекция (параллельная проекция)
+        const x = this.centerX + this.radius * x3d * this.zoom;
+        const y = this.centerY + this.radius * yRotated * this.zoom;
+        
+        // Проверяем видимость (точка видна, если она на передней стороне сферы)
+        const visible = zRotated >= 0 && 
+                       Math.abs(x - this.centerX) < this.canvas.width / 2 && 
+                       Math.abs(y - this.centerY) < this.canvas.height / 2;
+        
+        return { x, y, visible };
     }
     
     draw() {
@@ -405,22 +433,26 @@ class CustomGlobe {
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Рисуем сетку (меридианы и параллели) в пиксельном стиле
+        // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 1;
         
         // Меридианы (вертикальные линии)
         for (let i = 0; i < 12; i++) {
-            const lng = (i * 30 - 180) * Math.PI / 180 + this.rotation;
+            const lng = (i * 30 - 180) * Math.PI / 180;
             ctx.beginPath();
+            let firstPoint = true;
             for (let lat = -90; lat <= 90; lat += 5) {
-                const phi = (90 - lat) * Math.PI / 180;
-                const x = this.radius * Math.sin(phi) * Math.cos(lng);
-                const y = this.radius * Math.cos(phi);
-                if (lat === -90) {
-                    ctx.moveTo(x, y);
+                const pos = this.latLngToXY(lat, lng * 180 / Math.PI);
+                if (pos.visible) {
+                    if (firstPoint) {
+                        ctx.moveTo(pos.x - this.centerX, pos.y - this.centerY);
+                        firstPoint = false;
+                    } else {
+                        ctx.lineTo(pos.x - this.centerX, pos.y - this.centerY);
+                    }
                 } else {
-                    ctx.lineTo(x, y);
+                    firstPoint = true; // Начинаем новую линию, если точка невидима
                 }
             }
             ctx.stroke();
@@ -428,10 +460,21 @@ class CustomGlobe {
         
         // Параллели (горизонтальные линии)
         for (let lat = -60; lat <= 60; lat += 30) {
-            const phi = (90 - lat) * Math.PI / 180;
-            const radius = this.radius * Math.sin(phi);
             ctx.beginPath();
-            ctx.arc(0, this.radius * Math.cos(phi), Math.abs(radius), 0, Math.PI * 2);
+            let firstPoint = true;
+            for (let lng = -180; lng <= 180; lng += 10) {
+                const pos = this.latLngToXY(lat, lng);
+                if (pos.visible) {
+                    if (firstPoint) {
+                        ctx.moveTo(pos.x - this.centerX, pos.y - this.centerY);
+                        firstPoint = false;
+                    } else {
+                        ctx.lineTo(pos.x - this.centerX, pos.y - this.centerY);
+                    }
+                } else {
+                    firstPoint = true;
+                }
+            }
             ctx.stroke();
         }
         
@@ -1924,15 +1967,54 @@ let originalOrientation = null;
 
 // Функция переключения полноэкранного режима
 async function toggleFullscreen(chartId) {
-    const chartContainer = document.getElementById(chartId).closest('div[style*="position: relative"]');
+    // Ищем контейнер графика разными способами
+    let chartContainer = null;
+    const canvas = document.getElementById(chartId);
+    
+    if (!canvas) {
+        console.error('Canvas графика не найден:', chartId);
+        showChartModal(chartId);
+        return;
+    }
+    
+    // Пробуем найти контейнер разными способами
+    chartContainer = canvas.closest('div[style*="position: relative"]');
+    if (!chartContainer) {
+        chartContainer = canvas.parentElement;
+    }
+    if (!chartContainer) {
+        chartContainer = canvas.closest('div');
+    }
+    
     if (!chartContainer) {
         console.error('Контейнер графика не найден');
+        showChartModal(chartId);
+        return;
+    }
+    
+    // Проверяем, поддерживается ли Fullscreen API
+    const isFullscreenSupported = document.fullscreenEnabled || 
+                                  document.webkitFullscreenEnabled || 
+                                  document.mozFullScreenEnabled || 
+                                  document.msFullscreenEnabled;
+    
+    // На мобильных устройствах всегда используем модальное окно (Fullscreen API работает нестабильно)
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // Если Fullscreen API не поддерживается или на мобильных, используем модальное окно
+    if (!isFullscreenSupported || isMobile) {
+        showChartModal(chartId);
         return;
     }
     
     try {
         // Проверяем, находимся ли мы уже в полноэкранном режиме
-        if (fullscreenChartId === chartId) {
+        const isCurrentlyFullscreen = document.fullscreenElement || 
+                                     document.webkitFullscreenElement || 
+                                     document.mozFullScreenElement || 
+                                     document.msFullscreenElement;
+        
+        if (isCurrentlyFullscreen && fullscreenChartId === chartId) {
             // Выходим из полноэкранного режима
             if (document.exitFullscreen) {
                 await document.exitFullscreen();
@@ -1945,7 +2027,7 @@ async function toggleFullscreen(chartId) {
             }
             
             // Восстанавливаем ориентацию экрана
-            if (originalOrientation && screen.orientation && screen.orientation.unlock) {
+            if (originalOrientation !== null && screen.orientation && screen.orientation.unlock) {
                 try {
                     await screen.orientation.unlock();
                 } catch (e) {
@@ -1963,16 +2045,22 @@ async function toggleFullscreen(chartId) {
             }
             
             // Запрашиваем полноэкранный режим
+            let fullscreenPromise = null;
             if (chartContainer.requestFullscreen) {
-                await chartContainer.requestFullscreen();
+                fullscreenPromise = chartContainer.requestFullscreen();
             } else if (chartContainer.webkitRequestFullscreen) {
-                await chartContainer.webkitRequestFullscreen();
+                fullscreenPromise = chartContainer.webkitRequestFullscreen();
             } else if (chartContainer.mozRequestFullScreen) {
-                await chartContainer.mozRequestFullScreen();
+                fullscreenPromise = chartContainer.mozRequestFullScreen();
             } else if (chartContainer.msRequestFullscreen) {
-                await chartContainer.msRequestFullscreen();
+                fullscreenPromise = chartContainer.msRequestFullscreen();
+            } else {
+                // Если Fullscreen API не поддерживается, используем модальное окно
+                showChartModal(chartId);
+                return;
             }
             
+            await fullscreenPromise;
             fullscreenChartId = chartId;
             
             // На мобильных устройствах разрешаем поворот экрана
@@ -1999,7 +2087,7 @@ async function toggleFullscreen(chartId) {
                 } else if (chartId === 'server-load-chart' && serverLoadChart) {
                     serverLoadChart.resize();
                 }
-            }, 100);
+            }, 200);
         }
     } catch (error) {
         console.error('Ошибка переключения полноэкранного режима:', error);
@@ -2044,9 +2132,48 @@ function showChartModal(chartId) {
         cursor: pointer;
         font-size: 16px;
     `;
-    closeBtn.onclick = () => {
-        document.body.removeChild(modal);
+    // Проверяем, не открыто ли уже модальное окно
+    const existingModal = document.getElementById('chart-fullscreen-modal');
+    if (existingModal) {
+        document.body.removeChild(existingModal);
         fullscreenChartId = null;
+        if (originalOrientation !== null && screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock().catch(e => console.log('Не удалось разблокировать ориентацию:', e));
+        }
+        originalOrientation = null;
+        return;
+    }
+    
+    modal.id = 'chart-fullscreen-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.98);
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+    `;
+    
+    closeBtn.style.zIndex = '10001';
+    closeBtn.onclick = () => {
+        if (document.body.contains(modal)) {
+            document.body.removeChild(modal);
+        }
+        fullscreenChartId = null;
+        // Восстанавливаем ориентацию
+        if (originalOrientation !== null && screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock().catch(e => {
+                console.log('Не удалось разблокировать ориентацию:', e);
+            });
+        }
+        originalOrientation = null;
     };
     
     const chartWrapper = document.createElement('div');
@@ -2054,19 +2181,61 @@ function showChartModal(chartId) {
         width: 100%;
         height: 100%;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
     `;
     
-    const clonedCanvas = canvas.cloneNode(true);
-    clonedCanvas.style.cssText = 'max-width: 100%; max-height: 100%;';
+    // Получаем контейнер графика для клонирования
+    const chartContainer = canvas.closest('div[style*="overflow-x"]') || canvas.parentElement;
     
-    chartWrapper.appendChild(clonedCanvas);
+    // Клонируем весь контейнер графика
+    const clonedContainer = chartContainer.cloneNode(true);
+    clonedContainer.style.cssText = `
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        min-height: 400px;
+    `;
+    
+    // Находим canvas внутри клонированного контейнера и обновляем его размер
+    const clonedCanvas = clonedContainer.querySelector('canvas');
+    if (clonedCanvas) {
+        // Увеличиваем размер canvas для лучшего качества
+        const containerWidth = window.innerWidth - 40;
+        const containerHeight = window.innerHeight - 100;
+        clonedCanvas.width = containerWidth;
+        clonedCanvas.height = Math.max(400, containerHeight);
+        clonedCanvas.style.width = '100%';
+        clonedCanvas.style.height = 'auto';
+    }
+    
+    chartWrapper.appendChild(clonedContainer);
     modal.appendChild(closeBtn);
     modal.appendChild(chartWrapper);
     document.body.appendChild(modal);
     
     fullscreenChartId = chartId;
+    
+    // На мобильных устройствах разрешаем поворот экрана
+    if (screen.orientation && screen.orientation.unlock) {
+        screen.orientation.unlock().catch(e => {
+            console.log('Не удалось разблокировать ориентацию:', e);
+        });
+    }
+    
+    // Обновляем размер графика после создания модального окна
+    setTimeout(() => {
+        if (chartId === 'user-growth-chart' && userGrowthChart) {
+            userGrowthChart.resize();
+        } else if (chartId === 'conversion-chart' && conversionChart) {
+            conversionChart.resize();
+        } else if (chartId === 'server-load-chart' && serverLoadChart) {
+            serverLoadChart.resize();
+        }
+    }, 200);
 }
 
 // Обработчик выхода из полноэкранного режима
