@@ -409,12 +409,15 @@ async def get_conversion_data(days: int = 30):
             
             # Считаем, сколько из этих пользователей купили подписку (любую, не только в этот день)
             # Пользователь считается "купившим", если у него есть хотя бы одна подписка со статусом 'active' или была 'expired' (т.е. не trial)
+            # Исключаем пробные подписки: status != 'trial' И price > 0
             placeholders = ','.join(['?'] * len(user_ids))
             query_purchased = f"""
                 SELECT COUNT(DISTINCT subscriber_id) as count
                 FROM subscriptions
                 WHERE subscriber_id IN ({placeholders})
                 AND status IN ('active', 'expired', 'canceled')
+                AND status != 'trial'
+                AND price > 0
             """
             
             async with db.execute(query_purchased, user_ids) as cur:
