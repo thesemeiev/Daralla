@@ -595,7 +595,10 @@ class X3:
                                 }
             
             logger.debug(f"clientStats доступен: {has_client_stats}, найдено {len(client_stats_map)} клиентов со статистикой")
-            logger.debug(f"Онлайн клиентов через API: {len(online_client_ids)}")
+            if use_api_method:
+                logger.info(f"Используется API /onlines для определения онлайн-статуса. Получено {len(online_client_ids)} онлайн ID: {list(online_client_ids)[:10]}")
+            else:
+                logger.info(f"API /onlines недоступен, используется fallback - проверка трафика")
             
             # Подсчитываем клиентов
             for inbound in inbounds:
@@ -621,14 +624,37 @@ class X3:
                             
                             # Метод 1: Используем API /onlines (самый точный)
                             if use_api_method and online_client_ids:
-                                # Получаем ID клиента (для VLESS - id, для TROJAN - password)
-                                client_id = client.get('id') if protocol == 'vless' else client.get('password')
+                                # Получаем ID клиента в зависимости от протокола
+                                if protocol == 'trojan':
+                                    client_id = client.get('password')
+                                else:
+                                    client_id = client.get('id')
                                 
-                                if client_id and client_id in online_client_ids:
-                                    is_online = True
-                                    logger.debug(f"Клиент {email} онлайн (определено через API, ID: {client_id})")
+                                if client_id:
+                                    client_id_str = str(client_id)
+                                    
+                                    # API /onlines возвращает короткие ID (первые 8 символов UUID)
+                                    # Создаем короткую версию для сравнения
+                                    client_id_short = client_id_str[:8] if len(client_id_str) >= 8 else client_id_str
+                                    
+                                    # Преобразуем online_client_ids в строки для сравнения
+                                    online_ids_str = {str(oid) for oid in online_client_ids}
+                                    
+                                    # Проверяем точное совпадение (полный ID)
+                                    if client_id_str in online_ids_str:
+                                        is_online = True
+                                        logger.debug(f"Клиент {email} онлайн (определено через API, полный ID: {client_id_str})")
+                                    # Проверяем короткий ID (первые 8 символов)
+                                    elif client_id_short in online_ids_str:
+                                        is_online = True
+                                        logger.debug(f"Клиент {email} онлайн (определено через API, короткий ID: {client_id_short} из {client_id_str})")
+                                    # Также проверяем обратное - может быть API вернул полный ID, а у нас короткий
+                                    elif any(str(online_id).startswith(client_id_short) or client_id_str.startswith(str(online_id)) 
+                                            for online_id in online_client_ids):
+                                        is_online = True
+                                        logger.debug(f"Клиент {email} онлайн (определено через API, частичное совпадение: {client_id_str} с {list(online_ids_str)[:3]})")
                             
-                            # Метод 2: Fallback - проверка трафика (если API недоступен)
+                            # Метод 2: Fallback - проверка трафика (если API недоступен или не нашли совпадение)
                             if not is_online and has_client_stats and email and email in client_stats_map:
                                 traffic = client_stats_map[email]
                                 current_upload = traffic.get('upload', 0)
