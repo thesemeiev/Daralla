@@ -173,6 +173,9 @@ async function loadSubscriptions() {
             // Показываем подписки
             subscriptionsEl.style.display = 'block';
             renderSubscriptions(data.subscriptions);
+            
+            // Загружаем карту серверов
+            loadServerMap();
         }
         
     } catch (error) {
@@ -279,6 +282,154 @@ async function loadServers() {
 }
 
 // Функция отображения серверов
+// Переменная для хранения экземпляра карты
+let serverMap = null;
+
+// Загрузка карты серверов
+async function loadServerMap() {
+    try {
+        const mapContainer = document.getElementById('server-map');
+        const mapError = document.getElementById('server-map-error');
+        
+        if (!mapContainer) {
+            return;
+        }
+        
+        // Проверяем, доступна ли библиотека Leaflet
+        if (typeof L === 'undefined') {
+            console.error('Leaflet.js не загружен');
+            if (mapError) {
+                mapError.style.display = 'block';
+            }
+            return;
+        }
+        
+        const initData = tg.initData;
+        if (!initData) {
+            return;
+        }
+        
+        // Запрашиваем данные о серверах
+        const response = await fetch(`/api/user/server-usage?initData=${encodeURIComponent(initData)}`);
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных серверов');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.servers || result.servers.length === 0) {
+            // Если нет данных, скрываем карту или показываем сообщение
+            if (mapError) {
+                mapError.style.display = 'none';
+            }
+            if (serverMap) {
+                serverMap.remove();
+                serverMap = null;
+            }
+            return;
+        }
+        
+        // Скрываем ошибку
+        if (mapError) {
+            mapError.style.display = 'none';
+        }
+        
+        // Уничтожаем предыдущую карту, если она существует
+        if (serverMap) {
+            serverMap.remove();
+            serverMap = null;
+        }
+        
+        // Создаем карту
+        serverMap = L.map('server-map', {
+            zoomControl: true,
+            attributionControl: true
+        });
+        
+        // Добавляем тайлы OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(serverMap);
+        
+        // Определяем границы для всех серверов
+        const bounds = [];
+        const markers = [];
+        
+        // Добавляем маркеры для каждого сервера
+        result.servers.forEach(server => {
+            const lat = server.lat;
+            const lng = server.lng;
+            
+            if (lat && lng) {
+                bounds.push([lat, lng]);
+                
+                // Определяем цвет маркера в зависимости от использования
+                let markerColor = '#4CAF50'; // Зеленый по умолчанию
+                if (server.usage_percentage > 50) {
+                    markerColor = '#FF5722'; // Красный - высокое использование
+                } else if (server.usage_percentage > 25) {
+                    markerColor = '#FFC107'; // Желтый - среднее использование
+                }
+                
+                // Создаем кастомную иконку
+                const customIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="
+                        background-color: ${markerColor};
+                        width: 20px;
+                        height: 20px;
+                        border-radius: 50%;
+                        border: 3px solid white;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                    "></div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                });
+                
+                // Создаем маркер
+                const marker = L.marker([lat, lng], { icon: customIcon })
+                    .addTo(serverMap);
+                
+                // Добавляем popup с информацией
+                const popupContent = `
+                    <div style="text-align: center; min-width: 150px;">
+                        <strong>${escapeHtml(server.display_name)}</strong><br>
+                        <span style="color: #666; font-size: 12px;">${escapeHtml(server.location)}</span><br>
+                        ${server.usage_count > 0 ? `
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                                <span style="font-size: 12px;">Использование: <strong>${server.usage_percentage}%</strong></span><br>
+                                <span style="font-size: 11px; color: #999;">(${server.usage_count} раз)</span>
+                            </div>
+                        ` : '<span style="font-size: 12px; color: #999;">Не использовался</span>'}
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                
+                markers.push(marker);
+            }
+        });
+        
+        // Устанавливаем границы карты, чтобы показать все маркеры
+        if (bounds.length > 0) {
+            if (bounds.length === 1) {
+                // Если только один сервер, устанавливаем зум
+                serverMap.setView([bounds[0][0], bounds[0][1]], 6);
+            } else {
+                // Если несколько серверов, показываем все
+                serverMap.fitBounds(bounds, { padding: [20, 20] });
+            }
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки карты серверов:', error);
+        const mapError = document.getElementById('server-map-error');
+        if (mapError) {
+            mapError.style.display = 'block';
+        }
+    }
+}
+
 function renderServers(servers) {
     const listEl = document.getElementById('servers-list');
     listEl.innerHTML = '';

@@ -560,6 +560,79 @@ def create_webhook_app(bot_app):
                 "Content-Type": "application/json"
             }
     
+    @app.route('/api/user/server-usage', methods=['GET', 'OPTIONS'])
+    def api_user_server_usage():
+        """API endpoint для получения данных о серверах и их использовании пользователем"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            init_data = request.args.get('initData')
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            from ...db.subscribers_db import get_user_server_usage
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                server_usage = loop.run_until_complete(get_user_server_usage(user_id))
+            finally:
+                loop.close()
+            
+            # Получаем информацию о серверах (координаты, display_name) из конфигурации
+            def get_servers_info():
+                try:
+                    from ... import bot as bot_module
+                    server_manager = getattr(bot_module, 'server_manager', None)
+                    if not server_manager:
+                        return []
+                    
+                    servers_info = []
+                    for location, servers in server_manager.servers_by_location.items():
+                        for server in servers:
+                            server_name = server['name']
+                            display_name = server['config'].get('display_name', server_name)
+                            lat = server['config'].get('lat')
+                            lng = server['config'].get('lng')
+                            
+                            if lat is not None and lng is not None:
+                                usage_data = server_usage.get(server_name, {'count': 0, 'percentage': 0})
+                                servers_info.append({
+                                    'name': server_name,
+                                    'display_name': display_name,
+                                    'location': location,
+                                    'lat': lat,
+                                    'lng': lng,
+                                    'usage_count': usage_data['count'],
+                                    'usage_percentage': usage_data['percentage']
+                                })
+                    return servers_info
+                except (ImportError, AttributeError) as e:
+                    logger.error(f"Ошибка получения информации о серверах: {e}")
+                    return []
+            
+            servers_info = get_servers_info()
+            
+            return jsonify({
+                'success': True,
+                'servers': servers_info
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/user/server-usage: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     # API endpoint для получения статуса серверов (для Telegram Mini App)
     @app.route('/api/servers', methods=['GET', 'OPTIONS'])
     def api_servers():

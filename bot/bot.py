@@ -171,7 +171,9 @@ SERVERS_BY_LOCATION = {
     "Poland": [
         {
             "name": "Poland-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇵🇱  Poland - 1",  
+            "display_name": "🇵🇱  Poland - 1",
+            "lat": 52.2297,  # Варшава
+            "lng": 21.0122,
             "host": os.getenv("XUI_HOST_POLAND_1"),
             "login": os.getenv("XUI_LOGIN_POLAND_1"),
             "password": os.getenv("XUI_PASSWORD_POLAND_1"),
@@ -181,7 +183,9 @@ SERVERS_BY_LOCATION = {
     "Netherlands": [
         {
             "name": "Netherlands-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇳🇱  Netherlands - 1",  
+            "display_name": "🇳🇱  Netherlands - 1",
+            "lat": 52.3676,  # Амстердам
+            "lng": 4.9041,
             "host": os.getenv("XUI_HOST_NETHERLANDS_1"),
             "login": os.getenv("XUI_LOGIN_NETHERLANDS_1"),
             "password": os.getenv("XUI_PASSWORD_NETHERLANDS_1"),
@@ -191,7 +195,9 @@ SERVERS_BY_LOCATION = {
         "Russia": [
         {
             "name": "Russia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇷🇺  Антиглушилка - 1",  
+            "display_name": "🇷🇺  Антиглушилка - 1",
+            "lat": 55.7558,  # Москва
+            "lng": 37.6173,
             "host": os.getenv("XUI_HOST_RUSSIA_1"),
             "login": os.getenv("XUI_LOGIN_RUSSIA_1"),
             "password": os.getenv("XUI_PASSWORD_RUSSIA_1"),
@@ -201,7 +207,9 @@ SERVERS_BY_LOCATION = {
             "Latvia ": [
         {
             "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇱🇻  Latvia - 1",  
+            "display_name": "🇱🇻  Latvia - 1",
+            "lat": 56.9496,  # Рига
+            "lng": 24.1052,
             "host": os.getenv("XUI_HOST_LATVIA_1"),
             "login": os.getenv("XUI_LOGIN_LATVIA_1"),
             "password": os.getenv("XUI_PASSWORD_LATVIA_1"),

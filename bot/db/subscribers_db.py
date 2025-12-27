@@ -228,6 +228,53 @@ async def remove_subscription_server(subscription_id: int, server_name: str):
         await db.commit()
         return True
 
+async def get_user_server_usage(user_id: str):
+    """
+    Возвращает статистику использования серверов пользователем
+    Считает, сколько раз пользователь использовал каждый сервер (на основе subscription_servers)
+    
+    Returns:
+        dict: {server_name: {'count': int, 'percentage': float}} - количество использований и процент каждого сервера
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Получаем все серверы, которые использовал пользователь
+        query = """
+            SELECT 
+                ss.server_name,
+                COUNT(*) as usage_count
+            FROM subscription_servers ss
+            JOIN subscriptions s ON ss.subscription_id = s.id
+            JOIN users u ON s.subscriber_id = u.id
+            WHERE u.user_id = ?
+            GROUP BY ss.server_name
+            ORDER BY usage_count DESC
+        """
+        
+        async with db.execute(query, (user_id,)) as cur:
+            rows = await cur.fetchall()
+        
+        # Преобразуем в словарь
+        server_usage = {}
+        total_usage = 0
+        for row in rows:
+            server_name = row['server_name']
+            usage_count = row['usage_count']
+            server_usage[server_name] = usage_count
+            total_usage += usage_count
+        
+        # Рассчитываем проценты
+        result = {}
+        for server_name, count in server_usage.items():
+            percentage = (count / total_usage * 100) if total_usage > 0 else 0
+            result[server_name] = {
+                'count': count,
+                'percentage': round(percentage, 1)
+            }
+        
+        return result
+
 async def get_subscription_statistics():
     """Возвращает статистику по подпискам и пользователям"""
     async with aiosqlite.connect(DB_PATH) as db:

@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Daralla VPN</title>
     <link rel="stylesheet" href="/webapp/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="container">
@@ -44,6 +46,14 @@
                 </div>
                 
                 <div id="subscriptions-list"></div>
+                
+                <div style="margin-top: 24px;">
+                    <h2 style="margin-bottom: 16px;">Ваши подключения</h2>
+                    <div id="server-map" style="height: 300px; width: 100%; border-radius: 8px; overflow: hidden; background: #1a1a1a;"></div>
+                    <div id="server-map-error" style="display: none; padding: 16px; background: #2a1a1a; border-radius: 8px; margin-top: 8px; color: #ff6b6b; text-align: center;">
+                        <p>Не удалось загрузить карту серверов</p>
+                    </div>
+                </div>
             </div>
         </div>
 
