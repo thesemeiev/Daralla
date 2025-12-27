@@ -305,7 +305,8 @@ class CustomGlobe {
         this.zoom = 1;
         this.centerX = canvas.width / 2;
         this.centerY = canvas.height / 2;
-        this.radius = Math.min(canvas.width, canvas.height) * 0.35;
+        // Увеличиваем радиус для более реалистичного отображения расстояний между точками
+        this.radius = Math.min(canvas.width, canvas.height) * 0.5;
         
         // Для pinch-to-zoom
         this.touches = [];
@@ -692,7 +693,7 @@ async function loadServerMap() {
             if (serverGlobe) {
                 serverGlobe.centerX = canvas.width / 2;
                 serverGlobe.centerY = canvas.height / 2;
-                serverGlobe.radius = Math.min(canvas.width, canvas.height) * 0.35;
+                serverGlobe.radius = Math.min(canvas.width, canvas.height) * 0.5;
             }
         });
         resizeObserver.observe(mapContainer);

@@ -1024,6 +1024,13 @@ h1 {
     color: #6a6a6a;
 }
 
+/* Скрываем кнопки полного экрана на мобильных устройствах */
+@media (max-width: 768px) {
+    .fullscreen-btn {
+        display: none !important;
+    }
+}
+
 @media (max-width: 600px) {
     .stats-grid {
         grid-template-columns: 1fr;
