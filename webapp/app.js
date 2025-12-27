@@ -303,12 +303,15 @@ class CustomGlobe {
         this.lastX = 0;
         this.lastY = 0;
         this.zoom = 1;
+        this.mapContainer = canvas.parentElement; // Сохраняем ссылку на контейнер
         
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const displayWidth = canvas.width / dpr;
         const displayHeight = canvas.height / dpr;
         
+        this.baseWidth = displayWidth;
+        this.baseHeight = displayHeight;
         this.centerX = displayWidth / 2;
         this.centerY = displayHeight / 2;
         // Увеличиваем радиус для более реалистичного отображения расстояний между точками
@@ -460,15 +463,18 @@ class CustomGlobe {
         // Ортографическая проекция (параллельная проекция)
         // Применяем zoom к радиусу, чтобы точки расходились при увеличении
         const scaledRadius = this.radius * this.zoom;
-        const x = this.centerX + scaledRadius * x3d;
-        const y = this.centerY - scaledRadius * yRotated; // Инвертируем Y для правильной ориентации
+        // Используем базовый центр для вычислений координат
+        const baseCenterX = this.baseWidth / 2;
+        const baseCenterY = this.baseHeight / 2;
+        const x = baseCenterX + scaledRadius * x3d;
+        const y = baseCenterY - scaledRadius * yRotated; // Инвертируем Y для правильной ориентации
         
         // Проверяем видимость (точка видна, если она на передней стороне сферы)
         // Учитываем увеличенный радиус при зуме для проверки границ
-        const maxDistance = Math.max(this.canvas.width, this.canvas.height) * 0.6 * this.zoom;
+        const maxDistance = Math.max(this.baseWidth, this.baseHeight) * 0.6 * this.zoom;
         const visible = zRotated >= 0 && 
-                       Math.abs(x - this.centerX) < maxDistance && 
-                       Math.abs(y - this.centerY) < maxDistance;
+                       Math.abs(x - baseCenterX) < maxDistance && 
+                       Math.abs(y - baseCenterY) < maxDistance;
         
         return { x, y, visible };
     }
@@ -705,7 +711,6 @@ class CustomGlobe {
             { name: 'Khabarovsk', lat: 48.4802, lng: 135.0719 },
             { name: 'Yaroslavl', lat: 57.6266, lng: 39.8938 },
             { name: 'Vladivostok', lat: 43.1155, lng: 131.8825 },
-            { name: 'Makhachkala', lat: 42.9849, lng: 47.5047 },
             { name: 'Tomsk', lat: 56.4977, lng: 84.9744 },
             { name: 'Orenburg', lat: 51.7682, lng: 55.0970 },
             { name: 'Kemerovo', lat: 55.3543, lng: 86.0883 },
@@ -746,10 +751,33 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
-        // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
-        const width = this.canvas.width / dpr;
-        const height = this.canvas.height / dpr;
+        
+        // При зуме увеличиваем размер canvas, чтобы глобус мог выходить за границы
+        const zoomFactor = Math.max(1, this.zoom);
+        const width = this.baseWidth * zoomFactor;
+        const height = this.baseHeight * zoomFactor;
+        
+        // Обновляем размер canvas при зуме
+        if (this.canvas.width !== width * dpr || this.canvas.height !== height * dpr) {
+            this.canvas.width = width * dpr;
+            this.canvas.height = height * dpr;
+            this.canvas.style.width = width + 'px';
+            this.canvas.style.height = height + 'px';
+            
+            // Пересоздаем контекст и масштабируем
+            this.ctx = this.canvas.getContext('2d');
+            this.ctx.scale(dpr, dpr);
+            
+            // Центр глобуса всегда в центре базового размера (видимой области)
+            this.centerX = this.baseWidth / 2;
+            this.centerY = this.baseHeight / 2;
+            
+            // Обновляем размер контейнера, чтобы он не обрезал canvas
+            if (this.mapContainer) {
+                this.mapContainer.style.height = height + 'px';
+            }
+        }
         
         // Очищаем canvas
         ctx.fillStyle = '#1a1a1a';
@@ -757,7 +785,10 @@ class CustomGlobe {
         
         // Рисуем круг глобуса (темный стиль)
         ctx.save();
-        ctx.translate(this.centerX, this.centerY);
+        // Центр глобуса всегда в центре базового размера (видимой области)
+        const baseCenterX = this.baseWidth / 2;
+        const baseCenterY = this.baseHeight / 2;
+        ctx.translate(baseCenterX, baseCenterY);
         // Убираем ctx.scale - применяем zoom только в latLngToXY для единообразия
         
         // Внешний круг (граница) - применяем zoom к радиусу
@@ -995,24 +1026,37 @@ async function loadServerMap() {
         const resizeObserver = new ResizeObserver(() => {
             const dpr = window.devicePixelRatio || 1;
             const displayWidth = mapContainer.clientWidth;
-            const displayHeight = mapContainer.clientHeight;
-            
-            canvas.width = displayWidth * dpr;
-            canvas.height = displayHeight * dpr;
-            canvas.style.width = displayWidth + 'px';
-            canvas.style.height = displayHeight + 'px';
-            
-            // Масштабируем контекст заново
-            const ctx = canvas.getContext('2d');
-            ctx.scale(dpr, dpr);
+            const displayHeight = mapContainer.clientHeight || 300; // Минимальная высота
             
             if (serverGlobe) {
+                // Обновляем базовые размеры
+                serverGlobe.baseWidth = displayWidth;
+                serverGlobe.baseHeight = displayHeight;
+                
+                // Пересчитываем размер canvas с учетом текущего зума
+                const zoomFactor = Math.max(1, serverGlobe.zoom);
+                const width = displayWidth * zoomFactor;
+                const height = displayHeight * zoomFactor;
+                
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+                
+                // Масштабируем контекст заново
+                const ctx = canvas.getContext('2d');
+                ctx.scale(dpr, dpr);
+                
+                // Центр глобуса всегда в центре базового размера
                 serverGlobe.centerX = displayWidth / 2;
                 serverGlobe.centerY = displayHeight / 2;
                 serverGlobe.radius = Math.min(displayWidth, displayHeight) * 0.5;
                 // Обновляем размеры canvas в объекте
                 serverGlobe.canvas = canvas;
                 serverGlobe.ctx = ctx;
+                
+                // Обновляем размер контейнера
+                mapContainer.style.height = height + 'px';
             }
         });
         resizeObserver.observe(mapContainer);
