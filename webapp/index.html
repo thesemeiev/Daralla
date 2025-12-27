@@ -28,7 +28,10 @@
             
             <div id="empty" class="empty" style="display: none;">
                 <p>У вас пока нет подписок</p>
-                <p class="hint">Купите подписку в боте, чтобы начать пользоваться VPN</p>
+                <p class="hint">Купите подписку, чтобы начать пользоваться VPN</p>
+                <button class="btn-primary" onclick="showPage('buy-subscription')" style="width: 100%; margin-top: 16px;">
+                    Купить подписку
+                </button>
             </div>
             
             <div id="subscriptions" class="subscriptions" style="display: none;">
@@ -55,6 +58,45 @@
             </header>
             
             <div id="subscription-detail-content"></div>
+        </div>
+
+        <!-- Раздел Покупка подписки -->
+        <div id="page-buy-subscription" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
+                <h1>Покупка подписки</h1>
+            </header>
+            
+            <div class="buy-subscription-content">
+                <div class="subscription-plans">
+                    <div class="plan-card" onclick="createPayment('month')">
+                        <div class="plan-header">
+                            <h2>1 месяц</h2>
+                            <div class="plan-price">150₽</div>
+                        </div>
+                        <div class="plan-features">
+                            <div class="feature-item">✓ Все доступные серверы</div>
+                            <div class="feature-item">✓ 1 устройство</div>
+                            <div class="feature-item">✓ Автоматическая активация</div>
+                        </div>
+                        <button class="btn-primary" style="width: 100%; margin-top: 16px;">Купить</button>
+                    </div>
+                    
+                    <div class="plan-card" onclick="createPayment('3month')">
+                        <div class="plan-header">
+                            <h2>3 месяца</h2>
+                            <div class="plan-price">350₽</div>
+                            <div class="plan-badge">Выгодно</div>
+                        </div>
+                        <div class="plan-features">
+                            <div class="feature-item">✓ Все доступные серверы</div>
+                            <div class="feature-item">✓ 1 устройство</div>
+                            <div class="feature-item">✓ Автоматическая активация</div>
+                        </div>
+                        <button class="btn-primary" style="width: 100%; margin-top: 16px;">Купить</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Раздел Серверы -->
@@ -245,6 +287,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Список пользователей -->
         <div id="page-admin-users" class="page" style="display: none;">
             <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
                 <h1>Пользователи</h1>
             </header>
             

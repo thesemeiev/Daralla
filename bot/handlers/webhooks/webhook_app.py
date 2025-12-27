@@ -560,6 +560,244 @@ def create_webhook_app(bot_app):
                 "Content-Type": "application/json"
             }
     
+    @app.route('/api/user/payment/create', methods=['POST', 'OPTIONS'])
+    def api_user_payment_create():
+        """API endpoint для создания платежа (покупка или продление подписки)"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            # Проверяем initData от Telegram
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                logger.warning("Invalid initData from Telegram Mini App")
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            # Получаем параметры платежа
+            period = data.get('period')  # 'month' или '3month'
+            subscription_id = data.get('subscription_id')  # Для продления
+            
+            if not period or period not in ['month', '3month']:
+                return jsonify({'error': 'Invalid period. Use "month" or "3month"'}), 400
+            
+            # Определяем цену
+            price = "150.00" if period == "month" else "350.00"
+            
+            # Импортируем необходимые модули
+            from yookassa import Payment
+            from ...db import add_payment, get_pending_payment, PAYMENTS_DB_PATH
+            import uuid
+            import datetime
+            import json
+            import aiosqlite
+            
+            # Проверяем существующие pending платежи и отменяем их
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Отменяем старые pending платежи
+                async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+                    await db.execute(
+                        'UPDATE payments SET status = ? WHERE user_id = ? AND status = ?',
+                        ('canceled', user_id, 'pending')
+                    )
+                    await db.commit()
+                
+                # Создаем уникальный email для подписки
+                now = int(datetime.datetime.now().timestamp())
+                subscription_uuid = str(uuid.uuid4())
+                unique_email = f'{user_id}_{subscription_uuid}'
+                
+                # Формируем period для платежа
+                payment_period = f"extend_sub_{period}" if subscription_id else period
+                
+                # Создаем платеж через YooKassa
+                payment = Payment.create({
+                    "amount": {"value": price, "currency": "RUB"},
+                    "confirmation": {"type": "redirect", "return_url": f"https://t.me/{user_id}"},
+                    "capture": True,
+                    "description": f"VPN {period} для {user_id}",
+                    "metadata": {
+                        "user_id": user_id,
+                        "type": payment_period,
+                        "device_limit": 1,
+                        "unique_email": unique_email,
+                        "price": price,
+                    },
+                    "receipt": {
+                        "customer": {"email": f"{user_id}@vpn-x3.ru"},
+                        "items": [{
+                            "description": f"VPN {period} для {user_id}",
+                            "quantity": "1.00",
+                            "amount": {"value": price, "currency": "RUB"},
+                            "vat_code": 1
+                        }]
+                    }
+                })
+                
+                # Добавляем subscription_id в метаданные для продления
+                payment_meta = {
+                    "price": price,
+                    "type": payment_period,
+                    "unique_email": unique_email,
+                    "message_id": None
+                }
+                
+                if subscription_id:
+                    payment_meta['extension_subscription_id'] = int(subscription_id)
+                
+                # Сохраняем платеж в БД
+                await add_payment(
+                    payment_id=payment.id,
+                    user_id=user_id,
+                    status='pending',
+                    meta=payment_meta
+                )
+                
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'payment_id': payment.id,
+                'payment_url': payment.confirmation.confirmation_url,
+                'amount': price,
+                'period': period
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/user/payment/create: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+    
+    @app.route('/api/user/payment/status/<payment_id>', methods=['GET', 'OPTIONS'])
+    def api_user_payment_status(payment_id):
+        """API endpoint для проверки статуса платежа"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            init_data = request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            # Проверяем initData от Telegram
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                logger.warning("Invalid initData from Telegram Mini App")
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            # Получаем информацию о платеже
+            from ...db import get_payment_by_id
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                payment_info = loop.run_until_complete(get_payment_by_id(payment_id))
+            finally:
+                loop.close()
+            
+            if not payment_info:
+                return jsonify({'error': 'Payment not found'}), 404
+            
+            # Проверяем, что платеж принадлежит пользователю
+            if payment_info['user_id'] != user_id:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            return jsonify({
+                'success': True,
+                'payment_id': payment_id,
+                'status': payment_info['status'],
+                'activated': bool(payment_info.get('activated', 0))
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/user/payment/status/{payment_id}: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+    
+    @app.route('/api/user/subscription/<int:sub_id>/rename', methods=['POST', 'OPTIONS'])
+    def api_user_subscription_rename(sub_id):
+        """API endpoint для переименования подписки пользователя"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            # Проверяем initData от Telegram
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                logger.warning("Invalid initData from Telegram Mini App")
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            # Получаем новое имя
+            new_name = data.get('name', '').strip()
+            if not new_name:
+                return jsonify({'error': 'Name is required'}), 400
+            
+            # Проверяем, что подписка принадлежит пользователю
+            from ...db.subscribers_db import get_subscription_by_id, update_subscription_name
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sub = loop.run_until_complete(get_subscription_by_id(sub_id, user_id))
+                if not sub:
+                    return jsonify({'error': 'Subscription not found or access denied'}), 404
+                
+                # Обновляем имя подписки
+                loop.run_until_complete(update_subscription_name(sub_id, new_name))
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Subscription renamed successfully',
+                'name': new_name
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/user/subscription/{sub_id}/rename: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+    
     @app.route('/api/user/server-usage', methods=['GET', 'OPTIONS'])
     def api_user_server_usage():
         """API endpoint для получения данных о серверах и их использовании пользователем"""

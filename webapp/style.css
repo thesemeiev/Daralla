@@ -297,6 +297,72 @@ h1 {
     background: #353535;
 }
 
+/* Стили для страницы покупки подписки */
+.subscription-plans {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.plan-card {
+    background: #2a2a2a;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #333;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.plan-card:hover {
+    border-color: #4a9eff;
+    transform: translateY(-2px);
+}
+
+.plan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.plan-header h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #fff;
+}
+
+.plan-price {
+    font-size: 24px;
+    font-weight: bold;
+    color: #4a9eff;
+}
+
+.plan-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #4a9eff;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.plan-features {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.feature-item {
+    color: #ccc;
+    font-size: 14px;
+}
+
 .days-badge {
     margin-top: 12px;
     padding: 12px;

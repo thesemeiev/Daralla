@@ -69,11 +69,17 @@ function showPage(pageName) {
     }
 }
 
+// Глобальная переменная для хранения текущей подписки
+let currentSubscriptionDetail = null;
+
 // Функция показа детальной информации о подписке
 function showSubscriptionDetail(sub) {
     const pageEl = document.getElementById('page-subscription-detail');
     const nameEl = document.getElementById('detail-subscription-name');
     const contentEl = document.getElementById('subscription-detail-content');
+    
+    // Сохраняем подписку для использования в функциях переименования
+    currentSubscriptionDetail = sub;
     
     nameEl.textContent = escapeHtml(sub.name);
     
@@ -91,7 +97,7 @@ function showSubscriptionDetail(sub) {
             <div class="detail-info-grid">
                 <div class="detail-info-item">
                     <div class="detail-info-label">Название</div>
-                    <div class="detail-info-value">${escapeHtml(sub.name)}</div>
+                    <div class="detail-info-value" id="subscription-name-display">${escapeHtml(sub.name)}</div>
                 </div>
                 
                 <div class="detail-info-item">
@@ -117,13 +123,19 @@ function showSubscriptionDetail(sub) {
                 ` : ''}
             </div>
             
-            ${sub.status === 'active' ? `
-                <div class="detail-actions">
-                    <button class="action-button" onclick="copySubscriptionLink('${sub.token}')">
+            <div class="detail-actions">
+                <button class="action-button" onclick="showRenameSubscriptionModal()" style="margin-bottom: 12px;">
+                    Переименовать подписку
+                </button>
+                ${sub.status === 'active' ? `
+                    <button class="action-button" onclick="copySubscriptionLink('${sub.token}')" style="margin-bottom: 12px;">
                         Копировать ссылку подписки
                     </button>
-                </div>
-            ` : ''}
+                    <button class="action-button" onclick="showExtendSubscriptionModal(${sub.id})" style="background: #4a9eff;">
+                        Продлить подписку
+                    </button>
+                ` : ''}
+            </div>
         </div>
     `;
     
@@ -178,6 +190,18 @@ async function loadSubscriptions() {
             // Показываем подписки
             subscriptionsEl.style.display = 'block';
             renderSubscriptions(data.subscriptions);
+        }
+        
+        // Добавляем кнопку "Купить подписку" в список подписок
+        const subscriptionsListEl = document.getElementById('subscriptions-list');
+        if (subscriptionsListEl && !document.getElementById('buy-subscription-button')) {
+            const buyButton = document.createElement('button');
+            buyButton.id = 'buy-subscription-button';
+            buyButton.className = 'btn-primary';
+            buyButton.style.cssText = 'width: 100%; margin-top: 16px;';
+            buyButton.textContent = 'Купить подписку';
+            buyButton.onclick = () => showPage('buy-subscription');
+            subscriptionsListEl.appendChild(buyButton);
         }
         
     } catch (error) {
@@ -1073,6 +1097,229 @@ function renderServers(servers) {
 }
 
 // Функция копирования ссылки подписки
+// Функция показа модального окна переименования подписки
+function showRenameSubscriptionModal() {
+    if (!currentSubscriptionDetail) {
+        alert('Ошибка: информация о подписке не найдена');
+        return;
+    }
+    
+    const currentName = currentSubscriptionDetail.name;
+    const newName = prompt('Введите новое название подписки:', currentName);
+    
+    if (newName === null) {
+        // Пользователь отменил
+        return;
+    }
+    
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+        alert('Название не может быть пустым');
+        return;
+    }
+    
+    if (trimmedName === currentName) {
+        // Имя не изменилось
+        return;
+    }
+    
+    // Вызываем функцию переименования
+    renameSubscription(currentSubscriptionDetail.id, trimmedName);
+}
+
+// Функция показа модального окна продления подписки
+function showExtendSubscriptionModal(subscriptionId) {
+    if (!subscriptionId) {
+        alert('Ошибка: ID подписки не найден');
+        return;
+    }
+    
+    const period = confirm('Выберите период продления:\n\nOK - 1 месяц (150₽)\nОтмена - 3 месяца (350₽)') ? 'month' : '3month';
+    createPayment(period, subscriptionId);
+}
+
+// Функция создания платежа
+async function createPayment(period, subscriptionId = null) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        // Показываем индикатор загрузки
+        if (tg && tg.showAlert) {
+            tg.showAlert('Создание платежа...');
+        }
+        
+        const response = await fetch('/api/user/payment/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                period,
+                subscription_id: subscriptionId
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка создания платежа');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.payment_url) {
+            throw new Error('Не удалось получить ссылку на оплату');
+        }
+        
+        // Открываем ссылку на оплату через Telegram Mini App API
+        if (tg && tg.openLink) {
+            tg.openLink(data.payment_url);
+        } else {
+            // Fallback для обычных браузеров
+            window.open(data.payment_url, '_blank');
+        }
+        
+        // Начинаем проверку статуса платежа
+        checkPaymentStatus(data.payment_id, subscriptionId);
+        
+    } catch (error) {
+        console.error('Ошибка создания платежа:', error);
+        alert('Ошибка создания платежа: ' + error.message);
+    }
+}
+
+// Функция проверки статуса платежа
+// Примечание: основная обработка платежа идет через вебхук от YooKassa (/webhook/yookassa)
+// Polling здесь нужен только для UX - чтобы пользователь видел обновление в мини-приложении
+// Вебхук обрабатывает платеж на сервере и обновляет БД, polling просто проверяет статус в БД
+let paymentCheckInterval = null;
+
+async function checkPaymentStatus(paymentId, subscriptionId = null) {
+    // Останавливаем предыдущую проверку, если она есть
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+    }
+    
+    let checkCount = 0;
+    const maxChecks = 36; // Проверяем в течение 3 минут (каждые 5 секунд)
+    
+    paymentCheckInterval = setInterval(async () => {
+        try {
+            checkCount++;
+            
+            if (checkCount > maxChecks) {
+                clearInterval(paymentCheckInterval);
+                paymentCheckInterval = null;
+                // Предлагаем пользователю обновить страницу вручную
+                if (tg && tg.showAlert) {
+                    tg.showAlert('Проверка статуса завершена. Обновите страницу, чтобы увидеть изменения.');
+                }
+                return;
+            }
+            
+            const initData = tg.initData;
+            if (!initData) {
+                clearInterval(paymentCheckInterval);
+                paymentCheckInterval = null;
+                return;
+            }
+            
+            const response = await fetch(`/api/user/payment/status/${paymentId}?initData=${encodeURIComponent(initData)}`);
+            
+            if (!response.ok) {
+                return; // Продолжаем проверку
+            }
+            
+            const data = await response.json();
+            
+            // Проверяем, что платеж успешен И обработан вебхуком (activated = true)
+            // Вебхук обрабатывает платеж и устанавливает activated = true
+            if (data.success && data.status === 'succeeded' && data.activated) {
+                // Платеж успешно обработан вебхуком
+                clearInterval(paymentCheckInterval);
+                paymentCheckInterval = null;
+                
+                // Показываем уведомление
+                if (tg && tg.showAlert) {
+                    tg.showAlert('Подписка успешно активирована!');
+                } else {
+                    alert('Подписка успешно активирована!');
+                }
+                
+                // Обновляем список подписок
+                showPage('subscriptions');
+                setTimeout(() => {
+                    loadSubscriptions();
+                }, 1000);
+            } else if (data.success && data.status === 'canceled') {
+                // Платеж отменен
+                clearInterval(paymentCheckInterval);
+                paymentCheckInterval = null;
+            }
+            
+        } catch (error) {
+            console.error('Ошибка проверки статуса платежа:', error);
+            // Продолжаем проверку
+        }
+    }, 5000); // Проверяем каждые 5 секунд (вебхук обычно приходит быстрее)
+}
+
+// Функция переименования подписки
+async function renameSubscription(subId, newName) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        const response = await fetch(`/api/user/subscription/${subId}/rename`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                name: newName
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка переименования');
+        }
+        
+        const data = await response.json();
+        
+        // Обновляем локальные данные
+        currentSubscriptionDetail.name = newName;
+        
+        // Обновляем отображение
+        document.getElementById('detail-subscription-name').textContent = escapeHtml(newName);
+        document.getElementById('subscription-name-display').textContent = escapeHtml(newName);
+        
+        // Показываем уведомление об успехе
+        if (tg && tg.showAlert) {
+            tg.showAlert('Подписка успешно переименована');
+        } else {
+            alert('Подписка успешно переименована');
+        }
+        
+        // Обновляем список подписок, если он открыт
+        if (document.getElementById('page-subscriptions').classList.contains('active')) {
+            loadSubscriptions();
+        }
+        
+    } catch (error) {
+        console.error('Ошибка переименования подписки:', error);
+        alert('Ошибка переименования: ' + error.message);
+    }
+}
+
 function copySubscriptionLink(token) {
     const webhookUrl = window.location.origin;
     const subscriptionUrl = `${webhookUrl}/sub/${token}`;
