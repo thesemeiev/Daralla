@@ -606,12 +606,15 @@ def create_webhook_app(bot_app):
             asyncio.set_event_loop(loop)
             try:
                 # Отменяем старые pending платежи
-                async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
-                    await db.execute(
-                        'UPDATE payments SET status = ? WHERE user_id = ? AND status = ?',
-                        ('canceled', user_id, 'pending')
-                    )
-                    await db.commit()
+                async def cancel_old_payments():
+                    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+                        await db.execute(
+                            'UPDATE payments SET status = ? WHERE user_id = ? AND status = ?',
+                            ('canceled', user_id, 'pending')
+                        )
+                        await db.commit()
+                
+                loop.run_until_complete(cancel_old_payments())
                 
                 # Создаем уникальный email для подписки
                 now = int(datetime.datetime.now().timestamp())
@@ -657,12 +660,15 @@ def create_webhook_app(bot_app):
                     payment_meta['extension_subscription_id'] = int(subscription_id)
                 
                 # Сохраняем платеж в БД
-                await add_payment(
-                    payment_id=payment.id,
-                    user_id=user_id,
-                    status='pending',
-                    meta=payment_meta
-                )
+                async def save_payment():
+                    await add_payment(
+                        payment_id=payment.id,
+                        user_id=user_id,
+                        status='pending',
+                        meta=payment_meta
+                    )
+                
+                loop.run_until_complete(save_payment())
                 
             finally:
                 loop.close()
