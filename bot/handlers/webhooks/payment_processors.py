@@ -639,6 +639,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         pass
             
             # Используем message_id из webhook или из базы данных
+            # Для платежей из мини-приложения message_id может быть None - не отправляем сообщение в бот
             actual_message_id = message_id or stored_message_id
             
             if actual_message_id:
@@ -671,16 +672,9 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
             else:
-                # Если нет message_id, отправляем новое сообщение
-                await safe_send_message_with_photo(
-                    bot_app.bot,
-                    chat_id=int(user_id),
-                    text=subscription_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.PAYMENT_SUCCESS
-                )
-                logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
+                # Если нет message_id (платеж из мини-приложения), не отправляем сообщение в бот
+                # Пользователь уже видит уведомление в мини-приложении через polling
+                logger.info(f"Платеж из мини-приложения для user_id={user_id} - сообщение в бот не отправляется (нет message_id)")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки информации о подписке пользователю: {e}")

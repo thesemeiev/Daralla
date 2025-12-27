@@ -1333,11 +1333,17 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
                 
-                // Показываем уведомление
-                if (tg && tg.showAlert) {
-                    tg.showAlert('Подписка успешно активирована!');
-                } else {
-                    alert('Подписка успешно активирована!');
+                // Показываем уведомление только если мы еще на странице оплаты
+                // Это предотвращает дублирование уведомлений
+                const currentPage = document.querySelector('.page.active');
+                const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
+                
+                if (isOnPaymentPage) {
+                    if (tg && tg.showAlert) {
+                        tg.showAlert('Подписка успешно активирована!');
+                    } else {
+                        alert('Подписка успешно активирована!');
+                    }
                 }
                 
                 // Обновляем список подписок
