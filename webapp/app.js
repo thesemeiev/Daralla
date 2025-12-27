@@ -545,20 +545,19 @@ class CustomGlobe {
             const pos = this.latLngToXY(server.lat, server.lng);
             if (!pos.visible) return;
             
-            // Определяем цвет и размер (масштабируем размер точки с зумом)
+            // Определяем цвет и размер (фиксированный размер, не масштабируется с зумом)
             let color = '#4CAF50'; // Зеленый
-            let baseSize = 6;
+            let size = 6;
             
             if (server.usage_percentage > 50) {
                 color = '#FF5722'; // Красный
-                baseSize = 10;
+                size = 10;
             } else if (server.usage_percentage > 25) {
                 color = '#FFC107'; // Желтый
-                baseSize = 8;
+                size = 8;
             }
             
-            // Размер точки масштабируется с зумом
-            const size = baseSize * this.zoom;
+            // Размер точки фиксированный, не зависит от зума
             
             // Рисуем точку в пиксельном стиле
             ctx.fillStyle = color;
@@ -580,8 +579,8 @@ class CustomGlobe {
             // Подпись сервера
             const label = server.location || server.display_name || server.server_name || '';
             if (label) {
-                // Размер шрифта масштабируется с зумом (уменьшен базовый размер)
-                const fontSize = Math.max(8, 10 * this.zoom);
+                // Размер шрифта фиксированный, не масштабируется с зумом
+                const fontSize = 10;
                 ctx.font = `${fontSize}px Arial, sans-serif`;
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
@@ -590,7 +589,8 @@ class CustomGlobe {
                 const textMetrics = ctx.measureText(label);
                 const textWidth = textMetrics.width;
                 const textHeight = fontSize;
-                const padding = 4 * this.zoom;
+                // Padding фиксированный
+                const padding = 4;
                 
                 // Позиция подписи (справа от точки)
                 const labelX = pos.x + size + padding;
@@ -2258,6 +2258,12 @@ function showChartModal(chartId) {
     
     closeBtn.style.zIndex = '10001';
     closeBtn.onclick = () => {
+        // Уничтожаем Chart.js экземпляр перед удалением модального окна
+        if (modal._fullscreenChart) {
+            modal._fullscreenChart.destroy();
+            modal._fullscreenChart = null;
+        }
+        
         if (document.body.contains(modal)) {
             document.body.removeChild(modal);
         }
@@ -2283,29 +2289,55 @@ function showChartModal(chartId) {
         -webkit-overflow-scrolling: touch;
     `;
     
-    // Получаем контейнер графика для клонирования
-    const chartContainer = canvas.closest('div[style*="overflow-x"]') || canvas.parentElement;
+    // Получаем оригинальный Chart.js экземпляр
+    let originalChart = null;
+    if (chartId === 'user-growth-chart' && userGrowthChart) {
+        originalChart = userGrowthChart;
+    } else if (chartId === 'conversion-chart' && conversionChart) {
+        originalChart = conversionChart;
+    } else if (chartId === 'server-load-chart' && serverLoadChart) {
+        originalChart = serverLoadChart;
+    }
     
-    // Клонируем весь контейнер графика
-    const clonedContainer = chartContainer.cloneNode(true);
+    if (!originalChart) {
+        console.error('Не найден Chart.js экземпляр для', chartId);
+        return;
+    }
+    
+    // Создаем новый canvas для модального окна
+    const clonedCanvas = document.createElement('canvas');
+    clonedCanvas.id = chartId + '-fullscreen';
+    
+    // Устанавливаем размер canvas
+    const containerWidth = window.innerWidth - 40;
+    const containerHeight = window.innerHeight - 100;
+    clonedCanvas.width = containerWidth * (window.devicePixelRatio || 1);
+    clonedCanvas.height = Math.max(400, containerHeight) * (window.devicePixelRatio || 1);
+    clonedCanvas.style.width = containerWidth + 'px';
+    clonedCanvas.style.height = Math.max(400, containerHeight) + 'px';
+    
+    // Создаем контейнер для графика
+    const clonedContainer = document.createElement('div');
     clonedContainer.style.cssText = `
         width: 100%;
         max-width: 100%;
         height: auto;
         min-height: 400px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
     `;
+    clonedContainer.appendChild(clonedCanvas);
     
-    // Находим canvas внутри клонированного контейнера и обновляем его размер
-    const clonedCanvas = clonedContainer.querySelector('canvas');
-    if (clonedCanvas) {
-        // Увеличиваем размер canvas для лучшего качества
-        const containerWidth = window.innerWidth - 40;
-        const containerHeight = window.innerHeight - 100;
-        clonedCanvas.width = containerWidth;
-        clonedCanvas.height = Math.max(400, containerHeight);
-        clonedCanvas.style.width = '100%';
-        clonedCanvas.style.height = 'auto';
-    }
+    // Создаем новый Chart.js экземпляр с конфигурацией оригинального
+    const chartConfig = JSON.parse(JSON.stringify(originalChart.config));
+    // Обновляем размеры для полноэкранного режима
+    chartConfig.options.responsive = true;
+    chartConfig.options.maintainAspectRatio = false;
+    
+    // Создаем новый график
+    const fullscreenChart = new Chart(clonedCanvas, chartConfig);
     
     chartWrapper.appendChild(clonedContainer);
     modal.appendChild(closeBtn);
@@ -2314,23 +2346,20 @@ function showChartModal(chartId) {
     
     fullscreenChartId = chartId;
     
+    // Сохраняем ссылку на полноэкранный график для очистки при закрытии
+    modal._fullscreenChart = fullscreenChart;
+    
+    // Обновляем размер графика после создания модального окна
+    setTimeout(() => {
+        fullscreenChart.resize();
+    }, 100);
+    
     // На мобильных устройствах разрешаем поворот экрана
     if (screen.orientation && screen.orientation.unlock) {
         screen.orientation.unlock().catch(e => {
             console.log('Не удалось разблокировать ориентацию:', e);
         });
     }
-    
-    // Обновляем размер графика после создания модального окна
-    setTimeout(() => {
-        if (chartId === 'user-growth-chart' && userGrowthChart) {
-            userGrowthChart.resize();
-        } else if (chartId === 'conversion-chart' && conversionChart) {
-            conversionChart.resize();
-        } else if (chartId === 'server-load-chart' && serverLoadChart) {
-            serverLoadChart.resize();
-        }
-    }, 200);
 }
 
 // Обработчик выхода из полноэкранного режима
