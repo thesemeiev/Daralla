@@ -447,13 +447,17 @@ class CustomGlobe {
         const zRotated = y3d * sinPitch + z3d * cosPitch;
         
         // Ортографическая проекция (параллельная проекция)
-        const x = this.centerX + this.radius * x3d * this.zoom;
-        const y = this.centerY - this.radius * yRotated * this.zoom; // Инвертируем Y для правильной ориентации
+        // Применяем zoom к радиусу, чтобы точки расходились при увеличении
+        const scaledRadius = this.radius * this.zoom;
+        const x = this.centerX + scaledRadius * x3d;
+        const y = this.centerY - scaledRadius * yRotated; // Инвертируем Y для правильной ориентации
         
         // Проверяем видимость (точка видна, если она на передней стороне сферы)
+        // Учитываем увеличенный радиус при зуме для проверки границ
+        const maxDistance = Math.max(this.canvas.width, this.canvas.height) * 0.6 * this.zoom;
         const visible = zRotated >= 0 && 
-                       Math.abs(x - this.centerX) < this.canvas.width / 2 && 
-                       Math.abs(y - this.centerY) < this.canvas.height / 2;
+                       Math.abs(x - this.centerX) < maxDistance && 
+                       Math.abs(y - this.centerY) < maxDistance;
         
         return { x, y, visible };
     }
@@ -576,8 +580,8 @@ class CustomGlobe {
             // Подпись сервера
             const label = server.location || server.display_name || server.server_name || '';
             if (label) {
-                // Размер шрифта масштабируется с зумом
-                const fontSize = Math.max(10, 12 * this.zoom);
+                // Размер шрифта масштабируется с зумом (уменьшен базовый размер)
+                const fontSize = Math.max(8, 10 * this.zoom);
                 ctx.font = `${fontSize}px Arial, sans-serif`;
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
