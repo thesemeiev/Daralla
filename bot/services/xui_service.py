@@ -477,13 +477,48 @@ class X3:
         # Если есть upload или download, клиент нагружает канал
         return upload > 0 or download > 0
     
+    def get_online_clients_ids(self, timeout=15):
+        """
+        Получает список ID клиентов, которые сейчас онлайн через API X-UI
+        
+        Использует эндпоинт /panel/api/inbounds/onlines
+        
+        Returns:
+            tuple: (online_ids: set, success: bool) - множество ID клиентов и флаг успешности
+        """
+        self._ensure_connected()
+        try:
+            url = f'{self.host}/panel/api/inbounds/onlines'
+            response = self.ses.post(url, timeout=timeout)
+            
+            if response.status_code != 200:
+                logger.warning(f"Ошибка получения онлайн клиентов: HTTP {response.status_code}")
+                return set(), False
+            
+            data = response.json()
+            if not data.get('success', False):
+                logger.warning(f"API вернул success=False: {data.get('msg', '')}")
+                return set(), False
+            
+            online_ids = data.get('obj', [])
+            if not isinstance(online_ids, list):
+                logger.warning(f"Неожиданный формат ответа: obj не является списком")
+                return set(), False
+            
+            logger.debug(f"Получено {len(online_ids)} онлайн клиентов через API: {online_ids}")
+            return set(online_ids), True
+            
+        except Exception as e:
+            logger.warning(f"Ошибка получения онлайн клиентов через API: {e}")
+            return set(), False
+    
     def get_online_clients_count(self, timeout=15):
         """
-        Подсчитывает количество клиентов, которые нагружают канал (имеют активный трафик)
+        Подсчитывает количество клиентов, которые сейчас онлайн (нагружают канал)
         
-        Метод определения онлайн-статуса:
-        - Если у клиента upload > 0 ИЛИ download > 0, значит он передает/принимает данные
-          и нагружает канал сервера
+        Использует API X-UI для точного определения онлайн-статуса:
+        1. Сначала пытается использовать /panel/api/inbounds/onlines (самый точный метод)
+        2. Если API недоступен, использует fallback - проверку трафика
         
         Это правильный подход для capacity planning:
         - Каждый снимок показывает количество клиентов с активным трафиком в момент времени
@@ -520,7 +555,17 @@ class X3:
             offline_count = 0
             current_time = int(datetime.datetime.now().timestamp() * 1000)
             
-            # Получаем статистику трафика для всех клиентов (если доступна)
+            # Пытаемся получить список онлайн клиентов через API (самый точный метод)
+            online_client_ids, api_available = self.get_online_clients_ids(timeout=timeout)
+            # Используем API метод, если он доступен и вернул результат
+            # Если API недоступен, используем fallback - проверку трафика
+            use_api_method = api_available
+            
+            # Если API недоступен, используем fallback - проверку трафика
+            if not use_api_method:
+                logger.debug("API /onlines недоступен, используем fallback - проверку трафика")
+            
+            # Получаем статистику трафика для fallback метода
             client_stats_map = {}
             has_client_stats = False
             for inbound in inbounds:
@@ -550,6 +595,7 @@ class X3:
                                 }
             
             logger.debug(f"clientStats доступен: {has_client_stats}, найдено {len(client_stats_map)} клиентов со статистикой")
+            logger.debug(f"Онлайн клиентов через API: {len(online_client_ids)}")
             
             # Подсчитываем клиентов
             for inbound in inbounds:
@@ -561,6 +607,9 @@ class X3:
                     settings = json.loads(settings_str)
                     clients = settings.get("clients", [])
                     
+                    # Определяем протокол для правильного получения ID клиента
+                    protocol = inbound.get('protocol', 'vless').lower()
+                    
                     for client in clients:
                         # Проверяем, активен ли клиент (не истек ли срок)
                         expiry_time = client.get('expiryTime', 0)
@@ -570,9 +619,17 @@ class X3:
                             
                             is_online = False
                             
-                            # Определяем онлайн-статус по наличию активного трафика
-                            # Если upload > 0 ИЛИ download > 0, клиент нагружает канал
-                            if has_client_stats and email and email in client_stats_map:
+                            # Метод 1: Используем API /onlines (самый точный)
+                            if use_api_method and online_client_ids:
+                                # Получаем ID клиента (для VLESS - id, для TROJAN - password)
+                                client_id = client.get('id') if protocol == 'vless' else client.get('password')
+                                
+                                if client_id and client_id in online_client_ids:
+                                    is_online = True
+                                    logger.debug(f"Клиент {email} онлайн (определено через API, ID: {client_id})")
+                            
+                            # Метод 2: Fallback - проверка трафика (если API недоступен)
+                            if not is_online and has_client_stats and email and email in client_stats_map:
                                 traffic = client_stats_map[email]
                                 current_upload = traffic.get('upload', 0)
                                 current_download = traffic.get('download', 0)
@@ -580,7 +637,7 @@ class X3:
                                 # Проверяем наличие активного трафика
                                 if self._has_active_traffic(current_upload, current_download):
                                     is_online = True
-                                    logger.debug(f"Клиент {email} нагружает канал (upload={current_upload}, download={current_download})")
+                                    logger.debug(f"Клиент {email} нагружает канал (upload={current_upload}, download={current_download}, fallback метод)")
                             
                             if is_online:
                                 online_count += 1
@@ -593,7 +650,8 @@ class X3:
                     logger.warning(f"Ошибка обработки inbound {inbound.get('id')}: {e}")
                     continue
             
-            logger.info(f"Сервер {self.host}: активных={total_active}, нагружают канал={online_count}, не нагружают={offline_count}")
+            method_used = "API /onlines" if use_api_method else "проверка трафика (fallback)"
+            logger.info(f"Сервер {self.host}: активных={total_active}, нагружают канал={online_count}, не нагружают={offline_count} (метод: {method_used})")
             return total_active, online_count, offline_count
         except Exception as e:
             logger.error(f"Ошибка при подсчете онлайн клиентов на {self.host}: {e}", exc_info=True)
