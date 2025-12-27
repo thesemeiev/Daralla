@@ -77,7 +77,6 @@
                         <div class="plan-features">
                             <div class="feature-item">✓ Все доступные серверы</div>
                             <div class="feature-item">✓ 1 устройство</div>
-                            <div class="feature-item">✓ Автоматическая активация</div>
                         </div>
                         <button class="btn-primary" style="width: 100%; margin-top: 16px;">Купить</button>
                     </div>
@@ -85,16 +84,94 @@
                     <div class="plan-card" onclick="createPayment('3month')">
                         <div class="plan-header">
                             <h2>3 месяца</h2>
-                            <div class="plan-price">350₽</div>
-                            <div class="plan-badge">Выгодно</div>
+                            <div class="plan-price-container">
+                                <div class="plan-price">350₽</div>
+                                <div class="plan-badge">Выгодно</div>
+                            </div>
                         </div>
                         <div class="plan-features">
                             <div class="feature-item">✓ Все доступные серверы</div>
                             <div class="feature-item">✓ 1 устройство</div>
-                            <div class="feature-item">✓ Автоматическая активация</div>
                         </div>
                         <button class="btn-primary" style="width: 100%; margin-top: 16px;">Купить</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Раздел Продление подписки -->
+        <div id="page-extend-subscription" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="goBackFromExtend()">← Назад</button>
+                <h1>Продление подписки</h1>
+            </header>
+            
+            <div class="buy-subscription-content">
+                <div class="subscription-plans">
+                    <div class="plan-card" onclick="createPayment('month', currentExtendSubscriptionId)">
+                        <div class="plan-header">
+                            <h2>1 месяц</h2>
+                            <div class="plan-price">150₽</div>
+                        </div>
+                        <div class="plan-features">
+                            <div class="feature-item">✓ Все доступные серверы</div>
+                            <div class="feature-item">✓ 1 устройство</div>
+                        </div>
+                        <button class="btn-primary" style="width: 100%; margin-top: 16px;">Продлить</button>
+                    </div>
+                    
+                    <div class="plan-card" onclick="createPayment('3month', currentExtendSubscriptionId)">
+                        <div class="plan-header">
+                            <h2>3 месяца</h2>
+                            <div class="plan-price-container">
+                                <div class="plan-price">350₽</div>
+                                <div class="plan-badge">Выгодно</div>
+                            </div>
+                        </div>
+                        <div class="plan-features">
+                            <div class="feature-item">✓ Все доступные серверы</div>
+                            <div class="feature-item">✓ 1 устройство</div>
+                        </div>
+                        <button class="btn-primary" style="width: 100%; margin-top: 16px;">Продлить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Раздел Оплата -->
+        <div id="page-payment" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="goBackFromPayment()">← Назад</button>
+                <h1>Оплата</h1>
+            </header>
+            
+            <div id="payment-content" style="padding: 24px;">
+                <div class="detail-card">
+                    <div class="detail-header">
+                        <div class="detail-status active">Ожидает оплаты</div>
+                    </div>
+                    
+                    <div class="detail-info-grid">
+                        <div class="detail-info-item">
+                            <div class="detail-info-label">Период</div>
+                            <div class="detail-info-value" id="payment-period">-</div>
+                        </div>
+                        
+                        <div class="detail-info-item">
+                            <div class="detail-info-label">Сумма</div>
+                            <div class="detail-info-value" id="payment-amount">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-actions">
+                        <button class="action-button" id="payment-link-button" onclick="openPaymentLink()" style="background: #4a9eff;">
+                            Перейти к оплате
+                        </button>
+                    </div>
+                    
+                    <p class="hint" style="margin-top: 16px; text-align: center; color: #999; font-size: 14px;">
+                        Ссылка действительна 15 минут
+                    </p>
                 </div>
             </div>
         </div>

@@ -1127,15 +1127,54 @@ function showRenameSubscriptionModal() {
     renameSubscription(currentSubscriptionDetail.id, trimmedName);
 }
 
-// Функция показа модального окна продления подписки
+// Глобальная переменная для хранения ID подписки при продлении
+let currentExtendSubscriptionId = null;
+let currentPaymentData = null;
+
+// Функция показа страницы продления подписки
 function showExtendSubscriptionModal(subscriptionId) {
     if (!subscriptionId) {
         alert('Ошибка: ID подписки не найден');
         return;
     }
     
-    const period = confirm('Выберите период продления:\n\nOK - 1 месяц (150₽)\nОтмена - 3 месяца (350₽)') ? 'month' : '3month';
-    createPayment(period, subscriptionId);
+    currentExtendSubscriptionId = subscriptionId;
+    showPage('extend-subscription');
+}
+
+// Функция возврата с страницы продления
+function goBackFromExtend() {
+    currentExtendSubscriptionId = null;
+    showPage('subscription-detail');
+}
+
+// Функция возврата с страницы оплаты
+function goBackFromPayment() {
+    currentPaymentData = null;
+    if (currentExtendSubscriptionId) {
+        showPage('extend-subscription');
+    } else {
+        showPage('buy-subscription');
+    }
+}
+
+// Функция открытия ссылки на оплату
+function openPaymentLink() {
+    if (!currentPaymentData || !currentPaymentData.payment_url) {
+        alert('Ошибка: ссылка на оплату не найдена');
+        return;
+    }
+    
+    // Открываем ссылку на оплату через Telegram Mini App API
+    if (tg && tg.openLink) {
+        tg.openLink(currentPaymentData.payment_url);
+    } else {
+        // Fallback для обычных браузеров
+        window.open(currentPaymentData.payment_url, '_blank');
+    }
+    
+    // Начинаем проверку статуса платежа
+    checkPaymentStatus(currentPaymentData.payment_id, currentExtendSubscriptionId);
 }
 
 // Функция создания платежа
@@ -1175,21 +1214,36 @@ async function createPayment(period, subscriptionId = null) {
             throw new Error('Не удалось получить ссылку на оплату');
         }
         
-        // Открываем ссылку на оплату через Telegram Mini App API
-        if (tg && tg.openLink) {
-            tg.openLink(data.payment_url);
-        } else {
-            // Fallback для обычных браузеров
-            window.open(data.payment_url, '_blank');
-        }
+        // Сохраняем данные платежа
+        currentPaymentData = {
+            payment_id: data.payment_id,
+            payment_url: data.payment_url,
+            amount: data.amount,
+            period: data.period
+        };
         
-        // Начинаем проверку статуса платежа
-        checkPaymentStatus(data.payment_id, subscriptionId);
+        // Показываем страницу оплаты
+        showPaymentPage();
         
     } catch (error) {
         console.error('Ошибка создания платежа:', error);
         alert('Ошибка создания платежа: ' + error.message);
     }
+}
+
+// Функция показа страницы оплаты
+function showPaymentPage() {
+    if (!currentPaymentData) {
+        return;
+    }
+    
+    // Обновляем информацию на странице оплаты
+    const periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
+    document.getElementById('payment-period').textContent = periodText;
+    document.getElementById('payment-amount').textContent = currentPaymentData.amount + '₽';
+    
+    // Показываем страницу
+    showPage('payment');
 }
 
 // Функция проверки статуса платежа
@@ -1205,7 +1259,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
     }
     
     let checkCount = 0;
-    const maxChecks = 36; // Проверяем в течение 3 минут (каждые 5 секунд)
+    const maxChecks = 180; // Проверяем в течение 15 минут (каждые 5 секунд) - столько же, сколько YooKassa хранит pending платеж
     
     paymentCheckInterval = setInterval(async () => {
         try {
@@ -1214,9 +1268,20 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
             if (checkCount > maxChecks) {
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
-                // Предлагаем пользователю обновить страницу вручную
-                if (tg && tg.showAlert) {
-                    tg.showAlert('Проверка статуса завершена. Обновите страницу, чтобы увидеть изменения.');
+                
+                // Проверяем финальный статус перед остановкой
+                const finalResponse = await fetch(`/api/user/payment/status/${paymentId}?initData=${encodeURIComponent(initData)}`);
+                if (finalResponse.ok) {
+                    const finalData = await finalResponse.json();
+                    if (finalData.success && finalData.status === 'pending') {
+                        // Платеж все еще pending - возможно, пользователь не оплатил
+                        if (tg && tg.showAlert) {
+                            tg.showAlert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
+                        } else {
+                            alert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
+                        }
+                        goBackFromPayment();
+                    }
                 }
                 return;
             }
@@ -1255,10 +1320,23 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 setTimeout(() => {
                     loadSubscriptions();
                 }, 1000);
-            } else if (data.success && data.status === 'canceled') {
-                // Платеж отменен
+            } else if (data.success && (data.status === 'canceled' || data.status === 'refunded' || data.status === 'failed')) {
+                // Платеж отменен, возвращен или не прошел
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
+                
+                // Показываем уведомление об отмене
+                const statusText = data.status === 'canceled' ? 'отменен' : 
+                                 data.status === 'refunded' ? 'возвращен' : 'не прошел';
+                
+                if (tg && tg.showAlert) {
+                    tg.showAlert(`Платеж ${statusText}. Вы можете попробовать оплатить снова.`);
+                } else {
+                    alert(`Платеж ${statusText}. Вы можете попробовать оплатить снова.`);
+                }
+                
+                // Возвращаемся на предыдущую страницу
+                goBackFromPayment();
             }
             
         } catch (error) {
