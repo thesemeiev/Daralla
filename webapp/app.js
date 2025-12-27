@@ -307,6 +307,11 @@ class CustomGlobe {
         this.centerY = canvas.height / 2;
         this.radius = Math.min(canvas.width, canvas.height) * 0.35;
         
+        // Для pinch-to-zoom
+        this.touches = [];
+        this.lastDistance = 0;
+        this.isPinching = false;
+        
         this.setupEventListeners();
         this.animate();
     }
@@ -321,15 +326,56 @@ class CustomGlobe {
         // Touch события для мобильных
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const touch = e.touches[0];
-            this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+            this.touches = Array.from(e.touches);
+            
+            if (this.touches.length === 1) {
+                // Одно касание - перетаскивание
+                const touch = this.touches[0];
+                this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+                this.isPinching = false;
+            } else if (this.touches.length === 2) {
+                // Два касания - pinch-to-zoom
+                this.isPinching = true;
+                this.isDragging = false;
+                this.lastDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
+            }
         });
+        
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const touch = e.touches[0];
-            this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+            this.touches = Array.from(e.touches);
+            
+            if (this.touches.length === 1 && !this.isPinching) {
+                // Одно касание - перетаскивание
+                const touch = this.touches[0];
+                this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+            } else if (this.touches.length === 2) {
+                // Два касания - pinch-to-zoom
+                this.isPinching = true;
+                this.isDragging = false;
+                const currentDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
+                const scale = currentDistance / this.lastDistance;
+                this.zoom *= scale;
+                this.zoom = Math.max(0.5, Math.min(3, this.zoom)); // Увеличиваем максимум до 3x
+                this.lastDistance = currentDistance;
+                this.draw();
+            }
         });
-        this.canvas.addEventListener('touchend', () => this.onMouseUp());
+        
+        this.canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.touches = Array.from(e.touches);
+            
+            if (this.touches.length === 0) {
+                this.onMouseUp();
+                this.isPinching = false;
+            } else if (this.touches.length === 1) {
+                // Переключаемся обратно на перетаскивание
+                this.isPinching = false;
+                const touch = this.touches[0];
+                this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+            }
+        });
         
         // Масштабирование колесиком
         this.canvas.addEventListener('wheel', (e) => {
@@ -373,19 +419,26 @@ class CustomGlobe {
         this.isDragging = false;
     }
     
+    // Вычисление расстояния между двумя точками касания
+    getTouchDistance(touch1, touch2) {
+        const dx = touch2.clientX - touch1.clientX;
+        const dy = touch2.clientY - touch1.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    
     // Преобразование координат в проекцию глобуса с учетом наклона
     latLngToXY(lat, lng) {
-        // Преобразуем широту и долготу в сферические координаты
-        const phi = (90 - lat) * Math.PI / 180; // Угол от северного полюса
-        const theta = (lng + 180) * Math.PI / 180; // Долгота
+        // Преобразуем широту и долготу в радианы
+        const latRad = lat * Math.PI / 180;
+        const lngRad = lng * Math.PI / 180;
         
         // Применяем горизонтальное вращение
-        const rotatedTheta = theta + this.rotation;
+        const rotatedLng = lngRad + this.rotation;
         
-        // Вычисляем 3D координаты на сфере
-        const x3d = Math.sin(phi) * Math.cos(rotatedTheta);
-        const y3d = Math.cos(phi);
-        const z3d = Math.sin(phi) * Math.sin(rotatedTheta);
+        // Вычисляем 3D координаты на сфере (стандартная сферическая система координат)
+        const x3d = Math.cos(latRad) * Math.cos(rotatedLng);
+        const y3d = Math.sin(latRad);
+        const z3d = Math.cos(latRad) * Math.sin(rotatedLng);
         
         // Применяем вертикальное вращение (pitch) - поворот вокруг оси X
         const cosPitch = Math.cos(this.pitch);
@@ -395,7 +448,7 @@ class CustomGlobe {
         
         // Ортографическая проекция (параллельная проекция)
         const x = this.centerX + this.radius * x3d * this.zoom;
-        const y = this.centerY + this.radius * yRotated * this.zoom;
+        const y = this.centerY - this.radius * yRotated * this.zoom; // Инвертируем Y для правильной ориентации
         
         // Проверяем видимость (точка видна, если она на передней стороне сферы)
         const visible = zRotated >= 0 && 
