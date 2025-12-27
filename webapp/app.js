@@ -289,23 +289,213 @@ async function loadServers() {
 // Функция отображения серверов
 // Переменная для хранения экземпляра глобуса
 let serverGlobe = null;
+let globeAnimationId = null;
 
-// Загрузка 3D глобуса серверов
+// Кастомный 2D глобус на Canvas
+class CustomGlobe {
+    constructor(canvas, servers) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.servers = servers;
+        this.rotation = 0;
+        this.isDragging = false;
+        this.lastX = 0;
+        this.lastY = 0;
+        this.zoom = 1;
+        this.centerX = canvas.width / 2;
+        this.centerY = canvas.height / 2;
+        this.radius = Math.min(canvas.width, canvas.height) * 0.35;
+        
+        this.setupEventListeners();
+        this.animate();
+    }
+    
+    setupEventListeners() {
+        // Перетаскивание
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        this.canvas.addEventListener('mouseup', () => this.onMouseUp());
+        this.canvas.addEventListener('mouseleave', () => this.onMouseUp());
+        
+        // Touch события для мобильных
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+        });
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+        });
+        this.canvas.addEventListener('touchend', () => this.onMouseUp());
+        
+        // Масштабирование колесиком
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            this.zoom += e.deltaY * -0.001;
+            this.zoom = Math.max(0.5, Math.min(2, this.zoom));
+            this.draw();
+        });
+    }
+    
+    onMouseDown(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        this.lastX = e.clientX - rect.left;
+        this.lastY = e.clientY - rect.top;
+        this.isDragging = true;
+    }
+    
+    onMouseMove(e) {
+        if (!this.isDragging) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        const deltaX = currentX - this.lastX;
+        this.rotation += deltaX * 0.01;
+        
+        this.lastX = currentX;
+        this.lastY = currentY;
+        this.draw();
+    }
+    
+    onMouseUp() {
+        this.isDragging = false;
+    }
+    
+    // Преобразование координат в проекцию глобуса
+    latLngToXY(lat, lng) {
+        const phi = (90 - lat) * Math.PI / 180;
+        const theta = (lng + 180 + this.rotation * 180 / Math.PI) * Math.PI / 180;
+        
+        const x = this.centerX + this.radius * Math.sin(phi) * Math.cos(theta) * this.zoom;
+        const y = this.centerY + this.radius * Math.cos(phi) * this.zoom;
+        
+        return { x, y, visible: Math.abs(x - this.centerX) < this.canvas.width / 2 && 
+                                Math.abs(y - this.centerY) < this.canvas.height / 2 };
+    }
+    
+    draw() {
+        const ctx = this.ctx;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        
+        // Очищаем canvas
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Рисуем круг глобуса (темный стиль)
+        ctx.save();
+        ctx.translate(this.centerX, this.centerY);
+        ctx.scale(this.zoom, this.zoom);
+        
+        // Внешний круг (граница)
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius);
+        gradient.addColorStop(0, '#2a2a2a');
+        gradient.addColorStop(0.7, '#1a1a1a');
+        gradient.addColorStop(1, '#0a0a0a');
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Рисуем сетку (меридианы и параллели) в пиксельном стиле
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        
+        // Меридианы (вертикальные линии)
+        for (let i = 0; i < 12; i++) {
+            const lng = (i * 30 - 180) * Math.PI / 180 + this.rotation;
+            ctx.beginPath();
+            for (let lat = -90; lat <= 90; lat += 5) {
+                const phi = (90 - lat) * Math.PI / 180;
+                const x = this.radius * Math.sin(phi) * Math.cos(lng);
+                const y = this.radius * Math.cos(phi);
+                if (lat === -90) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+        }
+        
+        // Параллели (горизонтальные линии)
+        for (let lat = -60; lat <= 60; lat += 30) {
+            const phi = (90 - lat) * Math.PI / 180;
+            const radius = this.radius * Math.sin(phi);
+            ctx.beginPath();
+            ctx.arc(0, this.radius * Math.cos(phi), Math.abs(radius), 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+        
+        // Рисуем точки серверов
+        this.servers.forEach(server => {
+            if (!server.lat || !server.lng) return;
+            
+            const pos = this.latLngToXY(server.lat, server.lng);
+            if (!pos.visible) return;
+            
+            // Определяем цвет и размер
+            let color = '#4CAF50'; // Зеленый
+            let size = 6;
+            
+            if (server.usage_percentage > 50) {
+                color = '#FF5722'; // Красный
+                size = 10;
+            } else if (server.usage_percentage > 25) {
+                color = '#FFC107'; // Желтый
+                size = 8;
+            }
+            
+            // Рисуем точку в пиксельном стиле
+            ctx.fillStyle = color;
+            ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
+            
+            // Обводка
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
+            
+            // Свечение
+            const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size * 2);
+            glow.addColorStop(0, color + '80');
+            glow.addColorStop(1, color + '00');
+            ctx.fillStyle = glow;
+            ctx.fillRect(Math.floor(pos.x - size * 2), Math.floor(pos.y - size * 2), size * 4, size * 4);
+        });
+    }
+    
+    animate() {
+        if (!this.isDragging) {
+            this.rotation += 0.005; // Медленное автоматическое вращение
+        }
+        this.draw();
+        this.animationId = requestAnimationFrame(() => this.animate());
+    }
+    
+    destroy() {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+        }
+    }
+}
+
+// Загрузка кастомного глобуса серверов
 async function loadServerMap() {
     try {
         const mapContainer = document.getElementById('server-map');
         const mapError = document.getElementById('server-map-error');
         
         if (!mapContainer) {
-            return;
-        }
-        
-        // Проверяем, доступна ли библиотека Globe.gl
-        if (typeof Globe === 'undefined') {
-            console.error('Globe.gl не загружен');
-            if (mapError) {
-                mapError.style.display = 'block';
-            }
             return;
         }
         
@@ -323,12 +513,11 @@ async function loadServerMap() {
         
         const result = await response.json();
         if (!result.success || !result.servers || result.servers.length === 0) {
-            // Если нет данных, скрываем глобус или показываем сообщение
             if (mapError) {
                 mapError.style.display = 'none';
             }
             if (serverGlobe) {
-                serverGlobe._destructor();
+                serverGlobe.destroy();
                 serverGlobe = null;
             }
             return;
@@ -339,113 +528,39 @@ async function loadServerMap() {
             mapError.style.display = 'none';
         }
         
-        // Очищаем контейнер
-        mapContainer.innerHTML = '';
-        
-        // Уничтожаем предыдущий глобус, если он существует
+        // Уничтожаем предыдущий глобус
         if (serverGlobe) {
-            serverGlobe._destructor();
+            serverGlobe.destroy();
             serverGlobe = null;
         }
         
-        // Подготавливаем данные для глобуса
-        const pointsData = result.servers
-            .filter(server => server.lat && server.lng)
-            .map(server => ({
-                lat: server.lat,
-                lng: server.lng,
-                size: Math.max(0.3, server.usage_percentage / 100), // Размер точки от 0.3 до 1
-                color: server.usage_percentage > 50 ? '#FF5722' : 
-                       server.usage_percentage > 25 ? '#FFC107' : '#4CAF50',
-                name: server.display_name,
-                location: server.location,
-                usage: server.usage_percentage,
-                count: server.usage_count
-            }));
+        // Очищаем контейнер
+        mapContainer.innerHTML = '';
         
-        // Создаем 3D глобус
-        serverGlobe = Globe()
-            (mapContainer)
-            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-            .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
-            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-            .pointOfView({ lat: 0, lng: 0, altitude: 2.5 })
-            .pointsData(pointsData)
-            .pointColor('color')
-            .pointRadius('size')
-            .pointResolution(2)
-            .pointLabel(d => `
-                <div style="
-                    background: rgba(26, 26, 26, 0.9);
-                    border: 1px solid #444;
-                    border-radius: 8px;
-                    padding: 12px;
-                    color: #fff;
-                    font-size: 14px;
-                    min-width: 180px;
-                    text-align: center;
-                ">
-                    <strong style="color: ${d.color};">${escapeHtml(d.name)}</strong><br>
-                    <span style="color: #999; font-size: 12px;">${escapeHtml(d.location)}</span><br>
-                    ${d.count > 0 ? `
-                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #444;">
-                            <span style="font-size: 12px;">Использование: <strong>${d.usage}%</strong></span><br>
-                            <span style="font-size: 11px; color: #999;">(${d.count} раз)</span>
-                        </div>
-                    ` : '<span style="font-size: 12px; color: #999;">Не использовался</span>'}
-                </div>
-            `)
-            .pointAltitude(0.01)
-            .onPointClick((point) => {
-                // При клике на точку, поворачиваем глобус к ней
-                serverGlobe.pointOfView({
-                    lat: point.lat,
-                    lng: point.lng,
-                    altitude: 2
-                }, 1000);
-            });
+        // Создаем canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = mapContainer.clientWidth;
+        canvas.height = mapContainer.clientHeight;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.cursor = 'grab';
+        canvas.style.imageRendering = 'pixelated'; // Пиксельный стиль
+        mapContainer.appendChild(canvas);
         
-        // Автоматическое вращение глобуса
-        let rotationSpeed = 0.5;
-        let rotation = { lat: 0, lng: 0 };
-        
-        const animate = () => {
-            rotation.lng += rotationSpeed;
-            serverGlobe.pointOfView({
-                lat: rotation.lat,
-                lng: rotation.lng,
-                altitude: 2.5
-            }, 0);
-            requestAnimationFrame(animate);
-        };
-        animate();
-        
-        // Останавливаем вращение при взаимодействии
-        let isInteracting = false;
-        mapContainer.addEventListener('mousedown', () => {
-            isInteracting = true;
-            rotationSpeed = 0;
-        });
-        mapContainer.addEventListener('mouseup', () => {
-            isInteracting = false;
-            setTimeout(() => {
-                if (!isInteracting) {
-                    rotationSpeed = 0.5;
-                }
-            }, 2000);
-        });
-        
-        // Адаптируем размер при изменении окна
+        // Обрабатываем изменение размера
         const resizeObserver = new ResizeObserver(() => {
-            if (serverGlobe && serverGlobe._camera) {
-                serverGlobe._camera.aspect = mapContainer.clientWidth / mapContainer.clientHeight;
-                serverGlobe._camera.updateProjectionMatrix();
-                if (serverGlobe._renderer) {
-                    serverGlobe._renderer.setSize(mapContainer.clientWidth, mapContainer.clientHeight);
-                }
+            canvas.width = mapContainer.clientWidth;
+            canvas.height = mapContainer.clientHeight;
+            if (serverGlobe) {
+                serverGlobe.centerX = canvas.width / 2;
+                serverGlobe.centerY = canvas.height / 2;
+                serverGlobe.radius = Math.min(canvas.width, canvas.height) * 0.35;
             }
         });
         resizeObserver.observe(mapContainer);
+        
+        // Создаем кастомный глобус
+        serverGlobe = new CustomGlobe(canvas, result.servers);
         
     } catch (error) {
         console.error('Ошибка загрузки глобуса серверов:', error);
