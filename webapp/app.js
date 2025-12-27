@@ -405,10 +405,13 @@ class CustomGlobe {
         const deltaY = currentY - this.lastY;
         
         // Горизонтальное вращение (влево-вправо)
-        this.rotation += deltaX * 0.01;
+        // Скорость вращения обратно пропорциональна зуму (при большом зуме - медленнее)
+        const rotationSpeed = 0.01 / this.zoom;
+        this.rotation += deltaX * rotationSpeed;
         
         // Вертикальное вращение (вверх-вниз) - ограничиваем угол наклона
-        this.pitch += deltaY * 0.01;
+        const pitchSpeed = 0.01 / this.zoom;
+        this.pitch += deltaY * pitchSpeed;
         this.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.pitch)); // Ограничиваем от -90 до 90 градусов
         
         this.lastX = currentX;
@@ -583,6 +586,14 @@ class CustomGlobe {
             { name: 'Belgrade', lat: 44.7866, lng: 20.4489 },
             { name: 'Zagreb', lat: 45.8150, lng: 15.9819 },
             { name: 'Sofia', lat: 42.6977, lng: 23.3219 },
+            { name: 'Tirana', lat: 41.3275, lng: 19.8187 },
+            { name: 'Skopje', lat: 41.9981, lng: 21.4254 },
+            { name: 'Sarajevo', lat: 43.8563, lng: 18.4131 },
+            { name: 'Podgorica', lat: 42.4304, lng: 19.2594 },
+            { name: 'Chisinau', lat: 47.0104, lng: 28.8638 },
+            { name: 'Vilnius', lat: 54.6872, lng: 25.2797 },
+            { name: 'Riga', lat: 56.9496, lng: 24.1052 },
+            { name: 'Tallinn', lat: 59.4370, lng: 24.7536 },
             { name: 'Barcelona', lat: 41.3851, lng: 2.1734 },
             { name: 'Milan', lat: 45.4642, lng: 9.1900 },
             { name: 'Munich', lat: 48.1351, lng: 11.5820 },
@@ -612,6 +623,15 @@ class CustomGlobe {
             { name: 'Bogotá', lat: 4.7110, lng: -74.0721 },
             { name: 'Santiago', lat: -33.4489, lng: -70.6693 },
             { name: 'Caracas', lat: 10.4806, lng: -66.9036 },
+            { name: 'Quito', lat: -0.1807, lng: -78.4678 },
+            { name: 'Montevideo', lat: -34.9011, lng: -56.1645 },
+            { name: 'Asunción', lat: -25.2637, lng: -57.5759 },
+            { name: 'La Paz', lat: -16.2902, lng: -68.1341 },
+            { name: 'Brasília', lat: -15.7942, lng: -47.8822 },
+            { name: 'Recife', lat: -8.0476, lng: -34.8770 },
+            { name: 'Salvador', lat: -12.9714, lng: -38.5014 },
+            { name: 'Medellín', lat: 6.2476, lng: -75.5658 },
+            { name: 'Guayaquil', lat: -2.1709, lng: -79.9224 },
             // Азия
             { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
             { name: 'Beijing', lat: 39.9042, lng: 116.4074 },
@@ -637,6 +657,21 @@ class CustomGlobe {
             { name: 'Mecca', lat: 21.3891, lng: 39.8579 },
             { name: 'Medina', lat: 24.5247, lng: 39.5692 },
             { name: 'Tel Aviv', lat: 32.0853, lng: 34.7818 },
+            { name: 'Jerusalem', lat: 31.7683, lng: 35.2137 },
+            { name: 'Amman', lat: 31.9539, lng: 35.9106 },
+            { name: 'Beirut', lat: 33.8938, lng: 35.5018 },
+            { name: 'Baghdad', lat: 33.3152, lng: 44.3661 },
+            { name: 'Damascus', lat: 33.5138, lng: 36.2765 },
+            { name: 'Almaty', lat: 43.2220, lng: 76.8512 },
+            { name: 'Tashkent', lat: 41.2995, lng: 69.2401 },
+            { name: 'Bishkek', lat: 42.8746, lng: 74.5698 },
+            { name: 'Dushanbe', lat: 38.5598, lng: 68.7870 },
+            { name: 'Ashgabat', lat: 37.9601, lng: 58.3261 },
+            { name: 'Kabul', lat: 34.5553, lng: 69.2075 },
+            { name: 'Islamabad', lat: 33.6844, lng: 73.0479 },
+            { name: 'Dhaka', lat: 23.8103, lng: 90.4125 },
+            { name: 'Yangon', lat: 16.8661, lng: 96.1951 },
+            { name: 'Phnom Penh', lat: 11.5564, lng: 104.9282 },
             // Африка
             { name: 'Cairo', lat: 30.0444, lng: 31.2357 },
             { name: 'Johannesburg', lat: -26.2041, lng: 28.0473 },
@@ -646,12 +681,29 @@ class CustomGlobe {
             { name: 'Cape Town', lat: -33.9249, lng: 18.4241 },
             { name: 'Addis Ababa', lat: 9.1450, lng: 38.7667 },
             { name: 'Tunis', lat: 36.8065, lng: 10.1815 },
+            { name: 'Algiers', lat: 36.7538, lng: 3.0588 },
+            { name: 'Rabat', lat: 34.0209, lng: -6.8416 },
+            { name: 'Khartoum', lat: 15.5007, lng: 32.5599 },
+            { name: 'Dar es Salaam', lat: -6.7924, lng: 39.2083 },
+            { name: 'Kampala', lat: 0.3476, lng: 32.5825 },
+            { name: 'Accra', lat: 5.6037, lng: -0.1870 },
+            { name: 'Abidjan', lat: 5.3600, lng: -4.0083 },
+            { name: 'Dakar', lat: 14.7167, lng: -17.4677 },
+            { name: 'Luanda', lat: -8.8383, lng: 13.2344 },
+            { name: 'Kinshasa', lat: -4.4419, lng: 15.2663 },
+            { name: 'Durban', lat: -29.8587, lng: 31.0218 },
+            { name: 'Alexandria', lat: 31.2001, lng: 29.9187 },
+            { name: 'Tripoli', lat: 32.8872, lng: 13.1913 },
             // Австралия и Океания
             { name: 'Sydney', lat: -33.8688, lng: 151.2093 },
             { name: 'Melbourne', lat: -37.8136, lng: 144.9631 },
             { name: 'Auckland', lat: -36.8485, lng: 174.7633 },
             { name: 'Brisbane', lat: -27.4698, lng: 153.0251 },
-            { name: 'Perth', lat: -31.9505, lng: 115.8605 }
+            { name: 'Perth', lat: -31.9505, lng: 115.8605 },
+            { name: 'Adelaide', lat: -34.9285, lng: 138.6007 },
+            { name: 'Darwin', lat: -12.4634, lng: 130.8456 },
+            { name: 'Honolulu', lat: 21.3099, lng: -157.8581 },
+            { name: 'Wellington', lat: -41.2865, lng: 174.7762 }
         ];
     }
     
