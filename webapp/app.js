@@ -12,6 +12,9 @@ tg.setBackgroundColor('#1a1a1a');
 // Текущая страница
 let currentPage = 'subscriptions';
 
+// Интервалы для автоматического обновления
+let serverLoadChartInterval = null;
+
 // Функция переключения страниц
 function showPage(pageName) {
     // Скрываем все страницы
@@ -1077,6 +1080,16 @@ async function loadAdminStats() {
         // Загружаем графики
         await loadUserGrowthChart();
         await loadServerLoadChart();
+        
+        // Запускаем автоматическое обновление графика каждые 2 минуты
+        if (serverLoadChartInterval) {
+            clearInterval(serverLoadChartInterval);
+        }
+        serverLoadChartInterval = setInterval(() => {
+            if (currentPage === 'admin-stats') {
+                loadServerLoadChart();
+            }
+        }, 2 * 60 * 1000); // 2 минуты
     } catch (error) {
         console.error('Ошибка загрузки статистики:', error);
         document.getElementById('admin-stats-loading').style.display = 'none';
