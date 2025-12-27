@@ -1079,6 +1079,7 @@ async function loadAdminStats() {
         
         // Загружаем графики
         await loadUserGrowthChart();
+        await loadConversionChart();
         await loadServerLoadChart();
         
         // Запускаем автоматическое обновление графика каждые 2 минуты
@@ -1100,6 +1101,7 @@ async function loadAdminStats() {
 // Переменные для хранения экземпляров графиков
 let userGrowthChart = null;
 let serverLoadChart = null;
+let conversionChart = null;
 
 // Загрузка графика роста пользователей
 async function loadUserGrowthChart(days = 30) {
@@ -1208,6 +1210,171 @@ async function loadUserGrowthChart(days = 30) {
     } catch (error) {
         console.error('Ошибка загрузки графика роста пользователей:', error);
     }
+}
+
+// Загрузка графика конверсии
+async function loadConversionChart(days = 30) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            return;
+        }
+        
+        const response = await fetch('/api/admin/charts/conversion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData, days: days })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных графика');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            return;
+        }
+        
+        const ctx = document.getElementById('conversion-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        // Уничтожаем предыдущий график, если он существует
+        if (conversionChart) {
+            conversionChart.destroy();
+        }
+        
+        // Подготавливаем данные
+        const labels = result.data.map(item => {
+            const date = new Date(item.date);
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        const conversions = result.data.map(item => item.conversion || 0);
+        const newUsers = result.data.map(item => item.new_users || 0);
+        const purchased = result.data.map(item => item.purchased || 0);
+        
+        // Создаем комбинированный график
+        conversionChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Конверсия (%)',
+                        data: conversions,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.4,
+                        yAxisID: 'y',
+                        fill: true,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Новых пользователей',
+                        data: newUsers,
+                        type: 'bar',
+                        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Купили подписку',
+                        data: purchased,
+                        type: 'bar',
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Конверсия (%)',
+                            color: 'rgb(75, 192, 192)'
+                        },
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            drawOnChartArea: true
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Количество пользователей',
+                            color: 'rgb(255, 99, 132)'
+                        },
+                        min: 0,
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const index = context.dataIndex;
+                                const item = result.data[index];
+                                if (context.datasetIndex === 0) {
+                                    // Для конверсии показываем детали
+                                    return `Новых: ${item.new_users}, Купили: ${item.purchased}`;
+                                }
+                                return '';
+                            }
+                        }
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика конверсии:', error);
+    }
+}
+
+// Изменение периода для графика конверсии
+function changeConversionPeriod() {
+    const select = document.getElementById('conversion-period');
+    const days = parseInt(select.value);
+    loadConversionChart(days);
 }
 
 // Загрузка графика нагрузки на серверы

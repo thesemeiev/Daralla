@@ -352,6 +352,87 @@ async def get_user_growth_data(days: int = 30):
             
             return daily_data
 
+async def get_conversion_data(days: int = 30):
+    """
+    Возвращает данные конверсии по дням за указанный период
+    Конверсия = (количество пользователей, которые зарегистрировались в день X и купили подписку) / (количество зарегистрированных в день X) * 100
+    
+    Возвращает список словарей с ключами:
+    - date (YYYY-MM-DD)
+    - new_users (количество новых пользователей)
+    - purchased (количество купивших подписку)
+    - conversion (конверсия в процентах)
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Вычисляем начальную дату
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Получаем новых пользователей по дням
+        query_new_users = """
+            SELECT 
+                DATE(first_seen, 'unixepoch') as date,
+                COUNT(*) as count,
+                GROUP_CONCAT(id) as user_ids
+            FROM users
+            WHERE first_seen >= ?
+            GROUP BY DATE(first_seen, 'unixepoch')
+            ORDER BY date ASC
+        """
+        
+        async with db.execute(query_new_users, (start_timestamp,)) as cur:
+            rows = await cur.fetchall()
+        
+        # Для каждого дня считаем, сколько из зарегистрированных купили подписку
+        daily_data = []
+        for row in rows:
+            date = row['date']
+            new_users_count = row['count']
+            user_ids_str = row['user_ids']
+            
+            if not user_ids_str:
+                continue
+            
+            # Парсим список ID пользователей
+            user_ids = [int(uid.strip()) for uid in user_ids_str.split(',') if uid.strip()]
+            
+            if not user_ids:
+                daily_data.append({
+                    'date': date,
+                    'new_users': new_users_count,
+                    'purchased': 0,
+                    'conversion': 0.0
+                })
+                continue
+            
+            # Считаем, сколько из этих пользователей купили подписку (любую, не только в этот день)
+            # Пользователь считается "купившим", если у него есть хотя бы одна подписка со статусом 'active' или была 'expired' (т.е. не trial)
+            placeholders = ','.join(['?'] * len(user_ids))
+            query_purchased = f"""
+                SELECT COUNT(DISTINCT subscriber_id) as count
+                FROM subscriptions
+                WHERE subscriber_id IN ({placeholders})
+                AND status IN ('active', 'expired', 'canceled')
+            """
+            
+            async with db.execute(query_purchased, user_ids) as cur:
+                purchased_row = await cur.fetchone()
+                purchased_count = purchased_row['count'] if purchased_row else 0
+            
+            # Рассчитываем конверсию
+            conversion = (purchased_count / new_users_count * 100) if new_users_count > 0 else 0.0
+            
+            daily_data.append({
+                'date': date,
+                'new_users': new_users_count,
+                'purchased': purchased_count,
+                'conversion': round(conversion, 2)
+            })
+        
+        return daily_data
+
 async def save_server_load_snapshot(server_name: str, online_clients: int, total_active: int, offline_clients: int):
     """
     Сохраняет снимок текущей нагрузки на сервер в историю

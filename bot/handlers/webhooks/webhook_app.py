@@ -1693,6 +1693,52 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/charts/server-load: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/charts/conversion', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_conversion():
+        """Данные для графика конверсии"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            days = int(data.get('days', 30))  # По умолчанию 30 дней
+            
+            from ...db.subscribers_db import get_conversion_data
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                conversion_data = loop.run_until_complete(get_conversion_data(days))
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'data': conversion_data
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/conversion: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     return app
 
 
