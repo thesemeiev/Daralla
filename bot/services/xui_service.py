@@ -502,11 +502,32 @@ class X3:
             
             online_ids = data.get('obj', [])
             if not isinstance(online_ids, list):
-                logger.warning(f"Неожиданный формат ответа: obj не является списком")
+                logger.warning(f"Неожиданный формат ответа: obj не является списком, тип: {type(online_ids)}, значение: {online_ids}")
                 return set(), False
             
+            # API возвращает ID в формате "tg_id_uuid" или просто "uuid"
+            # Извлекаем UUID часть (после последнего _) для сравнения
+            extracted_ids = set()
+            for online_id in online_ids:
+                online_id_str = str(online_id)
+                # Если ID содержит подчеркивание, берем часть после последнего _
+                if '_' in online_id_str:
+                    # Разделяем по последнему подчеркиванию
+                    parts = online_id_str.rsplit('_', 1)
+                    if len(parts) == 2:
+                        uuid_part = parts[1]  # Берем часть после последнего _
+                        extracted_ids.add(uuid_part)
+                        # Также добавляем полный ID на случай, если где-то используется полный формат
+                        extracted_ids.add(online_id_str)
+                    else:
+                        extracted_ids.add(online_id_str)
+                else:
+                    # Если нет подчеркивания, используем как есть
+                    extracted_ids.add(online_id_str)
+            
             logger.debug(f"Получено {len(online_ids)} онлайн клиентов через API: {online_ids}")
-            return set(online_ids), True
+            logger.debug(f"Извлечено {len(extracted_ids)} ID для сравнения: {list(extracted_ids)[:10]}")
+            return extracted_ids, True
             
         except Exception as e:
             logger.warning(f"Ошибка получения онлайн клиентов через API: {e}")
@@ -633,26 +654,24 @@ class X3:
                                 if client_id:
                                     client_id_str = str(client_id)
                                     
-                                    # API /onlines возвращает короткие ID (первые 8 символов UUID)
-                                    # Создаем короткую версию для сравнения
-                                    client_id_short = client_id_str[:8] if len(client_id_str) >= 8 else client_id_str
+                                    # API /onlines возвращает ID в формате "tg_id_uuid", мы уже извлекли UUID часть
+                                    # Теперь сравниваем UUID клиента с извлеченными UUID
                                     
-                                    # Преобразуем online_client_ids в строки для сравнения
-                                    online_ids_str = {str(oid) for oid in online_client_ids}
-                                    
-                                    # Проверяем точное совпадение (полный ID)
-                                    if client_id_str in online_ids_str:
+                                    # Проверяем точное совпадение (полный UUID)
+                                    if client_id_str in online_client_ids:
                                         is_online = True
-                                        logger.debug(f"Клиент {email} онлайн (определено через API, полный ID: {client_id_str})")
-                                    # Проверяем короткий ID (первые 8 символов)
-                                    elif client_id_short in online_ids_str:
-                                        is_online = True
-                                        logger.debug(f"Клиент {email} онлайн (определено через API, короткий ID: {client_id_short} из {client_id_str})")
-                                    # Также проверяем обратное - может быть API вернул полный ID, а у нас короткий
-                                    elif any(str(online_id).startswith(client_id_short) or client_id_str.startswith(str(online_id)) 
-                                            for online_id in online_client_ids):
-                                        is_online = True
-                                        logger.debug(f"Клиент {email} онлайн (определено через API, частичное совпадение: {client_id_str} с {list(online_ids_str)[:3]})")
+                                        logger.debug(f"Клиент {email} онлайн (определено через API, полный UUID: {client_id_str})")
+                                    else:
+                                        # Проверяем короткую версию (первые 8 символов) на случай, если API вернул короткий UUID
+                                        client_id_short = client_id_str[:8] if len(client_id_str) >= 8 else client_id_str
+                                        if client_id_short in online_client_ids:
+                                            is_online = True
+                                            logger.debug(f"Клиент {email} онлайн (определено через API, короткий UUID: {client_id_short} из {client_id_str})")
+                                        # Также проверяем частичное совпадение (на случай разных форматов)
+                                        elif any(str(online_id).startswith(client_id_short) or client_id_str.startswith(str(online_id)) 
+                                                for online_id in online_client_ids if len(str(online_id)) >= 8):
+                                            is_online = True
+                                            logger.debug(f"Клиент {email} онлайн (определено через API, частичное совпадение: {client_id_str})")
                             
                             # Метод 2: Fallback - проверка трафика (если API недоступен или не нашли совпадение)
                             if not is_online and has_client_stats and email and email in client_stats_map:
