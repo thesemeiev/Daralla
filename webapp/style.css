@@ -4,6 +4,32 @@
     box-sizing: border-box;
 }
 
+/* Стили для горизонтальной прокрутки графиков */
+.chart-scroll-container {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 24px;
+}
+
+.chart-scroll-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.chart-scroll-container::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+}
+
+.chart-scroll-container::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+.chart-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #5a5a5a;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #1a1a1a;
@@ -995,4 +1021,29 @@ h1 {
     .stats-grid {
         grid-template-columns: 1fr;
     }
+    
+    /* Улучшение отображения графиков на мобильных */
+    .chart-scroll-container {
+        margin-left: -16px;
+        margin-right: -16px;
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+    
+    .chart-scroll-container > div {
+        min-width: 700px; /* Увеличиваем минимальную ширину для лучшей читаемости */
+    }
+}
+
+/* Стили для легенды Chart.js - элементы друг под другом */
+canvas + div {
+    margin-top: 16px;
+}
+
+/* Улучшение отображения легенды */
+.chartjs-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
 }

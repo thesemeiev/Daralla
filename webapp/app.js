@@ -1327,7 +1327,17 @@ async function loadUserGrowthChart(days = 30) {
                 plugins: {
                     legend: {
                         display: true,
-                        position: 'top'
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            usePointStyle: false,
+                            font: {
+                                size: 12
+                            }
+                        }
                     },
                     title: {
                         display: false
@@ -1495,7 +1505,17 @@ async function loadConversionChart(days = 30) {
                 plugins: {
                     legend: {
                         display: true,
-                        position: 'top'
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            usePointStyle: false,
+                            font: {
+                                size: 12
+                            }
+                        }
                     },
                     tooltip: {
                         callbacks: {
@@ -1652,7 +1672,18 @@ async function loadServerLoadChart() {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            usePointStyle: false,
+                            font: {
+                                size: 12
+                            }
+                        }
                     },
                     title: {
                         display: true,

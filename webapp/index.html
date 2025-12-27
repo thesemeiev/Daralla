@@ -180,8 +180,10 @@
                             <option value="90">90 дней</option>
                         </select>
                     </div>
-                    <div style="position: relative; height: 300px; margin-bottom: 24px;">
-                        <canvas id="user-growth-chart"></canvas>
+                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                        <div style="position: relative; height: 300px; min-width: 700px;">
+                            <canvas id="user-growth-chart"></canvas>
+                        </div>
                     </div>
                     
                     <div style="margin-top: 24px;">
@@ -195,8 +197,10 @@
                                 <option value="90">90 дней</option>
                             </select>
                         </div>
-                        <div style="position: relative; height: 300px; margin-bottom: 24px;">
-                            <canvas id="conversion-chart"></canvas>
+                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                            <div style="position: relative; height: 300px; min-width: 700px;">
+                                <canvas id="conversion-chart"></canvas>
+                            </div>
                         </div>
                     </div>
                     
@@ -215,8 +219,10 @@
                             <span>&gt;80% - рекомендуется добавить сервер</span>
                         </div>
                     </div>
-                    <div style="position: relative; height: 400px; margin-bottom: 24px;">
-                        <canvas id="server-load-chart"></canvas>
+                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                        <div style="position: relative; height: 400px; min-width: 700px;">
+                            <canvas id="server-load-chart"></canvas>
+                        </div>
                     </div>
                     
                     <button class="btn-primary" onclick="showPage('admin-users')" style="width: 100%;">Перейти к пользователям</button>
