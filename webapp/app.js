@@ -303,10 +303,16 @@ class CustomGlobe {
         this.lastX = 0;
         this.lastY = 0;
         this.zoom = 1;
-        this.centerX = canvas.width / 2;
-        this.centerY = canvas.height / 2;
+        
+        // Получаем реальные размеры с учетом devicePixelRatio
+        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = canvas.width / dpr;
+        const displayHeight = canvas.height / dpr;
+        
+        this.centerX = displayWidth / 2;
+        this.centerY = displayHeight / 2;
         // Увеличиваем радиус для более реалистичного отображения расстояний между точками
-        this.radius = Math.min(canvas.width, canvas.height) * 0.5;
+        this.radius = Math.min(displayWidth, displayHeight) * 0.5;
         
         // Для pinch-to-zoom
         this.touches = [];
@@ -542,17 +548,21 @@ class CustomGlobe {
             
             const textMetrics = ctx.measureText(label);
             const padding = 4;
-            const labelX = pos.x + pointSize + padding;
-            const labelY = pos.y;
+            // Выравниваем по пикселям для четкости
+            const labelX = Math.round(pos.x + pointSize + padding);
+            const labelY = Math.round(pos.y);
+            
+            // Отключаем сглаживание для четкого текста
+            ctx.imageSmoothingEnabled = false;
             
             // Рисуем текст с обводкой (такой же стиль как у серверов)
             ctx.fillStyle = '#fff';
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.lineWidth = 1.5;
             ctx.lineJoin = 'round';
             ctx.miterLimit = 2;
-            ctx.strokeText(label, Math.floor(labelX), Math.floor(labelY));
-            ctx.fillText(label, Math.floor(labelX), Math.floor(labelY));
+            ctx.strokeText(label, labelX, labelY);
+            ctx.fillText(label, labelX, labelY);
         });
     }
     
@@ -709,8 +719,10 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
+        // Получаем реальные размеры с учетом devicePixelRatio
+        const dpr = window.devicePixelRatio || 1;
+        const width = this.canvas.width / dpr;
+        const height = this.canvas.height / dpr;
         
         // Очищаем canvas
         ctx.fillStyle = '#1a1a1a';
@@ -833,6 +845,9 @@ class CustomGlobe {
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
                 
+                // Отключаем сглаживание для четкого текста
+                ctx.imageSmoothingEnabled = false;
+                
                 // Измеряем размер текста
                 const textMetrics = ctx.measureText(label);
                 const textWidth = textMetrics.width;
@@ -841,19 +856,20 @@ class CustomGlobe {
                 const padding = 4;
                 
                 // Позиция подписи (справа от точки)
-                const labelX = pos.x + size + padding;
-                const labelY = pos.y;
+                // Выравниваем по пикселям для четкости
+                const labelX = Math.round(pos.x + size + padding);
+                const labelY = Math.round(pos.y);
                 
                 // Рисуем текст без фона (или с очень прозрачным фоном для читаемости)
                 ctx.fillStyle = '#fff';
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.lineWidth = 1.5;
                 ctx.lineJoin = 'round';
                 ctx.miterLimit = 2;
                 // Обводка для читаемости
-                ctx.strokeText(label, Math.floor(labelX), Math.floor(labelY));
+                ctx.strokeText(label, labelX, labelY);
                 // Сам текст
-                ctx.fillText(label, Math.floor(labelX), Math.floor(labelY));
+                ctx.fillText(label, labelX, labelY);
             }
         });
     }
@@ -921,24 +937,50 @@ async function loadServerMap() {
         // Очищаем контейнер
         mapContainer.innerHTML = '';
         
-        // Создаем canvas
+        // Создаем canvas с учетом devicePixelRatio для четкого рендеринга
+        const dpr = window.devicePixelRatio || 1;
         const canvas = document.createElement('canvas');
-        canvas.width = mapContainer.clientWidth;
-        canvas.height = mapContainer.clientHeight;
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
+        const displayWidth = mapContainer.clientWidth;
+        const displayHeight = mapContainer.clientHeight;
+        
+        // Устанавливаем реальный размер canvas (с учетом DPR)
+        canvas.width = displayWidth * dpr;
+        canvas.height = displayHeight * dpr;
+        
+        // Устанавливаем отображаемый размер
+        canvas.style.width = displayWidth + 'px';
+        canvas.style.height = displayHeight + 'px';
         canvas.style.cursor = 'grab';
         canvas.style.imageRendering = 'pixelated'; // Пиксельный стиль
+        
+        // Масштабируем контекст для четкого рендеринга
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        
         mapContainer.appendChild(canvas);
         
         // Обрабатываем изменение размера
         const resizeObserver = new ResizeObserver(() => {
-            canvas.width = mapContainer.clientWidth;
-            canvas.height = mapContainer.clientHeight;
+            const dpr = window.devicePixelRatio || 1;
+            const displayWidth = mapContainer.clientWidth;
+            const displayHeight = mapContainer.clientHeight;
+            
+            canvas.width = displayWidth * dpr;
+            canvas.height = displayHeight * dpr;
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+            
+            // Масштабируем контекст заново
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            
             if (serverGlobe) {
-                serverGlobe.centerX = canvas.width / 2;
-                serverGlobe.centerY = canvas.height / 2;
-                serverGlobe.radius = Math.min(canvas.width, canvas.height) * 0.5;
+                serverGlobe.centerX = displayWidth / 2;
+                serverGlobe.centerY = displayHeight / 2;
+                serverGlobe.radius = Math.min(displayWidth, displayHeight) * 0.5;
+                // Обновляем размеры canvas в объекте
+                serverGlobe.canvas = canvas;
+                serverGlobe.ctx = ctx;
             }
         });
         resizeObserver.observe(mapContainer);
