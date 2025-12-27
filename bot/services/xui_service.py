@@ -618,37 +618,22 @@ class X3:
                             is_online = False
                             
                             # Используем только API /onlines для определения онлайн-статуса
-                            # Получаем ID клиента в зависимости от протокола
-                            if protocol == 'trojan':
-                                client_id = client.get('password')
+                            # API возвращает EMAIL клиента в формате "tg_id_uuid" или "tg_id_число"
+                            # Сравниваем email клиента напрямую с тем, что вернул API
+                            if email:
+                                email_str = str(email)
+                                
+                                # Проверяем точное совпадение email
+                                if email_str in online_client_ids:
+                                    is_online = True
+                                    logger.debug(f"Клиент {email} онлайн (определено через API, email: {email_str})")
+                                else:
+                                    # Логируем для отладки, почему не нашли совпадение (только для первых нескольких клиентов)
+                                    if total_active <= 5 or online_count == 0:
+                                        logger.info(f"Клиент {email} не найден в онлайн списке. Email: {email_str}, онлайн ID из API: {list(online_client_ids)[:5]}")
                             else:
-                                client_id = client.get('id')
-                            
-                            # Получаем tg_id клиента для составления полного формата
-                            client_tg_id = client.get('tgId') or client.get('tg_id')
-                            
-                            if client_id and client_tg_id:
-                                client_id_str = str(client_id)
-                                tg_id_str = str(client_tg_id)
-                                
-                                # API /onlines возвращает ID в формате "tg_id_uuid" или "tg_id_число"
-                                # Составляем полный формат для сравнения
-                                full_client_id = f"{tg_id_str}_{client_id_str}"
-                                
-                                # Проверяем точное совпадение полного формата
-                                if full_client_id in online_client_ids:
-                                    is_online = True
-                                    logger.debug(f"Клиент {email} онлайн (определено через API, полный формат: {full_client_id})")
-                                # Также проверяем только ID на случай, если API вернул без tg_id
-                                elif client_id_str in online_client_ids:
-                                    is_online = True
-                                    logger.debug(f"Клиент {email} онлайн (определено через API, только ID: {client_id_str})")
-                            elif client_id:
-                                # Если нет tg_id, проверяем только ID
-                                client_id_str = str(client_id)
-                                if client_id_str in online_client_ids:
-                                    is_online = True
-                                    logger.debug(f"Клиент {email} онлайн (определено через API, только ID без tg_id: {client_id_str})")
+                                if total_active <= 5:
+                                    logger.info(f"Клиент не имеет email (protocol={protocol})")
                             
                             if is_online:
                                 online_count += 1
