@@ -5,6 +5,11 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
+// Отключаем вертикальные свайпы для закрытия приложения (предотвращает закрытие при скролле вверх)
+if (tg.disableVerticalSwipes) {
+    tg.disableVerticalSwipes();
+}
+
 // Устанавливаем цветовую схему
 tg.setHeaderColor('#1a1a1a');
 tg.setBackgroundColor('#1a1a1a');
@@ -1777,8 +1782,52 @@ function changeUserGrowthPeriod() {
     loadUserGrowthChart(days);
 }
 
+// Предотвращаем закрытие приложения при скролле вверх
+function preventCloseOnScroll() {
+    let touchStartY = 0;
+    let touchEndY = 0;
+    let isScrolling = false;
+    
+    // Обработка начала касания
+    document.addEventListener('touchstart', (e) => {
+        touchStartY = e.touches[0].clientY;
+        isScrolling = false;
+    }, { passive: true });
+    
+    // Обработка движения
+    document.addEventListener('touchmove', (e) => {
+        if (!touchStartY) return;
+        
+        touchEndY = e.touches[0].clientY;
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const isScrollingUp = touchEndY > touchStartY;
+        
+        // Если скроллим вверх и мы уже вверху страницы, предотвращаем закрытие
+        if (isScrollingUp && scrollTop === 0) {
+            // Разрешаем небольшой overscroll, но предотвращаем закрытие
+            const overscroll = touchEndY - touchStartY;
+            if (overscroll > 50) {
+                // Если overscroll слишком большой, предотвращаем его
+                e.preventDefault();
+            }
+        }
+        
+        isScrolling = true;
+    }, { passive: false });
+    
+    // Обработка окончания касания
+    document.addEventListener('touchend', () => {
+        touchStartY = 0;
+        touchEndY = 0;
+        isScrolling = false;
+    }, { passive: true });
+}
+
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
+    // Включаем защиту от закрытия при скролле вверх
+    preventCloseOnScroll();
+    
     showPage('subscriptions');
     
     // Проверяем права админа

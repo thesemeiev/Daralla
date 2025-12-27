@@ -37,11 +37,18 @@ body {
     padding: 20px 16px 85px 16px;
     min-height: 100vh;
     line-height: 1.6;
+    /* Предотвращаем закрытие приложения при скролле вверх */
+    overscroll-behavior-y: contain;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .container {
     max-width: 600px;
     margin: 0 auto;
+    /* Предотвращаем закрытие приложения при скролле вверх */
+    overscroll-behavior-y: contain;
+    overscroll-behavior-x: contain;
 }
 
 header {
