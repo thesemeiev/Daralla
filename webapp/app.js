@@ -287,10 +287,10 @@ async function loadServers() {
 }
 
 // Функция отображения серверов
-// Переменная для хранения экземпляра карты
-let serverMap = null;
+// Переменная для хранения экземпляра глобуса
+let serverGlobe = null;
 
-// Загрузка карты серверов
+// Загрузка 3D глобуса серверов
 async function loadServerMap() {
     try {
         const mapContainer = document.getElementById('server-map');
@@ -300,9 +300,9 @@ async function loadServerMap() {
             return;
         }
         
-        // Проверяем, доступна ли библиотека Leaflet
-        if (typeof L === 'undefined') {
-            console.error('Leaflet.js не загружен');
+        // Проверяем, доступна ли библиотека Globe.gl
+        if (typeof Globe === 'undefined') {
+            console.error('Globe.gl не загружен');
             if (mapError) {
                 mapError.style.display = 'block';
             }
@@ -323,13 +323,13 @@ async function loadServerMap() {
         
         const result = await response.json();
         if (!result.success || !result.servers || result.servers.length === 0) {
-            // Если нет данных, скрываем карту или показываем сообщение
+            // Если нет данных, скрываем глобус или показываем сообщение
             if (mapError) {
                 mapError.style.display = 'none';
             }
-            if (serverMap) {
-                serverMap.remove();
-                serverMap = null;
+            if (serverGlobe) {
+                serverGlobe._destructor();
+                serverGlobe = null;
             }
             return;
         }
@@ -339,95 +339,116 @@ async function loadServerMap() {
             mapError.style.display = 'none';
         }
         
-        // Уничтожаем предыдущую карту, если она существует
-        if (serverMap) {
-            serverMap.remove();
-            serverMap = null;
+        // Очищаем контейнер
+        mapContainer.innerHTML = '';
+        
+        // Уничтожаем предыдущий глобус, если он существует
+        if (serverGlobe) {
+            serverGlobe._destructor();
+            serverGlobe = null;
         }
         
-        // Создаем карту
-        serverMap = L.map('server-map', {
-            zoomControl: true,
-            attributionControl: true
+        // Подготавливаем данные для глобуса
+        const pointsData = result.servers
+            .filter(server => server.lat && server.lng)
+            .map(server => ({
+                lat: server.lat,
+                lng: server.lng,
+                size: Math.max(0.3, server.usage_percentage / 100), // Размер точки от 0.3 до 1
+                color: server.usage_percentage > 50 ? '#FF5722' : 
+                       server.usage_percentage > 25 ? '#FFC107' : '#4CAF50',
+                name: server.display_name,
+                location: server.location,
+                usage: server.usage_percentage,
+                count: server.usage_count
+            }));
+        
+        // Создаем 3D глобус
+        serverGlobe = Globe()
+            (mapContainer)
+            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
+            .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+            .pointOfView({ lat: 0, lng: 0, altitude: 2.5 })
+            .pointsData(pointsData)
+            .pointColor('color')
+            .pointRadius('size')
+            .pointResolution(2)
+            .pointLabel(d => `
+                <div style="
+                    background: rgba(26, 26, 26, 0.9);
+                    border: 1px solid #444;
+                    border-radius: 8px;
+                    padding: 12px;
+                    color: #fff;
+                    font-size: 14px;
+                    min-width: 180px;
+                    text-align: center;
+                ">
+                    <strong style="color: ${d.color};">${escapeHtml(d.name)}</strong><br>
+                    <span style="color: #999; font-size: 12px;">${escapeHtml(d.location)}</span><br>
+                    ${d.count > 0 ? `
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #444;">
+                            <span style="font-size: 12px;">Использование: <strong>${d.usage}%</strong></span><br>
+                            <span style="font-size: 11px; color: #999;">(${d.count} раз)</span>
+                        </div>
+                    ` : '<span style="font-size: 12px; color: #999;">Не использовался</span>'}
+                </div>
+            `)
+            .pointAltitude(0.01)
+            .onPointClick((point) => {
+                // При клике на точку, поворачиваем глобус к ней
+                serverGlobe.pointOfView({
+                    lat: point.lat,
+                    lng: point.lng,
+                    altitude: 2
+                }, 1000);
+            });
+        
+        // Автоматическое вращение глобуса
+        let rotationSpeed = 0.5;
+        let rotation = { lat: 0, lng: 0 };
+        
+        const animate = () => {
+            rotation.lng += rotationSpeed;
+            serverGlobe.pointOfView({
+                lat: rotation.lat,
+                lng: rotation.lng,
+                altitude: 2.5
+            }, 0);
+            requestAnimationFrame(animate);
+        };
+        animate();
+        
+        // Останавливаем вращение при взаимодействии
+        let isInteracting = false;
+        mapContainer.addEventListener('mousedown', () => {
+            isInteracting = true;
+            rotationSpeed = 0;
         });
-        
-        // Добавляем тайлы OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(serverMap);
-        
-        // Определяем границы для всех серверов
-        const bounds = [];
-        const markers = [];
-        
-        // Добавляем маркеры для каждого сервера
-        result.servers.forEach(server => {
-            const lat = server.lat;
-            const lng = server.lng;
-            
-            if (lat && lng) {
-                bounds.push([lat, lng]);
-                
-                // Определяем цвет маркера в зависимости от использования
-                let markerColor = '#4CAF50'; // Зеленый по умолчанию
-                if (server.usage_percentage > 50) {
-                    markerColor = '#FF5722'; // Красный - высокое использование
-                } else if (server.usage_percentage > 25) {
-                    markerColor = '#FFC107'; // Желтый - среднее использование
+        mapContainer.addEventListener('mouseup', () => {
+            isInteracting = false;
+            setTimeout(() => {
+                if (!isInteracting) {
+                    rotationSpeed = 0.5;
                 }
-                
-                // Создаем кастомную иконку
-                const customIcon = L.divIcon({
-                    className: 'custom-marker',
-                    html: `<div style="
-                        background-color: ${markerColor};
-                        width: 20px;
-                        height: 20px;
-                        border-radius: 50%;
-                        border: 3px solid white;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                    "></div>`,
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10]
-                });
-                
-                // Создаем маркер
-                const marker = L.marker([lat, lng], { icon: customIcon })
-                    .addTo(serverMap);
-                
-                // Добавляем popup с информацией
-                const popupContent = `
-                    <div style="text-align: center; min-width: 150px;">
-                        <strong>${escapeHtml(server.display_name)}</strong><br>
-                        <span style="color: #666; font-size: 12px;">${escapeHtml(server.location)}</span><br>
-                        ${server.usage_count > 0 ? `
-                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
-                                <span style="font-size: 12px;">Использование: <strong>${server.usage_percentage}%</strong></span><br>
-                                <span style="font-size: 11px; color: #999;">(${server.usage_count} раз)</span>
-                            </div>
-                        ` : '<span style="font-size: 12px; color: #999;">Не использовался</span>'}
-                    </div>
-                `;
-                marker.bindPopup(popupContent);
-                
-                markers.push(marker);
-            }
+            }, 2000);
         });
         
-        // Устанавливаем границы карты, чтобы показать все маркеры
-        if (bounds.length > 0) {
-            if (bounds.length === 1) {
-                // Если только один сервер, устанавливаем зум
-                serverMap.setView([bounds[0][0], bounds[0][1]], 6);
-            } else {
-                // Если несколько серверов, показываем все
-                serverMap.fitBounds(bounds, { padding: [20, 20] });
+        // Адаптируем размер при изменении окна
+        const resizeObserver = new ResizeObserver(() => {
+            if (serverGlobe && serverGlobe._camera) {
+                serverGlobe._camera.aspect = mapContainer.clientWidth / mapContainer.clientHeight;
+                serverGlobe._camera.updateProjectionMatrix();
+                if (serverGlobe._renderer) {
+                    serverGlobe._renderer.setSize(mapContainer.clientWidth, mapContainer.clientHeight);
+                }
             }
-        }
+        });
+        resizeObserver.observe(mapContainer);
         
     } catch (error) {
-        console.error('Ошибка загрузки карты серверов:', error);
+        console.error('Ошибка загрузки глобуса серверов:', error);
         const mapError = document.getElementById('server-map-error');
         if (mapError) {
             mapError.style.display = 'block';
@@ -1780,6 +1801,182 @@ function changeUserGrowthPeriod() {
     const select = document.getElementById('user-growth-period');
     const days = parseInt(select.value);
     loadUserGrowthChart(days);
+}
+
+// Переменная для отслеживания полноэкранного режима
+let fullscreenChartId = null;
+let originalOrientation = null;
+
+// Функция переключения полноэкранного режима
+async function toggleFullscreen(chartId) {
+    const chartContainer = document.getElementById(chartId).closest('div[style*="position: relative"]');
+    if (!chartContainer) {
+        console.error('Контейнер графика не найден');
+        return;
+    }
+    
+    try {
+        // Проверяем, находимся ли мы уже в полноэкранном режиме
+        if (fullscreenChartId === chartId) {
+            // Выходим из полноэкранного режима
+            if (document.exitFullscreen) {
+                await document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                await document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                await document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+                await document.msExitFullscreen();
+            }
+            
+            // Восстанавливаем ориентацию экрана
+            if (originalOrientation && screen.orientation && screen.orientation.unlock) {
+                try {
+                    await screen.orientation.unlock();
+                } catch (e) {
+                    console.log('Не удалось разблокировать ориентацию:', e);
+                }
+            }
+            
+            fullscreenChartId = null;
+            originalOrientation = null;
+        } else {
+            // Входим в полноэкранный режим
+            // Сохраняем текущую ориентацию
+            if (screen.orientation) {
+                originalOrientation = screen.orientation.angle;
+            }
+            
+            // Запрашиваем полноэкранный режим
+            if (chartContainer.requestFullscreen) {
+                await chartContainer.requestFullscreen();
+            } else if (chartContainer.webkitRequestFullscreen) {
+                await chartContainer.webkitRequestFullscreen();
+            } else if (chartContainer.mozRequestFullScreen) {
+                await chartContainer.mozRequestFullScreen();
+            } else if (chartContainer.msRequestFullscreen) {
+                await chartContainer.msRequestFullscreen();
+            }
+            
+            fullscreenChartId = chartId;
+            
+            // На мобильных устройствах разрешаем поворот экрана
+            if (screen.orientation && screen.orientation.lock) {
+                try {
+                    // Пробуем установить landscape ориентацию для лучшего просмотра графиков
+                    await screen.orientation.lock('landscape');
+                } catch (e) {
+                    // Если не удалось заблокировать, пробуем unlock для разрешения поворота
+                    try {
+                        await screen.orientation.unlock();
+                    } catch (e2) {
+                        console.log('Не удалось изменить ориентацию:', e2);
+                    }
+                }
+            }
+            
+            // Обновляем размер графика после входа в полноэкранный режим
+            setTimeout(() => {
+                if (chartId === 'user-growth-chart' && userGrowthChart) {
+                    userGrowthChart.resize();
+                } else if (chartId === 'conversion-chart' && conversionChart) {
+                    conversionChart.resize();
+                } else if (chartId === 'server-load-chart' && serverLoadChart) {
+                    serverLoadChart.resize();
+                }
+            }, 100);
+        }
+    } catch (error) {
+        console.error('Ошибка переключения полноэкранного режима:', error);
+        // Если полноэкранный режим не поддерживается, показываем график в модальном окне
+        showChartModal(chartId);
+    }
+}
+
+// Функция показа графика в модальном окне (fallback для устройств без поддержки Fullscreen API)
+function showChartModal(chartId) {
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+    
+    // Создаем модальное окно
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    `;
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Закрыть';
+    closeBtn.style.cssText = `
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 12px 24px;
+        background: #2a2a2a;
+        color: #fff;
+        border: 1px solid #444;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+    `;
+    closeBtn.onclick = () => {
+        document.body.removeChild(modal);
+        fullscreenChartId = null;
+    };
+    
+    const chartWrapper = document.createElement('div');
+    chartWrapper.style.cssText = `
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const clonedCanvas = canvas.cloneNode(true);
+    clonedCanvas.style.cssText = 'max-width: 100%; max-height: 100%;';
+    
+    chartWrapper.appendChild(clonedCanvas);
+    modal.appendChild(closeBtn);
+    modal.appendChild(chartWrapper);
+    document.body.appendChild(modal);
+    
+    fullscreenChartId = chartId;
+}
+
+// Обработчик выхода из полноэкранного режима
+document.addEventListener('fullscreenchange', handleFullscreenChange);
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+function handleFullscreenChange() {
+    const isFullscreen = document.fullscreenElement || 
+                        document.webkitFullscreenElement || 
+                        document.mozFullScreenElement || 
+                        document.msFullscreenElement;
+    
+    if (!isFullscreen && fullscreenChartId) {
+        // Восстанавливаем ориентацию при выходе из полноэкранного режима
+        if (originalOrientation !== null && screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock().catch(e => {
+                console.log('Не удалось разблокировать ориентацию:', e);
+            });
+        }
+        
+        fullscreenChartId = null;
+        originalOrientation = null;
+    }
 }
 
 // Предотвращаем закрытие приложения при скролле вверх
