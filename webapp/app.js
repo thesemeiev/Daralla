@@ -1186,10 +1186,9 @@ async function createPayment(period, subscriptionId = null) {
             return;
         }
         
-        // Показываем индикатор загрузки
-        if (tg && tg.showAlert) {
-            tg.showAlert('Создание платежа...');
-        }
+        // Показываем страницу оплаты с индикатором загрузки
+        currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
+        showPaymentPage();
         
         const response = await fetch('/api/user/payment/create', {
             method: 'POST',
@@ -1222,18 +1221,40 @@ async function createPayment(period, subscriptionId = null) {
             period: data.period
         };
         
-        // Показываем страницу оплаты
+        // Обновляем страницу оплаты с данными (кнопка восстановится автоматически)
         showPaymentPage();
         
     } catch (error) {
         console.error('Ошибка создания платежа:', error);
+        
+        // Восстанавливаем кнопку при ошибке
+        const paymentButton = document.getElementById('payment-link-button');
+        if (paymentButton) {
+            paymentButton.disabled = false;
+            paymentButton.textContent = 'Перейти к оплате';
+        }
+        
         alert('Ошибка создания платежа: ' + error.message);
+        
+        // Возвращаемся назад при ошибке
+        goBackFromPayment();
     }
 }
 
 // Функция показа страницы оплаты
 function showPaymentPage() {
+    // Показываем страницу
+    showPage('payment');
+    
     if (!currentPaymentData) {
+        // Если данных еще нет, показываем индикатор загрузки
+        document.getElementById('payment-period').textContent = 'Загрузка...';
+        document.getElementById('payment-amount').textContent = 'Загрузка...';
+        const paymentButton = document.getElementById('payment-link-button');
+        if (paymentButton) {
+            paymentButton.disabled = true;
+            paymentButton.textContent = 'Создание платежа...';
+        }
         return;
     }
     
@@ -1242,8 +1263,12 @@ function showPaymentPage() {
     document.getElementById('payment-period').textContent = periodText;
     document.getElementById('payment-amount').textContent = currentPaymentData.amount + '₽';
     
-    // Показываем страницу
-    showPage('payment');
+    // Восстанавливаем кнопку
+    const paymentButton = document.getElementById('payment-link-button');
+    if (paymentButton) {
+        paymentButton.disabled = false;
+        paymentButton.textContent = 'Перейти к оплате';
+    }
 }
 
 // Функция проверки статуса платежа
