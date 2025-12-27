@@ -568,50 +568,32 @@ class X3:
             offline_count = 0
             current_time = int(datetime.datetime.now().timestamp() * 1000)
             
-            # Пытаемся получить список онлайн клиентов через API (самый точный метод)
+            # Получаем список онлайн клиентов через API (единственный метод)
             online_client_ids, api_available = self.get_online_clients_ids(timeout=timeout)
-            # Используем API метод, если он доступен (даже если вернул пустой список - это значит 0 онлайн)
-            # Если API недоступен (api_available=False), используем fallback - проверку трафика
-            use_api_method = api_available
             
-            # Если API недоступен, используем fallback - проверку трафика
-            if not use_api_method:
-                logger.debug("API /onlines недоступен, используем fallback - проверку трафика")
+            if not api_available:
+                logger.warning(f"API /onlines недоступен на сервере {self.host}, возвращаем 0 онлайн клиентов")
+                # Если API недоступен, считаем что все клиенты офлайн
+                # Подсчитываем только активных клиентов
+                for inbound in inbounds:
+                    try:
+                        settings_str = inbound.get('settings', '{}')
+                        if not settings_str:
+                            continue
+                        settings = json.loads(settings_str)
+                        clients = settings.get("clients", [])
+                        for client in clients:
+                            expiry_time = client.get('expiryTime', 0)
+                            if expiry_time == 0 or current_time < expiry_time:
+                                total_active += 1
+                                offline_count += 1
+                    except Exception:
+                        continue
+                
+                logger.info(f"Сервер {self.host}: активных={total_active}, нагружают канал=0, не нагружают={offline_count} (API недоступен)")
+                return total_active, 0, offline_count
             
-            # Получаем статистику трафика для fallback метода
-            client_stats_map = {}
-            has_client_stats = False
-            for inbound in inbounds:
-                client_stats = inbound.get('clientStats')
-                if client_stats is not None:
-                    has_client_stats = True
-                    if isinstance(client_stats, list):
-                        for stat in client_stats:
-                            email = stat.get('email')
-                            if email:
-                                upload = stat.get('up', 0) or stat.get('upload', 0)
-                                download = stat.get('down', 0) or stat.get('download', 0)
-                                client_stats_map[email] = {
-                                    'upload': upload,
-                                    'download': download,
-                                    'total': upload + download
-                                }
-                    elif isinstance(client_stats, dict):
-                        for email, stat in client_stats.items():
-                            if isinstance(stat, dict):
-                                upload = stat.get('up', 0) or stat.get('upload', 0)
-                                download = stat.get('down', 0) or stat.get('download', 0)
-                                client_stats_map[email] = {
-                                    'upload': upload,
-                                    'download': download,
-                                    'total': upload + download
-                                }
-            
-            logger.debug(f"clientStats доступен: {has_client_stats}, найдено {len(client_stats_map)} клиентов со статистикой")
-            if use_api_method:
-                logger.info(f"Используется API /onlines для определения онлайн-статуса. Получено {len(online_client_ids)} онлайн ID: {list(online_client_ids)[:10]}")
-            else:
-                logger.info(f"API /onlines недоступен, используется fallback - проверка трафика")
+            logger.info(f"Используется API /onlines для определения онлайн-статуса. Получено {len(online_client_ids)} онлайн ID: {list(online_client_ids)[:10]}")
             
             # Подсчитываем клиентов
             for inbound in inbounds:
@@ -635,51 +617,38 @@ class X3:
                             
                             is_online = False
                             
-                            # Метод 1: Используем API /onlines (самый точный)
-                            # Если API доступен, используем его (даже если online_client_ids пустой - это значит 0 онлайн)
-                            if use_api_method:
-                                # Получаем ID клиента в зависимости от протокола
-                                if protocol == 'trojan':
-                                    client_id = client.get('password')
-                                else:
-                                    client_id = client.get('id')
-                                
-                                # Получаем tg_id клиента для составления полного формата
-                                client_tg_id = client.get('tgId') or client.get('tg_id')
-                                
-                                if client_id and client_tg_id:
-                                    client_id_str = str(client_id)
-                                    tg_id_str = str(client_tg_id)
-                                    
-                                    # API /onlines возвращает ID в формате "tg_id_uuid" или "tg_id_число"
-                                    # Составляем полный формат для сравнения
-                                    full_client_id = f"{tg_id_str}_{client_id_str}"
-                                    
-                                    # Проверяем точное совпадение полного формата
-                                    if full_client_id in online_client_ids:
-                                        is_online = True
-                                        logger.debug(f"Клиент {email} онлайн (определено через API, полный формат: {full_client_id})")
-                                    # Также проверяем только ID на случай, если API вернул без tg_id
-                                    elif client_id_str in online_client_ids:
-                                        is_online = True
-                                        logger.debug(f"Клиент {email} онлайн (определено через API, только ID: {client_id_str})")
-                                elif client_id:
-                                    # Если нет tg_id, проверяем только ID
-                                    client_id_str = str(client_id)
-                                    if client_id_str in online_client_ids:
-                                        is_online = True
-                                        logger.debug(f"Клиент {email} онлайн (определено через API, только ID без tg_id: {client_id_str})")
+                            # Используем только API /onlines для определения онлайн-статуса
+                            # Получаем ID клиента в зависимости от протокола
+                            if protocol == 'trojan':
+                                client_id = client.get('password')
+                            else:
+                                client_id = client.get('id')
                             
-                            # Метод 2: Fallback - проверка трафика (если API недоступен или не нашли совпадение)
-                            if not is_online and has_client_stats and email and email in client_stats_map:
-                                traffic = client_stats_map[email]
-                                current_upload = traffic.get('upload', 0)
-                                current_download = traffic.get('download', 0)
+                            # Получаем tg_id клиента для составления полного формата
+                            client_tg_id = client.get('tgId') or client.get('tg_id')
+                            
+                            if client_id and client_tg_id:
+                                client_id_str = str(client_id)
+                                tg_id_str = str(client_tg_id)
                                 
-                                # Проверяем наличие активного трафика
-                                if self._has_active_traffic(current_upload, current_download):
+                                # API /onlines возвращает ID в формате "tg_id_uuid" или "tg_id_число"
+                                # Составляем полный формат для сравнения
+                                full_client_id = f"{tg_id_str}_{client_id_str}"
+                                
+                                # Проверяем точное совпадение полного формата
+                                if full_client_id in online_client_ids:
                                     is_online = True
-                                    logger.debug(f"Клиент {email} нагружает канал (upload={current_upload}, download={current_download}, fallback метод)")
+                                    logger.debug(f"Клиент {email} онлайн (определено через API, полный формат: {full_client_id})")
+                                # Также проверяем только ID на случай, если API вернул без tg_id
+                                elif client_id_str in online_client_ids:
+                                    is_online = True
+                                    logger.debug(f"Клиент {email} онлайн (определено через API, только ID: {client_id_str})")
+                            elif client_id:
+                                # Если нет tg_id, проверяем только ID
+                                client_id_str = str(client_id)
+                                if client_id_str in online_client_ids:
+                                    is_online = True
+                                    logger.debug(f"Клиент {email} онлайн (определено через API, только ID без tg_id: {client_id_str})")
                             
                             if is_online:
                                 online_count += 1
@@ -692,8 +661,7 @@ class X3:
                     logger.warning(f"Ошибка обработки inbound {inbound.get('id')}: {e}")
                     continue
             
-            method_used = "API /onlines" if use_api_method else "проверка трафика (fallback)"
-            logger.info(f"Сервер {self.host}: активных={total_active}, нагружают канал={online_count}, не нагружают={offline_count} (метод: {method_used})")
+            logger.info(f"Сервер {self.host}: активных={total_active}, нагружают канал={online_count}, не нагружают={offline_count} (метод: API /onlines)")
             return total_active, online_count, offline_count
         except Exception as e:
             logger.error(f"Ошибка при подсчете онлайн клиентов на {self.host}: {e}", exc_info=True)
