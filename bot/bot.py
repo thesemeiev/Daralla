@@ -184,8 +184,8 @@ SERVERS_BY_LOCATION = {
         {
             "name": "Netherlands-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
             "display_name": "🇳🇱  Netherlands - 1",
-            "lat": 52.3676,  # Амстердам
-            "lng": 4.9041,
+            "lat": 52.5167,  # Дротен
+            "lng": 5.7167,
             "host": os.getenv("XUI_HOST_NETHERLANDS_1"),
             "login": os.getenv("XUI_LOGIN_NETHERLANDS_1"),
             "password": os.getenv("XUI_PASSWORD_NETHERLANDS_1"),
