@@ -469,12 +469,12 @@ class CustomGlobe {
     
     // Получить название города по данным сервера
     getCityName(server) {
-        // Маппинг стран/локаций на города
+        // Маппинг стран/локаций на города (на английском)
         const cityMap = {
-            'Poland': 'Варшава',
-            'Netherlands': 'Дротен',
-            'Russia': 'Москва',
-            'Latvia': 'Рига'
+            'Poland': 'Warsaw',
+            'Netherlands': 'Dronten',
+            'Russia': 'Moscow',
+            'Latvia': 'Riga'
         };
         
         // Сначала пробуем по location
@@ -484,21 +484,21 @@ class CustomGlobe {
         
         // Если location не подходит, пробуем определить по координатам
         if (server.lat && server.lng) {
-            // Варшава: 52.2297, 21.0122
+            // Warsaw: 52.2297, 21.0122
             if (Math.abs(server.lat - 52.2297) < 0.5 && Math.abs(server.lng - 21.0122) < 0.5) {
-                return 'Варшава';
+                return 'Warsaw';
             }
-            // Дротен: 52.5167, 5.7167
+            // Dronten: 52.5167, 5.7167
             if (Math.abs(server.lat - 52.5167) < 0.5 && Math.abs(server.lng - 5.7167) < 0.5) {
-                return 'Дротен';
+                return 'Dronten';
             }
-            // Москва: 55.7558, 37.6173
+            // Moscow: 55.7558, 37.6173
             if (Math.abs(server.lat - 55.7558) < 0.5 && Math.abs(server.lng - 37.6173) < 0.5) {
-                return 'Москва';
+                return 'Moscow';
             }
-            // Рига: 56.9496, 24.1052
+            // Riga: 56.9496, 24.1052
             if (Math.abs(server.lat - 56.9496) < 0.5 && Math.abs(server.lng - 24.1052) < 0.5) {
-                return 'Рига';
+                return 'Riga';
             }
         }
         
@@ -616,21 +616,21 @@ class CustomGlobe {
             { name: 'Houston', lat: 29.7604, lng: -95.3698 },
             { name: 'Mexico City', lat: 19.4326, lng: -99.1332 },
             // Южная Америка
-            { name: 'São Paulo', lat: -23.5505, lng: -46.6333 },
+            { name: 'Sao Paulo', lat: -23.5505, lng: -46.6333 },
             { name: 'Buenos Aires', lat: -34.6037, lng: -58.3816 },
             { name: 'Rio de Janeiro', lat: -22.9068, lng: -43.1729 },
             { name: 'Lima', lat: -12.0464, lng: -77.0428 },
-            { name: 'Bogotá', lat: 4.7110, lng: -74.0721 },
+            { name: 'Bogota', lat: 4.7110, lng: -74.0721 },
             { name: 'Santiago', lat: -33.4489, lng: -70.6693 },
             { name: 'Caracas', lat: 10.4806, lng: -66.9036 },
             { name: 'Quito', lat: -0.1807, lng: -78.4678 },
             { name: 'Montevideo', lat: -34.9011, lng: -56.1645 },
-            { name: 'Asunción', lat: -25.2637, lng: -57.5759 },
+            { name: 'Asuncion', lat: -25.2637, lng: -57.5759 },
             { name: 'La Paz', lat: -16.2902, lng: -68.1341 },
-            { name: 'Brasília', lat: -15.7942, lng: -47.8822 },
+            { name: 'Brasilia', lat: -15.7942, lng: -47.8822 },
             { name: 'Recife', lat: -8.0476, lng: -34.8770 },
             { name: 'Salvador', lat: -12.9714, lng: -38.5014 },
-            { name: 'Medellín', lat: 6.2476, lng: -75.5658 },
+            { name: 'Medellin', lat: 6.2476, lng: -75.5658 },
             { name: 'Guayaquil', lat: -2.1709, lng: -79.9224 },
             // Азия
             { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
