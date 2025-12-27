@@ -501,6 +501,11 @@ class X3:
                 return set(), False
             
             online_ids = data.get('obj', [])
+            # Если obj=None, это означает "нет онлайн клиентов", а не ошибка
+            if online_ids is None:
+                logger.debug(f"API вернул obj=None - нет онлайн клиентов на сервере {self.host}")
+                return set(), True  # Возвращаем пустой set, но success=True
+            
             if not isinstance(online_ids, list):
                 logger.warning(f"Неожиданный формат ответа: obj не является списком, тип: {type(online_ids)}, значение: {online_ids}")
                 return set(), False
@@ -565,8 +570,8 @@ class X3:
             
             # Пытаемся получить список онлайн клиентов через API (самый точный метод)
             online_client_ids, api_available = self.get_online_clients_ids(timeout=timeout)
-            # Используем API метод, если он доступен и вернул результат
-            # Если API недоступен, используем fallback - проверку трафика
+            # Используем API метод, если он доступен (даже если вернул пустой список - это значит 0 онлайн)
+            # Если API недоступен (api_available=False), используем fallback - проверку трафика
             use_api_method = api_available
             
             # Если API недоступен, используем fallback - проверку трафика
@@ -631,7 +636,8 @@ class X3:
                             is_online = False
                             
                             # Метод 1: Используем API /onlines (самый точный)
-                            if use_api_method and online_client_ids:
+                            # Если API доступен, используем его (даже если online_client_ids пустой - это значит 0 онлайн)
+                            if use_api_method:
                                 # Получаем ID клиента в зависимости от протокола
                                 if protocol == 'trojan':
                                     client_id = client.get('password')
