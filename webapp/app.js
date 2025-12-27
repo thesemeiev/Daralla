@@ -357,7 +357,7 @@ class CustomGlobe {
                 const currentDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
                 const scale = currentDistance / this.lastDistance;
                 this.zoom *= scale;
-                this.zoom = Math.max(0.5, Math.min(3, this.zoom)); // Увеличиваем максимум до 3x
+                this.zoom = Math.max(0.5, Math.min(6, this.zoom)); // Увеличиваем максимум до 6x
                 this.lastDistance = currentDistance;
                 this.draw();
             }
@@ -382,7 +382,7 @@ class CustomGlobe {
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             this.zoom += e.deltaY * -0.001;
-            this.zoom = Math.max(0.5, Math.min(2, this.zoom));
+            this.zoom = Math.max(0.5, Math.min(6, this.zoom)); // Увеличиваем максимум до 6x
             this.draw();
         });
     }
@@ -464,127 +464,195 @@ class CustomGlobe {
         return { x, y, visible };
     }
     
-    // Упрощенные границы континентов
-    drawContinentBorders(ctx) {
-        ctx.strokeStyle = '#555';
-        ctx.lineWidth = 1.5 / this.zoom;
-        ctx.globalAlpha = 0.6;
+    // Получить название города по данным сервера
+    getCityName(server) {
+        // Маппинг стран/локаций на города
+        const cityMap = {
+            'Poland': 'Варшава',
+            'Netherlands': 'Дротен',
+            'Russia': 'Москва',
+            'Latvia': 'Рига'
+        };
         
-        // Европа - упрощенный контур
-        const europeOutline = [
-            [70, -10], [72, 0], [71, 15], [70, 25], [68, 30], [65, 32], [60, 30], [55, 25], [50, 20], 
-            [45, 15], [40, 10], [35, 5], [30, 0], [25, -5], [30, -10], [35, -8], [40, -6], [45, -5], 
-            [50, -6], [55, -7], [60, -8], [65, -9], [70, -10]
-        ];
+        // Сначала пробуем по location
+        if (server.location && cityMap[server.location]) {
+            return cityMap[server.location];
+        }
         
-        // Азия - упрощенный контур
-        const asiaOutline = [
-            [30, 100], [35, 110], [40, 120], [45, 130], [50, 140], [45, 150], [40, 160], [35, 170], 
-            [30, 180], [30, -180], [30, -170], [30, -160], [30, -150], [30, -140], [30, -130], 
-            [30, -120], [30, -110], [30, -100], [30, -90], [30, -80], [30, -70], [30, -60], 
-            [30, -50], [30, -40], [30, -30], [30, -20], [30, -10], [30, 0], [30, 10], [30, 20], 
-            [30, 30], [30, 40], [30, 50], [30, 60], [30, 70], [30, 80], [30, 90], [30, 100]
-        ];
-        
-        // Северная Америка - упрощенный контур
-        const northAmericaOutline = [
-            [70, -170], [70, -160], [70, -150], [70, -140], [70, -130], [70, -120], [70, -110], 
-            [70, -100], [70, -90], [70, -80], [70, -70], [65, -60], [60, -50], [55, -40], 
-            [50, -30], [45, -20], [40, -10], [35, 0], [30, 10], [25, 20], [20, 30], [15, 40], 
-            [20, 50], [25, 60], [30, 70], [35, 80], [40, 90], [45, 100], [50, 110], [55, 120], 
-            [60, 130], [65, 140], [70, 150], [75, 160], [80, 170], [75, 180], [70, -180], [70, -170]
-        ];
-        
-        // Южная Америка - упрощенный контур
-        const southAmericaOutline = [
-            [10, -80], [5, -70], [0, -60], [-5, -50], [-10, -40], [-15, -30], [-20, -20], 
-            [-25, -10], [-30, 0], [-35, 10], [-40, 20], [-45, 30], [-50, 40], [-55, 50], 
-            [-60, 60], [-55, 70], [-50, 80], [-45, 90], [-40, 100], [-35, 110], [-30, 120], 
-            [-25, 130], [-20, 140], [-15, 150], [-10, 160], [-5, 170], [0, 180], [5, -180], 
-            [10, -170], [10, -160], [10, -150], [10, -140], [10, -130], [10, -120], 
-            [10, -110], [10, -100], [10, -90], [10, -80]
-        ];
-        
-        // Африка - упрощенный контур
-        const africaOutline = [
-            [35, -20], [30, -10], [25, 0], [20, 10], [15, 20], [10, 30], [5, 40], [0, 50], 
-            [-5, 60], [-10, 70], [-15, 80], [-20, 90], [-25, 100], [-30, 110], [-35, 120], 
-            [-30, 130], [-25, 140], [-20, 150], [-15, 160], [-10, 170], [-5, 180], [0, -180], 
-            [5, -170], [10, -160], [15, -150], [20, -140], [25, -130], [30, -120], [35, -110], 
-            [35, -100], [35, -90], [35, -80], [35, -70], [35, -60], [35, -50], [35, -40], 
-            [35, -30], [35, -20]
-        ];
-        
-        // Австралия - упрощенный контур
-        const australiaOutline = [
-            [-10, 110], [-15, 115], [-20, 120], [-25, 125], [-30, 130], [-35, 135], [-40, 140], 
-            [-35, 145], [-30, 150], [-25, 155], [-20, 160], [-15, 165], [-10, 170], [-5, 175], 
-            [0, 180], [5, -180], [0, -175], [-5, -170], [-10, -165], [-15, -160], [-20, -155], 
-            [-25, -150], [-30, -145], [-35, -140], [-40, -135], [-35, -130], [-30, -125], 
-            [-25, -120], [-20, -115], [-15, -110], [-10, -105], [-5, -100], [0, -95], 
-            [5, -90], [10, -85], [15, -80], [10, -75], [5, -70], [0, -65], [-5, -60], 
-            [-10, -55], [-15, -50], [-20, -45], [-25, -40], [-30, -35], [-35, -30], 
-            [-40, -25], [-35, -20], [-30, -15], [-25, -10], [-20, -5], [-15, 0], 
-            [-10, 5], [-5, 10], [0, 15], [5, 20], [10, 25], [15, 30], [20, 35], [25, 40], 
-            [30, 45], [35, 50], [40, 55], [45, 60], [50, 65], [55, 70], [60, 75], [65, 80], 
-            [70, 85], [75, 90], [80, 95], [85, 100], [90, 105], [95, 110], [100, 115], 
-            [105, 120], [110, 125], [115, 130], [120, 135], [125, 140], [130, 145], 
-            [135, 150], [140, 155], [145, 160], [150, 165], [155, 170], [160, 175], 
-            [165, 180], [170, -180], [165, -175], [160, -170], [155, -165], [150, -160], 
-            [145, -155], [140, -150], [135, -145], [130, -140], [125, -135], [120, -130], 
-            [115, -125], [110, -120], [105, -115], [100, -110], [95, -105], [90, -100], 
-            [85, -95], [80, -90], [75, -85], [70, -80], [65, -75], [60, -70], [55, -65], 
-            [50, -60], [45, -55], [40, -50], [35, -45], [30, -40], [25, -35], [20, -30], 
-            [15, -25], [10, -20], [5, -15], [0, -10], [-5, -5], [-10, 0], [-15, 5], 
-            [-20, 10], [-25, 15], [-30, 20], [-35, 25], [-40, 30], [-35, 35], [-30, 40], 
-            [-25, 45], [-20, 50], [-15, 55], [-10, 60], [-5, 65], [0, 70], [5, 75], 
-            [10, 80], [15, 85], [20, 90], [25, 95], [30, 100], [35, 105], [40, 110], 
-            [45, 115], [50, 120], [55, 125], [60, 130], [65, 135], [70, 140], [75, 145], 
-            [80, 150], [85, 155], [90, 160], [95, 165], [100, 170], [105, 175], 
-            [110, 180], [115, -180], [110, -175], [105, -170], [100, -165], [95, -160], 
-            [90, -155], [85, -150], [80, -145], [75, -140], [70, -135], [65, -130], 
-            [60, -125], [55, -120], [50, -115], [45, -110], [40, -105], [35, -100], 
-            [30, -95], [25, -90], [20, -85], [15, -80], [10, -75], [5, -70], [0, -65], 
-            [-5, -60], [-10, -55], [-15, -50], [-20, -45], [-25, -40], [-30, -35], 
-            [-35, -30], [-40, -25], [-35, -20], [-30, -15], [-25, -10], [-20, -5], 
-            [-15, 0], [-10, 5], [-5, 10], [0, 15], [5, 20], [10, 25], [15, 30], [20, 35], 
-            [25, 40], [30, 45], [35, 50], [40, 55], [45, 60], [50, 65], [55, 70], 
-            [60, 75], [65, 80], [70, 85], [75, 90], [80, 95], [85, 100], [90, 105], 
-            [95, 110], [100, 115], [105, 120], [110, 125], [115, 130], [120, 135], 
-            [125, 140], [130, 145], [135, 150], [140, 155], [145, 160], [150, 165], 
-            [155, 170], [160, 175], [165, 180], [170, -180], [165, -175], [160, -170], 
-            [155, -165], [150, -160], [145, -155], [140, -150], [135, -145], [130, -140], 
-            [125, -135], [120, -130], [115, -125], [110, -120], [105, -115], [100, -110], 
-            [95, -105], [90, -100], [85, -95], [80, -90], [75, -85], [70, -80], 
-            [65, -75], [60, -70], [55, -65], [50, -60], [45, -55], [40, -50], [35, -45], 
-            [30, -40], [25, -35], [20, -30], [15, -25], [10, -20], [5, -15], [0, -10], 
-            [-5, -5], [-10, 0]
-        ];
-        
-        // Рисуем контуры континентов
-        const continents = [europeOutline, asiaOutline, northAmericaOutline, southAmericaOutline, africaOutline];
-        
-        continents.forEach(continent => {
-            ctx.beginPath();
-            let firstPoint = true;
-            for (let i = 0; i < continent.length; i++) {
-                const [lat, lng] = continent[i];
-                const pos = this.latLngToXY(lat, lng);
-                if (pos.visible) {
-                    if (firstPoint) {
-                        ctx.moveTo(pos.x - this.centerX, pos.y - this.centerY);
-                        firstPoint = false;
-                    } else {
-                        ctx.lineTo(pos.x - this.centerX, pos.y - this.centerY);
-                    }
-                } else {
-                    firstPoint = true;
-                }
+        // Если location не подходит, пробуем определить по координатам
+        if (server.lat && server.lng) {
+            // Варшава: 52.2297, 21.0122
+            if (Math.abs(server.lat - 52.2297) < 0.5 && Math.abs(server.lng - 21.0122) < 0.5) {
+                return 'Варшава';
             }
-            ctx.stroke();
-        });
+            // Дротен: 52.5167, 5.7167
+            if (Math.abs(server.lat - 52.5167) < 0.5 && Math.abs(server.lng - 5.7167) < 0.5) {
+                return 'Дротен';
+            }
+            // Москва: 55.7558, 37.6173
+            if (Math.abs(server.lat - 55.7558) < 0.5 && Math.abs(server.lng - 37.6173) < 0.5) {
+                return 'Москва';
+            }
+            // Рига: 56.9496, 24.1052
+            if (Math.abs(server.lat - 56.9496) < 0.5 && Math.abs(server.lng - 24.1052) < 0.5) {
+                return 'Рига';
+            }
+        }
         
-        ctx.globalAlpha = 1.0;
+        // Fallback на display_name или server_name
+        return server.display_name || server.server_name || server.location || '';
+    }
+    
+    // Рисует точки крупных городов (серые)
+    drawMajorCities(ctx) {
+        const cities = this.getMajorCities();
+        const grayColor = '#888'; // Серый цвет
+        const groznyColor = '#FF6B35'; // Оранжево-красный цвет для Грозного
+        const size = 4; // Размер точки меньше, чем у серверов
+        
+        cities.forEach(city => {
+            const pos = this.latLngToXY(city.lat, city.lng);
+            if (!pos.visible) return;
+            
+            // Определяем цвет точки (особый для Грозного, Мекки и Медины)
+            const specialCities = ['Grozny', 'Mecca', 'Medina'];
+            const isSpecial = specialCities.includes(city.name);
+            const pointColor = isSpecial ? groznyColor : grayColor;
+            const strokeColor = isSpecial ? '#CC5528' : '#666';
+            const pointSize = isSpecial ? 5 : size; // Немного больше для особых городов
+            
+            // Рисуем точку
+            ctx.fillStyle = pointColor;
+            ctx.fillRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
+            
+            // Обводка
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
+            
+            // Подпись города (такой же стиль как у серверов)
+            const label = city.name;
+            const fontSize = 10;
+            ctx.font = `${fontSize}px Arial, sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            
+            const textMetrics = ctx.measureText(label);
+            const padding = 4;
+            const labelX = pos.x + pointSize + padding;
+            const labelY = pos.y;
+            
+            // Рисуем текст с обводкой (такой же стиль как у серверов)
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.miterLimit = 2;
+            ctx.strokeText(label, Math.floor(labelX), Math.floor(labelY));
+            ctx.fillText(label, Math.floor(labelX), Math.floor(labelY));
+        });
+    }
+    
+    // Список крупных городов для отображения на глобусе
+    getMajorCities() {
+        return [
+            // Европа
+            { name: 'London', lat: 51.5074, lng: -0.1278 },
+            { name: 'Paris', lat: 48.8566, lng: 2.3522 },
+            { name: 'Berlin', lat: 52.5200, lng: 13.4050 },
+            { name: 'Rome', lat: 41.9028, lng: 12.4964 },
+            { name: 'Madrid', lat: 40.4168, lng: -3.7038 },
+            { name: 'Amsterdam', lat: 52.3676, lng: 4.9041 },
+            { name: 'Prague', lat: 50.0755, lng: 14.4378 },
+            { name: 'Vienna', lat: 48.2082, lng: 16.3738 },
+            { name: 'Stockholm', lat: 59.3293, lng: 18.0686 },
+            { name: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
+            { name: 'Oslo', lat: 59.9139, lng: 10.7522 },
+            { name: 'Helsinki', lat: 60.1699, lng: 24.9384 },
+            { name: 'Dublin', lat: 53.3498, lng: -6.2603 },
+            { name: 'Lisbon', lat: 38.7223, lng: -9.1393 },
+            { name: 'Athens', lat: 37.9838, lng: 23.7275 },
+            { name: 'Istanbul', lat: 41.0082, lng: 28.9784 },
+            { name: 'Kyiv', lat: 50.4501, lng: 30.5234 },
+            { name: 'Minsk', lat: 53.9045, lng: 27.5615 },
+            { name: 'Grozny', lat: 43.3183, lng: 45.6981 },
+            { name: 'Brussels', lat: 50.8503, lng: 4.3517 },
+            { name: 'Budapest', lat: 47.4979, lng: 19.0402 },
+            { name: 'Warsaw', lat: 52.2297, lng: 21.0122 },
+            { name: 'Bucharest', lat: 44.4268, lng: 26.1025 },
+            { name: 'Belgrade', lat: 44.7866, lng: 20.4489 },
+            { name: 'Zagreb', lat: 45.8150, lng: 15.9819 },
+            { name: 'Sofia', lat: 42.6977, lng: 23.3219 },
+            { name: 'Barcelona', lat: 41.3851, lng: 2.1734 },
+            { name: 'Milan', lat: 45.4642, lng: 9.1900 },
+            { name: 'Munich', lat: 48.1351, lng: 11.5820 },
+            { name: 'Frankfurt', lat: 50.1109, lng: 8.6821 },
+            { name: 'Zurich', lat: 47.3769, lng: 8.5417 },
+            // Северная Америка
+            { name: 'New York', lat: 40.7128, lng: -74.0060 },
+            { name: 'Los Angeles', lat: 34.0522, lng: -118.2437 },
+            { name: 'Chicago', lat: 41.8781, lng: -87.6298 },
+            { name: 'Toronto', lat: 43.6532, lng: -79.3832 },
+            { name: 'Miami', lat: 25.7617, lng: -80.1918 },
+            { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
+            { name: 'Seattle', lat: 47.6062, lng: -122.3321 },
+            { name: 'Vancouver', lat: 49.2827, lng: -123.1207 },
+            { name: 'Montreal', lat: 45.5017, lng: -73.5673 },
+            { name: 'Boston', lat: 42.3601, lng: -71.0589 },
+            { name: 'Washington', lat: 38.9072, lng: -77.0369 },
+            { name: 'Atlanta', lat: 33.7490, lng: -84.3880 },
+            { name: 'Dallas', lat: 32.7767, lng: -96.7970 },
+            { name: 'Houston', lat: 29.7604, lng: -95.3698 },
+            { name: 'Mexico City', lat: 19.4326, lng: -99.1332 },
+            // Южная Америка
+            { name: 'São Paulo', lat: -23.5505, lng: -46.6333 },
+            { name: 'Buenos Aires', lat: -34.6037, lng: -58.3816 },
+            { name: 'Rio de Janeiro', lat: -22.9068, lng: -43.1729 },
+            { name: 'Lima', lat: -12.0464, lng: -77.0428 },
+            { name: 'Bogotá', lat: 4.7110, lng: -74.0721 },
+            { name: 'Santiago', lat: -33.4489, lng: -70.6693 },
+            { name: 'Caracas', lat: 10.4806, lng: -66.9036 },
+            // Азия
+            { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
+            { name: 'Beijing', lat: 39.9042, lng: 116.4074 },
+            { name: 'Shanghai', lat: 31.2304, lng: 121.4737 },
+            { name: 'Hong Kong', lat: 22.3193, lng: 114.1694 },
+            { name: 'Singapore', lat: 1.3521, lng: 103.8198 },
+            { name: 'Bangkok', lat: 13.7563, lng: 100.5018 },
+            { name: 'Delhi', lat: 28.6139, lng: 77.2090 },
+            { name: 'Mumbai', lat: 19.0760, lng: 72.8777 },
+            { name: 'Dubai', lat: 25.2048, lng: 55.2708 },
+            { name: 'Seoul', lat: 37.5665, lng: 126.9780 },
+            { name: 'Jakarta', lat: -6.2088, lng: 106.8456 },
+            { name: 'Manila', lat: 14.5995, lng: 120.9842 },
+            { name: 'Kuala Lumpur', lat: 3.1390, lng: 101.6869 },
+            { name: 'Ho Chi Minh City', lat: 10.8231, lng: 106.6297 },
+            { name: 'Bangalore', lat: 12.9716, lng: 77.5946 },
+            { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
+            { name: 'Kolkata', lat: 22.5726, lng: 88.3639 },
+            { name: 'Karachi', lat: 24.8607, lng: 67.0011 },
+            { name: 'Lahore', lat: 31.5204, lng: 74.3587 },
+            { name: 'Tehran', lat: 35.6892, lng: 51.3890 },
+            { name: 'Riyadh', lat: 24.7136, lng: 46.6753 },
+            { name: 'Mecca', lat: 21.3891, lng: 39.8579 },
+            { name: 'Medina', lat: 24.5247, lng: 39.5692 },
+            { name: 'Tel Aviv', lat: 32.0853, lng: 34.7818 },
+            // Африка
+            { name: 'Cairo', lat: 30.0444, lng: 31.2357 },
+            { name: 'Johannesburg', lat: -26.2041, lng: 28.0473 },
+            { name: 'Lagos', lat: 6.5244, lng: 3.3792 },
+            { name: 'Nairobi', lat: -1.2921, lng: 36.8219 },
+            { name: 'Casablanca', lat: 33.5731, lng: -7.5898 },
+            { name: 'Cape Town', lat: -33.9249, lng: 18.4241 },
+            { name: 'Addis Ababa', lat: 9.1450, lng: 38.7667 },
+            { name: 'Tunis', lat: 36.8065, lng: 10.1815 },
+            // Австралия и Океания
+            { name: 'Sydney', lat: -33.8688, lng: 151.2093 },
+            { name: 'Melbourne', lat: -37.8136, lng: 144.9631 },
+            { name: 'Auckland', lat: -36.8485, lng: 174.7633 },
+            { name: 'Brisbane', lat: -27.4698, lng: 153.0251 },
+            { name: 'Perth', lat: -31.9505, lng: 115.8605 }
+        ];
     }
     
     draw() {
@@ -661,10 +729,10 @@ class CustomGlobe {
             ctx.stroke();
         }
         
-        // Рисуем границы континентов
-        this.drawContinentBorders(ctx);
-        
         ctx.restore();
+        
+        // Рисуем точки крупных городов (серые)
+        this.drawMajorCities(ctx);
         
         // Рисуем точки серверов
         this.servers.forEach(server => {
@@ -704,8 +772,8 @@ class CustomGlobe {
             ctx.fillStyle = glow;
             ctx.fillRect(Math.floor(pos.x - glowSize), Math.floor(pos.y - glowSize), glowSize * 2, glowSize * 2);
             
-            // Подпись сервера
-            const label = server.location || server.display_name || server.server_name || '';
+            // Подпись сервера - используем названия городов вместо стран
+            const label = this.getCityName(server);
             if (label) {
                 // Размер шрифта фиксированный, не масштабируется с зумом
                 const fontSize = 10;
