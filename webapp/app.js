@@ -403,8 +403,8 @@ class CustomGlobe {
         const deltaX = currentX - this.lastX;
         const deltaY = currentY - this.lastY;
         
-        // Горизонтальное вращение (влево-вправо)
-        this.rotation += deltaX * 0.01;
+        // Горизонтальное вращение (влево-вправо) - инвертируем направление
+        this.rotation -= deltaX * 0.01;
         
         // Вертикальное вращение (вверх-вниз) - ограничиваем угол наклона
         this.pitch += deltaY * 0.01;
@@ -470,25 +470,26 @@ class CustomGlobe {
         // Рисуем круг глобуса (темный стиль)
         ctx.save();
         ctx.translate(this.centerX, this.centerY);
-        ctx.scale(this.zoom, this.zoom);
+        // Убираем ctx.scale - применяем zoom только в latLngToXY для единообразия
         
-        // Внешний круг (граница)
-        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius);
+        // Внешний круг (граница) - применяем zoom к радиусу
+        const scaledRadius = this.radius * this.zoom;
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, scaledRadius);
         gradient.addColorStop(0, '#2a2a2a');
         gradient.addColorStop(0.7, '#1a1a1a');
         gradient.addColorStop(1, '#0a0a0a');
         
         ctx.beginPath();
-        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
         ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 / this.zoom; // Компенсируем толщину линии при зуме
         ctx.stroke();
         
         // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
         ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1 / this.zoom; // Компенсируем толщину линии при зуме
         
         // Меридианы (вертикальные линии)
         for (let i = 0; i < 12; i++) {
@@ -540,17 +541,20 @@ class CustomGlobe {
             const pos = this.latLngToXY(server.lat, server.lng);
             if (!pos.visible) return;
             
-            // Определяем цвет и размер
+            // Определяем цвет и размер (масштабируем размер точки с зумом)
             let color = '#4CAF50'; // Зеленый
-            let size = 6;
+            let baseSize = 6;
             
             if (server.usage_percentage > 50) {
                 color = '#FF5722'; // Красный
-                size = 10;
+                baseSize = 10;
             } else if (server.usage_percentage > 25) {
                 color = '#FFC107'; // Желтый
-                size = 8;
+                baseSize = 8;
             }
+            
+            // Размер точки масштабируется с зумом
+            const size = baseSize * this.zoom;
             
             // Рисуем точку в пиксельном стиле
             ctx.fillStyle = color;
@@ -562,11 +566,45 @@ class CustomGlobe {
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
             // Свечение
-            const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size * 2);
+            const glowSize = size * 2;
+            const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowSize);
             glow.addColorStop(0, color + '80');
             glow.addColorStop(1, color + '00');
             ctx.fillStyle = glow;
-            ctx.fillRect(Math.floor(pos.x - size * 2), Math.floor(pos.y - size * 2), size * 4, size * 4);
+            ctx.fillRect(Math.floor(pos.x - glowSize), Math.floor(pos.y - glowSize), glowSize * 2, glowSize * 2);
+            
+            // Подпись сервера
+            const label = server.location || server.display_name || server.server_name || '';
+            if (label) {
+                // Размер шрифта масштабируется с зумом
+                const fontSize = Math.max(10, 12 * this.zoom);
+                ctx.font = `${fontSize}px Arial, sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                
+                // Измеряем размер текста
+                const textMetrics = ctx.measureText(label);
+                const textWidth = textMetrics.width;
+                const textHeight = fontSize;
+                const padding = 4 * this.zoom;
+                
+                // Позиция подписи (справа от точки)
+                const labelX = pos.x + size + padding;
+                const labelY = pos.y;
+                
+                // Рисуем полупрозрачный фон для читаемости
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(
+                    Math.floor(labelX - padding),
+                    Math.floor(labelY - textHeight / 2 - padding),
+                    Math.floor(textWidth + padding * 2),
+                    Math.floor(textHeight + padding * 2)
+                );
+                
+                // Рисуем текст
+                ctx.fillStyle = '#fff';
+                ctx.fillText(label, Math.floor(labelX), Math.floor(labelY));
+            }
         });
     }
     
