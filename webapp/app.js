@@ -964,6 +964,11 @@ async function loadServerMap() {
         // Очищаем контейнер
         mapContainer.innerHTML = '';
         
+        // Настраиваем контейнер для того, чтобы глобус уходил в фон
+        mapContainer.style.overflow = 'visible';
+        mapContainer.style.position = 'relative';
+        mapContainer.style.zIndex = '0';
+        
         // Создаем canvas с учетом devicePixelRatio для четкого рендеринга
         const dpr = window.devicePixelRatio || 1;
         const canvas = document.createElement('canvas');

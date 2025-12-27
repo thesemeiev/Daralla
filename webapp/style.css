@@ -55,6 +55,9 @@ header {
     text-align: center;
     margin-bottom: 32px;
     padding-bottom: 24px;
+    position: relative;
+    z-index: 10;
+    background: var(--bg-color, #1a1a1a);
 }
 
 h1 {
@@ -67,6 +70,8 @@ h1 {
 .loading {
     text-align: center;
     padding: 60px 20px;
+    position: relative;
+    z-index: 10;
 }
 
 .spinner {
@@ -91,6 +96,8 @@ h1 {
 .error, .empty {
     text-align: center;
     padding: 60px 20px;
+    position: relative;
+    z-index: 10;
 }
 
 .error p, .empty p {
@@ -454,6 +461,8 @@ h1 {
     border-radius: 14px;
     padding: 20px;
     margin-bottom: 12px;
+    position: relative;
+    z-index: 10;
 }
 
 .server-card.online {
