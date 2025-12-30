@@ -616,10 +616,12 @@ def create_webhook_app(bot_app):
                 
                 loop.run_until_complete(cancel_old_payments())
                 
-                # Создаем уникальный email для подписки
+                # Для продления используем существующий email из подписки
+                # Для новой покупки email будет создан после создания подписки в process_new_purchase_payment
+                # Временный UUID используется только для метаданных платежа, реальный email будет {user_id}_{subscription_id}
                 now = int(datetime.datetime.now().timestamp())
                 subscription_uuid = str(uuid.uuid4())
-                unique_email = f'{user_id}_{subscription_uuid}'
+                unique_email = f'{user_id}_{subscription_uuid}'  # Временный, будет заменен на {user_id}_{subscription_id} после создания подписки
                 
                 # Формируем period для платежа
                 payment_period = f"extend_sub_{period}" if subscription_id else period

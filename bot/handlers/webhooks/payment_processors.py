@@ -387,6 +387,11 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             )
             subscription_created = True
             logger.info(f"Подписка создана: sub_id={sub_dict['id']}, token={token}")
+            
+            # Используем правильный формат email: {user_id}_{subscription_id}
+            # Вместо UUID из метаданных платежа используем реальный subscription_id
+            unique_email = f"{user_id}_{sub_dict['id']}"
+            logger.info(f"Используется правильный формат email: {unique_email} (вместо UUID из метаданных)")
         except Exception as sub_e:
             logger.error(f"Ошибка при создании подписки для user_id={user_id}: {sub_e}")
             await update_payment_status(payment_id, 'failed')

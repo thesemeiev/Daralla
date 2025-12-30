@@ -149,9 +149,12 @@ async def handle_payment(update, context, price, period):
                 logger.info(f"Отменено {canceled_count} pending платежей для user_id={user_id}")
         
         # 2. Создаём новый платёж
+        # ВАЖНО: subscription_id здесь - это временный UUID для метаданных платежа
+        # Реальный email будет создан в process_new_purchase_payment после создания подписки
+        # в формате {user_id}_{subscription_id}, где subscription_id - реальный ID подписки из БД
         now = int(datetime.datetime.now().timestamp())
-        subscription_id = str(uuid.uuid4())
-        unique_email = f'{user_id}_{subscription_id}'
+        subscription_id = str(uuid.uuid4())  # Временный UUID для метаданных
+        unique_email = f'{user_id}_{subscription_id}'  # Временный, будет заменен на {user_id}_{subscription_id} после создания подписки
         
         # Обычная покупка за деньги (1 подписка = 1 устройство)
         try:

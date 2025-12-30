@@ -519,9 +519,8 @@ class SubscriptionManager:
                             client_email = current_servers[0]["client_email"]
                         else:
                             # Если это первая подписка без серверов, создаем новый email
-                            # Формат: {user_id}_{uuid}
-                            import uuid
-                            client_email = f"{user_id}_{uuid.uuid4().hex[:8]}"
+                            # Формат: {user_id}_{subscription_id} (единый стандарт для всех подписок)
+                            client_email = f"{user_id}_{subscription_id}"
                         
                         if not client_email:
                             logger.warning(
