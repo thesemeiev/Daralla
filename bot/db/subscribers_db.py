@@ -796,3 +796,299 @@ async def get_all_subscriptions_by_user(user_id: str):
         ) as cur:
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
+
+async def get_subscription_types_statistics():
+    """
+    Возвращает статистику по типам активных подписок (пробные vs купленные)
+    
+    Returns:
+        dict: {
+            'trial_active': int,      # Активные пробные подписки (status='trial' или price=0)
+            'purchased_active': int,  # Активные купленные подписки (status='active' и price>0 и status!='trial')
+            'month_active': int,      # Активные подписки на 1 месяц
+            '3month_active': int,     # Активные подписки на 3 месяца
+            'total_active': int       # Всего активных подписок
+        }
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Активные пробные подписки (status='trial' ИЛИ (status='active' И price=0))
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscriptions 
+            WHERE (status = 'trial' OR (status = 'active' AND price = 0))
+        """) as cur:
+            row = await cur.fetchone()
+            trial_active = row['count'] if row else 0
+        
+        # Активные купленные подписки (status='active' И price>0 И status!='trial')
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscriptions 
+            WHERE status = 'active' 
+            AND price > 0
+            AND status != 'trial'
+        """) as cur:
+            row = await cur.fetchone()
+            purchased_active = row['count'] if row else 0
+        
+        # Активные подписки на 1 месяц
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscriptions 
+            WHERE status = 'active' 
+            AND period = 'month'
+        """) as cur:
+            row = await cur.fetchone()
+            month_active = row['count'] if row else 0
+        
+        # Активные подписки на 3 месяца
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscriptions 
+            WHERE status = 'active' 
+            AND period = '3month'
+        """) as cur:
+            row = await cur.fetchone()
+            month3_active = row['count'] if row else 0
+        
+        # Всего активных подписок
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscriptions 
+            WHERE status = 'active'
+        """) as cur:
+            row = await cur.fetchone()
+            total_active = row['count'] if row else 0
+        
+        return {
+            'trial_active': trial_active,
+            'purchased_active': purchased_active,
+            'month_active': month_active,
+            '3month_active': month3_active,
+            'total_active': total_active
+        }
+
+async def get_subscription_dynamics_data(days: int = 30):
+    """
+    Возвращает динамику подписок по дням за указанный период
+    
+    Args:
+        days: Количество дней для анализа
+    
+    Returns:
+        list: [
+            {
+                'date': str,              # Дата в формате YYYY-MM-DD
+                'trial_active': int,      # Активные пробные в этот день
+                'purchased_active': int,  # Активные купленные в этот день
+                'trial_created': int,     # Созданные пробные в этот день
+                'purchased_created': int  # Созданные купленные в этот день
+            },
+            ...
+        ]
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Получаем все подписки, созданные или активные в период
+        async with db.execute("""
+            SELECT 
+                created_at,
+                DATE(datetime(created_at, 'unixepoch')) as date,
+                status,
+                price,
+                period,
+                expires_at
+            FROM subscriptions
+            WHERE created_at >= ? OR expires_at >= ?
+            ORDER BY created_at
+        """, (start_timestamp, start_timestamp)) as cur:
+            rows = await cur.fetchall()
+        
+        # Группируем по датам
+        daily_data = {}
+        
+        for row in rows:
+            date_str = row['date']
+            if date_str not in daily_data:
+                daily_data[date_str] = {
+                    'trial_active': 0,
+                    'purchased_active': 0,
+                    'trial_created': 0,
+                    'purchased_created': 0
+                }
+            
+            # Определяем тип подписки
+            is_trial = row['status'] == 'trial' or row['price'] == 0
+            is_active = row['status'] == 'active'
+            created_timestamp = row['created_at']
+            
+            # Если подписка была создана в этот день
+            if created_timestamp >= start_timestamp:
+                if is_trial:
+                    daily_data[date_str]['trial_created'] += 1
+                else:
+                    daily_data[date_str]['purchased_created'] += 1
+            
+            # Если подписка активна в этот день
+            if is_active:
+                if is_trial:
+                    daily_data[date_str]['trial_active'] += 1
+                else:
+                    daily_data[date_str]['purchased_active'] += 1
+        
+        # Преобразуем в список и заполняем пропущенные даты
+        result = []
+        start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
+        end_date = datetime.datetime.now().date()
+        
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            if date_str in daily_data:
+                result.append({
+                    'date': date_str,
+                    **daily_data[date_str]
+                })
+            else:
+                result.append({
+                    'date': date_str,
+                    'trial_active': 0,
+                    'purchased_active': 0,
+                    'trial_created': 0,
+                    'purchased_created': 0
+                })
+            current_date += datetime.timedelta(days=1)
+        
+        return result
+
+async def get_subscription_conversion_data(days: int = 30):
+    """
+    Возвращает данные о конверсии пробных подписок в купленные
+    
+    Args:
+        days: Количество дней для анализа
+    
+    Returns:
+        dict: {
+            'total_trial_users': int,        # Всего пользователей с пробными подписками
+            'converted_users': int,          # Пользователей, которые купили после пробной
+            'conversion_rate': float,        # Процент конверсии
+            'daily': [                       # Ежедневная статистика
+                {
+                    'date': str,
+                    'trial_users': int,
+                    'converted': int,
+                    'conversion_rate': float
+                },
+                ...
+            ]
+        }
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Находим всех пользователей с пробными подписками
+        async with db.execute("""
+            SELECT DISTINCT subscriber_id
+            FROM subscriptions
+            WHERE (status = 'trial' OR price = 0)
+            AND created_at >= ?
+        """, (start_timestamp,)) as cur:
+            trial_user_ids = [row['subscriber_id'] for row in await cur.fetchall()]
+        
+        if not trial_user_ids:
+            return {
+                'total_trial_users': 0,
+                'converted_users': 0,
+                'conversion_rate': 0.0,
+                'daily': []
+            }
+        
+        # Проверяем, сколько из них купили подписку
+        placeholders = ','.join(['?'] * len(trial_user_ids))
+        async with db.execute(f"""
+            SELECT COUNT(DISTINCT subscriber_id) as count
+            FROM subscriptions
+            WHERE subscriber_id IN ({placeholders})
+            AND status IN ('active', 'expired', 'canceled')
+            AND status != 'trial'
+            AND price > 0
+        """, trial_user_ids) as cur:
+            row = await cur.fetchone()
+            converted_users = row['count'] if row else 0
+        
+        total_trial_users = len(trial_user_ids)
+        conversion_rate = (converted_users / total_trial_users * 100) if total_trial_users > 0 else 0.0
+        
+        # Ежедневная статистика (упрощенная версия)
+        daily = []
+        start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
+        end_date = datetime.datetime.now().date()
+        
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            date_timestamp = int(datetime.datetime.combine(current_date, datetime.time.min).timestamp())
+            next_date_timestamp = date_timestamp + 86400
+            
+            # Пробные подписки, созданные в этот день
+            async with db.execute("""
+                SELECT COUNT(DISTINCT subscriber_id) as count
+                FROM subscriptions
+                WHERE (status = 'trial' OR price = 0)
+                AND created_at >= ? AND created_at < ?
+            """, (date_timestamp, next_date_timestamp)) as cur:
+                row = await cur.fetchone()
+                trial_users = row['count'] if row else 0
+            
+            # Конверсия для этих пользователей (упрощенно - проверяем, купили ли они в течение 7 дней)
+            if trial_users > 0:
+                async with db.execute(f"""
+                    SELECT COUNT(DISTINCT s1.subscriber_id) as count
+                    FROM subscriptions s1
+                    WHERE s1.subscriber_id IN (
+                        SELECT DISTINCT subscriber_id
+                        FROM subscriptions
+                        WHERE (status = 'trial' OR price = 0)
+                        AND created_at >= ? AND created_at < ?
+                    )
+                    AND EXISTS (
+                        SELECT 1 FROM subscriptions s2
+                        WHERE s2.subscriber_id = s1.subscriber_id
+                        AND s2.status IN ('active', 'expired', 'canceled')
+                        AND s2.status != 'trial'
+                        AND s2.price > 0
+                        AND s2.created_at >= ? AND s2.created_at < ?
+                    )
+                """, (date_timestamp, next_date_timestamp, date_timestamp, next_date_timestamp + 7*86400)) as cur:
+                    row = await cur.fetchone()
+                    converted = row['count'] if row else 0
+            else:
+                converted = 0
+            
+            conversion_rate_daily = (converted / trial_users * 100) if trial_users > 0 else 0.0
+            
+            daily.append({
+                'date': date_str,
+                'trial_users': trial_users,
+                'converted': converted,
+                'conversion_rate': round(conversion_rate_daily, 2)
+            })
+            
+            current_date += datetime.timedelta(days=1)
+        
+        return {
+            'total_trial_users': total_trial_users,
+            'converted_users': converted_users,
+            'conversion_rate': round(conversion_rate, 2),
+            'daily': daily
+        }

@@ -68,6 +68,8 @@ function showPage(pageName) {
         loadAdminStats();
     } else if (pageName === 'admin-notifications') {
         loadNotificationStats();
+    } else if (pageName === 'admin-subscriptions') {
+        loadSubscriptionStats();
     }
 }
 
@@ -1812,6 +1814,9 @@ async function showAdminUserDetail(userId) {
 }
 
 // Показать форму редактирования подписки
+// Глобальная переменная для хранения исходных значений подписки
+let originalSubscriptionData = null;
+
 async function showAdminSubscriptionEdit(subId) {
     try {
         const initData = tg.initData;
@@ -1842,6 +1847,14 @@ async function showAdminSubscriptionEdit(subId) {
         const data = await response.json();
         const sub = data.subscription;
         
+        // Сохраняем исходные данные для сравнения
+        originalSubscriptionData = {
+            name: sub.name || '',
+            device_limit: sub.device_limit || 1,
+            status: sub.status || 'active',
+            expires_at: sub.expires_at
+        };
+        
         document.getElementById('admin-subscription-edit-loading').style.display = 'none';
         document.getElementById('admin-subscription-edit-content').style.display = 'block';
         
@@ -1869,25 +1882,109 @@ async function showAdminSubscriptionEdit(subId) {
 async function saveSubscriptionChanges(event) {
     event.preventDefault();
     
+    if (!currentEditingSubscriptionId || !originalSubscriptionData) {
+        alert('Ошибка: данные подписки не загружены');
+        return;
+    }
+    
+    const form = event.target;
+    const newData = {
+        name: form.name.value,
+        device_limit: parseInt(form.device_limit.value),
+        status: form.status.value,
+        expires_at: Math.floor(new Date(form.expires_at.value).getTime() / 1000)
+    };
+    
+    // Определяем, что изменилось
+    const changes = [];
+    if (newData.name !== originalSubscriptionData.name) {
+        changes.push({
+            field: 'Название',
+            old: originalSubscriptionData.name || '(не указано)',
+            new: newData.name || '(не указано)'
+        });
+    }
+    if (newData.device_limit !== originalSubscriptionData.device_limit) {
+        changes.push({
+            field: 'Лимит устройств',
+            old: originalSubscriptionData.device_limit,
+            new: newData.device_limit
+        });
+    }
+    if (newData.status !== originalSubscriptionData.status) {
+        const statusNames = {
+            'active': 'Активна',
+            'expired': 'Истекла',
+            'canceled': 'Отменена',
+            'deleted': 'Удалена'
+        };
+        changes.push({
+            field: 'Статус',
+            old: statusNames[originalSubscriptionData.status] || originalSubscriptionData.status,
+            new: statusNames[newData.status] || newData.status
+        });
+    }
+    if (newData.expires_at !== originalSubscriptionData.expires_at) {
+        const oldDate = new Date(originalSubscriptionData.expires_at * 1000).toLocaleString('ru-RU');
+        const newDate = new Date(newData.expires_at * 1000).toLocaleString('ru-RU');
+        changes.push({
+            field: 'Дата истечения',
+            old: oldDate,
+            new: newDate
+        });
+    }
+    
+    // Если есть изменения, показываем модальное окно
+    if (changes.length > 0) {
+        // Сохраняем данные формы для использования после подтверждения
+        window.pendingSubscriptionUpdate = newData;
+        
+        // Показываем список изменений
+        const changesList = document.getElementById('subscription-changes-list');
+        changesList.innerHTML = changes.map(change => `
+            <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #333;">
+                <div style="font-weight: bold; color: #4CAF50; margin-bottom: 4px;">${escapeHtml(change.field)}</div>
+                <div style="color: #999; font-size: 12px;">Было: ${escapeHtml(String(change.old))}</div>
+                <div style="color: #fff; font-size: 12px;">Станет: ${escapeHtml(String(change.new))}</div>
+            </div>
+        `).join('');
+        
+        // Показываем модальное окно
+        document.getElementById('subscription-confirm-modal').style.display = 'flex';
+    } else {
+        // Нет изменений - просто возвращаемся
+        alert('Нет изменений для сохранения');
+    }
+}
+
+// Закрытие модального окна
+function closeSubscriptionConfirmModal() {
+    document.getElementById('subscription-confirm-modal').style.display = 'none';
+    window.pendingSubscriptionUpdate = null;
+}
+
+// Подтверждение и сохранение изменений
+async function confirmSaveSubscriptionChanges() {
+    if (!window.pendingSubscriptionUpdate) {
+        closeSubscriptionConfirmModal();
+        return;
+    }
+    
     try {
         const initData = tg.initData;
         if (!initData) {
             alert('Ошибка авторизации');
+            closeSubscriptionConfirmModal();
             return;
         }
         
-        if (!currentEditingSubscriptionId) {
-            alert('Ошибка: ID подписки не найден');
-            return;
+        // Показываем индикатор загрузки
+        const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
+        const originalText = confirmBtn ? confirmBtn.textContent : 'Подтвердить и сохранить';
+        if (confirmBtn) {
+            confirmBtn.textContent = 'Сохранение...';
+            confirmBtn.disabled = true;
         }
-        
-        const form = event.target;
-        const formData = {
-            name: form.name.value,
-            device_limit: parseInt(form.device_limit.value),
-            status: form.status.value,
-            expires_at: Math.floor(new Date(form.expires_at.value).getTime() / 1000)
-        };
         
         const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/update`, {
             method: 'POST',
@@ -1896,7 +1993,7 @@ async function saveSubscriptionChanges(event) {
             },
             body: JSON.stringify({
                 initData,
-                ...formData
+                ...window.pendingSubscriptionUpdate
             })
         });
         
@@ -1907,13 +2004,24 @@ async function saveSubscriptionChanges(event) {
         
         const data = await response.json();
         
-        alert('Изменения сохранены!');
+        // Закрываем модальное окно
+        closeSubscriptionConfirmModal();
+        
+        // Показываем успешное сообщение
+        alert('Изменения сохранены и синхронизированы с серверами!');
         
         // Возвращаемся назад
         goBackFromSubscriptionEdit();
     } catch (error) {
         console.error('Ошибка сохранения подписки:', error);
         alert('Ошибка сохранения: ' + error.message);
+        
+        // Восстанавливаем кнопку
+        const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
+        if (confirmBtn) {
+            confirmBtn.textContent = 'Подтвердить и сохранить';
+            confirmBtn.disabled = false;
+        }
     }
 }
 
@@ -2228,6 +2336,9 @@ let notificationDeliveryChart = null;
 let notificationSuccessRateChart = null;
 let notificationBlockedChart = null;
 let notificationTypesChart = null;
+let subscriptionTypesChart = null;
+let subscriptionDynamicsChart = null;
+let subscriptionConversionChart = null;
 
 // Загрузка графика роста пользователей
 async function loadUserGrowthChart(days = 30) {
@@ -3526,3 +3637,314 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Проверяем права админа
     await checkAdminAccess();
 });
+
+// Загрузка статистики подписок
+async function loadSubscriptionStats(days = 30) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            showError('admin-subscriptions-error', 'Ошибка авторизации');
+            return;
+        }
+        
+        document.getElementById('admin-subscriptions-loading').style.display = 'block';
+        document.getElementById('admin-subscriptions-error').style.display = 'none';
+        document.getElementById('admin-subscriptions-content').style.display = 'none';
+        
+        const response = await fetch('/api/admin/charts/subscriptions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData, days: days })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки статистики подписок');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            throw new Error('Неверный формат данных');
+        }
+        
+        const data = result.data;
+        const types = data.types || {};
+        
+        document.getElementById('admin-subscriptions-loading').style.display = 'none';
+        document.getElementById('admin-subscriptions-content').style.display = 'block';
+        
+        // Обновляем карточки статистики
+        document.getElementById('subscriptions-trial').textContent = types.trial_active || 0;
+        document.getElementById('subscriptions-purchased').textContent = types.purchased_active || 0;
+        document.getElementById('subscriptions-conversion').textContent = (types.conversion_rate || 0).toFixed(1) + '%';
+        document.getElementById('subscriptions-month').textContent = types.month_active || 0;
+        document.getElementById('subscriptions-3month').textContent = types['3month_active'] || 0;
+        document.getElementById('subscriptions-total-active').textContent = types.total_active || 0;
+        
+        // Загружаем графики
+        await loadSubscriptionTypesChart(types);
+        await loadSubscriptionDynamicsChart(data.dynamics || []);
+        await loadSubscriptionConversionChart(data.conversion || {});
+        
+    } catch (error) {
+        console.error('Ошибка загрузки статистики подписок:', error);
+        document.getElementById('admin-subscriptions-loading').style.display = 'none';
+        showError('admin-subscriptions-error', 'Ошибка загрузки статистики подписок');
+    }
+}
+
+// Загрузка графика типов подписок (круговая диаграмма)
+async function loadSubscriptionTypesChart(typesData) {
+    try {
+        const ctx = document.getElementById('subscription-types-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (subscriptionTypesChart) {
+            subscriptionTypesChart.destroy();
+        }
+        
+        const trial = typesData.trial_active || 0;
+        const purchased = typesData.purchased_active || 0;
+        const total = trial + purchased;
+        
+        if (total === 0) {
+            // Показываем пустой график
+            subscriptionTypesChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Нет данных'],
+                    datasets: [{
+                        data: [1],
+                        backgroundColor: ['rgba(128, 128, 128, 0.5)']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            return;
+        }
+        
+        subscriptionTypesChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Пробные', 'Купленные'],
+                datasets: [{
+                    data: [trial, purchased],
+                    backgroundColor: [
+                        'rgba(255, 206, 86, 0.8)',
+                        'rgba(75, 192, 192, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgb(255, 206, 86)',
+                        'rgb(75, 192, 192)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#fff',
+                            padding: 15,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика типов подписок:', error);
+    }
+}
+
+// Загрузка графика динамики подписок
+async function loadSubscriptionDynamicsChart(dynamicsData) {
+    try {
+        const ctx = document.getElementById('subscription-dynamics-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (subscriptionDynamicsChart) {
+            subscriptionDynamicsChart.destroy();
+        }
+        
+        const labels = dynamicsData.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        subscriptionDynamicsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Пробные (активные)',
+                        data: dynamicsData.map(item => item.trial_active || 0),
+                        borderColor: 'rgb(255, 206, 86)',
+                        backgroundColor: 'rgba(255, 206, 86, 0.2)',
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'Купленные (активные)',
+                        data: dynamicsData.map(item => item.purchased_active || 0),
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#fff'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика динамики подписок:', error);
+    }
+}
+
+// Загрузка графика конверсии
+async function loadSubscriptionConversionChart(conversionData) {
+    try {
+        const ctx = document.getElementById('subscription-conversion-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (subscriptionConversionChart) {
+            subscriptionConversionChart.destroy();
+        }
+        
+        const daily = conversionData.daily || [];
+        const labels = daily.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        subscriptionConversionChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Процент конверсии (%)',
+                        data: daily.map(item => item.conversion_rate || 0),
+                        borderColor: 'rgb(153, 102, 255)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                        tension: 0.1,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#fff'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            color: '#fff',
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика конверсии:', error);
+    }
+}
+
+// Изменение периода для динамики подписок
+function changeSubscriptionsPeriod() {
+    const select = document.getElementById('subscriptions-period');
+    const days = parseInt(select.value);
+    loadSubscriptionStats(days);
+}
+
+// Изменение периода для конверсии подписок
+function changeConversionSubscriptionsPeriod() {
+    const select = document.getElementById('conversion-subscriptions-period');
+    const days = parseInt(select.value);
+    loadSubscriptionStats(days);
+}

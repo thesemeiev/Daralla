@@ -1579,7 +1579,7 @@ def create_webhook_app(bot_app):
             if not updates:
                 return jsonify({'error': 'No fields to update'}), 400
             
-            from ...db.subscribers_db import get_subscription_by_id_only, update_subscription_name, update_subscription_expiry, update_subscription_status, DB_PATH
+            from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, DB_PATH
             import aiosqlite
             
             loop = asyncio.new_event_loop()
@@ -1590,7 +1590,12 @@ def create_webhook_app(bot_app):
                 if not sub:
                     return jsonify({'error': 'Subscription not found'}), 404
                 
-                # Обновляем поля
+                # Сохраняем старые значения для синхронизации
+                old_status = sub['status']
+                old_expires_at = sub['expires_at']
+                old_device_limit = sub['device_limit']
+                
+                # Обновляем поля в БД
                 if 'name' in updates:
                     loop.run_until_complete(update_subscription_name(sub_id, updates['name']))
                 
@@ -1612,6 +1617,113 @@ def create_webhook_app(bot_app):
                 
                 # Получаем обновленную подписку
                 updated_sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
+                
+                # Синхронизация с X-UI серверами
+                async def sync_with_servers():
+                    # Получаем менеджеры из глобальных переменных
+                    from .payment_processors import get_globals
+                    managers = get_globals()
+                    server_manager = managers.get('server_manager')
+                    subscription_manager = managers.get('subscription_manager')
+                    
+                    if not server_manager or not subscription_manager:
+                        logger.warning("server_manager или subscription_manager не доступны для синхронизации")
+                        return
+                    
+                    # Получаем список серверов подписки
+                    servers = await get_subscription_servers(sub_id)
+                    if not servers:
+                        logger.info(f"Подписка {sub_id} не имеет привязанных серверов, синхронизация не требуется")
+                        return
+                    
+                    # Получаем user_id из subscriber_id
+                    subscriber_id = updated_sub.get('subscriber_id')
+                    if not subscriber_id:
+                        logger.warning(f"Подписка {sub_id} не имеет subscriber_id, синхронизация невозможна")
+                        return
+                    
+                    # Получаем user_id из таблицы users
+                    async def get_user_id_from_subscriber():
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            db.row_factory = aiosqlite.Row
+                            async with db.execute("SELECT user_id FROM users WHERE id = ?", (subscriber_id,)) as cur:
+                                row = await cur.fetchone()
+                                return row['user_id'] if row else None
+                    
+                    user_id = await get_user_id_from_subscriber()
+                    if not user_id:
+                        logger.warning(f"Не найден user_id для subscriber_id={subscriber_id}, синхронизация невозможна")
+                        return
+                    
+                    new_status = updated_sub['status']
+                    new_expires_at = updated_sub['expires_at']
+                    new_device_limit = updated_sub['device_limit']
+                    token = updated_sub['subscription_token']
+                    
+                    # 1. Если статус изменился на expired/canceled/deleted - удаляем клиентов
+                    if 'status' in updates and new_status in ['expired', 'canceled', 'deleted']:
+                        if old_status != new_status:
+                            logger.info(f"Статус подписки {sub_id} изменился на {new_status}, удаляем клиентов с серверов")
+                            for server_info in servers:
+                                server_name = server_info['server_name']
+                                client_email = server_info['client_email']
+                                try:
+                                    xui, _ = server_manager.get_server_by_name(server_name)
+                                    if xui:
+                                        xui.deleteClient(client_email)
+                                        logger.info(f"Удален клиент {client_email} с сервера {server_name}")
+                                    else:
+                                        logger.warning(f"Сервер {server_name} не найден")
+                                except Exception as e:
+                                    logger.error(f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}")
+                    
+                    # 2. Если статус изменился на active - создаем/восстанавливаем клиентов
+                    elif 'status' in updates and new_status == 'active' and old_status != 'active':
+                        logger.info(f"Статус подписки {sub_id} изменился на active, создаем/восстанавливаем клиентов")
+                        for server_info in servers:
+                            server_name = server_info['server_name']
+                            client_email = server_info['client_email']
+                            try:
+                                # Используем ensure_client_on_server для создания/обновления клиента
+                                await subscription_manager.ensure_client_on_server(
+                                    subscription_id=sub_id,
+                                    server_name=server_name,
+                                    client_email=client_email,
+                                    user_id=user_id,
+                                    expires_at=new_expires_at,
+                                    token=token,
+                                    device_limit=new_device_limit
+                                )
+                                logger.info(f"Клиент {client_email} создан/обновлен на сервере {server_name}")
+                            except Exception as e:
+                                logger.error(f"Ошибка создания/обновления клиента {client_email} на сервере {server_name}: {e}")
+                    
+                    # 3. Если изменилась дата истечения или лимит устройств - обновляем клиентов
+                    elif 'expires_at' in updates or 'device_limit' in updates:
+                        if new_status == 'active':
+                            logger.info(f"Обновление клиентов подписки {sub_id}: expires_at или device_limit изменились")
+                            for server_info in servers:
+                                server_name = server_info['server_name']
+                                client_email = server_info['client_email']
+                                try:
+                                    xui, _ = server_manager.get_server_by_name(server_name)
+                                    if xui:
+                                        # Обновляем время истечения
+                                        if 'expires_at' in updates:
+                                            import time
+                                            xui.setClientExpiry(client_email, new_expires_at)
+                                            logger.debug(f"Обновлено время истечения для {client_email} на {server_name}: {new_expires_at}")
+                                        
+                                        # Обновляем лимит устройств
+                                        if 'device_limit' in updates:
+                                            xui.updateClientLimitIp(client_email, new_device_limit)
+                                            logger.debug(f"Обновлен лимит устройств для {client_email} на {server_name}: {new_device_limit}")
+                                except Exception as e:
+                                    logger.error(f"Ошибка обновления клиента {client_email} на сервере {server_name}: {e}")
+                
+                # Выполняем синхронизацию
+                loop.run_until_complete(sync_with_servers())
+                
             finally:
                 loop.close()
             
@@ -2321,6 +2433,88 @@ def create_webhook_app(bot_app):
             }
         except Exception as e:
             logger.error(f"Ошибка в /api/admin/charts/notifications: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/charts/subscriptions', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_subscriptions():
+        """Данные для графиков подписок"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            days = int(data.get('days', 30))
+            
+            # Импортируем функции из subscribers_db
+            from ..db.subscribers_db import (
+                get_subscription_types_statistics,
+                get_subscription_dynamics_data,
+                get_subscription_conversion_data
+            )
+            
+            # Создаем новый event loop для async функций
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                # Получаем статистику по типам
+                types_stats = loop.run_until_complete(get_subscription_types_statistics())
+                
+                # Получаем динамику
+                dynamics_data = loop.run_until_complete(get_subscription_dynamics_data(days))
+                
+                # Получаем данные конверсии
+                conversion_data = loop.run_until_complete(get_subscription_conversion_data(days))
+                
+                # Рассчитываем конверсию
+                total_trial = types_stats.get('trial_active', 0)
+                total_purchased = types_stats.get('purchased_active', 0)
+                total_active = types_stats.get('total_active', 0)
+                
+                # Находим пользователей с пробными, которые потом купили
+                conversion_rate = conversion_data.get('conversion_rate', 0.0)
+                
+                result = {
+                    'success': True,
+                    'data': {
+                        'types': {
+                            'trial_active': types_stats.get('trial_active', 0),
+                            'purchased_active': types_stats.get('purchased_active', 0),
+                            'month_active': types_stats.get('month_active', 0),
+                            '3month_active': types_stats.get('3month_active', 0),
+                            'total_active': total_active,
+                            'conversion_rate': round(conversion_rate, 2)
+                        },
+                        'dynamics': dynamics_data,
+                        'conversion': conversion_data
+                    }
+                }
+                
+            finally:
+                loop.close()
+            
+            return jsonify(result), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/subscriptions: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
     return app
