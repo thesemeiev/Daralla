@@ -108,6 +108,19 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
 ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
 
+# URL мини-приложения (формируется на основе WEBHOOK_URL)
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+if WEBHOOK_URL:
+    # Убираем путь /webhook/yookassa и добавляем /webapp/
+    # Например: https://domain.com/webhook/yookassa -> https://domain.com/webapp/
+    if "/webhook/" in WEBHOOK_URL:
+        WEBAPP_URL = WEBHOOK_URL.split("/webhook/")[0] + "/webapp/"
+    else:
+        # Если WEBHOOK_URL не содержит /webhook/, просто добавляем /webapp/
+        WEBAPP_URL = WEBHOOK_URL.rstrip("/") + "/webapp/"
+else:
+    WEBAPP_URL = None
+
 # Пути к изображениям для меню
 IMAGE_PATHS = {
     'main_menu': 'images/main_menu.jpg',

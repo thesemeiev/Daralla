@@ -193,8 +193,14 @@ class NotificationManager:
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
             
             # Получаем URL мини-приложения и bot username из конфигурации
-            from ... import bot as bot_module
-            webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
+            webapp_url = None
+            try:
+                import sys
+                bot_module = sys.modules.get('bot.bot')
+                if bot_module:
+                    webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
+            except (ImportError, AttributeError, KeyError):
+                pass
             
             # Получаем bot username из bot объекта
             bot_username = None
