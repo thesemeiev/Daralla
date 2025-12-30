@@ -1294,6 +1294,190 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/user: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/user/<user_id_param>/create-subscription', methods=['POST', 'OPTIONS'])
+    def api_admin_user_create_subscription(user_id_param):
+        """Создание подписки для пользователя администратором"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            # Получаем параметры из запроса
+            period = data.get('period', 'month')  # month или 3month
+            device_limit = int(data.get('device_limit', 1))
+            name = data.get('name') or None  # Опционально
+            expires_at = data.get('expires_at')  # Опционально, timestamp
+            
+            if period not in ('month', '3month'):
+                return jsonify({'error': 'Invalid period. Must be "month" or "3month"'}), 400
+            
+            # Получаем subscription_manager и new_client_manager
+            def get_managers():
+                try:
+                    from ... import bot as bot_module
+                    return {
+                        'subscription_manager': getattr(bot_module, 'subscription_manager', None),
+                        'new_client_manager': getattr(bot_module, 'new_client_manager', None)
+                    }
+                except (ImportError, AttributeError):
+                    return {'subscription_manager': None, 'new_client_manager': None}
+            
+            managers = get_managers()
+            subscription_manager = managers['subscription_manager']
+            new_client_manager = managers['new_client_manager']
+            
+            if not subscription_manager:
+                return jsonify({'error': 'Subscription manager not available'}), 503
+            
+            if not new_client_manager:
+                return jsonify({'error': 'New client manager not available'}), 503
+            
+            # Создаем подписку
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Если указана дата истечения, используем её, иначе рассчитываем от периода
+                if expires_at:
+                    expires_at_timestamp = int(expires_at)
+                else:
+                    import time
+                    days = 90 if period == "3month" else 30
+                    expires_at_timestamp = int(time.time()) + days * 24 * 60 * 60
+                
+                # Создаем подписку в БД
+                price = 0.0  # Бесплатно (выдано админом)
+                
+                sub_dict, token = loop.run_until_complete(
+                    subscription_manager.create_subscription_for_user(
+                        user_id=user_id_param,
+                        period=period,
+                        device_limit=device_limit,
+                        price=price,
+                        name=name
+                    )
+                )
+                
+                subscription_id = sub_dict['id']
+                
+                # Если была указана дата истечения, обновляем её
+                if expires_at:
+                    from ...db.subscribers_db import update_subscription_expiry
+                    loop.run_until_complete(update_subscription_expiry(subscription_id, expires_at_timestamp))
+                    expires_at_final = expires_at_timestamp
+                    logger.info(f"Дата истечения обновлена на {expires_at_timestamp} для подписки {subscription_id}")
+                else:
+                    expires_at_final = sub_dict['expires_at']
+                
+                logger.info(f"✅ Подписка создана в БД: subscription_id={subscription_id}, user_id={user_id_param}, period={period}")
+                
+                # Получаем все серверы из конфигурации
+                all_configured_servers = []
+                for server in new_client_manager.servers:
+                    server_name = server["name"]
+                    if server.get("x3") is not None:
+                        all_configured_servers.append(server_name)
+                
+                successful_servers = []
+                failed_servers = []
+                
+                if all_configured_servers:
+                    # Генерируем уникальный email для клиента
+                    unique_email = f"{user_id_param}_{subscription_id}"
+                    
+                    logger.info(f"Создание клиентов на {len(all_configured_servers)} серверах для подписки {subscription_id}")
+                    
+                    # Привязываем все серверы к подписке в БД и создаем клиентов
+                    async def attach_servers_and_create_clients():
+                        # Привязываем все серверы к подписке в БД
+                        for server_name in all_configured_servers:
+                            try:
+                                await subscription_manager.attach_server_to_subscription(
+                                    subscription_id=subscription_id,
+                                    server_name=server_name,
+                                    client_email=unique_email,
+                                    client_id=None,
+                                )
+                                logger.info(f"Сервер {server_name} привязан к подписке {subscription_id}")
+                            except Exception as attach_e:
+                                if "UNIQUE constraint" in str(attach_e) or "already exists" in str(attach_e).lower():
+                                    logger.info(f"Сервер {server_name} уже привязан к подписке {subscription_id}")
+                                else:
+                                    logger.error(f"Ошибка привязки сервера {server_name}: {attach_e}")
+                        
+                        # Создаем клиентов на всех серверах
+                        for server_name in all_configured_servers:
+                            try:
+                                client_exists, client_created = await subscription_manager.ensure_client_on_server(
+                                    subscription_id=subscription_id,
+                                    server_name=server_name,
+                                    client_email=unique_email,
+                                    user_id=user_id_param,
+                                    expires_at=expires_at_final,
+                                    token=token,
+                                    device_limit=device_limit
+                                )
+                                
+                                if client_exists:
+                                    successful_servers.append({'server': server_name, 'created': client_created})
+                                    if client_created:
+                                        logger.info(f"✅ Клиент создан на сервере {server_name}")
+                                    else:
+                                        logger.info(f"Клиент уже существует на сервере {server_name}")
+                                else:
+                                    failed_servers.append({'server': server_name, 'error': 'Failed to create client'})
+                                    logger.warning(f"Не удалось создать клиента на сервере {server_name} (будет создан при синхронизации)")
+                            except Exception as e:
+                                failed_servers.append({'server': server_name, 'error': str(e)})
+                                logger.error(f"Ошибка создания клиента на сервере {server_name}: {e}")
+                    
+                    loop.run_until_complete(attach_servers_and_create_clients())
+                
+                import datetime
+                
+                return jsonify({
+                    'success': True,
+                    'subscription': {
+                        'id': subscription_id,
+                        'name': sub_dict.get('name', f"Подписка {subscription_id}"),
+                        'status': sub_dict['status'],
+                        'period': period,
+                        'device_limit': device_limit,
+                        'expires_at': expires_at_final,
+                        'expires_at_formatted': datetime.datetime.fromtimestamp(expires_at_final).strftime('%d.%m.%Y %H:%M'),
+                        'token': token
+                    },
+                    'successful_servers': successful_servers,
+                    'failed_servers': failed_servers
+                }), 200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                }
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/user/create-subscription: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error', 'details': str(e)}), 500, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+    
     @app.route('/api/admin/subscription/<int:sub_id>', methods=['POST', 'OPTIONS'])
     def api_admin_subscription_info(sub_id):
         """Информация о подписке"""
