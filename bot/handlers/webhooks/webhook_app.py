@@ -2462,7 +2462,7 @@ def create_webhook_app(bot_app):
             days = int(data.get('days', 30))
             
             # Импортируем функции из subscribers_db
-            from ..db.subscribers_db import (
+            from ...db.subscribers_db import (
                 get_subscription_types_statistics,
                 get_subscription_dynamics_data,
                 get_subscription_conversion_data
