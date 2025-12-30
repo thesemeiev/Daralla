@@ -1846,6 +1846,7 @@ async function showAdminSubscriptionEdit(subId) {
         
         const data = await response.json();
         const sub = data.subscription;
+        const servers = data.servers || [];
         
         // Сохраняем исходные данные для сравнения
         originalSubscriptionData = {
@@ -1854,6 +1855,9 @@ async function showAdminSubscriptionEdit(subId) {
             status: sub.status || 'active',
             expires_at: sub.expires_at
         };
+        
+        // Сохраняем данные серверов для отображения во вкладке "Ключи"
+        currentSubscriptionServers = servers;
         
         document.getElementById('admin-subscription-edit-loading').style.display = 'none';
         document.getElementById('admin-subscription-edit-content').style.display = 'block';
@@ -1871,6 +1875,12 @@ async function showAdminSubscriptionEdit(subId) {
         const hours = String(expiresDate.getHours()).padStart(2, '0');
         const minutes = String(expiresDate.getMinutes()).padStart(2, '0');
         document.getElementById('sub-expires-at').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        
+        // Загружаем ключи для отображения
+        loadSubscriptionKeys(servers);
+        
+        // Загружаем ключи для отображения
+        loadSubscriptionKeys(servers);
     } catch (error) {
         console.error('Ошибка загрузки подписки:', error);
         document.getElementById('admin-subscription-edit-loading').style.display = 'none';
@@ -2081,8 +2091,120 @@ async function syncSubscription() {
     }
 }
 
+// Переключение между вкладками редактирования подписки
+function switchSubscriptionTab(tabName) {
+    // Убираем активный класс со всех вкладок
+    const tabButtons = document.querySelectorAll('#page-admin-subscription-edit .tab-button');
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    
+    // Скрываем все содержимое вкладок
+    const tabContents = document.querySelectorAll('#page-admin-subscription-edit .tab-content');
+    tabContents.forEach(content => content.classList.remove('active'));
+    
+    // Активируем выбранную вкладку
+    if (tabName === 'params') {
+        const paramsBtn = document.querySelector('#page-admin-subscription-edit .tab-button[onclick*="params"]');
+        if (paramsBtn) paramsBtn.classList.add('active');
+        const paramsContent = document.getElementById('subscription-tab-params');
+        if (paramsContent) paramsContent.classList.add('active');
+    } else if (tabName === 'keys') {
+        const keysBtn = document.querySelector('#page-admin-subscription-edit .tab-button[onclick*="keys"]');
+        if (keysBtn) keysBtn.classList.add('active');
+        const keysContent = document.getElementById('subscription-tab-keys');
+        if (keysContent) keysContent.classList.add('active');
+        // Загружаем ключи, если они еще не загружены
+        if (currentSubscriptionServers && currentSubscriptionServers.length >= 0) {
+            loadSubscriptionKeys(currentSubscriptionServers);
+        }
+    }
+}
+
+// Загрузка и отображение ключей подписки
+function loadSubscriptionKeys(servers) {
+    const keysListEl = document.getElementById('subscription-keys-list');
+    if (!keysListEl) return;
+    
+    if (!servers || servers.length === 0) {
+        keysListEl.innerHTML = `
+            <div class="empty-state">
+                <p>У этой подписки нет привязанных серверов</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="keys-list">';
+    html += '<div class="keys-header"><h3>Ключи подписки</h3></div>';
+    html += '<div class="keys-items">';
+    
+    servers.forEach((server, index) => {
+        const serverName = escapeHtml(server.server_name || 'Неизвестный сервер');
+        const clientEmail = escapeHtml(server.client_email || 'Не указан');
+        
+        html += `
+            <div class="key-item">
+                <div class="key-server">${serverName}</div>
+                <div class="key-email">
+                    <code class="key-email-code">${clientEmail}</code>
+                    <button class="btn-copy-key" onclick="copyToClipboard('${clientEmail.replace(/'/g, "\\'")}', this)" title="Копировать">
+                        📋
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    html += `<div class="keys-summary">Всего ключей: ${servers.length}</div>`;
+    html += '</div>';
+    
+    keysListEl.innerHTML = html;
+}
+
+// Функция копирования в буфер обмена
+function copyToClipboard(text, button) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = button.textContent;
+            button.textContent = '✓';
+            button.style.color = '#4caf50';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.color = '';
+            }, 2000);
+        }).catch(err => {
+            console.error('Ошибка копирования:', err);
+            alert('Не удалось скопировать');
+        });
+    } else {
+        // Fallback для старых браузеров
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            const originalText = button.textContent;
+            button.textContent = '✓';
+            button.style.color = '#4caf50';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.color = '';
+            }, 2000);
+        } catch (err) {
+            console.error('Ошибка копирования:', err);
+            alert('Не удалось скопировать');
+        }
+        document.body.removeChild(textArea);
+    }
+}
+
 // Возврат назад из редактирования подписки
 function goBackFromSubscriptionEdit() {
+    // Сбрасываем активную вкладку на "Параметры"
+    switchSubscriptionTab('params');
     if (previousAdminPage === 'admin-user-detail') {
         // Нужно перезагрузить информацию о пользователе
         const titleEl = document.getElementById('admin-user-detail-title');

@@ -694,48 +694,67 @@
             </div>
             
             <div id="admin-subscription-edit-content" style="display: none;">
-                <form id="admin-subscription-edit-form" onsubmit="saveSubscriptionChanges(event)">
-                    <div class="form-group">
-                        <label for="sub-name">Название подписки</label>
-                        <input type="text" id="sub-name" name="name" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="sub-expires-at">Дата истечения</label>
-                        <input type="datetime-local" id="sub-expires-at" name="expires_at" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="sub-device-limit">Лимит устройств</label>
-                        <input type="number" id="sub-device-limit" name="device_limit" min="1" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="sub-status">Статус</label>
-                        <select id="sub-status" name="status" required>
-                            <option value="active">Активна</option>
-                            <option value="expired">Истекла</option>
-                            <option value="canceled">Отменена</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" onclick="goBackFromSubscriptionEdit()">Отмена</button>
-                        <button type="submit" class="btn-primary">Сохранить</button>
-                    </div>
-                </form>
-                
-                <div class="sync-section">
-                    <h3>Синхронизация с серверами</h3>
-                    <p class="hint">Применить изменения на всех X-UI серверах</p>
-                    <button class="btn-sync" onclick="syncSubscription()">Синхронизировать</button>
-                    <div id="sync-results" style="display: none;"></div>
+                <!-- Вкладки -->
+                <div class="tabs">
+                    <button class="tab-button active" onclick="switchSubscriptionTab('params')">Параметры</button>
+                    <button class="tab-button" onclick="switchSubscriptionTab('keys')">Ключи</button>
                 </div>
                 
-                <div class="delete-section">
-                    <h3>Удаление подписки</h3>
-                    <p class="hint warning">Внимание! Это действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.</p>
-                    <button class="btn-danger" onclick="confirmDeleteSubscription()">Удалить подписку</button>
+                <!-- Вкладка: Параметры -->
+                <div id="subscription-tab-params" class="tab-content active">
+                    <form id="admin-subscription-edit-form" onsubmit="saveSubscriptionChanges(event)">
+                        <div class="form-group">
+                            <label for="sub-name">Название подписки</label>
+                            <input type="text" id="sub-name" name="name" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sub-expires-at">Дата истечения</label>
+                            <input type="datetime-local" id="sub-expires-at" name="expires_at" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sub-device-limit">Лимит устройств</label>
+                            <input type="number" id="sub-device-limit" name="device_limit" min="1" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sub-status">Статус</label>
+                            <select id="sub-status" name="status" required>
+                                <option value="active">Активна</option>
+                                <option value="expired">Истекла</option>
+                                <option value="canceled">Отменена</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" onclick="goBackFromSubscriptionEdit()">Отмена</button>
+                            <button type="submit" class="btn-primary">Сохранить</button>
+                        </div>
+                    </form>
+                    
+                    <div class="sync-section">
+                        <h3>Синхронизация с серверами</h3>
+                        <p class="hint">Применить изменения на всех X-UI серверах</p>
+                        <button class="btn-sync" onclick="syncSubscription()">Синхронизировать</button>
+                        <div id="sync-results" style="display: none;"></div>
+                    </div>
+                    
+                    <div class="delete-section">
+                        <h3>Удаление подписки</h3>
+                        <p class="hint warning">Внимание! Это действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.</p>
+                        <button class="btn-danger" onclick="confirmDeleteSubscription()">Удалить подписку</button>
+                    </div>
+                </div>
+                
+                <!-- Вкладка: Ключи -->
+                <div id="subscription-tab-keys" class="tab-content">
+                    <div id="subscription-keys-list">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Загрузка ключей...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
