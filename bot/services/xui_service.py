@@ -1091,24 +1091,34 @@ class X3:
                     if client.get('email') != user_email:
                         continue
                     
-                    # Безопасно получаем client_id и inbound_id
-                    client_id = client.get('id')
+                    # Определяем протокол inbound
+                    protocol = inbound.get('protocol', 'vless').lower()
                     inbound_id = inbound.get('id')
-                    
-                    if not client_id:
-                        logger.warning(f"Клиент {user_email} найден, но не имеет 'id' в inbound {inbound_id}")
-                        continue
                     
                     if not inbound_id:
                         logger.warning(f"Inbound не имеет 'id' для клиента {user_email}")
                         continue
                     
+                    # Для TROJAN используем password, для других протоколов - id
+                    if protocol == 'trojan':
+                        client_id = client.get('password') or client.get('id')
+                        if not client_id:
+                            logger.warning(f"Клиент {user_email} найден (TROJAN), но не имеет 'password' или 'id' в inbound {inbound_id}")
+                            continue
+                    else:
+                        client_id = client.get('id')
+                        if not client_id:
+                            logger.warning(f"Клиент {user_email} найден, но не имеет 'id' в inbound {inbound_id}")
+                            continue
+                    
                     url = f"{self.host}/panel/api/inbounds/{inbound_id}/delClient/{client_id}"
-                    logger.info(f"Удаляю VLESS клиента: inbound_id={inbound_id}, client_id={client_id}, email={user_email}")
+                    logger.info(f"Удаляю {protocol.upper()} клиента: inbound_id={inbound_id}, client_id={client_id}, email={user_email}")
                     result = self.ses.post(url, timeout=timeout)
                     logger.info(f"Ответ XUI: status_code={getattr(result, 'status_code', None)}, text={getattr(result, 'text', None)[:200] if hasattr(result, 'text') else None}")
                     if getattr(result, 'status_code', None) == 200:
-                        logger.info(f"Клиент успешно удалён: {user_email}")
+                        logger.info(f"Клиент успешно удалён: {user_email} (протокол: {protocol})")
+                    else:
+                        logger.warning(f"Неожиданный статус код при удалении клиента {user_email}: {getattr(result, 'status_code', None)}")
                     return result
             
             logger.warning(f"Клиент с email={user_email} не найден ни в одном inbound")

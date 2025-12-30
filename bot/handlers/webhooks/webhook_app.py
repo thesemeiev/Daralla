@@ -2041,19 +2041,43 @@ def create_webhook_app(bot_app):
                             try:
                                 xui, _ = server_manager.get_server_by_name(server_name)
                                 if xui:
-                                    xui.deleteClient(client_email)
-                                    deleted.append(server_name)
-                                    logger.info(
-                                        f"Удален клиент {client_email} с сервера {server_name} "
-                                        f"при удалении подписки {sub_id}"
+                                    # Используем run_in_executor для предотвращения блокировки
+                                    import concurrent.futures
+                                    loop = asyncio.get_event_loop()
+                                    result = await loop.run_in_executor(
+                                        None,
+                                        lambda: xui.deleteClient(client_email, timeout=30)
                                     )
+                                    
+                                    # Проверяем результат удаления
+                                    if result is not None:
+                                        status_code = getattr(result, 'status_code', None)
+                                        if status_code == 200:
+                                            deleted.append(server_name)
+                                            logger.info(
+                                                f"✅ Удален клиент {client_email} с сервера {server_name} "
+                                                f"при удалении подписки {sub_id}"
+                                            )
+                                        else:
+                                            failed.append(server_name)
+                                            logger.warning(
+                                                f"⚠️ Неожиданный статус код {status_code} при удалении "
+                                                f"клиента {client_email} с сервера {server_name}"
+                                            )
+                                    else:
+                                        failed.append(server_name)
+                                        logger.warning(
+                                            f"⚠️ Клиент {client_email} не найден на сервере {server_name} "
+                                            f"(возможно, уже удален)"
+                                        )
                                 else:
                                     failed.append(server_name)
                                     logger.warning(f"Сервер {server_name} не найден в server_manager")
                             except Exception as e:
                                 failed.append(server_name)
                                 logger.error(
-                                    f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}"
+                                    f"❌ Ошибка удаления клиента {client_email} с сервера {server_name}: {e}",
+                                    exc_info=True
                                 )
                     return deleted, failed
                 
