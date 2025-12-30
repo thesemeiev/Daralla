@@ -356,7 +356,119 @@
                         </div>
                     </div>
                     
-                    <button class="btn-primary" onclick="showPage('admin-users')" style="width: 100%;">Перейти к пользователям</button>
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button class="btn-primary" onclick="showPage('admin-notifications')" style="flex: 1;">Уведомления</button>
+                        <button class="btn-primary" onclick="showPage('admin-users')" style="flex: 1;">Пользователи</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Раздел Уведомления -->
+        <div id="page-admin-notifications" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1>Уведомления</h1>
+            </header>
+            
+            <div id="admin-notifications-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка статистики уведомлений...</p>
+            </div>
+            
+            <div id="admin-notifications-error" class="error" style="display: none;">
+                <p>Ошибка загрузки данных</p>
+                <button onclick="loadNotificationStats()">Повторить</button>
+            </div>
+            
+            <div id="admin-notifications-content" style="display: none;">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-title">Всего отправлено</div>
+                        <div class="stat-card-value" id="notifications-total-sent">0</div>
+                        <div class="stat-card-subtitle">За выбранный период</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Успешно доставлено</div>
+                        <div class="stat-card-value active" id="notifications-success-count">0</div>
+                        <div class="stat-card-subtitle">Процент: <span id="notifications-success-rate">0%</span></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Заблокировано</div>
+                        <div class="stat-card-value expired" id="notifications-blocked">0</div>
+                        <div class="stat-card-subtitle">Пользователей</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Эффективность</div>
+                        <div class="stat-card-value revenue" id="notifications-effectiveness">0</div>
+                        <div class="stat-card-subtitle">Продлений после уведомлений</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0;">Доставка уведомлений</h2>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="notifications-period" onchange="changeNotificationsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                                <option value="7" selected>7 дней</option>
+                                <option value="14">14 дней</option>
+                                <option value="30">30 дней</option>
+                            </select>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-delivery-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                        <div style="position: relative; height: 300px; min-width: 700px;">
+                            <canvas id="notification-delivery-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 style="margin: 0;">Процент успешности доставки</h2>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-success-rate-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                            <div style="position: relative; height: 300px; min-width: 700px;">
+                                <canvas id="notification-success-rate-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 style="margin: 0;">Заблокированные пользователи</h2>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-blocked-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                            <div style="position: relative; height: 300px; min-width: 700px;">
+                                <canvas id="notification-blocked-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 style="margin: 0;">По типам уведомлений</h2>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-types-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                            <div style="position: relative; height: 300px; min-width: 700px;">
+                                <canvas id="notification-types-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

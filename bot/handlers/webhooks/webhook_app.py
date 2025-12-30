@@ -2056,6 +2056,89 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/charts/conversion: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/charts/notifications', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_notifications():
+        """Данные для графиков уведомлений"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            days = int(data.get('days', 7))  # По умолчанию 7 дней
+            
+            from ...db.notifications_db import get_notification_stats, get_daily_notification_stats
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Общая статистика
+                stats = loop.run_until_complete(get_notification_stats(days))
+                
+                # Ежедневная статистика для графиков
+                daily_stats = loop.run_until_complete(get_daily_notification_stats(days))
+                
+                # Формируем данные для графиков
+                chart_data = {
+                    'stats': {
+                        'total_sent': stats.get('total_sent', 0),
+                        'success_count': stats.get('success_count', 0),
+                        'failed_count': stats.get('failed_count', 0),
+                        'blocked_users': stats.get('blocked_users', 0),
+                        'success_rate': stats.get('success_rate', 0),
+                        'by_type': stats.get('by_type', []),
+                        'effectiveness': stats.get('effectiveness_stats', {})
+                    },
+                    'daily': []
+                }
+                
+                # Обрабатываем ежедневную статистику
+                for day_stat in daily_stats:
+                    date_str = day_stat.get('date', '')
+                    total = day_stat.get('total', 0) or 0
+                    success = day_stat.get('success', 0) or 0
+                    failed = total - success
+                    
+                    chart_data['daily'].append({
+                        'date': date_str,
+                        'total': total,
+                        'success': success,
+                        'failed': failed,
+                        'success_rate': (success / total * 100) if total > 0 else 0
+                    })
+                
+                # Сортируем по дате (от старых к новым)
+                chart_data['daily'].sort(key=lambda x: x['date'])
+                
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'data': chart_data
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/notifications: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     return app
 
 

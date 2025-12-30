@@ -118,12 +118,12 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
         )
         return
     
-    # Проверяем, что подписка активна
+    # Проверяем, что подписка не удалена/отменена (разрешаем продление активных и истекших подписок)
     import time
-    if sub['status'] != 'active' or sub['expires_at'] <= int(time.time()):
+    if sub['status'] in ('canceled', 'deleted'):
         await safe_edit_or_reply_universal(
             query.message,
-            f"{UIEmojis.ERROR} Ошибка: подписка неактивна или истекла",
+            f"{UIEmojis.ERROR} Ошибка: подписка была отменена или удалена",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
             menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )
@@ -224,12 +224,12 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
         )
         return
     
-    # Проверяем, что подписка активна
+    # Проверяем, что подписка не удалена/отменена (разрешаем продление активных и истекших подписок)
     import time
-    if sub['status'] != 'active' or sub['expires_at'] <= int(time.time()):
+    if sub['status'] in ('canceled', 'deleted'):
         await safe_edit_or_reply_universal(
             query.message,
-            f"{UIEmojis.ERROR} Ошибка: подписка неактивна или истекла",
+            f"{UIEmojis.ERROR} Ошибка: подписка была отменена или удалена",
             reply_markup=InlineKeyboardMarkup([[NavigationBuilder.create_back_button()]]),
             menu_type=MenuTypes.SUBSCRIPTIONS_MENU
         )

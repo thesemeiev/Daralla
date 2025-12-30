@@ -166,7 +166,7 @@ class NotificationManager:
                         time_remaining = calculate_time_remaining(expires_at)
                         success = await self._send_subscription_expiry_notification(
                             user_id, subscription_id, notification_type, time_remaining,
-                            time_diff.days
+                            time_diff.days, expiry_time
                         )
                         if success:
                             notifications_sent += 1
@@ -182,7 +182,7 @@ class NotificationManager:
     
     async def _send_subscription_expiry_notification(
         self, user_id: str, subscription_id: int, notification_type: str,
-        time_remaining: str, days_until_expiry: int
+        time_remaining: str, days_until_expiry: int, expiry_datetime=None
     ) -> bool:
         """Отправляет уведомление об истекающей подписке"""
         try:
@@ -190,13 +190,45 @@ class NotificationManager:
             if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
                 return False
             
-            message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry)
+            message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
             
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{subscription_id}")],
+            # Получаем URL мини-приложения и bot username из конфигурации
+            from ... import bot as bot_module
+            webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
+            
+            # Получаем bot username из bot объекта
+            bot_username = None
+            try:
+                bot_info = await self.bot.get_me()
+                bot_username = bot_info.username if bot_info else None
+            except Exception as e:
+                logger.warning(f"Не удалось получить bot username: {e}")
+            
+            # Формируем deep link для открытия мини-приложения с переходом на продление
+            webapp_button = None
+            if webapp_url:
+                # Используем прямой URL мини-приложения
+                deep_link = f"{webapp_url}?startapp=extend_subscription_{subscription_id}"
+                webapp_button = InlineKeyboardButton("📱 Открыть в приложении", url=deep_link)
+            elif bot_username:
+                # Fallback: используем формат t.me/bot/webapp (требует настройки Web App в BotFather)
+                deep_link = f"https://t.me/{bot_username}/webapp?startapp=extend_subscription_{subscription_id}"
+                webapp_button = InlineKeyboardButton("📱 Открыть в приложении", url=deep_link)
+            
+            # Создаем клавиатуру с кнопками
+            buttons = [
+                [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{subscription_id}")]
+            ]
+            
+            if webapp_button:
+                buttons.append([webapp_button])
+            
+            buttons.extend([
                 [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                 [NavigationBuilder.create_main_menu_button()]
             ])
+            
+            keyboard = InlineKeyboardMarkup(buttons)
             
             try:
                 await self.bot.send_message(

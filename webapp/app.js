@@ -66,6 +66,8 @@ function showPage(pageName) {
         loadAdminUsers(1, currentAdminUserSearch);
     } else if (pageName === 'admin-stats') {
         loadAdminStats();
+    } else if (pageName === 'admin-notifications') {
+        loadNotificationStats();
     }
 }
 
@@ -131,6 +133,8 @@ function showSubscriptionDetail(sub) {
                     <button class="action-button" onclick="copySubscriptionLink('${sub.token}')" style="margin-bottom: 12px;">
                         Копировать ссылку подписки
                     </button>
+                ` : ''}
+                ${sub.status === 'active' || sub.status === 'expired' ? `
                     <button class="action-button" onclick="showExtendSubscriptionModal(${sub.id})" style="background: #4a9eff;">
                         Продлить подписку
                     </button>
@@ -2220,6 +2224,10 @@ async function loadAdminStats() {
 let userGrowthChart = null;
 let serverLoadChart = null;
 let conversionChart = null;
+let notificationDeliveryChart = null;
+let notificationSuccessRateChart = null;
+let notificationBlockedChart = null;
+let notificationTypesChart = null;
 
 // Загрузка графика роста пользователей
 async function loadUserGrowthChart(days = 30) {
@@ -3116,10 +3124,402 @@ function preventCloseOnScroll() {
     }, { passive: true });
 }
 
+// Загрузка статистики уведомлений
+async function loadNotificationStats(days = 7) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            showError('admin-notifications-error', 'Ошибка авторизации');
+            return;
+        }
+        
+        document.getElementById('admin-notifications-loading').style.display = 'block';
+        document.getElementById('admin-notifications-error').style.display = 'none';
+        document.getElementById('admin-notifications-content').style.display = 'none';
+        
+        const response = await fetch('/api/admin/charts/notifications', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData, days: days })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки статистики уведомлений');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            throw new Error('Некорректные данные');
+        }
+        
+        const data = result.data;
+        const stats = data.stats;
+        
+        // Обновляем карточки статистики
+        document.getElementById('notifications-total-sent').textContent = stats.total_sent || 0;
+        document.getElementById('notifications-success-count').textContent = stats.success_count || 0;
+        document.getElementById('notifications-success-rate').textContent = (stats.success_rate || 0).toFixed(1) + '%';
+        document.getElementById('notifications-blocked').textContent = stats.blocked_users || 0;
+        
+        // Эффективность (продления после уведомлений)
+        const effectiveness = stats.effectiveness || {};
+        const extensions = effectiveness['extended'] || 0;
+        document.getElementById('notifications-effectiveness').textContent = extensions;
+        
+        document.getElementById('admin-notifications-loading').style.display = 'none';
+        document.getElementById('admin-notifications-content').style.display = 'block';
+        
+        // Загружаем графики
+        await loadNotificationDeliveryChart(data.daily);
+        await loadNotificationSuccessRateChart(data.daily);
+        await loadNotificationBlockedChart(data.daily);
+        await loadNotificationTypesChart(stats.by_type || []);
+        
+    } catch (error) {
+        console.error('Ошибка загрузки статистики уведомлений:', error);
+        document.getElementById('admin-notifications-loading').style.display = 'none';
+        showError('admin-notifications-error', 'Ошибка загрузки статистики уведомлений');
+    }
+}
+
+// Загрузка графика доставки уведомлений
+async function loadNotificationDeliveryChart(dailyData) {
+    try {
+        const ctx = document.getElementById('notification-delivery-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (notificationDeliveryChart) {
+            notificationDeliveryChart.destroy();
+        }
+        
+        const labels = dailyData.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        notificationDeliveryChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Успешно доставлено',
+                        data: dailyData.map(item => item.success || 0),
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                        borderColor: 'rgb(75, 192, 192)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Не доставлено',
+                        data: dailyData.map(item => item.failed || 0),
+                        backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                        borderColor: 'rgb(255, 99, 132)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: { size: 12 }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика доставки:', error);
+    }
+}
+
+// Загрузка графика процента успешности
+async function loadNotificationSuccessRateChart(dailyData) {
+    try {
+        const ctx = document.getElementById('notification-success-rate-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (notificationSuccessRateChart) {
+            notificationSuccessRateChart.destroy();
+        }
+        
+        const labels = dailyData.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        notificationSuccessRateChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Процент успешности (%)',
+                    data: dailyData.map(item => item.success_rate || 0),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: { size: 12 }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика успешности:', error);
+    }
+}
+
+// Загрузка графика заблокированных пользователей
+async function loadNotificationBlockedChart(dailyData) {
+    try {
+        const ctx = document.getElementById('notification-blocked-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (notificationBlockedChart) {
+            notificationBlockedChart.destroy();
+        }
+        
+        // Для этого графика нужно получить данные о заблокированных по дням
+        // Пока используем общие данные, но можно улучшить API
+        const labels = dailyData.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        // Показываем failed как заблокированных (можно улучшить API для разделения)
+        notificationBlockedChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Не доставлено (включая заблокированных)',
+                    data: dailyData.map(item => item.failed || 0),
+                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                    borderColor: 'rgb(255, 99, 132)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: { size: 12 }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика заблокированных:', error);
+    }
+}
+
+// Загрузка графика по типам уведомлений
+async function loadNotificationTypesChart(byTypeData) {
+    try {
+        const ctx = document.getElementById('notification-types-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (notificationTypesChart) {
+            notificationTypesChart.destroy();
+        }
+        
+        if (!byTypeData || byTypeData.length === 0) {
+            // Если нет данных, показываем пустой график
+            notificationTypesChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: []
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            return;
+        }
+        
+        // Форматируем названия типов
+        const typeNames = {
+            'expiry_3d': 'За 3 дня до истечения',
+            'expiry_1d': 'За 1 день до истечения',
+            'expired': 'Истекла'
+        };
+        
+        const labels = byTypeData.map(item => {
+            const type = item.notification_type || '';
+            return typeNames[type] || type;
+        });
+        const data = byTypeData.map(item => item.total || 0);
+        
+        notificationTypesChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.8)',
+                        'rgba(255, 206, 86, 0.8)',
+                        'rgba(255, 99, 132, 0.8)',
+                        'rgba(153, 102, 255, 0.8)',
+                        'rgba(255, 159, 64, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgb(75, 192, 192)',
+                        'rgb(255, 206, 86)',
+                        'rgb(255, 99, 132)',
+                        'rgb(153, 102, 255)',
+                        'rgb(255, 159, 64)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: { size: 12 }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика по типам:', error);
+    }
+}
+
+// Изменение периода для графика уведомлений
+function changeNotificationsPeriod() {
+    const select = document.getElementById('notifications-period');
+    const days = parseInt(select.value);
+    loadNotificationStats(days);
+}
+
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
     // Включаем защиту от закрытия при скролле вверх
     preventCloseOnScroll();
+    
+    // Проверяем deep link параметры
+    const urlParams = new URLSearchParams(window.location.search);
+    const startapp = urlParams.get('startapp');
+    
+    if (startapp && startapp.startsWith('extend_subscription_')) {
+        // Прямой переход на продление подписки
+        const subscriptionId = parseInt(startapp.replace('extend_subscription_', ''));
+        if (subscriptionId && !isNaN(subscriptionId)) {
+            // Сначала загружаем подписки, чтобы убедиться, что данные загружены
+            await loadSubscriptions();
+            // Небольшая задержка для загрузки данных, затем открываем страницу продления
+            setTimeout(() => {
+                showExtendSubscriptionModal(subscriptionId);
+            }, 300);
+            // Проверяем права админа в фоне
+            checkAdminAccess();
+            return;
+        }
+    }
     
     showPage('subscriptions');
     
