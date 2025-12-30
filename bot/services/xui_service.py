@@ -1049,21 +1049,79 @@ class X3:
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def deleteClient(self, user_email, timeout=15):
         """Удаляет клиента по email"""
-        for inbound in self.list(timeout=timeout)['obj']:
-            settings = json.loads(inbound['settings'])
-            for client in settings.get("clients", []):
-                if client['email'] == user_email:
-                    client_id = client['id']
-                    inbound_id = inbound['id']
+        try:
+            inbounds_list = self.list(timeout=timeout)
+            
+            # Проверяем структуру ответа
+            if not isinstance(inbounds_list, dict):
+                logger.warning(f"Неожиданный формат ответа от list() для удаления клиента {user_email}: {type(inbounds_list)}")
+                raise KeyError(f"Ответ от list() не является словарем: {type(inbounds_list)}")
+            
+            # Безопасно получаем список inbounds
+            inbounds = inbounds_list.get('obj', [])
+            if not isinstance(inbounds, list):
+                logger.warning(f"Ключ 'obj' в ответе от list() не является списком для удаления клиента {user_email}: {type(inbounds)}")
+                raise KeyError(f"Ключ 'obj' не является списком: {type(inbounds)}")
+            
+            for inbound in inbounds:
+                if not isinstance(inbound, dict):
+                    continue
+                
+                # Безопасно получаем settings
+                settings_str = inbound.get('settings')
+                if not settings_str:
+                    continue
+                
+                try:
+                    settings = json.loads(settings_str)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id', 'unknown')}: {e}")
+                    continue
+                
+                # Безопасно получаем список клиентов
+                clients = settings.get("clients", [])
+                if not isinstance(clients, list):
+                    continue
+                
+                for client in clients:
+                    if not isinstance(client, dict):
+                        continue
+                    
+                    # Проверяем email
+                    if client.get('email') != user_email:
+                        continue
+                    
+                    # Безопасно получаем client_id и inbound_id
+                    client_id = client.get('id')
+                    inbound_id = inbound.get('id')
+                    
+                    if not client_id:
+                        logger.warning(f"Клиент {user_email} найден, но не имеет 'id' в inbound {inbound_id}")
+                        continue
+                    
+                    if not inbound_id:
+                        logger.warning(f"Inbound не имеет 'id' для клиента {user_email}")
+                        continue
+                    
                     url = f"{self.host}/panel/api/inbounds/{inbound_id}/delClient/{client_id}"
                     logger.info(f"Удаляю VLESS клиента: inbound_id={inbound_id}, client_id={client_id}, email={user_email}")
                     result = self.ses.post(url, timeout=timeout)
-                    logger.info(f"Ответ XUI: status_code={getattr(result, 'status_code', None)}, text={getattr(result, 'text', None)}")
+                    logger.info(f"Ответ XUI: status_code={getattr(result, 'status_code', None)}, text={getattr(result, 'text', None)[:200] if hasattr(result, 'text') else None}")
                     if getattr(result, 'status_code', None) == 200:
                         logger.info(f"Клиент успешно удалён: {user_email}")
                     return result
-        logger.warning(f"Клиент с email={user_email} не найден ни в одном inbound")
-        return None
+            
+            logger.warning(f"Клиент с email={user_email} не найден ни в одном inbound")
+            return None
+            
+        except KeyError as e:
+            # Пробрасываем KeyError как есть, чтобы retry мог обработать
+            logger.error(f"KeyError при удалении клиента {user_email}: {e}")
+            raise
+        except Exception as e:
+            # Другие ошибки логируем и пробрасываем
+            logger.error(f"Ошибка при удалении клиента {user_email}: {e}")
+            raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def updateClientName(self, user_email, new_name, timeout=15):

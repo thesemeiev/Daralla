@@ -1582,8 +1582,9 @@ def create_webhook_app(bot_app):
             from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, DB_PATH
             import aiosqlite
             
+            # Создаем новый event loop, но НЕ устанавливаем его глобально для потока
+            # Это предотвращает конфликты при многопоточных запросах Flask
             loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
                 # Проверяем существование подписки
                 sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
@@ -1619,7 +1620,8 @@ def create_webhook_app(bot_app):
                 updated_sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
                 
                 # Синхронизация с X-UI серверами
-                async def sync_with_servers():
+                # Передаем loop явно, чтобы избежать проблем с get_event_loop()
+                async def sync_with_servers(executor_loop):
                     # Получаем менеджеры из глобальных переменных
                     from .payment_processors import get_globals
                     managers = get_globals()
@@ -1682,9 +1684,9 @@ def create_webhook_app(bot_app):
                                             try:
                                                 # Используем run_in_executor для выполнения синхронного deleteClient
                                                 # с таймаутом 8 секунд на сервер
-                                                loop = asyncio.get_event_loop()
+                                                # Используем переданный loop явно, чтобы избежать deadlock
                                                 await asyncio.wait_for(
-                                                    loop.run_in_executor(None, lambda: xui.deleteClient(client_email, 5)),
+                                                    executor_loop.run_in_executor(None, lambda: xui.deleteClient(client_email, 5)),
                                                     timeout=8.0
                                                 )
                                                 logger.info(f"Удален клиент {client_email} с сервера {server_name}")
@@ -1757,11 +1759,27 @@ def create_webhook_app(bot_app):
                                 except Exception as e:
                                     logger.error(f"Ошибка обновления клиента {client_email} на сервере {server_name}: {e}")
                 
-                # Выполняем синхронизацию
-                loop.run_until_complete(sync_with_servers())
+                # Выполняем синхронизацию, передавая loop явно
+                loop.run_until_complete(sync_with_servers(loop))
                 
             finally:
-                loop.close()
+                # Корректно закрываем loop, отменяя все pending задачи
+                try:
+                    # Даем время на завершение всех операций
+                    import time
+                    time.sleep(0.1)
+                    
+                    # Отменяем все pending задачи
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    # Ждем завершения отмененных задач
+                    if pending:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                except Exception as e:
+                    logger.warning(f"Ошибка при закрытии event loop: {e}")
+                finally:
+                    loop.close()
             
             import datetime
             
