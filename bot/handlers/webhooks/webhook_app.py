@@ -1684,13 +1684,14 @@ def create_webhook_app(bot_app):
                                         if xui:
                                             # Выполняем удаление в отдельной задаче с таймаутом
                                             try:
-                                                # Используем run_in_executor для выполнения синхронного deleteClient
-                                                # с таймаутом 8 секунд на сервер
-                                                # Используем переданный loop явно, чтобы избежать deadlock
-                                                await asyncio.wait_for(
-                                                    executor_loop.run_in_executor(None, lambda: xui.deleteClient(client_email, 5)),
-                                                    timeout=8.0
-                                                )
+                                                # Используем ThreadPoolExecutor для выполнения синхронного deleteClient
+                                                # Это предотвращает проблемы с переиспользованием default executor
+                                                import concurrent.futures
+                                                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                                                    future = executor.submit(xui.deleteClient, client_email, 5)
+                                                    # Обертываем future в asyncio.Future для использования с await
+                                                    asyncio_future = asyncio.wrap_future(future, loop=executor_loop)
+                                                    await asyncio.wait_for(asyncio_future, timeout=8.0)
                                                 logger.info(f"✅ Удален клиент {client_email} с сервера {server_name} (подписка {sub_id}, статус изменен на {new_status})")
                                                 deleted_count += 1
                                             except asyncio.TimeoutError:
@@ -1793,26 +1794,62 @@ def create_webhook_app(bot_app):
                                     logger.error(f"Ошибка обновления клиента {client_email} на сервере {server_name}: {e}")
                 
                 # Выполняем синхронизацию, передавая loop явно
-                loop.run_until_complete(sync_with_servers(loop))
+                # Используем таймаут для предотвращения зависания
+                sync_task = None
+                try:
+                    # Создаем задачу синхронизации
+                    sync_task = loop.create_task(sync_with_servers(loop))
+                    # Выполняем с таймаутом
+                    loop.run_until_complete(asyncio.wait_for(sync_task, timeout=60.0))
+                except asyncio.TimeoutError:
+                    logger.error(f"Таймаут при синхронизации подписки {sub_id} (превышен лимит 60 секунд)")
+                    # Отменяем задачу при таймауте
+                    if sync_task and not sync_task.done():
+                        sync_task.cancel()
+                except Exception as sync_e:
+                    logger.error(f"Ошибка при синхронизации подписки {sub_id}: {sync_e}", exc_info=True)
+                    # Отменяем задачу при ошибке
+                    if sync_task and not sync_task.done():
+                        sync_task.cancel()
                 
             finally:
                 # Корректно закрываем loop, отменяя все pending задачи
                 try:
-                    # Даем время на завершение всех операций
-                    import time
-                    time.sleep(0.1)
-                    
-                    # Отменяем все pending задачи
-                    pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-                    # Ждем завершения отмененных задач
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    # Получаем все pending задачи
+                    try:
+                        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                        if pending:
+                            logger.debug(f"Отменяем {len(pending)} pending задач перед закрытием loop")
+                            for task in pending:
+                                if not task.done():
+                                    task.cancel()
+                            
+                            # Ждем завершения отмененных задач с таймаутом
+                            if pending:
+                                try:
+                                    # Используем gather с return_exceptions, чтобы не падать на ошибках
+                                    loop.run_until_complete(
+                                        asyncio.wait_for(
+                                            asyncio.gather(*pending, return_exceptions=True),
+                                            timeout=1.0
+                                        )
+                                    )
+                                except (asyncio.TimeoutError, RuntimeError):
+                                    # Игнорируем таймауты и ошибки при отмене задач
+                                    pass
+                    except RuntimeError as e:
+                        # Loop может быть уже закрыт или в неправильном состоянии
+                        if "Event loop is closed" not in str(e) and "This event loop is already running" not in str(e):
+                            logger.debug(f"Ошибка при получении задач: {e}")
                 except Exception as e:
-                    logger.warning(f"Ошибка при закрытии event loop: {e}")
+                    logger.debug(f"Ошибка при закрытии event loop: {e}")
                 finally:
-                    loop.close()
+                    try:
+                        # Убеждаемся, что loop закрыт
+                        if not loop.is_closed():
+                            loop.close()
+                    except Exception as e:
+                        logger.debug(f"Ошибка при финальном закрытии loop: {e}")
             
             import datetime
             
