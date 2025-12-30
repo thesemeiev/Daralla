@@ -1664,18 +1664,54 @@ def create_webhook_app(bot_app):
                     if 'status' in updates and new_status in ['expired', 'canceled', 'deleted']:
                         if old_status != new_status:
                             logger.info(f"Статус подписки {sub_id} изменился на {new_status}, удаляем клиентов с серверов")
-                            for server_info in servers:
-                                server_name = server_info['server_name']
-                                client_email = server_info['client_email']
-                                try:
-                                    xui, _ = server_manager.get_server_by_name(server_name)
-                                    if xui:
-                                        xui.deleteClient(client_email)
-                                        logger.info(f"Удален клиент {client_email} с сервера {server_name}")
-                                    else:
-                                        logger.warning(f"Сервер {server_name} не найден")
-                                except Exception as e:
-                                    logger.error(f"Ошибка удаления клиента {client_email} с сервера {server_name}: {e}")
+                            
+                            # Выполняем удаление с общим таймаутом на всю операцию
+                            async def delete_clients_with_timeout():
+                                import asyncio
+                                deleted_count = 0
+                                failed_count = 0
+                                
+                                for server_info in servers:
+                                    server_name = server_info['server_name']
+                                    client_email = server_info['client_email']
+                                    
+                                    try:
+                                        xui, _ = server_manager.get_server_by_name(server_name)
+                                        if xui:
+                                            # Выполняем удаление в отдельной задаче с таймаутом
+                                            try:
+                                                # Используем run_in_executor для выполнения синхронного deleteClient
+                                                # с таймаутом 8 секунд на сервер
+                                                loop = asyncio.get_event_loop()
+                                                await asyncio.wait_for(
+                                                    loop.run_in_executor(None, lambda: xui.deleteClient(client_email, 5)),
+                                                    timeout=8.0
+                                                )
+                                                logger.info(f"Удален клиент {client_email} с сервера {server_name}")
+                                                deleted_count += 1
+                                            except asyncio.TimeoutError:
+                                                logger.warning(f"Таймаут при удалении клиента {client_email} с сервера {server_name}")
+                                                failed_count += 1
+                                            except Exception as delete_e:
+                                                # Клиент может быть уже удален или сервер недоступен - это нормально
+                                                logger.warning(f"Не удалось удалить клиента {client_email} с сервера {server_name}: {delete_e}")
+                                                failed_count += 1
+                                        else:
+                                            logger.warning(f"Сервер {server_name} не найден")
+                                            failed_count += 1
+                                    except Exception as e:
+                                        logger.error(f"Ошибка при попытке удаления клиента {client_email} с сервера {server_name}: {e}")
+                                        failed_count += 1
+                                
+                                logger.info(f"Удаление клиентов завершено: успешно={deleted_count}, ошибок={failed_count}")
+                            
+                            # Выполняем удаление с общим таймаутом 30 секунд на все серверы
+                            try:
+                                await asyncio.wait_for(delete_clients_with_timeout(), timeout=30.0)
+                            except asyncio.TimeoutError:
+                                logger.error(f"Таймаут при удалении клиентов для подписки {sub_id} (превышен общий таймаут 30 секунд)")
+                            except Exception as e:
+                                logger.error(f"Ошибка при удалении клиентов для подписки {sub_id}: {e}")
                     
                     # 2. Если статус изменился на active - создаем/восстанавливаем клиентов
                     elif 'status' in updates and new_status == 'active' and old_status != 'active':
