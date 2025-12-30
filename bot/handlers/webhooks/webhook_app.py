@@ -1689,7 +1689,7 @@ def create_webhook_app(bot_app):
                                                     executor_loop.run_in_executor(None, lambda: xui.deleteClient(client_email, 5)),
                                                     timeout=8.0
                                                 )
-                                                logger.info(f"Удален клиент {client_email} с сервера {server_name}")
+                                                logger.info(f"✅ Удален клиент {client_email} с сервера {server_name} (подписка {sub_id}, статус изменен на {new_status})")
                                                 deleted_count += 1
                                             except asyncio.TimeoutError:
                                                 logger.warning(f"Таймаут при удалении клиента {client_email} с сервера {server_name}")
@@ -1706,14 +1706,45 @@ def create_webhook_app(bot_app):
                                         failed_count += 1
                                 
                                 logger.info(f"Удаление клиентов завершено: успешно={deleted_count}, ошибок={failed_count}")
+                                return deleted_count, failed_count
                             
                             # Выполняем удаление с общим таймаутом 30 секунд на все серверы
+                            deleted_count = 0
+                            failed_count = 0
                             try:
-                                await asyncio.wait_for(delete_clients_with_timeout(), timeout=30.0)
+                                deleted_count, failed_count = await asyncio.wait_for(delete_clients_with_timeout(), timeout=30.0)
                             except asyncio.TimeoutError:
                                 logger.error(f"Таймаут при удалении клиентов для подписки {sub_id} (превышен общий таймаут 30 секунд)")
+                                failed_count = len(servers)  # Считаем все как неудачные при таймауте
                             except Exception as e:
                                 logger.error(f"Ошибка при удалении клиентов для подписки {sub_id}: {e}")
+                                failed_count = len(servers)
+                            
+                            # Удаляем связи подписки с серверами из БД после удаления клиентов
+                            # ВАЖНО: Удаляем связи только если удаление клиентов прошло успешно
+                            # или если есть частичные успехи (не все серверы недоступны)
+                            from ...db.subscribers_db import remove_subscription_server
+                            removed_connections = 0
+                            failed_connections = 0
+                            
+                            # Если были успешные удаления или не все серверы недоступны - удаляем связи
+                            # Это безопасно, так как если клиент не удалился, cleanup_orphaned_clients его удалит позже
+                            if deleted_count > 0 or failed_count < len(servers):
+                                for server_info in servers:
+                                    server_name = server_info['server_name']
+                                    client_email = server_info['client_email']
+                                    try:
+                                        await remove_subscription_server(sub_id, server_name)
+                                        logger.info(f"✅ Удалена связь подписки {sub_id} с сервером {server_name} (клиент: {client_email}, статус изменен на {new_status})")
+                                        removed_connections += 1
+                                    except Exception as e:
+                                        logger.error(f"❌ Ошибка удаления связи подписки {sub_id} с сервером {server_name} (клиент: {client_email}): {e}")
+                                        failed_connections += 1
+                                
+                                if removed_connections > 0:
+                                    logger.info(f"Удалено связей из БД: {removed_connections}, ошибок: {failed_connections}")
+                            else:
+                                logger.warning(f"Не удалось удалить клиентов ни с одного сервера для подписки {sub_id}, связи не удаляются из БД (будут удалены при следующей синхронизации)")
                     
                     # 2. Если статус изменился на active - создаем/восстанавливаем клиентов
                     elif 'status' in updates and new_status == 'active' and old_status != 'active':

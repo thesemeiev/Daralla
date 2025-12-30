@@ -338,11 +338,18 @@ async def get_subscription_statistics():
         return {
             'total_users': total_users,
             'users_with_active_subs': users_with_active_subs,
+            # Короткие ключи (для обратной совместимости)
             'total': total_subscriptions,
             'active': active_subscriptions,
             'expired': expired_subscriptions,
             'canceled': canceled_subscriptions,
             'trial': trial_subscriptions,
+            # Длинные ключи (для читаемости кода)
+            'total_subscriptions': total_subscriptions,
+            'active_subscriptions': active_subscriptions,
+            'expired_subscriptions': expired_subscriptions,
+            'canceled_subscriptions': canceled_subscriptions,
+            'trial_subscriptions': trial_subscriptions,
             'total_server_clients': total_server_clients,
             'active_server_clients': active_server_clients
         }

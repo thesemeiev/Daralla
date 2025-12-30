@@ -249,35 +249,82 @@ class SyncManager:
         """
         Удаляет клиентов на серверах, которые не связаны ни с одной активной подпиской.
         
-        Логика:
-        1. Получаем все активные подписки
-        2. Собираем все client_email из subscription_servers
+        Улучшенная логика:
+        1. Получаем ВСЕ подписки (не только активные) для полной картины
+        2. Разделяем клиентов по статусам подписок:
+           - active: должны остаться на сервере
+           - expired/canceled/deleted: могут быть удалены (если связь еще есть в БД)
         3. Для каждого сервера:
            - Получаем список всех клиентов через X-UI API
-           - Для каждого клиента проверяем, есть ли он в списке активных подписок
-           - Если клиента нет в списке - удаляем его
+           - Для каждого клиента проверяем:
+             * Если клиент в active - оставляем
+             * Если клиент в expired/canceled/deleted - проверяем дату истечения
+             * Если клиента нет в БД вообще - удаляем (сиротский)
         
         Returns:
-            dict со статистикой: {'deleted_count': int, 'servers_checked': int, 'errors': list}
+            dict со статистикой: {'deleted_count': int, 'servers_checked': int, 'errors': list, 'details': list}
         """
         logger.info("🧹 Начало очистки сиротских клиентов")
         
         stats = {
             'deleted_count': 0,
             'servers_checked': 0,
-            'errors': []
+            'errors': [],
+            'details': []  # Детальная информация о каждом удалении
         }
         
-        # Получаем все активные подписки и их клиентов
+        # Получаем все подписки (не только активные) для полной картины
+        from ..db.subscribers_db import get_all_active_subscriptions, get_subscription_servers, DB_PATH
+        import aiosqlite
+        import time
+        
+        # Получаем активные подписки
         active_subs = await get_all_active_subscriptions()
         active_client_emails = set()
+        active_client_details = {}  # email -> {subscription_id, server_name, expires_at}
         
         for sub in active_subs:
             servers = await get_subscription_servers(sub['id'])
             for s_info in servers:
-                active_client_emails.add(s_info['client_email'])
+                client_email = s_info['client_email']
+                active_client_emails.add(client_email)
+                active_client_details[client_email] = {
+                    'subscription_id': sub['id'],
+                    'server_name': s_info['server_name'],
+                    'expires_at': sub.get('expires_at', 0),
+                    'status': sub.get('status', 'active')
+                }
         
-        logger.info(f"Найдено {len(active_client_emails)} активных клиентов в БД")
+        # Получаем неактивные подписки (expired, canceled, deleted) для контекста
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT s.*, ss.server_name, ss.client_email 
+                FROM subscriptions s
+                JOIN subscription_servers ss ON s.id = ss.subscription_id
+                WHERE s.status IN ('expired', 'canceled', 'deleted')
+            """) as cur:
+                inactive_subs = await cur.fetchall()
+        
+        inactive_client_emails = set()
+        inactive_client_details = {}  # email -> list of details (может быть несколько подписок с одним email)
+        for row in inactive_subs:
+            client_email = row['client_email']
+            server_name_row = row['server_name']
+            inactive_client_emails.add(client_email)
+            
+            # Если email уже есть, добавляем в список (может быть несколько подписок)
+            if client_email not in inactive_client_details:
+                inactive_client_details[client_email] = []
+            
+            inactive_client_details[client_email].append({
+                'subscription_id': row['id'],
+                'server_name': server_name_row,
+                'expires_at': row['expires_at'],
+                'status': row['status']
+            })
+        
+        logger.info(f"Найдено {len(active_client_emails)} активных клиентов и {len(inactive_client_emails)} неактивных клиентов в БД")
         
         # Проверяем каждый сервер
         for server in self.server_manager.servers:
@@ -307,16 +354,98 @@ class SyncManager:
                             if not client_email:
                                 continue
                             
-                            # Если клиент не в списке активных - удаляем
-                            if client_email not in active_client_emails:
-                                try:
-                                    xui.deleteClient(client_email)
-                                    stats['deleted_count'] += 1
-                                    logger.info(f"Удален сиротский клиент {client_email} с сервера {server_name}")
-                                except Exception as e:
-                                    error_msg = f"Ошибка удаления клиента {client_email} с {server_name}: {e}"
-                                    logger.error(error_msg)
-                                    stats['errors'].append(error_msg)
+                            # Проверяем статус клиента
+                            current_time = int(time.time())
+                            
+                            # Если клиент в активных подписках - оставляем
+                            if client_email in active_client_emails:
+                                detail = active_client_details.get(client_email, {})
+                                logger.debug(f"Клиент {client_email} активен (подписка {detail.get('subscription_id', '?')}), пропускаем")
+                                continue
+                            
+                            # Если клиент в неактивных подписках - проверяем детали
+                            if client_email in inactive_client_emails:
+                                # Получаем все подписки для этого email (может быть несколько)
+                                details_list = inactive_client_details.get(client_email, [])
+                                
+                                # Ищем подписку, связанную с этим сервером
+                                matching_detail = None
+                                for detail in details_list:
+                                    if detail.get('server_name') == server_name:
+                                        matching_detail = detail
+                                        break
+                                
+                                # Если не нашли связь с этим сервером, но email есть в неактивных - 
+                                # это может быть другая подписка на другом сервере, пропускаем
+                                if not matching_detail:
+                                    logger.debug(f"Клиент {client_email} есть в неактивных подписках, но не связан с сервером {server_name}, пропускаем")
+                                    continue
+                                
+                                subscription_id = matching_detail.get('subscription_id', '?')
+                                status = matching_detail.get('status', 'unknown')
+                                expires_at = matching_detail.get('expires_at', 0)
+                                
+                                # Если подписка canceled или deleted - удаляем клиента
+                                if status in ['canceled', 'deleted']:
+                                    reason = f"Подписка {subscription_id} имеет статус {status}"
+                                    try:
+                                        xui.deleteClient(client_email)
+                                        stats['deleted_count'] += 1
+                                        stats['details'].append({
+                                            'server': server_name,
+                                            'email': client_email,
+                                            'subscription_id': subscription_id,
+                                            'reason': reason,
+                                            'status': status
+                                        })
+                                        logger.info(f"Удален клиент {client_email} с сервера {server_name}: {reason}")
+                                    except Exception as e:
+                                        error_msg = f"Ошибка удаления клиента {client_email} с {server_name}: {e}"
+                                        logger.error(error_msg)
+                                        stats['errors'].append(error_msg)
+                                # Если подписка expired - проверяем дату (удаляем если истекла более 3 дней назад)
+                                elif status == 'expired':
+                                    days_since_expiry = (current_time - expires_at) // (24 * 60 * 60) if expires_at > 0 else 999
+                                    if days_since_expiry >= 3:
+                                        reason = f"Подписка {subscription_id} истекла {days_since_expiry} дней назад"
+                                        try:
+                                            xui.deleteClient(client_email)
+                                            stats['deleted_count'] += 1
+                                            stats['details'].append({
+                                                'server': server_name,
+                                                'email': client_email,
+                                                'subscription_id': subscription_id,
+                                                'reason': reason,
+                                                'status': status,
+                                                'days_since_expiry': days_since_expiry
+                                            })
+                                            logger.info(f"Удален клиент {client_email} с сервера {server_name}: {reason}")
+                                        except Exception as e:
+                                            error_msg = f"Ошибка удаления клиента {client_email} с {server_name}: {e}"
+                                            logger.error(error_msg)
+                                            stats['errors'].append(error_msg)
+                                    else:
+                                        logger.debug(f"Клиент {client_email} истек недавно ({days_since_expiry} дней), оставляем")
+                                continue
+                            
+                            # Если клиента нет ни в активных, ни в неактивных - это сиротский клиент
+                            # (связь в subscription_servers была удалена, но клиент остался на сервере)
+                            reason = "Клиент не найден в БД (сиротский клиент)"
+                            try:
+                                xui.deleteClient(client_email)
+                                stats['deleted_count'] += 1
+                                stats['details'].append({
+                                    'server': server_name,
+                                    'email': client_email,
+                                    'subscription_id': None,
+                                    'reason': reason,
+                                    'status': 'orphaned'
+                                })
+                                logger.info(f"Удален сиротский клиент {client_email} с сервера {server_name} (не найден в БД)")
+                            except Exception as e:
+                                error_msg = f"Ошибка удаления сиротского клиента {client_email} с {server_name}: {e}"
+                                logger.error(error_msg)
+                                stats['errors'].append(error_msg)
                     except json.JSONDecodeError as e:
                         logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id', 'unknown')} на сервере {server_name}: {e}")
                         continue
@@ -331,4 +460,214 @@ class SyncManager:
                 stats['errors'].append(error_msg)
         
         logger.info(f"✅ Очистка завершена: удалено {stats['deleted_count']} сиротских клиентов с {stats['servers_checked']} серверов")
+        if stats['details']:
+            logger.debug(f"Детали удаления: {len(stats['details'])} записей")
         return stats
+    
+    async def diagnose_server_client_mismatch(self, server_name: str = None):
+        """
+        Диагностирует расхождения между БД и серверами X-UI.
+        
+        Проверяет:
+        1. Клиенты на сервере, которых нет в БД (сиротские)
+        2. Клиенты в БД, которых нет на сервере (потерянные)
+        3. Клиенты с несоответствием статуса (активны в БД, но истекли на сервере)
+        4. Клиенты с несоответствием времени истечения
+        
+        Args:
+            server_name: Имя сервера для проверки (если None - проверяет все серверы)
+        
+        Returns:
+            dict с результатами диагностики для каждого сервера
+        """
+        logger.info(f"🔍 Начало диагностики расхождений между БД и серверами" + (f" (сервер: {server_name})" if server_name else ""))
+        
+        import aiosqlite
+        from ..db.subscribers_db import get_subscription_servers, DB_PATH
+        
+        results = {}
+        servers_to_check = []
+        
+        if server_name:
+            # Проверяем только указанный сервер
+            for server in self.server_manager.servers:
+                if server["name"] == server_name:
+                    servers_to_check.append(server)
+                    break
+        else:
+            # Проверяем все серверы
+            servers_to_check = self.server_manager.servers
+        
+        # Получаем все связи из БД
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT ss.*, s.status, s.expires_at, u.user_id
+                FROM subscription_servers ss
+                JOIN subscriptions s ON ss.subscription_id = s.id
+                JOIN users u ON s.subscriber_id = u.id
+            """) as cur:
+                db_connections = await cur.fetchall()
+        
+        # Группируем по серверам
+        db_clients_by_server = {}
+        for conn in db_connections:
+            server = conn['server_name']
+            if server not in db_clients_by_server:
+                db_clients_by_server[server] = []
+            db_clients_by_server[server].append({
+                'email': conn['client_email'],
+                'subscription_id': conn['subscription_id'],
+                'status': conn['status'],
+                'expires_at': conn['expires_at'],
+                'user_id': conn['user_id']
+            })
+        
+        # Проверяем каждый сервер
+        for server in servers_to_check:
+            server_name_check = server["name"]
+            xui = server.get("x3")
+            
+            if not xui:
+                results[server_name_check] = {
+                    'status': 'unavailable',
+                    'error': 'Сервер недоступен'
+                }
+                continue
+            
+            result = {
+                'status': 'ok',
+                'orphaned_clients': [],  # На сервере, но нет в БД
+                'missing_clients': [],   # В БД, но нет на сервере
+                'status_mismatches': [], # Несоответствие статуса
+                'expiry_mismatches': []  # Несоответствие времени истечения
+            }
+            
+            try:
+                # Получаем клиентов с сервера
+                response = xui.list()
+                if 'obj' not in response:
+                    result['status'] = 'error'
+                    result['error'] = 'Неожиданный формат ответа XUI'
+                    results[server_name_check] = result
+                    continue
+                
+                server_clients = {}
+                for inbound in response['obj']:
+                    try:
+                        settings = json.loads(inbound['settings'])
+                        clients = settings.get("clients", [])
+                        for client in clients:
+                            client_email = client.get('email')
+                            if not client_email:
+                                continue
+                            
+                            # Получаем время истечения клиента
+                            expiry_time = client.get('expiryTime', 0)
+                            if expiry_time:
+                                # X-UI возвращает время в миллисекундах
+                                if expiry_time > 1000000000000:  # Это миллисекунды
+                                    expiry_time = expiry_time // 1000
+                            
+                            server_clients[client_email] = {
+                                'expiry_time': expiry_time,
+                                'expired': expiry_time > 0 and expiry_time < int(time.time())
+                            }
+                    except (json.JSONDecodeError, Exception) as e:
+                        logger.warning(f"Ошибка обработки inbound на сервере {server_name_check}: {e}")
+                        continue
+                
+                # Получаем клиентов из БД для этого сервера
+                db_clients = db_clients_by_server.get(server_name_check, [])
+                db_client_emails = {c['email'] for c in db_clients}
+                
+                # 1. Сиротские клиенты (на сервере, но нет в БД)
+                for email, info in server_clients.items():
+                    if email not in db_client_emails:
+                        result['orphaned_clients'].append({
+                            'email': email,
+                            'expiry_time': info['expiry_time'],
+                            'expired': info['expired']
+                        })
+                
+                # 2. Потерянные клиенты (в БД, но нет на сервере)
+                for db_info in db_clients:
+                    client_email = db_info['email']
+                    if client_email not in server_clients:
+                        result['missing_clients'].append({
+                            'email': client_email,
+                            'subscription_id': db_info['subscription_id'],
+                            'status': db_info['status'],
+                            'user_id': db_info['user_id']
+                        })
+                
+                # 3. Проверяем несоответствия статуса и времени
+                for db_info in db_clients:
+                    client_email = db_info['email']
+                    if client_email not in server_clients:
+                        continue  # Уже обработано как потерянный
+                    
+                    server_info = server_clients[client_email]
+                    server_expired = server_info['expired']
+                    db_expires_at = db_info['expires_at']
+                    current_time = int(time.time())
+                    db_expired = db_expires_at < current_time
+                    
+                    # Несоответствие статуса
+                    if db_info['status'] == 'active' and server_expired:
+                        # Активен в БД, но истек на сервере
+                        result['status_mismatches'].append({
+                            'email': client_email,
+                            'subscription_id': db_info['subscription_id'],
+                            'db_status': db_info['status'],
+                            'db_expires_at': db_expires_at,
+                            'server_expiry_time': server_info['expiry_time'],
+                            'user_id': db_info['user_id']
+                        })
+                    elif db_info['status'] in ['expired', 'canceled', 'deleted'] and not server_expired:
+                        # Неактивен в БД, но еще активен на сервере
+                        result['status_mismatches'].append({
+                            'email': client_email,
+                            'subscription_id': db_info['subscription_id'],
+                            'db_status': db_info['status'],
+                            'db_expires_at': db_expires_at,
+                            'server_expiry_time': server_info['expiry_time'],
+                            'user_id': db_info['user_id']
+                        })
+                    
+                    # Несоответствие времени истечения (разница более 1 дня)
+                    if db_expires_at > 0 and server_info['expiry_time'] > 0:
+                        time_diff = abs(db_expires_at - server_info['expiry_time'])
+                        if time_diff > 24 * 60 * 60:  # Более 1 дня разницы
+                            result['expiry_mismatches'].append({
+                                'email': client_email,
+                                'subscription_id': db_info['subscription_id'],
+                                'db_expires_at': db_expires_at,
+                                'server_expiry_time': server_info['expiry_time'],
+                                'time_diff_hours': round(time_diff / 3600, 1),
+                                'user_id': db_info['user_id']
+                            })
+                
+                # Формируем итоговый статус
+                total_issues = (len(result['orphaned_clients']) + 
+                              len(result['missing_clients']) + 
+                              len(result['status_mismatches']) + 
+                              len(result['expiry_mismatches']))
+                
+                if total_issues > 0:
+                    result['status'] = 'issues_found'
+                    result['total_issues'] = total_issues
+                else:
+                    result['status'] = 'ok'
+                    result['message'] = 'Расхождений не обнаружено'
+                
+                results[server_name_check] = result
+                
+            except Exception as e:
+                result['status'] = 'error'
+                result['error'] = str(e)
+                results[server_name_check] = result
+                logger.error(f"Ошибка диагностики сервера {server_name_check}: {e}")
+        
+        logger.info(f"✅ Диагностика завершена для {len(results)} серверов")
+        return results
