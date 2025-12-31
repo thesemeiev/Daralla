@@ -120,7 +120,7 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     
     # Проверяем, что подписка не удалена/отменена (разрешаем продление активных и истекших подписок)
     import time
-    if sub['status'] in ('canceled', 'deleted'):
+    if sub['status'] == 'deleted':
         await safe_edit_or_reply_universal(
             query.message,
             f"{UIEmojis.ERROR} Ошибка: подписка была отменена или удалена",
@@ -226,7 +226,7 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
     
     # Проверяем, что подписка не удалена/отменена (разрешаем продление активных и истекших подписок)
     import time
-    if sub['status'] in ('canceled', 'deleted'):
+    if sub['status'] == 'deleted':
         await safe_edit_or_reply_universal(
             query.message,
             f"{UIEmojis.ERROR} Ошибка: подписка была отменена или удалена",

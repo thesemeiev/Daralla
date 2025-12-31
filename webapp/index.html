@@ -718,15 +718,10 @@
                             <input type="number" id="sub-device-limit" name="device_limit" min="1" required>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="sub-status">Статус</label>
-                            <select id="sub-status" name="status">
-                                <option value="canceled">Отменена</option>
-                                <option value="deleted">Удалена</option>
-                            </select>
-                            <small style="color: #a0a0a0; display: block; margin-top: 4px;">
-                                Статусы "Активна" и "Истекла" управляются автоматически через дату истечения
-                            </small>
+                        <div class="form-group" id="sub-status-display-group" style="display: none;">
+                            <label>Статус подписки</label>
+                            <div id="sub-status-display" style="padding: 8px 12px; background: #2a2a2a; border-radius: 4px; color: #fff; margin-top: 4px;"></div>
+                            <small style="color: #a0a0a0; display: block; margin-top: 4px;" id="sub-status-hint"></small>
                         </div>
                         
                         <div class="form-actions">
@@ -735,16 +730,20 @@
                         </div>
                     </form>
                     
-                    <div class="sync-section">
-                        <h3>Синхронизация с серверами</h3>
-                        <p class="hint">Применить изменения на всех X-UI серверах</p>
-                        <button class="btn-sync" onclick="syncSubscription()">Синхронизировать</button>
-                        <div id="sync-results" style="display: none;"></div>
+                    <div class="info-section" style="margin-top: 24px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
+                        <h3 style="margin-top: 0; color: #4a9eff;">ℹ️ Автоматическая синхронизация</h3>
+                        <p class="hint" style="margin-bottom: 0;">
+                            При сохранении изменений подписка автоматически синхронизируется со всеми X-UI серверами. 
+                            Изменения статуса, даты истечения и лимита устройств применяются на всех серверах.
+                        </p>
                     </div>
                     
-                    <div class="delete-section">
-                        <h3>Удаление подписки</h3>
-                        <p class="hint warning">Внимание! Это действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.</p>
+                    <div class="delete-section" style="margin-top: 24px; padding: 16px; background: #3a1a1a; border-radius: 8px; border: 1px solid #ff4444;">
+                        <h3 style="margin-top: 0; color: #ff6666;">⚠️ Удаление подписки</h3>
+                        <p class="hint warning" style="margin-bottom: 16px;">
+                            <strong>Внимание! Это действие необратимо.</strong><br>
+                            Подписка будет полностью удалена из базы данных, а все клиенты удалены со всех X-UI серверов.
+                        </p>
                         <button class="btn-danger" onclick="confirmDeleteSubscription()">Удалить подписку</button>
                     </div>
                 </div>

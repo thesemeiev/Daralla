@@ -1600,10 +1600,10 @@ def create_webhook_app(bot_app):
                         return jsonify({
                             'error': 'Нельзя вручную менять статус между "active" и "expired". Статус обновляется автоматически при изменении даты истечения (expires_at).'
                         }), 400
-                    # Разрешаем только изменение на canceled или deleted (ручное управление)
-                    if new_status not in ('canceled', 'deleted') and old_status in ('canceled', 'deleted'):
+                    # Разрешаем только изменение на deleted (ручное управление)
+                    if new_status != 'deleted' and old_status == 'deleted':
                         return jsonify({
-                            'error': f'Нельзя изменить статус "{old_status}" на "{new_status}". Статусы "canceled" и "deleted" являются финальными.'
+                            'error': f'Нельзя изменить статус "{old_status}" на "{new_status}". Статус "deleted" является финальным.'
                         }), 400
                 
                 # Обновляем поля в БД
@@ -1624,11 +1624,11 @@ def create_webhook_app(bot_app):
                             await db.commit()
                     loop.run_until_complete(update_device_limit())
                 
-                # Статус обновляется последним (только для canceled/deleted, active/expired управляются через expires_at)
+                # Статус обновляется последним (только для deleted, active/expired управляются через expires_at)
                 if 'status' in updates:
                     new_status = updates['status']
-                    # Обновляем только если это canceled или deleted
-                    if new_status in ('canceled', 'deleted'):
+                    # Обновляем только если это deleted
+                    if new_status == 'deleted':
                         loop.run_until_complete(update_subscription_status(sub_id, new_status))
                     # Если пытались установить active/expired - игнорируем (уже обновлено через expires_at)
                 
@@ -1678,9 +1678,9 @@ def create_webhook_app(bot_app):
                     new_device_limit = updated_sub['device_limit']
                     token = updated_sub['subscription_token']
                     
-                    # 1. Если статус изменился на expired/canceled/deleted - удаляем клиентов
+                    # 1. Если статус изменился на expired/deleted - удаляем клиентов
                     # Проверяем изменение статуса (может быть изменен автоматически через expires_at)
-                    if new_status in ['expired', 'canceled', 'deleted']:
+                    if new_status in ['expired', 'deleted']:
                         if old_status != new_status:
                             logger.info(f"Статус подписки {sub_id} изменился на {new_status}, удаляем клиентов с серверов")
                             
@@ -1766,7 +1766,7 @@ def create_webhook_app(bot_app):
                     
                     # 2. Если статус изменился на active - создаем/восстанавливаем клиентов
                     # (может быть изменен автоматически через expires_at)
-                    elif new_status == 'active' and old_status != 'active' and old_status not in ('canceled', 'deleted'):
+                    elif new_status == 'active' and old_status != 'active' and old_status != 'deleted':
                         logger.info(f"Статус подписки {sub_id} изменился на active, создаем/восстанавливаем клиентов")
                         for server_info in servers:
                             server_name = server_info['server_name']
@@ -2285,7 +2285,6 @@ def create_webhook_app(bot_app):
                         'total': stats.get('total', stats.get('total_subscriptions', 0)),
                         'active': stats.get('active', stats.get('active_subscriptions', 0)),
                         'expired': stats.get('expired', stats.get('expired_subscriptions', 0)),
-                        'canceled': stats.get('canceled', 0),
                         'trial': stats.get('trial', 0)
                     },
                     'payments': {

@@ -17,7 +17,7 @@ from .admin_sync import admin_sync
 from .admin_check_subscription import admin_check_subscription
 from .admin_user_management import admin_search_user, admin_user_subscriptions, admin_user_payments
 from .admin_subscription_manage import (
-    admin_subscription_info, admin_extend_subscription, admin_cancel_subscription,
+    admin_subscription_info, admin_extend_subscription,
     admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
     ADMIN_SUB_CHANGE_LIMIT_WAITING
 )

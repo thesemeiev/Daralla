@@ -50,7 +50,7 @@ from .handlers.admin import (
     admin_test_payment, test_confirm_payment_callback,
     admin_sync, admin_check_subscription,
     admin_search_user, admin_user_subscriptions, admin_user_payments,
-    admin_subscription_info, admin_extend_subscription, admin_cancel_subscription,
+    admin_subscription_info, admin_extend_subscription,
     admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
     ADMIN_SUB_CHANGE_LIMIT_WAITING,
     admin_give_subscription, admin_give_subscription_input_user, admin_give_subscription_continue,
@@ -453,7 +453,7 @@ if __name__ == '__main__':
         admin_user_subscriptions, admin_user_payments
     )
     from .handlers.admin.admin_subscription_manage import (
-        admin_subscription_info, admin_extend_subscription, admin_cancel_subscription,
+        admin_subscription_info, admin_extend_subscription,
         admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
         ADMIN_SUB_CHANGE_LIMIT_WAITING
     )
@@ -485,7 +485,6 @@ if __name__ == '__main__':
     )
     app.add_handler(change_limit_conv)
     app.add_handler(CallbackQueryHandler(admin_extend_subscription, pattern="^admin_sub_extend:"))
-    app.add_handler(CallbackQueryHandler(admin_cancel_subscription, pattern="^admin_sub_cancel:"))
     
     # ConversationHandler для поиска пользователя
     from .handlers.admin.admin_user_management import (

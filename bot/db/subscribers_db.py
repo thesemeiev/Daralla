@@ -27,7 +27,7 @@ async def init_subscribers_db():
             CREATE TABLE IF NOT EXISTS subscriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 subscriber_id INTEGER NOT NULL,
-                status TEXT NOT NULL,          -- active, expired, canceled
+                status TEXT NOT NULL,          -- active, expired, deleted
                 period TEXT NOT NULL,          -- month, 3month
                 device_limit INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
@@ -134,7 +134,7 @@ async def create_subscription(subscriber_id: int, period: str, device_limit: int
             return sub_id, token
 
 async def get_all_active_subscriptions():
-    """Возвращает все активные подписки (с учетом expires_at и исключая canceled/deleted)"""
+    """Возвращает все активные подписки (с учетом expires_at и исключая deleted)"""
     import time
     current_time = int(time.time())
     
@@ -146,7 +146,7 @@ async def get_all_active_subscriptions():
                JOIN users u ON s.subscriber_id = u.id 
                WHERE s.status = 'active' 
                AND s.expires_at > ?
-               AND s.status NOT IN ('canceled', 'deleted')""",
+               AND s.status != 'deleted'""",
             (current_time,)
         ) as cur:
             rows = await cur.fetchall()
@@ -193,8 +193,8 @@ async def update_subscription_expiry(subscription_id: int, new_expires_at: int):
         # Обновляем expires_at
         await db.execute("UPDATE subscriptions SET expires_at = ? WHERE id = ?", (new_expires_at, subscription_id))
         
-        # Автоматически обновляем статус (только если не canceled/deleted)
-        if current_status not in ('canceled', 'deleted'):
+        # Автоматически обновляем статус (только если не deleted)
+        if current_status != 'deleted':
             if new_expires_at > current_time:
                 # Продлеваем - меняем на active, если был expired
                 if current_status == 'expired':
@@ -226,8 +226,8 @@ def is_subscription_active(sub: dict) -> bool:
     import time
     current_time = int(time.time())
     
-    # canceled и deleted всегда неактивны
-    if sub.get('status') in ('canceled', 'deleted'):
+    # deleted всегда неактивна
+    if sub.get('status') == 'deleted':
         return False
     
     # Проверяем статус и expires_at
@@ -240,7 +240,7 @@ async def sync_subscription_statuses():
     - active -> expired (если expires_at < current_time)
     - expired -> active (если expires_at > current_time)
     
-    Не трогает canceled и deleted статусы (они только ручные)
+    Не трогает deleted статус (он финальный)
     
     Returns:
         dict с результатами: {'expired_count': int, 'activated_count': int}
@@ -255,7 +255,7 @@ async def sync_subscription_statuses():
             SET status = 'expired' 
             WHERE status = 'active' 
             AND expires_at < ? 
-            AND status NOT IN ('canceled', 'deleted')
+            AND status != 'deleted'
         """, (current_time,)) as cur:
             expired_count = cur.rowcount
         
@@ -265,7 +265,7 @@ async def sync_subscription_statuses():
             SET status = 'active' 
             WHERE status = 'expired' 
             AND expires_at > ? 
-            AND status NOT IN ('canceled', 'deleted')
+            AND status != 'deleted'
         """, (current_time,)) as cur:
             activated_count = cur.rowcount
         
@@ -398,11 +398,6 @@ async def get_subscription_statistics():
             row = await cur.fetchone()
             expired_subscriptions = row['count'] if row else 0
         
-        # Количество отмененных подписок
-        async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'canceled'") as cur:
-            row = await cur.fetchone()
-            canceled_subscriptions = row['count'] if row else 0
-        
         # Количество пробных подписок (trial)
         async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'trial'") as cur:
             row = await cur.fetchone()
@@ -440,13 +435,11 @@ async def get_subscription_statistics():
             'total': total_subscriptions,
             'active': active_subscriptions,
             'expired': expired_subscriptions,
-            'canceled': canceled_subscriptions,
             'trial': trial_subscriptions,
             # Длинные ключи (для читаемости кода)
             'total_subscriptions': total_subscriptions,
             'active_subscriptions': active_subscriptions,
             'expired_subscriptions': expired_subscriptions,
-            'canceled_subscriptions': canceled_subscriptions,
             'trial_subscriptions': trial_subscriptions,
             'total_server_clients': total_server_clients,
             'active_server_clients': active_server_clients
@@ -567,7 +560,7 @@ async def get_conversion_data(days: int = 30):
                 SELECT COUNT(DISTINCT subscriber_id) as count
                 FROM subscriptions
                 WHERE subscriber_id IN ({placeholders})
-                AND status IN ('active', 'expired', 'canceled')
+                AND status IN ('active', 'expired')
                 AND status != 'trial'
                 AND price > 0
             """
@@ -1124,7 +1117,7 @@ async def get_subscription_conversion_data(days: int = 30):
             SELECT COUNT(DISTINCT subscriber_id) as count
             FROM subscriptions
             WHERE subscriber_id IN ({placeholders})
-            AND status IN ('active', 'expired', 'canceled')
+            AND status IN ('active', 'expired')
             AND status != 'trial'
             AND price > 0
         """, trial_user_ids) as cur:
@@ -1169,7 +1162,7 @@ async def get_subscription_conversion_data(days: int = 30):
                     AND EXISTS (
                         SELECT 1 FROM subscriptions s2
                         WHERE s2.subscriber_id = s1.subscriber_id
-                        AND s2.status IN ('active', 'expired', 'canceled')
+                        AND s2.status IN ('active', 'expired')
                         AND s2.status != 'trial'
                         AND s2.price > 0
                         AND s2.created_at >= ? AND s2.created_at < ?

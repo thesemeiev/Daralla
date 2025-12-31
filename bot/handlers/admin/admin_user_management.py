@@ -234,7 +234,7 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         # Статистика подписок
         active_subs = [s for s in subscriptions if s['status'] == 'active']
         expired_subs = [s for s in subscriptions if s['status'] == 'expired']
-        canceled_subs = [s for s in subscriptions if s['status'] == 'canceled']
+        deleted_subs = [s for s in subscriptions if s['status'] == 'deleted']
         
         message = (
             f"{UIStyles.header('Информация о пользователе')}\n\n"
@@ -245,7 +245,7 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             f"   Всего: {len(subscriptions)}\n"
             f"   {UIEmojis.SUCCESS} Активных: {len(active_subs)}\n"
             f"   {UIEmojis.ERROR} Истекших: {len(expired_subs)}\n"
-            f"   {UIEmojis.WARNING} Отмененных: {len(canceled_subs)}\n\n"
+            f"   {UIEmojis.WARNING} Удаленных: {len(deleted_subs)}\n\n"
             f"<b>Платежи:</b> {len(payments)} (показано последних 10)\n"
         )
         

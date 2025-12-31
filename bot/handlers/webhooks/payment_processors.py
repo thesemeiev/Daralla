@@ -506,8 +506,8 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             if subscription_created and sub_dict:
                 try:
                     from ...db.subscribers_db import update_subscription_status
-                    await update_subscription_status(sub_dict['id'], 'canceled')
-                    logger.info(f"Подписка {sub_dict['id']} отменена из-за ошибки создания клиентов (компенсирующая транзакция)")
+                    await update_subscription_status(sub_dict['id'], 'deleted')
+                    logger.info(f"Подписка {sub_dict['id']} удалена из-за ошибки создания клиентов (компенсирующая транзакция)")
                 except Exception as rollback_e:
                     logger.error(f"Ошибка отката подписки {sub_dict['id']}: {rollback_e}")
             

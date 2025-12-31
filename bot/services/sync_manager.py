@@ -193,7 +193,7 @@ class SyncManager:
                 except Exception as e:
                     logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
             
-            # 2. Удаляем из БД (статус canceled или полное удаление)
+            # 2. Удаляем из БД (полное удаление)
             # По вашей просьбе — удаляем совсем
             await update_subscription_status(sub_id, 'deleted')
             # В реальной БД лучше просто скрыть, но мы удаляем связи
@@ -254,12 +254,12 @@ class SyncManager:
         1. Получаем ВСЕ подписки (не только активные) для полной картины
         2. Разделяем клиентов по статусам подписок:
            - active: должны остаться на сервере
-           - expired/canceled/deleted: могут быть удалены (если связь еще есть в БД)
+           - expired/deleted: могут быть удалены (если связь еще есть в БД)
         3. Для каждого сервера:
            - Получаем список всех клиентов через X-UI API
            - Для каждого клиента проверяем:
              * Если клиент в active - оставляем
-             * Если клиент в expired/canceled/deleted - проверяем дату истечения
+             * Если клиент в expired/deleted - проверяем дату истечения
              * Если клиента нет в БД вообще - удаляем (сиротский)
         
         Returns:
@@ -296,14 +296,14 @@ class SyncManager:
                     'status': sub.get('status', 'active')
                 }
         
-        # Получаем неактивные подписки (expired, canceled, deleted) для контекста
+        # Получаем неактивные подписки (expired, deleted) для контекста
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute("""
                 SELECT s.*, ss.server_name, ss.client_email 
                 FROM subscriptions s
                 JOIN subscription_servers ss ON s.id = ss.subscription_id
-                WHERE s.status IN ('expired', 'canceled', 'deleted')
+                WHERE s.status IN ('expired', 'deleted')
             """) as cur:
                 inactive_subs = await cur.fetchall()
         
@@ -386,8 +386,8 @@ class SyncManager:
                                 status = matching_detail.get('status', 'unknown')
                                 expires_at = matching_detail.get('expires_at', 0)
                                 
-                                # Если подписка canceled или deleted - удаляем клиента
-                                if status in ['canceled', 'deleted']:
+                                # Если подписка deleted - удаляем клиента
+                                if status == 'deleted':
                                     reason = f"Подписка {subscription_id} имеет статус {status}"
                                     try:
                                         xui.deleteClient(client_email)
@@ -625,7 +625,7 @@ class SyncManager:
                             'server_expiry_time': server_info['expiry_time'],
                             'user_id': db_info['user_id']
                         })
-                    elif db_info['status'] in ['expired', 'canceled', 'deleted'] and not server_expired:
+                    elif db_info['status'] in ['expired', 'deleted'] and not server_expired:
                         # Неактивен в БД, но еще активен на сервере
                         result['status_mismatches'].append({
                             'email': client_email,
