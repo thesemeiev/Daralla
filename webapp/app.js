@@ -4632,18 +4632,24 @@ function closeInstructionModal() {
 function moveNavIndicator(index) {
     const indicator = document.querySelector('.nav-glass-indicator');
     const navItems = document.querySelectorAll('.nav-item');
-    
-    if (!indicator || !navItems[index]) return;
-    
     const nav = document.querySelector('.bottom-nav');
-    const navWidth = nav.offsetWidth;
-    const itemWidth = navWidth / navItems.length;
-    const leftPosition = itemWidth * index;
     
-    // Устанавливаем ширину индикатора динамически
+    if (!indicator || !navItems[index] || !nav) return;
+    
+    // Получаем позицию конкретной иконки
+    const targetItem = navItems[index];
+    const navRect = nav.getBoundingClientRect();
+    const itemRect = targetItem.getBoundingClientRect();
+    
+    // Вычисляем позицию относительно навбара
+    const leftPosition = itemRect.left - navRect.left;
+    
+    // Устанавливаем ширину равной ширине иконки
+    indicator.style.width = `${itemRect.width}px`;
+    
+    // Устанавливаем CSS переменную для адаптации
     const itemWidthPercent = (100 / navItems.length);
     indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
-    indicator.style.width = `${itemWidthPercent}%`;
     
     // Добавляем класс для анимации масштабирования и устанавливаем transform
     indicator.classList.add('moving');
@@ -4663,11 +4669,6 @@ function initNavIndicator() {
     const nav = document.querySelector('.bottom-nav');
     
     if (!indicator || !nav) return;
-    
-    // Устанавливаем начальную ширину индикатора в зависимости от количества иконок
-    const itemWidthPercent = (100 / navItems.length);
-    indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
-    indicator.style.width = `calc(${itemWidthPercent}% - 24px)`;
     
     // Устанавливаем начальную позицию для активной кнопки
     const activeItem = document.querySelector('.nav-item.active');
@@ -4723,6 +4724,15 @@ function initNavIndicator() {
         const maxX = navWidth - itemWidth;
         
         const clampedX = Math.max(minX, Math.min(maxX, newTransform));
+        
+        // Обновляем ширину индикатора при перетаскивании на основе ближайшей иконки
+        const currentItemIndex = Math.round(clampedX / itemWidth);
+        if (currentItemIndex >= 0 && currentItemIndex < navItems.length) {
+            const currentItem = navItems[currentItemIndex];
+            const currentItemRect = currentItem.getBoundingClientRect();
+            indicator.style.width = `${currentItemRect.width}px`;
+        }
+        
         indicator.style.transform = `translateX(${clampedX}px) scale(1.05)`;
     });
     
