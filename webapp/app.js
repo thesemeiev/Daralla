@@ -2365,6 +2365,13 @@ function closeDeleteUserModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+    
+    // Всегда сбрасывать состояние кнопки при закрытии модального окна
+    const confirmBtn = document.getElementById('delete-user-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Удалить';
+    }
 }
 
 // Подтвердить удаление пользователя
@@ -2418,12 +2425,20 @@ async function confirmDeleteUser(userId) {
             loadAdminUsers(1, '');
         }, 500);
         
+        // Убеждаемся, что кнопка сброшена после успешного удаления
+        const confirmBtnAfter = document.getElementById('delete-user-confirm-btn');
+        if (confirmBtnAfter) {
+            confirmBtnAfter.disabled = false;
+            confirmBtnAfter.textContent = 'Удалить';
+        }
+        
     } catch (error) {
         console.error('Ошибка удаления пользователя:', error);
         if (tg && tg.showAlert) {
             tg.showAlert(`Ошибка удаления пользователя: ${error.message}`);
         }
         
+        // Всегда сбрасывать состояние кнопки при ошибке
         const confirmBtn = document.getElementById('delete-user-confirm-btn');
         if (confirmBtn) {
             confirmBtn.disabled = false;
@@ -4755,36 +4770,45 @@ function moveNavIndicator(index) {
     
     if (!indicator || !navItems[index] || !nav) return;
     
-    // Получаем позицию конкретной иконки
-    const targetItem = navItems[index];
-    const navRect = nav.getBoundingClientRect();
-    const itemRect = targetItem.getBoundingClientRect();
-    
-    // Вычисляем позицию относительно навбара с отступом от краев
-    const indicatorPadding = 8; // Отступ от краев островка
-    const itemCenterX = itemRect.left - navRect.left + itemRect.width / 2;
-    const itemWidth = itemRect.width;
-    
-    // Вычисляем позицию так, чтобы индикатор был центрирован относительно кнопки
-    const indicatorWidth = itemWidth - (indicatorPadding * 2);
-    const leftPosition = itemCenterX - indicatorWidth / 2;
-    
-    // Устанавливаем ширину равной ширине иконки минус отступы
-    indicator.style.width = `${indicatorWidth}px`;
-    
-    // Устанавливаем CSS переменную для адаптации
-    const itemWidthPercent = (100 / navItems.length);
-    indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
-    
-    // Добавляем класс для анимации масштабирования и устанавливаем transform
-    indicator.classList.add('moving');
-    indicator.style.transform = `translateX(${leftPosition}px) translateY(-50%) scale(1.05)`;
-    
-    // Убираем класс после завершения анимации и возвращаем нормальный масштаб
-    setTimeout(() => {
-        indicator.classList.remove('moving');
-        indicator.style.transform = `translateX(${leftPosition}px) translateY(-50%)`;
-    }, 200);
+    // Используем requestAnimationFrame для более точного расчета после рендеринга
+    requestAnimationFrame(() => {
+        // Получаем позицию конкретной иконки
+        const targetItem = navItems[index];
+        const navRect = nav.getBoundingClientRect();
+        const itemRect = targetItem.getBoundingClientRect();
+        
+        // Вычисляем позицию относительно навбара с отступом от краев
+        const indicatorPadding = 8; // Отступ от краев островка
+        const itemCenterX = itemRect.left - navRect.left + itemRect.width / 2;
+        const itemWidth = itemRect.width;
+        
+        // Вычисляем позицию так, чтобы индикатор был центрирован относительно кнопки
+        const indicatorWidth = itemWidth - (indicatorPadding * 2);
+        let leftPosition = itemCenterX - indicatorWidth / 2;
+        
+        // Проверка границ: индикатор не должен выходить за пределы навбара
+        const navWidth = nav.offsetWidth;
+        const minLeft = indicatorPadding;
+        const maxLeft = navWidth - indicatorWidth - indicatorPadding;
+        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, leftPosition));
+        
+        // Устанавливаем ширину равной ширине иконки минус отступы
+        indicator.style.width = `${indicatorWidth}px`;
+        
+        // Устанавливаем CSS переменную для адаптации
+        const itemWidthPercent = (100 / navItems.length);
+        indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
+        
+        // Добавляем класс для анимации масштабирования и устанавливаем transform
+        indicator.classList.add('moving');
+        indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%) scale(1.05)`;
+        
+        // Убираем класс после завершения анимации и возвращаем нормальный масштаб
+        setTimeout(() => {
+            indicator.classList.remove('moving');
+            indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%)`;
+        }, 200);
+    });
 }
 
 // Инициализация навигации с индикатором
