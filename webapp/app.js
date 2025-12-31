@@ -56,10 +56,11 @@ function showPage(pageName) {
         } else if (pageName === 'about') {
             navItems[3]?.classList.add('active');
             activeIndex = 3;
-        } else if (pageName === 'admin-stats' && document.getElementById('admin-nav-button')) {
-            document.getElementById('admin-nav-button').classList.add('active');
-        } else if (pageName === 'admin-users' && document.getElementById('admin-nav-button')) {
-            document.getElementById('admin-nav-button').classList.add('active');
+        } else if ((pageName === 'admin-stats' || pageName === 'admin-users' || pageName === 'admin-subscriptions' || pageName === 'admin-notifications') && document.getElementById('admin-nav-button')) {
+            const adminButton = document.getElementById('admin-nav-button');
+            adminButton.classList.add('active');
+            const allNavItems = document.querySelectorAll('.nav-item');
+            activeIndex = Array.from(allNavItems).indexOf(adminButton);
         }
         
         // Перемещаем индикатор к активной кнопке
@@ -1594,11 +1595,17 @@ function addAdminNavButton() {
     const adminButton = document.createElement('button');
     adminButton.id = 'admin-nav-button';
     adminButton.className = 'nav-item';
+    adminButton.setAttribute('data-page', 'admin-stats');
     adminButton.onclick = () => {
         console.log('Переход в админ-панель');
         showPage('admin-stats');
     };
-    adminButton.innerHTML = '<span class="nav-label">Админ</span>';
+    adminButton.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L4 5V11C4 16.55 7.16 21.74 12 23C16.84 21.74 20 16.55 20 11V5L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 8V12M12 16H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+    `;
     
     nav.appendChild(adminButton);
     console.log('Кнопка админ-панели успешно добавлена');
@@ -4624,7 +4631,7 @@ function closeInstructionModal() {
 // Функция для перемещения индикатора к активной кнопке
 function moveNavIndicator(index) {
     const indicator = document.querySelector('.nav-glass-indicator');
-    const navItems = document.querySelectorAll('.nav-item:not(#admin-nav-button)');
+    const navItems = document.querySelectorAll('.nav-item');
     
     if (!indicator || !navItems[index]) return;
     
@@ -4638,14 +4645,14 @@ function moveNavIndicator(index) {
 
 // Инициализация навигации с индикатором
 function initNavIndicator() {
-    const navItems = document.querySelectorAll('.nav-item:not(#admin-nav-button)');
+    const navItems = document.querySelectorAll('.nav-item');
     const indicator = document.querySelector('.nav-glass-indicator');
     const nav = document.querySelector('.bottom-nav');
     
     if (!indicator || !nav) return;
     
     // Устанавливаем начальную позицию для активной кнопки
-    const activeItem = document.querySelector('.nav-item.active:not(#admin-nav-button)');
+    const activeItem = document.querySelector('.nav-item.active');
     if (activeItem) {
         const activeIndex = Array.from(navItems).indexOf(activeItem);
         if (activeIndex >= 0) {
@@ -4715,8 +4722,10 @@ function initNavIndicator() {
         
         // Активируем соответствующую кнопку
         const targetButton = navItems[clampedIndex];
-        if (targetButton && targetButton.dataset.page) {
+        if (targetButton && targetButton.dataset && targetButton.dataset.page) {
             showPage(targetButton.dataset.page);
+        } else if (targetButton && targetButton.id === 'admin-nav-button') {
+            showPage('admin-stats');
         }
     });
     
