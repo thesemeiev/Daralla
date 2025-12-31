@@ -34,7 +34,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #1a1a1a;
     color: #e0e0e0;
-    padding: calc(20px + env(safe-area-inset-top)) 16px calc(85px + env(safe-area-inset-bottom)) 16px;
+    padding: calc(28px + env(safe-area-inset-top)) 16px calc(85px + env(safe-area-inset-bottom)) 16px;
     min-height: 100vh;
     line-height: 1.6;
     /* Предотвращаем закрытие приложения при скролле вверх */
@@ -92,11 +92,12 @@ body {
 header {
     text-align: center;
     margin-bottom: 24px;
-    padding-top: calc(20px + env(safe-area-inset-top));
+    padding-top: calc(28px + env(safe-area-inset-top));
     padding-bottom: 16px;
     position: relative;
     z-index: 10;
     background: var(--bg-color, #1a1a1a);
+    min-height: calc(64px + env(safe-area-inset-top));
 }
 
 h1 {
@@ -474,9 +475,10 @@ h1 {
 /* Детальная страница подписки */
 .back-button {
     position: absolute;
-    left: 0;
-    top: calc(20px + env(safe-area-inset-top));
+    left: 16px;
+    top: 50%;
     transform: translateY(-50%);
+    margin-top: calc(env(safe-area-inset-top) / 2);
     background: none;
     border: none;
     color: #b0b0b0;
