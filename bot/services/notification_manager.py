@@ -192,49 +192,19 @@ class NotificationManager:
             
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
             
-            # Получаем URL мини-приложения и bot username из конфигурации
-            webapp_url = None
-            try:
-                import sys
-                bot_module = sys.modules.get('bot.bot')
-                if bot_module:
-                    webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-            except (ImportError, AttributeError, KeyError):
-                pass
+            # Создаем кнопку для открытия мини-приложения через deep link
+            from ..utils import UIButtons
+            webapp_button = UIButtons.create_webapp_button(
+                action='extend_subscription',
+                params=subscription_id
+            )
             
-            # Получаем bot username из bot объекта
-            bot_username = None
-            try:
-                bot_info = await self.bot.get_me()
-                bot_username = bot_info.username if bot_info else None
-            except Exception as e:
-                logger.warning(f"Не удалось получить bot username: {e}")
-            
-            # Формируем deep link для открытия мини-приложения с переходом на продление
-            webapp_button = None
-            if webapp_url:
-                # Используем прямой URL мини-приложения
-                deep_link = f"{webapp_url}?startapp=extend_subscription_{subscription_id}"
-                webapp_button = InlineKeyboardButton("📱 Открыть в приложении", url=deep_link)
-            elif bot_username:
-                # Fallback: используем формат t.me/bot/webapp (требует настройки Web App в BotFather)
-                deep_link = f"https://t.me/{bot_username}/webapp?startapp=extend_subscription_{subscription_id}"
-                webapp_button = InlineKeyboardButton("📱 Открыть в приложении", url=deep_link)
-            
-            # Создаем клавиатуру с кнопками
-            buttons = [
-                [InlineKeyboardButton(f"{UIEmojis.REFRESH} Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{subscription_id}")]
-            ]
-            
+            # Создаем клавиатуру только с deep link кнопкой
+            buttons = []
             if webapp_button:
                 buttons.append([webapp_button])
             
-            buttons.extend([
-                [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-                [NavigationBuilder.create_main_menu_button()]
-            ])
-            
-            keyboard = InlineKeyboardMarkup(buttons)
+            keyboard = InlineKeyboardMarkup(buttons) if buttons else None
             
             try:
                 await self.bot.send_message(

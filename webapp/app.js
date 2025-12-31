@@ -3810,16 +3810,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const startapp = urlParams.get('startapp');
     
-    if (startapp && startapp.startsWith('extend_subscription_')) {
-        // Прямой переход на продление подписки
-        const subscriptionId = parseInt(startapp.replace('extend_subscription_', ''));
-        if (subscriptionId && !isNaN(subscriptionId)) {
-            // Сначала загружаем подписки, чтобы убедиться, что данные загружены
+    if (startapp) {
+        if (startapp.startsWith('extend_subscription_')) {
+            // Прямой переход на продление подписки
+            const subscriptionId = parseInt(startapp.replace('extend_subscription_', ''));
+            if (subscriptionId && !isNaN(subscriptionId)) {
+                // Сначала загружаем подписки, чтобы убедиться, что данные загружены
+                await loadSubscriptions();
+                // Небольшая задержка для загрузки данных, затем открываем страницу продления
+                setTimeout(() => {
+                    showExtendSubscriptionModal(subscriptionId);
+                }, 300);
+                // Проверяем права админа в фоне
+                checkAdminAccess();
+                return;
+            }
+        } else if (startapp.startsWith('subscription_')) {
+            // Прямой переход на конкретную подписку
+            const subscriptionId = parseInt(startapp.replace('subscription_', ''));
+            if (subscriptionId && !isNaN(subscriptionId)) {
+                // Загружаем подписки
+                await loadSubscriptions();
+                // Находим подписку и открываем её детали
+                setTimeout(() => {
+                    const subscriptions = window.allSubscriptions || [];
+                    const sub = subscriptions.find(s => s.id === subscriptionId);
+                    if (sub) {
+                        showSubscriptionDetail(sub);
+                    } else {
+                        showPage('subscriptions');
+                    }
+                }, 300);
+                // Проверяем права админа в фоне
+                checkAdminAccess();
+                return;
+            }
+        } else if (startapp === 'subscriptions') {
+            // Прямой переход на список подписок
+            showPage('subscriptions');
             await loadSubscriptions();
-            // Небольшая задержка для загрузки данных, затем открываем страницу продления
-            setTimeout(() => {
-                showExtendSubscriptionModal(subscriptionId);
-            }, 300);
             // Проверяем права админа в фоне
             checkAdminAccess();
             return;
@@ -4578,6 +4607,3 @@ function closeInstructionModal() {
     currentInstructionSteps = [];
 }
 
-function goBackFromInstructions() {
-    showPage('subscriptions');
-}

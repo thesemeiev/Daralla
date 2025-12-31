@@ -232,10 +232,23 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         f"<b>Причина:</b> Не удалось синхронизировать клиентов на серверах\n\n"
                         f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                     )
-                    keyboard = InlineKeyboardMarkup([
+                    # Создаем кнопку для открытия мини-приложения
+                    from ...utils import UIButtons
+                    webapp_button = UIButtons.create_webapp_button(
+                        action='subscriptions'
+                    )
+                    
+                    buttons = []
+                    if webapp_button:
+                        buttons.append([webapp_button])
+                    
+                    # Оставляем старые кнопки для совместимости
+                    buttons.extend([
                         [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                         [NavigationBuilder.create_main_menu_button()]
                     ])
+                    
+                    keyboard = InlineKeyboardMarkup(buttons)
                     await safe_edit_message_with_photo(
                         bot_app.bot,
                         chat_id=int(user_id),
@@ -301,10 +314,24 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 extension_message += f"{UIStyles.description('Подписка активна и готова к использованию.')}"
                 
                 if message_id:
-                    keyboard = InlineKeyboardMarkup([
+                    # Создаем кнопку для открытия мини-приложения
+                    from ...utils import UIButtons
+                    webapp_button = UIButtons.create_webapp_button(
+                        action='subscription',
+                        params=extension_subscription_id
+                    )
+                    
+                    buttons = []
+                    if webapp_button:
+                        buttons.append([webapp_button])
+                    
+                    # Оставляем старые кнопки для совместимости
+                    buttons.extend([
                         [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                         [NavigationBuilder.create_main_menu_button()]
                     ])
+                    
+                    keyboard = InlineKeyboardMarkup(buttons)
                     
                     await safe_edit_message_with_photo(
                         bot_app.bot,
@@ -418,9 +445,20 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     f"<b>Причина:</b> Нет серверов в конфигурации\n\n"
                     f"{UIStyles.description('Обратитесь в поддержку')}"
                 )
-                keyboard = InlineKeyboardMarkup([
-                    [NavigationBuilder.create_main_menu_button()]
-                ])
+                # Создаем кнопку для открытия мини-приложения
+                from ...utils import UIButtons
+                webapp_button = UIButtons.create_webapp_button(
+                    action='subscriptions'
+                )
+                
+                buttons = []
+                if webapp_button:
+                    buttons.append([webapp_button])
+                
+                # Оставляем старые кнопки для совместимости
+                buttons.append([NavigationBuilder.create_main_menu_button()])
+                
+                keyboard = InlineKeyboardMarkup(buttons)
                 await safe_edit_message_with_photo(
                     bot_app.bot,
                     chat_id=int(user_id),
@@ -520,9 +558,20 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     f"<b>Причина:</b> Не удалось создать клиентов на серверах\n\n"
                     f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                 )
-                keyboard = InlineKeyboardMarkup([
-                    [NavigationBuilder.create_main_menu_button()]
-                ])
+                # Создаем кнопку для открытия мини-приложения
+                from ...utils import UIButtons
+                webapp_button = UIButtons.create_webapp_button(
+                    action='subscriptions'
+                )
+                
+                buttons = []
+                if webapp_button:
+                    buttons.append([webapp_button])
+                
+                # Оставляем старые кнопки для совместимости
+                buttons.append([NavigationBuilder.create_main_menu_button()])
+                
+                keyboard = InlineKeyboardMarkup(buttons)
                 await safe_edit_message_with_photo(
                     bot_app.bot,
                     chat_id=int(user_id),
@@ -625,10 +674,24 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             if failed_servers:
                 subscription_message += f"\n\n{UIEmojis.WARNING} <i>Не удалось создать клиентов на серверах: {', '.join(failed_servers)}</i>"
             
-            keyboard = InlineKeyboardMarkup([
+            # Создаем кнопку для открытия мини-приложения
+            from ...utils import UIButtons
+            webapp_button = UIButtons.create_webapp_button(
+                action='subscription',
+                params=sub_dict['id'] if sub_dict else None
+            )
+            
+            buttons = []
+            if webapp_button:
+                buttons.append([webapp_button])
+            
+            # Оставляем старые кнопки для совместимости
+            buttons.extend([
                 [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                 [NavigationBuilder.create_main_menu_button()]
             ])
+            
+            keyboard = InlineKeyboardMarkup(buttons)
             
             # Получаем message_id из мета-данных платежа
             payment_info = await get_payment_by_id(payment_id)
@@ -750,10 +813,23 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                     f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
                 )
                 
-                keyboard = InlineKeyboardMarkup([
+                # Создаем кнопку для открытия мини-приложения
+                from ...utils import UIButtons
+                webapp_button = UIButtons.create_webapp_button(
+                    action='subscriptions'
+                )
+                
+                buttons = []
+                if webapp_button:
+                    buttons.append([webapp_button])
+                
+                # Оставляем старые кнопки для совместимости
+                buttons.extend([
                     [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
                     [NavigationBuilder.create_main_menu_button()]
                 ])
+                
+                keyboard = InlineKeyboardMarkup(buttons)
                 
                 menu_type = MenuTypes.SUBSCRIPTIONS_MENU
             else:
@@ -766,10 +842,23 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                     f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
                 )
                 
-                keyboard = InlineKeyboardMarkup([
+                # Создаем кнопку для открытия мини-приложения
+                from ...utils import UIButtons
+                webapp_button = UIButtons.create_webapp_button(
+                    action='subscriptions'
+                )
+                
+                buttons = []
+                if webapp_button:
+                    buttons.append([webapp_button])
+                
+                # Оставляем старые кнопки для совместимости
+                buttons.extend([
                     [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.BUY_VPN)],
                     [NavigationBuilder.create_main_menu_button()]
                 ])
+                
+                keyboard = InlineKeyboardMarkup(buttons)
                 
                 menu_type = MenuTypes.PAYMENT_FAILED
             

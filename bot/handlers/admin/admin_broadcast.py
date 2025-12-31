@@ -204,12 +204,21 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
         chunk = recipients[i:i+batch]
         for user_id in chunk:
             try:
-                # Отправляем ТОЛЬКО текстовое сообщение
+                # Создаем кнопку для открытия мини-приложения
+                from ...utils import UIButtons
+                webapp_button = UIButtons.create_webapp_button()
+                
+                reply_markup = None
+                if webapp_button:
+                    reply_markup = InlineKeyboardMarkup([[webapp_button]])
+                
+                # Отправляем текстовое сообщение с кнопкой
                 await context.bot.send_message(
                     chat_id=int(user_id), 
                     text=text, 
                     parse_mode="HTML", 
-                    disable_web_page_preview=True
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup
                 )
                 
                 sent += 1

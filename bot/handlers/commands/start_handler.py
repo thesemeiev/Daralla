@@ -82,7 +82,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         expires_at=expires_at,
                         name="Пробная подписка"
                     )
-                    logger.info(f"✅ Пробная подписка создана в БД для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
+                    logger.info(f" Пробная подписка создана в БД для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
                     
                     # Устанавливаем trial_created сразу после создания подписки в БД
                     trial_created = True
@@ -142,7 +142,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         if client_exists:
                                             successful_servers.append(server_name)
                                             if client_created:
-                                                logger.info(f"✅ Клиент создан на сервере {server_name} для пробной подписки")
+                                                logger.info(f" Клиент создан на сервере {server_name} для пробной подписки")
                                             else:
                                                 logger.info(f"Клиент уже существует на сервере {server_name}")
                                         else:
@@ -173,7 +173,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если создана пробная подписка - добавляем информацию о ней
     if trial_created:
         trial_info = (
-            f"\n\n{UIStyles.success_message('🎁 Вам выдана пробная подписка на 5 дней!')}\n"
+            f"\n\n{UIStyles.success_message(' Вам выдана пробная подписка на 5 дней!')}\n"
             f"{UIStyles.description('Вы можете протестировать VPN прямо сейчас. Перейдите в «Мои подписки» для получения ключей.')}"
         )
         welcome_text += trial_info
