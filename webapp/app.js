@@ -4653,12 +4653,12 @@ function moveNavIndicator(index) {
     
     // Добавляем класс для анимации масштабирования и устанавливаем transform
     indicator.classList.add('moving');
-    indicator.style.transform = `translateX(${leftPosition}px) scale(1.05)`;
+    indicator.style.transform = `translateX(${leftPosition}px) translateY(-50%) scale(1.05)`;
     
     // Убираем класс после завершения анимации и возвращаем нормальный масштаб
     setTimeout(() => {
         indicator.classList.remove('moving');
-        indicator.style.transform = `translateX(${leftPosition}px)`;
+        indicator.style.transform = `translateX(${leftPosition}px) translateY(-50%)`;
     }, 200);
 }
 
@@ -4733,7 +4733,7 @@ function initNavIndicator() {
             indicator.style.width = `${currentItemRect.width}px`;
         }
         
-        indicator.style.transform = `translateX(${clampedX}px) scale(1.05)`;
+        indicator.style.transform = `translateX(${clampedX}px) translateY(-50%) scale(1.05)`;
     });
     
     nav.addEventListener('touchend', (e) => {
