@@ -215,33 +215,28 @@
                 <div class="instructions-menu" id="instructions-menu">
                     <h2 style="margin-bottom: 16px; color: #fff;">Выберите вашу платформу:</h2>
                     <div class="instructions-grid">
-                        <button class="instruction-platform-btn" onclick="showInstruction('android')">
-                            <span>📱 Android</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('android')">
+                            <span>Android</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstruction('ios')">
-                            <span>🍎 iOS</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('ios')">
+                            <span>iOS</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstruction('windows')">
-                            <span>🪟 Windows</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('windows')">
+                            <span>Windows</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstruction('macos')">
-                            <span>💻 macOS</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('macos')">
+                            <span>macOS</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstruction('linux')">
-                            <span>🐧 Linux</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('linux')">
+                            <span>Linux</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstruction('tv')">
-                            <span>📺 Android TV</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('tv')">
+                            <span>Android TV</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstruction('faq')" style="grid-column: 1 / -1;">
-                            <span>❓ FAQ</span>
+                        <button class="instruction-platform-btn" onclick="showInstructionModal('faq')" style="grid-column: 1 / -1;">
+                            <span>FAQ</span>
                         </button>
                     </div>
-                </div>
-                
-                <div class="instruction-detail" id="instruction-detail" style="display: none;">
-                    <div id="instruction-content" style="color: #fff; line-height: 1.6;"></div>
-                    <button class="btn-primary" onclick="goBackToInstructionsMenu()" style="margin-top: 24px; width: 100%;">← Назад к выбору платформы</button>
                 </div>
             </div>
         </div>
@@ -831,6 +826,30 @@
             <div style="display: flex; gap: 12px; margin-top: 24px;">
                 <button type="button" class="btn-secondary" onclick="closeSubscriptionConfirmModal()" style="flex: 1;">Отмена</button>
                 <button type="button" class="btn-primary" onclick="confirmSaveSubscriptionChanges()" style="flex: 1;">Подтвердить и сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно инструкций -->
+    <div id="instruction-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="instruction-modal-title" style="margin: 0;">Инструкция</h2>
+                <button onclick="closeInstructionModal()" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            </div>
+            
+            <div id="instruction-steps-container" style="margin-bottom: 24px;">
+                <!-- Шаги будут добавлены динамически -->
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-top: 24px;">
+                <button type="button" class="btn-secondary" onclick="prevInstructionStep()" id="instruction-prev-btn" style="flex: 1; display: none;">Назад</button>
+                <button type="button" class="btn-primary" onclick="nextInstructionStep()" id="instruction-next-btn" style="flex: 1;">Далее</button>
+                <button type="button" class="btn-primary" onclick="closeInstructionModal()" id="instruction-close-btn" style="flex: 1; display: none;">Закрыть</button>
+            </div>
+            
+            <div style="margin-top: 16px; text-align: center;">
+                <span id="instruction-step-indicator" style="color: #999; font-size: 14px;">Шаг 1 из 5</span>
             </div>
         </div>
     </div>

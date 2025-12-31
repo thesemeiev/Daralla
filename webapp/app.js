@@ -4143,148 +4143,439 @@ function changeConversionSubscriptionsPeriod() {
     loadSubscriptionStats(days);
 }
 
-// Функции для работы с инструкциями
-function showInstruction(platform) {
-    const menu = document.getElementById('instructions-menu');
-    const detail = document.getElementById('instruction-detail');
-    const content = document.getElementById('instruction-content');
+// Глобальные переменные для инструкций
+let currentInstructionPlatform = null;
+let currentInstructionStep = 0;
+let currentInstructionSteps = [];
+
+// Структура пошаговых инструкций
+const instructionSteps = {
+    android: {
+        title: 'Android (v2RayTun, Happ)',
+        steps: [
+            {
+                title: 'Шаг 1: Выберите приложение',
+                content: `
+                    <p>Выберите одно из приложений для Android:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" style="color: #4a9eff;">v2RayTun из Google Play</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happ.vpn" target="_blank" style="color: #4a9eff;">Happ из Google Play</a></li>
+                    </ul>
+                    <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
+                `
+            },
+            {
+                title: 'Шаг 2: Получите ссылку на подписку',
+                content: `
+                    <p>В мини-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
+                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
+                    </ol>
+                    <p>Ссылка будет скопирована в буфер обмена.</p>
+                `
+            },
+            {
+                title: 'Шаг 3: Добавьте подписку в приложение',
+                content: `
+                    <p>В выбранном VPN-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
+                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
+                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 4: Подключитесь к VPN',
+                content: `
+                    <p>После импорта подписки:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Выберите добавленный профиль</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку подключения</li>
+                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Советы и рекомендации',
+                content: `
+                    <p><strong>Если VPN не подключается:</strong></p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Проверьте подключение к интернету</li>
+                        <li style="margin-bottom: 8px;">Перезапустите VPN-приложение</li>
+                        <li style="margin-bottom: 8px;">Перезагрузите устройство</li>
+                        <li style="margin-bottom: 8px;">Скопируйте ссылку заново</li>
+                    </ul>
+                    <p><strong>Важно:</strong> Используйте только одну VPN-программу одновременно. Не делитесь своей ссылкой с другими пользователями.</p>
+                `
+            }
+        ]
+    },
+    ios: {
+        title: 'iOS (v2RayTun, Happ)',
+        steps: [
+            {
+                title: 'Шаг 1: Выберите приложение',
+                content: `
+                    <p>Выберите одно из приложений для iPhone:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank" style="color: #4a9eff;">v2RayTun из App Store</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ/id1635156981" target="_blank" style="color: #4a9eff;">Happ из App Store</a></li>
+                    </ul>
+                    <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
+                `
+            },
+            {
+                title: 'Шаг 2: Получите ссылку на подписку',
+                content: `
+                    <p>В мини-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
+                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 3: Откройте VPN-приложение',
+                content: `
+                    <p>Откройте установленное VPN-приложение на вашем iPhone.</p>
+                `
+            },
+            {
+                title: 'Шаг 4: Добавьте подписку',
+                content: `
+                    <p>В VPN-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
+                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
+                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 5: Подключитесь',
+                content: `
+                    <p>После импорта:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Выберите добавленный профиль</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку подключения</li>
+                        <li style="margin-bottom: 8px;">Разрешите создание VPN-подключения при запросе системы</li>
+                    </ol>
+                    <p><strong>Важно:</strong> Не делитесь своей ссылкой с другими пользователями.</p>
+                `
+            }
+        ]
+    },
+    windows: {
+        title: 'Windows (v2RayTun, Happ)',
+        steps: [
+            {
+                title: 'Шаг 1: Скачайте приложение',
+                content: `
+                    <p>Выберите и скачайте одно из приложений:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;"><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank" style="color: #4a9eff;">v2RayTun для Windows</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://happvpn.help/download-pc/" target="_blank" style="color: #4a9eff;">Happ для Windows</a></li>
+                    </ul>
+                    <p>Установите приложение на ваш компьютер.</p>
+                `
+            },
+            {
+                title: 'Шаг 2: Получите ссылку на подписку',
+                content: `
+                    <p>В мини-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
+                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 3: Добавьте подписку в приложение',
+                content: `
+                    <p>В VPN-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
+                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
+                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 4: Включите VPN',
+                content: `
+                    <p>После импорта:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Найдите добавленный профиль в списке</li>
+                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
+                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
+                    </ol>
+                    <p><strong>Важно:</strong> Используйте только одну VPN-программу одновременно.</p>
+                `
+            }
+        ]
+    },
+    macos: {
+        title: 'macOS (v2RayTun, Happ)',
+        steps: [
+            {
+                title: 'Шаг 1: Скачайте приложение',
+                content: `
+                    <p>Выберите и скачайте одно из приложений:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank" style="color: #4a9eff;">v2RayTun для Mac</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://happvpn.help/download-pc/" target="_blank" style="color: #4a9eff;">Happ для Mac</a></li>
+                    </ul>
+                    <p>Установите приложение на ваш Mac.</p>
+                `
+            },
+            {
+                title: 'Шаг 2: Получите ссылку на подписку',
+                content: `
+                    <p>В мини-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
+                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 3: Добавьте подписку',
+                content: `
+                    <p>В VPN-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
+                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
+                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 4: Включите VPN',
+                content: `
+                    <p>После импорта:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Найдите добавленный профиль</li>
+                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
+                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
+                    </ol>
+                    <p><strong>Важно:</strong> Используйте только одну VPN-программу одновременно.</p>
+                `
+            }
+        ]
+    },
+    linux: {
+        title: 'Linux (Happ)',
+        steps: [
+            {
+                title: 'Шаг 1: Скачайте Happ',
+                content: `
+                    <p><a href="https://happvpn.help/download-pc/" target="_blank" style="color: #4a9eff;">Скачайте Happ для Linux</a> и установите на ваш компьютер.</p>
+                `
+            },
+            {
+                title: 'Шаг 2: Получите ссылку на подписку',
+                content: `
+                    <p>В мини-приложении:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
+                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 3: Добавьте подписку',
+                content: `
+                    <p>В Happ:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
+                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
+                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 4: Включите VPN',
+                content: `
+                    <p>После импорта:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Найдите добавленный профиль</li>
+                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
+                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
+                    </ol>
+                `
+            }
+        ]
+    },
+    tv: {
+        title: 'Android TV (v2RayTun, Happ)',
+        steps: [
+            {
+                title: 'Шаг 1: Выберите приложение',
+                content: `
+                    <p>Выберите одно из приложений для Android TV:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" style="color: #4a9eff;">v2RayTun для Android TV</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happ.vpn" target="_blank" style="color: #4a9eff;">Happ для Android TV</a></li>
+                    </ul>
+                `
+            },
+            {
+                title: 'Шаг 2: Получите ссылку на подписку',
+                content: `
+                    <p>В мини-приложении на вашем телефоне:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
+                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 3: Добавьте подписку',
+                content: `
+                    <p>В VPN-приложении на Android TV:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
+                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
+                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
+                    </ol>
+                `
+            },
+            {
+                title: 'Шаг 4: Включите VPN',
+                content: `
+                    <p>После импорта:</p>
+                    <ol style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Выберите добавленный профиль</li>
+                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
+                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
+                    </ol>
+                `
+            }
+        ]
+    },
+    faq: {
+        title: 'FAQ - Частые вопросы',
+        steps: [
+            {
+                title: 'VPN не подключается',
+                content: `
+                    <p>Если VPN не подключается, попробуйте следующее:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Проверьте подключение к интернету</li>
+                        <li style="margin-bottom: 8px;">Перезапустите VPN-приложение</li>
+                        <li style="margin-bottom: 8px;">Перезагрузите устройство</li>
+                        <li style="margin-bottom: 8px;">Скопируйте ссылку на подписку заново</li>
+                        <li style="margin-bottom: 8px;">Убедитесь, что никому не передавали свою ссылку</li>
+                        <li style="margin-bottom: 8px;">Отключите другие VPN-приложения</li>
+                    </ul>
+                `
+            },
+            {
+                title: 'Не импортируется ссылка',
+                content: `
+                    <p>Если ссылка не импортируется:</p>
+                    <ul style="margin: 12px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">Скопируйте ссылку полностью, от начала до конца</li>
+                        <li style="margin-bottom: 8px;">Убедитесь, что ссылка начинается с "https://"</li>
+                        <li style="margin-bottom: 8px;">Обновите VPN-приложение до последней версии</li>
+                        <li style="margin-bottom: 8px;">Попробуйте скопировать ссылку еще раз</li>
+                    </ul>
+                `
+            },
+            {
+                title: 'Мультисерверность',
+                content: `
+                    <p>Ваша подписка включает все доступные серверы сразу. Вы можете переключаться между серверами в настройках VPN-приложения.</p>
+                `
+            },
+            {
+                title: 'Нужна помощь?',
+                content: `
+                    <p>Если у вас возникли проблемы или вопросы, обратитесь в поддержку через Telegram.</p>
+                `
+            }
+        ]
+    }
+};
+
+// Функции для работы с модальным окном инструкций
+function showInstructionModal(platform) {
+    currentInstructionPlatform = platform;
+    currentInstructionStep = 0;
     
-    const instructions = {
-        android: `
-            <h3>Android (v2RayTun, Happ)</h3>
-            <p><strong>1. Выберите приложение:</strong></p>
-            <ul>
-                <li><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank">v2RayTun из Google Play</a></li>
-                <li><a href="https://play.google.com/store/apps/details?id=com.happ.vpn" target="_blank">Happ из Google Play</a></li>
-            </ul>
-            <p><strong>2. В мини-приложении нажмите 'Подписки' и скопируйте ссылку на подписку.</strong></p>
-            <p><strong>3. В приложении нажмите + → Добавить из буфера обмена.</strong></p>
-            <p><strong>4. Подключитесь к VPN.</strong></p>
-            <h3>Советы:</h3>
-            <ul>
-                <li>Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.</li>
-                <li>Используйте только одну VPN-программу одновременно.</li>
-            </ul>
-            <p><strong>Безопасность:</strong> Не делитесь своей ссылкой с другими!</p>
-        `,
-        ios: `
-            <h3>iPhone (v2RayTun, Happ)</h3>
-            <p><strong>1. Выберите приложение:</strong></p>
-            <ul>
-                <li><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank">v2RayTun из App Store</a></li>
-                <li><a href="https://apps.apple.com/ru/app/happ/id1635156981" target="_blank">Happ из App Store</a></li>
-            </ul>
-            <p><strong>2. В мини-приложении нажмите 'Подписки' и скопируйте ссылку на подписку.</strong></p>
-            <p><strong>3. Откройте выбранное приложение.</strong></p>
-            <p><strong>4. Нажмите + → Добавить из буфера обмена.</strong></p>
-            <p><strong>5. Выберите добавленный профиль и подключитесь.</strong></p>
-            <h3>Советы:</h3>
-            <ul>
-                <li>Если не удаётся подключиться, попробуйте перезапустить приложение или телефон.</li>
-                <li>Используйте только одну VPN-программу одновременно.</li>
-            </ul>
-            <p><strong>Безопасность:</strong> Не делитесь своей ссылкой с другими!</p>
-        `,
-        windows: `
-            <h3>Windows (v2RayTun, Happ)</h3>
-            <p><strong>1. Выберите приложение:</strong></p>
-            <ul>
-                <li><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank">v2RayTun для Windows</a></li>
-                <li><a href="https://happvpn.help/download-pc/" target="_blank">Happ для Windows</a></li>
-            </ul>
-            <p><strong>2. В мини-приложении нажмите 'Подписки' и скопируйте ссылку на подписку.</strong></p>
-            <p><strong>3. В выбранном приложении нажмите + → Добавить из буфера обмена.</strong></p>
-            <p><strong>4. Включите профиль (нажмите на переключатель или кнопку 'Включить').</strong></p>
-            <h3>Советы:</h3>
-            <ul>
-                <li>Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.</li>
-                <li>Используйте только одну VPN-программу одновременно.</li>
-            </ul>
-            <p><strong>Безопасность:</strong> Не делитесь своей ссылкой с другими!</p>
-        `,
-        macos: `
-            <h3>Mac (v2RayTun, Happ)</h3>
-            <p><strong>1. Выберите приложение:</strong></p>
-            <ul>
-                <li><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank">v2RayTun для Mac</a></li>
-                <li><a href="https://happvpn.help/download-pc/" target="_blank">Happ для Mac</a></li>
-            </ul>
-            <p><strong>2. В мини-приложении нажмите 'Подписки' и скопируйте ссылку на подписку.</strong></p>
-            <p><strong>3. В выбранном приложении нажмите + → Добавить из буфера обмена.</strong></p>
-            <p><strong>4. Включите профиль (нажмите на переключатель или кнопку 'Включить').</strong></p>
-            <h3>Советы:</h3>
-            <ul>
-                <li>Если не удаётся подключиться, попробуйте перезапустить приложение или Mac.</li>
-                <li>Используйте только одну VPN-программу одновременно.</li>
-            </ul>
-            <p><strong>Безопасность:</strong> Не делитесь своей ссылкой с другими!</p>
-        `,
-        linux: `
-            <h3>Linux (Happ)</h3>
-            <p><strong>1. <a href="https://happvpn.help/download-pc/" target="_blank">Скачайте Happ для Linux</a>.</strong></p>
-            <p><strong>2. В мини-приложении нажмите 'Подписки' и скопируйте ссылку на подписку.</strong></p>
-            <p><strong>3. В Happ нажмите + → Добавить из буфера обмена.</strong></p>
-            <p><strong>4. Включите профиль (нажмите на переключатель или кнопку 'Включить').</strong></p>
-            <h3>Советы:</h3>
-            <ul>
-                <li>Если не удаётся подключиться, попробуйте перезапустить приложение или компьютер.</li>
-                <li>Используйте только одну VPN-программу одновременно.</li>
-            </ul>
-            <p><strong>Безопасность:</strong> Не делитесь своей ссылкой с другими!</p>
-        `,
-        tv: `
-            <h3>Android TV (v2RayTun, Happ)</h3>
-            <p><strong>1. Выберите приложение:</strong></p>
-            <ul>
-                <li><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank">v2RayTun для Android TV</a></li>
-                <li><a href="https://play.google.com/store/apps/details?id=com.happ.vpn" target="_blank">Happ для Android TV</a></li>
-            </ul>
-            <p><strong>2. В мини-приложении нажмите 'Подписки' и скопируйте ссылку на подписку.</strong></p>
-            <p><strong>3. В выбранном приложении нажмите + → Добавить из буфера обмена.</strong></p>
-            <p><strong>4. Включите профиль (нажмите на переключатель или кнопку 'Включить').</strong></p>
-            <h3>Советы:</h3>
-            <ul>
-                <li>Если не удаётся подключиться, попробуйте перезапустить приложение или Android TV.</li>
-                <li>Используйте только одну VPN-программу одновременно.</li>
-            </ul>
-            <p><strong>Безопасность:</strong> Не делитесь своей ссылкой с другими!</p>
-        `,
-        faq: `
-            <h3>FAQ - Частые вопросы</h3>
-            <h3>VPN не подключается:</h3>
-            <ul>
-                <li>Проверьте интернет</li>
-                <li>Перезапустите приложение</li>
-                <li>Скопируйте ссылку заново</li>
-                <li>Убедитесь в том, что никому не передавали свою ссылку</li>
-                <li>Отключите другие VPN</li>
-            </ul>
-            <h3>Не импортируется ссылка:</h3>
-            <ul>
-                <li>Скопируйте ссылку полностью</li>
-                <li>Убедитесь, что она начинается на https</li>
-                <li>Обновите приложение</li>
-            </ul>
-            <h3>Мультисерверность:</h3>
-            <p>Ваша подписка включает все доступные серверы сразу.</p>
-            <h3>Нужна помощь?</h3>
-            <p>Обратитесь в поддержку</p>
-        `
-    };
+    const instruction = instructionSteps[platform];
+    if (!instruction) return;
     
-    if (instructions[platform]) {
-        menu.style.display = 'none';
-        detail.style.display = 'block';
-        content.innerHTML = instructions[platform];
+    currentInstructionSteps = instruction.steps;
+    
+    document.getElementById('instruction-modal-title').textContent = instruction.title;
+    document.getElementById('instruction-modal').style.display = 'flex';
+    
+    renderInstructionStep();
+}
+
+function renderInstructionStep() {
+    const container = document.getElementById('instruction-steps-container');
+    const step = currentInstructionSteps[currentInstructionStep];
+    
+    if (!step) return;
+    
+    container.innerHTML = `
+        <div style="background: #222; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
+            <h3 style="color: #4a9eff; margin-bottom: 16px; font-size: 18px;">${step.title}</h3>
+            <div style="color: #e0e0e0; line-height: 1.8; font-size: 15px;">
+                ${step.content}
+            </div>
+        </div>
+    `;
+    
+    // Обновляем индикатор шага
+    document.getElementById('instruction-step-indicator').textContent = 
+        `Шаг ${currentInstructionStep + 1} из ${currentInstructionSteps.length}`;
+    
+    // Управление кнопками
+    const prevBtn = document.getElementById('instruction-prev-btn');
+    const nextBtn = document.getElementById('instruction-next-btn');
+    const closeBtn = document.getElementById('instruction-close-btn');
+    
+    prevBtn.style.display = currentInstructionStep > 0 ? 'block' : 'none';
+    
+    if (currentInstructionStep === currentInstructionSteps.length - 1) {
+        nextBtn.style.display = 'none';
+        closeBtn.style.display = 'block';
+    } else {
+        nextBtn.style.display = 'block';
+        closeBtn.style.display = 'none';
     }
 }
 
-function goBackToInstructionsMenu() {
-    const menu = document.getElementById('instructions-menu');
-    const detail = document.getElementById('instruction-detail');
-    
-    menu.style.display = 'block';
-    detail.style.display = 'none';
+function nextInstructionStep() {
+    if (currentInstructionStep < currentInstructionSteps.length - 1) {
+        currentInstructionStep++;
+        renderInstructionStep();
+    }
+}
+
+function prevInstructionStep() {
+    if (currentInstructionStep > 0) {
+        currentInstructionStep--;
+        renderInstructionStep();
+    }
+}
+
+function closeInstructionModal() {
+    document.getElementById('instruction-modal').style.display = 'none';
+    currentInstructionPlatform = null;
+    currentInstructionStep = 0;
+    currentInstructionSteps = [];
 }
 
 function goBackFromInstructions() {
