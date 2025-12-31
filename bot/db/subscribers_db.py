@@ -424,6 +424,11 @@ async def get_subscription_statistics():
             row = await cur.fetchone()
             expired_subscriptions = row['count'] if row else 0
         
+        # Количество удаленных подписок
+        async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'deleted'") as cur:
+            row = await cur.fetchone()
+            deleted_subscriptions = row['count'] if row else 0
+        
         # Количество пробных подписок (trial)
         async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'trial'") as cur:
             row = await cur.fetchone()
@@ -461,11 +466,13 @@ async def get_subscription_statistics():
             'total': total_subscriptions,
             'active': active_subscriptions,
             'expired': expired_subscriptions,
+            'deleted': deleted_subscriptions,
             'trial': trial_subscriptions,
             # Длинные ключи (для читаемости кода)
             'total_subscriptions': total_subscriptions,
             'active_subscriptions': active_subscriptions,
             'expired_subscriptions': expired_subscriptions,
+            'deleted_subscriptions': deleted_subscriptions,
             'trial_subscriptions': trial_subscriptions,
             'total_server_clients': total_server_clients,
             'active_server_clients': active_server_clients

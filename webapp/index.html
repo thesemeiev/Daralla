@@ -306,13 +306,13 @@
                     <div class="stat-card">
                         <div class="stat-card-title">Активные подписки</div>
                         <div class="stat-card-value active" id="stats-active-subs">0</div>
-                        <div class="stat-card-subtitle">Всего: <span id="stats-total-subs">0</span></div>
+                        <div class="stat-card-subtitle">Всего подписок: <span id="stats-total-subs">0</span></div>
                     </div>
                     
                     <div class="stat-card">
                         <div class="stat-card-title">Истекшие</div>
                         <div class="stat-card-value expired" id="stats-expired-subs">0</div>
-                        <div class="stat-card-subtitle">Отмененных: <span id="stats-canceled-subs">0</span></div>
+                        <div class="stat-card-subtitle">Удаленных: <span id="stats-deleted-subs">0</span></div>
                     </div>
                     
                     <div class="stat-card">
@@ -768,7 +768,7 @@
                     </form>
                     
                     <div class="info-section" style="margin-top: 24px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
-                        <h3 style="margin-top: 0; color: #4a9eff;">ℹ️ Автоматическая синхронизация</h3>
+                        <h3 style="margin-top: 0; color: #4a9eff;"> Автоматическая синхронизация</h3>
                         <p class="hint" style="margin-bottom: 0;">
                             При сохранении изменений подписка автоматически синхронизируется со всеми X-UI серверами. 
                             Изменения статуса, даты истечения и лимита устройств применяются на всех серверах.
@@ -776,7 +776,7 @@
                     </div>
                     
                     <div class="delete-section" style="margin-top: 24px; padding: 16px; background: #3a1a1a; border-radius: 8px; border: 1px solid #ff4444;">
-                        <h3 style="margin-top: 0; color: #ff6666;">⚠️ Удаление подписки</h3>
+                        <h3 style="margin-top: 0; color: #ff6666;"> Удаление подписки</h3>
                         <p class="hint warning" style="margin-bottom: 16px;">
                             <strong>Внимание! Это действие необратимо.</strong><br>
                             Подписка будет полностью удалена из базы данных, а все клиенты удалены со всех X-UI серверов.
@@ -822,7 +822,7 @@
             <div id="subscription-changes-list" style="background: #1a1a1a; padding: 16px; border-radius: 8px; margin: 16px 0; max-height: 300px; overflow-y: auto;">
                 <!-- Список изменений будет добавлен динамически -->
             </div>
-            <p style="margin: 16px 0; color: #ffa500; font-size: 14px;">⚠️ Это действие изменит настройки на всех серверах. Продолжить?</p>
+            <p style="margin: 16px 0; color: #ffa500; font-size: 14px;"> Это действие изменит настройки на всех серверах. Продолжить?</p>
             <div style="display: flex; gap: 12px; margin-top: 24px;">
                 <button type="button" class="btn-secondary" onclick="closeSubscriptionConfirmModal()" style="flex: 1;">Отмена</button>
                 <button type="button" class="btn-primary" onclick="confirmSaveSubscriptionChanges()" style="flex: 1;">Подтвердить и сохранить</button>

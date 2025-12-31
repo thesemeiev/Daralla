@@ -215,15 +215,15 @@ class UIMessages:
         if days_until_expiry == 0:
             # Менее чем через час - срочное уведомление
             message = (
-                f"⚠️ <b>СРОЧНО! Ваша подписка истекает менее чем через час!</b>\n\n"
-                f"⏰ Осталось: <b>{time_remaining}</b>\n"
+                f" <b>СРОЧНО! Ваша подписка истекает менее чем через час!</b>\n\n"
+                f" Осталось: <b>{time_remaining}</b>\n"
             )
             if expiry_str:
-                message += f"📅 Истекает: <b>{expiry_str}</b>\n"
+                message += f" Истекает: <b>{expiry_str}</b>\n"
             message += (
                 f"\n"
                 f"Продлите подписку сейчас, чтобы не потерять доступ к VPN.\n\n"
-                f"💳 <b>Цены:</b>\n"
+                f" <b>Цены:</b>\n"
                 f"• 1 месяц — 150₽\n"
                 f"• 3 месяца — 350₽ (выгоднее)\n"
             )
@@ -232,15 +232,15 @@ class UIMessages:
             # Завтра или сегодня - важное уведомление
             day_text = "завтра" if days_until_expiry == 1 else "сегодня"
             message = (
-                f"⚠️ <b>Ваша подписка истекает {day_text}!</b>\n\n"
-                f"⏰ Осталось: <b>{time_remaining}</b>\n"
+                f" <b>Ваша подписка истекает {day_text}!</b>\n\n"
+                f" Осталось: <b>{time_remaining}</b>\n"
             )
             if expiry_str:
-                message += f"📅 Истекает: <b>{expiry_str}</b>\n"
+                message += f" Истекает: <b>{expiry_str}</b>\n"
             message += (
                 f"\n"
                 f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
-                f"💳 <b>Цены:</b>\n"
+                f" <b>Цены:</b>\n"
                 f"• 1 месяц — 150₽\n"
                 f"• 3 месяца — 350₽ (выгоднее)\n"
             )
@@ -248,15 +248,15 @@ class UIMessages:
         else:
             # За несколько дней - информационное напоминание
             message = (
-                f"ℹ️ <b>Напоминание: ваша подписка истекает через {days_until_expiry} дней</b>\n\n"
-                f"⏰ Осталось: <b>{time_remaining}</b>\n"
+                f" <b>Напоминание: ваша подписка истекает через {days_until_expiry} дней</b>\n\n"
+                f" Осталось: <b>{time_remaining}</b>\n"
             )
             if expiry_str:
-                message += f"📅 Истекает: <b>{expiry_str}</b>\n"
+                message += f" Истекает: <b>{expiry_str}</b>\n"
             message += (
                 f"\n"
                 f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
-                f"💳 <b>Цены:</b>\n"
+                f" <b>Цены:</b>\n"
                 f"• 1 месяц — 150₽\n"
                 f"• 3 месяца — 350₽ (выгоднее)\n"
             )

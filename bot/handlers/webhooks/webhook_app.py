@@ -2453,6 +2453,7 @@ def create_webhook_app(bot_app):
                         'total': stats.get('total', stats.get('total_subscriptions', 0)),
                         'active': stats.get('active', stats.get('active_subscriptions', 0)),
                         'expired': stats.get('expired', stats.get('expired_subscriptions', 0)),
+                        'deleted': stats.get('deleted', stats.get('deleted_subscriptions', 0)),
                         'trial': stats.get('trial', 0)
                     },
                     'payments': {

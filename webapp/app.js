@@ -2472,7 +2472,7 @@ async function loadAdminStats() {
         document.getElementById('stats-active-subs').textContent = data.stats.subscriptions.active || 0;
         document.getElementById('stats-total-subs').textContent = data.stats.subscriptions.total || 0;
         document.getElementById('stats-expired-subs').textContent = data.stats.subscriptions.expired || 0;
-        document.getElementById('stats-canceled-subs').textContent = data.stats.subscriptions.canceled || 0;
+        document.getElementById('stats-deleted-subs').textContent = data.stats.subscriptions.deleted || 0;
         document.getElementById('stats-revenue').textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
         document.getElementById('stats-succeeded-payments').textContent = data.stats.payments.succeeded || 0;
         
