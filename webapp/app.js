@@ -1830,7 +1830,8 @@ async function showAdminUserDetail(userId) {
             ` : ''}
             
             <div class="create-subscription-section" style="margin-top: 24px;">
-                <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')" style="width: 100%;">Создать подписку</button>
+                <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')" style="width: 100%; margin-bottom: 12px;">Создать подписку</button>
+                <button class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')" style="width: 100%; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Удалить пользователя</button>
             </div>
         `;
     } catch (error) {
@@ -2317,6 +2318,118 @@ function goBackFromCreateSubscription() {
 // Возврат назад из детальной информации о пользователе
 function goBackFromUserDetail() {
     showPage('admin-users');
+}
+
+// Показать модальное окно подтверждения удаления пользователя
+function showDeleteUserConfirm(userId) {
+    const modal = document.getElementById('delete-user-confirm-modal');
+    if (!modal) {
+        // Создаем модальное окно, если его нет
+        const modalHTML = `
+            <div id="delete-user-confirm-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h2>⚠️ Удаление пользователя</h2>
+                    <p style="color: #ff6b6b; margin: 16px 0; line-height: 1.6;">
+                        Вы уверены, что хотите удалить этого пользователя?<br><br>
+                        Это действие удалит:
+                        <ul style="margin: 12px 0; padding-left: 20px; color: #ccc;">
+                            <li>Все подписки пользователя</li>
+                            <li>Все клиенты на серверах</li>
+                            <li>Все платежи</li>
+                            <li>Все данные пользователя</li>
+                        </ul>
+                        <strong style="color: #ff6b6b;">Это действие нельзя отменить!</strong>
+                    </p>
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1;">Отмена</button>
+                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer;">Удалить</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+    
+    // Обновляем userId в кнопке подтверждения
+    const confirmBtn = document.getElementById('delete-user-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.onclick = () => confirmDeleteUser(userId);
+    }
+    
+    document.getElementById('delete-user-confirm-modal').style.display = 'flex';
+}
+
+// Закрыть модальное окно удаления пользователя
+function closeDeleteUserModal() {
+    const modal = document.getElementById('delete-user-confirm-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Подтвердить удаление пользователя
+async function confirmDeleteUser(userId) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            alert('Ошибка авторизации');
+            return;
+        }
+        
+        const confirmBtn = document.getElementById('delete-user-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Удаление...';
+        }
+        
+        const response = await fetch(`/api/admin/user/${userId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                confirm: true
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Ошибка удаления пользователя');
+        }
+        
+        const data = await response.json();
+        
+        closeDeleteUserModal();
+        
+        // Показываем уведомление об успехе
+        if (tg && tg.showAlert) {
+            tg.showAlert(
+                `Пользователь удален:\n` +
+                `- Подписок: ${data.stats.subscriptions_deleted}\n` +
+                `- Платежей: ${data.stats.payments_deleted}\n` +
+                `- Серверов очищено: ${data.deleted_servers.length}`
+            );
+        }
+        
+        // Возвращаемся к списку пользователей
+        setTimeout(() => {
+            showPage('admin-users');
+            loadAdminUsers(1, '');
+        }, 500);
+        
+    } catch (error) {
+        console.error('Ошибка удаления пользователя:', error);
+        if (tg && tg.showAlert) {
+            tg.showAlert(`Ошибка удаления пользователя: ${error.message}`);
+        }
+        
+        const confirmBtn = document.getElementById('delete-user-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Удалить';
+        }
+    }
 }
 
 // Создание подписки
@@ -4649,10 +4762,15 @@ function moveNavIndicator(index) {
     
     // Вычисляем позицию относительно навбара с отступом от краев
     const indicatorPadding = 8; // Отступ от краев островка
-    const leftPosition = itemRect.left - navRect.left + indicatorPadding;
+    const itemCenterX = itemRect.left - navRect.left + itemRect.width / 2;
+    const itemWidth = itemRect.width;
+    
+    // Вычисляем позицию так, чтобы индикатор был центрирован относительно кнопки
+    const indicatorWidth = itemWidth - (indicatorPadding * 2);
+    const leftPosition = itemCenterX - indicatorWidth / 2;
     
     // Устанавливаем ширину равной ширине иконки минус отступы
-    indicator.style.width = `${itemRect.width - (indicatorPadding * 2)}px`;
+    indicator.style.width = `${indicatorWidth}px`;
     
     // Устанавливаем CSS переменную для адаптации
     const itemWidthPercent = (100 / navItems.length);
@@ -4782,5 +4900,99 @@ function initNavIndicator() {
             moveNavIndicator(index);
         });
     });
+    
+    // Эффект "жидкого стекла" при удержании
+    let pressTimer = null;
+    let isPressing = false;
+    
+    // Обработчики для десктопа (mouse)
+    nav.addEventListener('mousedown', (e) => {
+        const target = e.target.closest('.nav-item');
+        if (!target) return;
+        
+        const indicatorRect = indicator.getBoundingClientRect();
+        const navRect = nav.getBoundingClientRect();
+        const mouseX = e.clientX - navRect.left;
+        
+        // Проверяем, находится ли клик в области индикатора
+        const indicatorLeft = indicatorRect.left - navRect.left;
+        const indicatorRight = indicatorRect.right - navRect.left;
+        
+        if (mouseX >= indicatorLeft && mouseX <= indicatorRight) {
+            isPressing = true;
+            pressTimer = setTimeout(() => {
+                if (isPressing) {
+                    indicator.classList.add('pressing');
+                }
+            }, 100); // Задержка перед активацией эффекта
+        }
+    });
+    
+    nav.addEventListener('mouseup', () => {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+        if (isPressing) {
+            indicator.classList.remove('pressing');
+            isPressing = false;
+        }
+    });
+    
+    nav.addEventListener('mouseleave', () => {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+        if (isPressing) {
+            indicator.classList.remove('pressing');
+            isPressing = false;
+        }
+    });
+    
+    // Обработчики для мобильных (touch)
+    let touchPressTimer = null;
+    let isTouchPressing = false;
+    
+    nav.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        const navRect = nav.getBoundingClientRect();
+        const touchX = touch.clientX - navRect.left;
+        
+        const indicatorRect = indicator.getBoundingClientRect();
+        const indicatorLeft = indicatorRect.left - navRect.left;
+        const indicatorRight = indicatorRect.right - navRect.left;
+        
+        if (touchX >= indicatorLeft && touchX <= indicatorRight && !isDragging) {
+            isTouchPressing = true;
+            touchPressTimer = setTimeout(() => {
+                if (isTouchPressing) {
+                    indicator.classList.add('pressing');
+                }
+            }, 150); // Немного больше задержка для touch
+        }
+    }, { passive: true });
+    
+    nav.addEventListener('touchend', () => {
+        if (touchPressTimer) {
+            clearTimeout(touchPressTimer);
+            touchPressTimer = null;
+        }
+        if (isTouchPressing) {
+            indicator.classList.remove('pressing');
+            isTouchPressing = false;
+        }
+    }, { passive: true });
+    
+    nav.addEventListener('touchcancel', () => {
+        if (touchPressTimer) {
+            clearTimeout(touchPressTimer);
+            touchPressTimer = null;
+        }
+        if (isTouchPressing) {
+            indicator.classList.remove('pressing');
+            isTouchPressing = false;
+        }
+    }, { passive: true });
 }
 

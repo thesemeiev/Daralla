@@ -2338,6 +2338,141 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/subscription/delete: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/user/<user_id>/delete', methods=['POST', 'OPTIONS'])
+    def api_admin_user_delete(user_id):
+        """Полное удаление пользователя и всех связанных данных"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            confirm = data.get('confirm', False)
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            if not confirm:
+                return jsonify({'error': 'Confirmation required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import delete_user_completely, get_all_subscriptions_by_user, get_subscription_servers
+            import aiosqlite
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Получаем все подписки пользователя для удаления клиентов с серверов
+                all_subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id))
+                
+                # Получаем менеджеры
+                def get_managers():
+                    try:
+                        from ... import bot as bot_module
+                        return {
+                            'server_manager': getattr(bot_module, 'server_manager', None)
+                        }
+                    except (ImportError, AttributeError):
+                        return {'server_manager': None}
+                
+                managers = get_managers()
+                server_manager = managers.get('server_manager')
+                
+                # Удаляем клиентов со всех серверов для всех подписок
+                deleted_servers = []
+                failed_servers = []
+                
+                async def delete_all_clients_from_servers():
+                    deleted = []
+                    failed = []
+                    
+                    if server_manager and all_subscriptions:
+                        for sub in all_subscriptions:
+                            sub_id = sub['id']
+                            servers = await get_subscription_servers(sub_id)
+                            
+                            for server_info in servers:
+                                server_name = server_info['server_name']
+                                client_email = server_info['client_email']
+                                
+                                try:
+                                    xui, _ = server_manager.get_server_by_name(server_name)
+                                    if xui:
+                                        import concurrent.futures
+                                        loop = asyncio.get_event_loop()
+                                        result = await loop.run_in_executor(
+                                            None,
+                                            lambda: xui.deleteClient(client_email, timeout=30)
+                                        )
+                                        
+                                        if result is not None:
+                                            status_code = getattr(result, 'status_code', None)
+                                            if status_code == 200:
+                                                if server_name not in deleted:
+                                                    deleted.append(server_name)
+                                                logger.info(
+                                                    f"✅ Удален клиент {client_email} с сервера {server_name} "
+                                                    f"при удалении пользователя {user_id}"
+                                                )
+                                            else:
+                                                if server_name not in failed:
+                                                    failed.append(server_name)
+                                                logger.warning(
+                                                    f"⚠️ Неожиданный статус код {status_code} при удалении "
+                                                    f"клиента {client_email} с сервера {server_name}"
+                                                )
+                                        else:
+                                            if server_name not in failed:
+                                                failed.append(server_name)
+                                            logger.warning(
+                                                f"⚠️ Клиент {client_email} не найден на сервере {server_name}"
+                                            )
+                                    else:
+                                        if server_name not in failed:
+                                            failed.append(server_name)
+                                        logger.warning(f"Сервер {server_name} не найден в server_manager")
+                                except Exception as e:
+                                    if server_name not in failed:
+                                        failed.append(server_name)
+                                    logger.error(
+                                        f"❌ Ошибка удаления клиента {client_email} с сервера {server_name}: {e}",
+                                        exc_info=True
+                                    )
+                    
+                    return deleted, failed
+                
+                deleted_servers, failed_servers = loop.run_until_complete(delete_all_clients_from_servers())
+                
+                # Удаляем все данные пользователя из БД
+                delete_stats = loop.run_until_complete(delete_user_completely(user_id))
+                
+                logger.info(f"Админ {admin_id} удалил пользователя {user_id}")
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'stats': delete_stats,
+                'deleted_servers': deleted_servers,
+                'failed_servers': failed_servers
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/user/{user_id}/delete: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     @app.route('/api/admin/stats', methods=['POST', 'OPTIONS'])
     def api_admin_stats():
         """Статистика для админ-панели"""

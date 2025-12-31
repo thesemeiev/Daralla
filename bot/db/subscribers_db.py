@@ -1098,6 +1098,112 @@ async def get_subscription_dynamics_data(days: int = 30):
         
         return result
 
+async def delete_user_completely(user_id: str) -> dict:
+    """
+    Полностью удаляет пользователя и все связанные данные из БД.
+    
+    Порядок удаления:
+    1. Получает все подписки пользователя
+    2. Удаляет все связи подписок с серверами (subscription_servers)
+    3. Удаляет все подписки (subscriptions)
+    4. Удаляет все платежи (payments)
+    5. Удаляет все использования промокодов (promo_code_uses)
+    6. Удаляет пользователя (users)
+    
+    Args:
+        user_id: Telegram user_id пользователя
+        
+    Returns:
+        dict: {
+            'subscriptions_deleted': int,
+            'subscription_servers_deleted': int,
+            'payments_deleted': int,
+            'promo_uses_deleted': int,
+            'user_deleted': bool,
+            'user_internal_id': int or None
+        }
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        stats = {
+            'subscriptions_deleted': 0,
+            'subscription_servers_deleted': 0,
+            'payments_deleted': 0,
+            'promo_uses_deleted': 0,
+            'user_deleted': False,
+            'user_internal_id': None
+        }
+        
+        try:
+            # Получаем внутренний ID пользователя
+            async with db.execute("SELECT id FROM users WHERE user_id = ?", (user_id,)) as cur:
+                row = await cur.fetchone()
+                if not row:
+                    logger.warning(f"Пользователь {user_id} не найден в БД")
+                    return stats
+                
+                user_internal_id = row[0]
+                stats['user_internal_id'] = user_internal_id
+                
+                # Получаем все подписки пользователя
+                async with db.execute(
+                    "SELECT id FROM subscriptions WHERE subscriber_id = ?",
+                    (user_internal_id,)
+                ) as cur:
+                    subscription_ids = [row[0] for row in await cur.fetchall()]
+                
+                # 1. Удаляем все связи подписок с серверами
+                for sub_id in subscription_ids:
+                    async with db.execute(
+                        "DELETE FROM subscription_servers WHERE subscription_id = ?",
+                        (sub_id,)
+                    ) as cur:
+                        stats['subscription_servers_deleted'] += cur.rowcount
+                
+                # 2. Удаляем все подписки
+                async with db.execute(
+                    "DELETE FROM subscriptions WHERE subscriber_id = ?",
+                    (user_internal_id,)
+                ) as cur:
+                    stats['subscriptions_deleted'] = cur.rowcount
+                
+                # 3. Удаляем все платежи пользователя
+                async with db.execute(
+                    "DELETE FROM payments WHERE user_id = ?",
+                    (user_id,)
+                ) as cur:
+                    stats['payments_deleted'] = cur.rowcount
+                
+                # 4. Удаляем все использования промокодов
+                async with db.execute(
+                    "DELETE FROM promo_code_uses WHERE user_id = ?",
+                    (user_id,)
+                ) as cur:
+                    stats['promo_uses_deleted'] = cur.rowcount
+                
+                # 5. Удаляем пользователя
+                async with db.execute(
+                    "DELETE FROM users WHERE id = ?",
+                    (user_internal_id,)
+                ) as cur:
+                    if cur.rowcount > 0:
+                        stats['user_deleted'] = True
+                
+                await db.commit()
+                logger.info(
+                    f"Пользователь {user_id} полностью удален: "
+                    f"{stats['subscriptions_deleted']} подписок, "
+                    f"{stats['subscription_servers_deleted']} связей с серверами, "
+                    f"{stats['payments_deleted']} платежей, "
+                    f"{stats['promo_uses_deleted']} использований промокодов"
+                )
+                
+        except Exception as e:
+            logger.error(f"Ошибка удаления пользователя {user_id}: {e}", exc_info=True)
+            await db.rollback()
+            raise
+        
+        return stats
+
 async def get_subscription_conversion_data(days: int = 30):
     """
     Возвращает данные о конверсии пробных подписок в купленные
