@@ -1865,7 +1865,48 @@ async function showAdminSubscriptionEdit(subId) {
         // Заполняем форму
         document.getElementById('sub-name').value = sub.name || '';
         document.getElementById('sub-device-limit').value = sub.device_limit || 1;
-        document.getElementById('sub-status').value = sub.status || 'active';
+        
+        // Обработка статуса: показываем текущий статус и даем возможность изменить только на canceled/deleted
+        const statusSelect = document.getElementById('sub-status');
+        const statusGroup = statusSelect.closest('.form-group');
+        const statusLabel = statusGroup.querySelector('label');
+        
+        // Удаляем старый display элемент, если он был
+        const oldStatusDisplay = document.getElementById('sub-status-display');
+        if (oldStatusDisplay) {
+            oldStatusDisplay.remove();
+        }
+        
+        // Показываем текущий статус
+        const statusDisplay = document.createElement('div');
+        statusDisplay.id = 'sub-status-display';
+        statusDisplay.style.cssText = 'padding: 8px; background: #2a2a2a; border-radius: 4px; color: #fff; margin-bottom: 8px;';
+        
+        const statusNames = {
+            'active': 'Активна',
+            'expired': 'Истекла',
+            'canceled': 'Отменена',
+            'deleted': 'Удалена'
+        };
+        const currentStatusName = statusNames[sub.status] || sub.status;
+        
+        if (sub.status === 'active' || sub.status === 'expired') {
+            statusDisplay.textContent = `Текущий статус: ${currentStatusName} (управляется автоматически через дату истечения)`;
+        } else {
+            statusDisplay.textContent = `Текущий статус: ${currentStatusName}`;
+        }
+        
+        statusGroup.insertBefore(statusDisplay, statusSelect);
+        
+        // Select всегда доступен, но только для выбора canceled/deleted
+        statusSelect.style.display = 'block';
+        statusSelect.disabled = false;
+        // Устанавливаем значение по умолчанию (если текущий статус canceled/deleted - показываем его, иначе - canceled)
+        if (sub.status === 'canceled' || sub.status === 'deleted') {
+            statusSelect.value = sub.status;
+        } else {
+            statusSelect.value = 'canceled'; // По умолчанию canceled для active/expired подписок
+        }
         
         // Конвертируем timestamp в datetime-local формат
         const expiresDate = new Date(sub.expires_at * 1000);
@@ -1901,9 +1942,19 @@ async function saveSubscriptionChanges(event) {
     const newData = {
         name: form.name.value,
         device_limit: parseInt(form.device_limit.value),
-        status: form.status.value,
         expires_at: Math.floor(new Date(form.expires_at.value).getTime() / 1000)
     };
+    
+    // Статус отправляем только если он изменился на canceled или deleted
+    // (active/expired управляются автоматически через expires_at)
+    const newStatus = form.status.value;
+    if (newStatus === 'canceled' || newStatus === 'deleted') {
+        // Отправляем статус только если он действительно изменился
+        if (newStatus !== originalSubscriptionData.status) {
+            newData.status = newStatus;
+        }
+    }
+    // Если пытаются установить active/expired - игнорируем (не отправляем)
     
     // Определяем, что изменилось
     const changes = [];
@@ -1921,7 +1972,7 @@ async function saveSubscriptionChanges(event) {
             new: newData.device_limit
         });
     }
-    if (newData.status !== originalSubscriptionData.status) {
+    if (newData.status && newData.status !== originalSubscriptionData.status) {
         const statusNames = {
             'active': 'Активна',
             'expired': 'Истекла',

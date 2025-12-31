@@ -720,11 +720,13 @@
                         
                         <div class="form-group">
                             <label for="sub-status">Статус</label>
-                            <select id="sub-status" name="status" required>
-                                <option value="active">Активна</option>
-                                <option value="expired">Истекла</option>
+                            <select id="sub-status" name="status">
                                 <option value="canceled">Отменена</option>
+                                <option value="deleted">Удалена</option>
                             </select>
+                            <small style="color: #a0a0a0; display: block; margin-top: 4px;">
+                                Статусы "Активна" и "Истекла" управляются автоматически через дату истечения
+                            </small>
                         </div>
                         
                         <div class="form-actions">
