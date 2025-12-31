@@ -1862,6 +1862,16 @@ async function showAdminSubscriptionEdit(subId) {
         document.getElementById('admin-subscription-edit-loading').style.display = 'none';
         document.getElementById('admin-subscription-edit-content').style.display = 'block';
         
+        // ВАЖНО: Восстанавливаем состояние кнопки submit при загрузке
+        const form = document.getElementById('admin-subscription-edit-form');
+        if (form) {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Сохранить';
+            }
+        }
+        
         // Заполняем форму
         document.getElementById('sub-name').value = sub.name || '';
         document.getElementById('sub-device-limit').value = sub.device_limit || 1;
@@ -1915,6 +1925,13 @@ async function showAdminSubscriptionEdit(subId) {
 // Сохранение изменений подписки
 async function saveSubscriptionChanges(event) {
     event.preventDefault();
+    
+    // ВАЖНО: Восстанавливаем состояние кнопки submit сразу после preventDefault
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Сохранить';
+    }
     
     if (!currentEditingSubscriptionId || !originalSubscriptionData) {
         alert('Ошибка: данные подписки не загружены');
@@ -1983,6 +2000,13 @@ async function saveSubscriptionChanges(event) {
 
 // Закрытие модального окна
 function closeSubscriptionConfirmModal() {
+    // Восстанавливаем кнопку перед закрытием
+    const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
+    if (confirmBtn) {
+        confirmBtn.textContent = 'Подтвердить и сохранить';
+        confirmBtn.disabled = false;
+    }
+    
     document.getElementById('subscription-confirm-modal').style.display = 'none';
     window.pendingSubscriptionUpdate = null;
 }
@@ -1994,6 +2018,10 @@ async function confirmSaveSubscriptionChanges() {
         return;
     }
     
+    // Получаем кнопку и сохраняем оригинальный текст
+    const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
+    const originalText = confirmBtn ? confirmBtn.textContent : 'Подтвердить и сохранить';
+    
     try {
         const initData = tg.initData;
         if (!initData) {
@@ -2003,8 +2031,6 @@ async function confirmSaveSubscriptionChanges() {
         }
         
         // Показываем индикатор загрузки
-        const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
-        const originalText = confirmBtn ? confirmBtn.textContent : 'Подтвердить и сохранить';
         if (confirmBtn) {
             confirmBtn.textContent = 'Сохранение...';
             confirmBtn.disabled = true;
@@ -2028,6 +2054,12 @@ async function confirmSaveSubscriptionChanges() {
         
         const data = await response.json();
         
+        // ВАЖНО: Восстанавливаем кнопку ПЕРЕД закрытием модального окна
+        if (confirmBtn) {
+            confirmBtn.textContent = originalText;
+            confirmBtn.disabled = false;
+        }
+        
         // Закрываем модальное окно
         closeSubscriptionConfirmModal();
         
@@ -2040,10 +2072,9 @@ async function confirmSaveSubscriptionChanges() {
         console.error('Ошибка сохранения подписки:', error);
         alert('Ошибка сохранения: ' + error.message);
         
-        // Восстанавливаем кнопку
-        const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
+        // Восстанавливаем кнопку при ошибке
         if (confirmBtn) {
-            confirmBtn.textContent = 'Подтвердить и сохранить';
+            confirmBtn.textContent = originalText;
             confirmBtn.disabled = false;
         }
     }

@@ -131,16 +131,22 @@ class SyncManager:
         """Запуск полной синхронизации"""
         logger.info("🌀 Запуск полной синхронизации серверов...")
         
-        # 1. Очистка старых подписок (истекли более 3 дней назад)
+        # 1. Синхронизация статусов подписок
+        await sync_subscription_statuses()
+        
+        # 2. Миграция старых UUID-email'ов на новый формат
+        await self.migrate_old_uuid_emails()
+        
+        # 3. Очистка старых подписок (истекли более 3 дней назад)
         await self.cleanup_expired_subscriptions(days_limit=3)
         
-        # 2. Синхронизация активных подписок с конфигурацией серверов
+        # 4. Синхронизация активных подписок с конфигурацией серверов
         await self.subscription_manager.sync_servers_with_config(auto_create_clients=True)
         
-        # 3. Проверка консистентности времени и наличия клиентов
+        # 5. Проверка консистентности времени и наличия клиентов
         await self.sync_all_clients_states()
         
-        # 4. Очистка сиротских клиентов (не связанных с активными подписками)
+        # 6. Очистка сиротских клиентов (не связанных с активными подписками)
         orphaned_stats = await self.cleanup_orphaned_clients()
         if orphaned_stats['deleted_count'] > 0:
             logger.info(f"🧹 Удалено {orphaned_stats['deleted_count']} сиротских клиентов")
@@ -432,6 +438,7 @@ class SyncManager:
                             # Если клиента нет ни в активных, ни в неактивных - это сиротский клиент
                             # (связь в subscription_servers была удалена, но клиент остался на сервере)
                             reason = "Клиент не найден в БД (сиротский клиент)"
+                            
                             try:
                                 xui.deleteClient(client_email)
                                 stats['deleted_count'] += 1
@@ -442,7 +449,7 @@ class SyncManager:
                                     'reason': reason,
                                     'status': 'orphaned'
                                 })
-                                logger.info(f"Удален сиротский клиент {client_email} с сервера {server_name} (не найден в БД)")
+                                logger.info(f"Удален сиротский клиент {client_email} с сервера {server_name}: {reason}")
                             except Exception as e:
                                 error_msg = f"Ошибка удаления сиротского клиента {client_email} с {server_name}: {e}"
                                 logger.error(error_msg)
@@ -463,6 +470,152 @@ class SyncManager:
         logger.info(f"✅ Очистка завершена: удалено {stats['deleted_count']} сиротских клиентов с {stats['servers_checked']} серверов")
         if stats['details']:
             logger.debug(f"Детали удаления: {len(stats['details'])} записей")
+        return stats
+    
+    async def migrate_old_uuid_emails(self):
+        """
+        Миграция клиентов со старым UUID-email'ом на новый формат {user_id}_{subscription_id}.
+        
+        Находит все клиенты со старым форматом email (содержит UUID) и заменяет их
+        на правильный формат из БД.
+        """
+        logger.info("🔄 Начало миграции старых UUID-email'ов на новый формат")
+        
+        stats = {
+            'migrated_count': 0,
+            'servers_checked': 0,
+            'errors': []
+        }
+        
+        # Получаем все активные подписки для построения карты правильных email'ов
+        from ..db.subscribers_db import get_all_active_subscriptions, get_subscription_servers
+        active_subs = await get_all_active_subscriptions()
+        
+        # Строим карту: user_id -> {server_name: correct_email}
+        user_servers_map = {}  # {user_id: {server_name: correct_email}}
+        
+        for sub in active_subs:
+            user_id = str(sub['user_id'])  # Приводим к строке для единообразия с email
+            subscription_id = sub['id']
+            correct_email = f"{user_id}_{subscription_id}"
+            
+            servers = await get_subscription_servers(subscription_id)
+            if user_id not in user_servers_map:
+                user_servers_map[user_id] = {}
+            
+            for s_info in servers:
+                server_name = s_info['server_name']
+                user_servers_map[user_id][server_name] = correct_email
+        
+        # Проверяем каждый сервер
+        for server in self.server_manager.servers:
+            server_name = server["name"]
+            xui = server.get("x3")
+            
+            if not xui:
+                logger.warning(f"Сервер {server_name} недоступен, пропускаем")
+                continue
+            
+            stats['servers_checked'] += 1
+            
+            try:
+                # Получаем всех клиентов на сервере
+                response = xui.list()
+                if 'obj' not in response:
+                    continue
+                
+                for inbound in response['obj']:
+                    try:
+                        settings = json.loads(inbound['settings'])
+                        clients = settings.get("clients", [])
+                        
+                        for client in clients:
+                            client_email = client.get('email')
+                            if not client_email:
+                                continue
+                            
+                            # Проверяем, является ли email старым форматом (UUID)
+                            email_parts = client_email.split('_', 1)
+                            if len(email_parts) != 2:
+                                continue
+                            
+                            user_id_part = email_parts[0]
+                            suffix = email_parts[1]
+                            
+                            # Если суффикс содержит буквы (a-f) - это старый формат с UUID
+                            if not any(c in suffix.lower() for c in 'abcdef'):
+                                continue  # Правильный формат, пропускаем
+                            
+                            # Это старый формат - проверяем, есть ли правильный email в БД
+                            if user_id_part not in user_servers_map:
+                                continue  # Пользователь не найден в активных подписках
+                            
+                            if server_name not in user_servers_map[user_id_part]:
+                                continue  # Сервер не привязан к подписке этого пользователя
+                            
+                            correct_email = user_servers_map[user_id_part][server_name]
+                            
+                            # Если правильный клиент уже существует - просто удаляем старый
+                            if xui.client_exists(correct_email):
+                                logger.info(f"Правильный клиент {correct_email} уже существует на {server_name}, удаляем старый {client_email}")
+                                try:
+                                    xui.deleteClient(client_email)
+                                    stats['migrated_count'] += 1
+                                    logger.info(f"✅ Удален старый клиент {client_email} с сервера {server_name}")
+                                except Exception as e:
+                                    error_msg = f"Ошибка удаления старого клиента {client_email} с {server_name}: {e}"
+                                    logger.error(error_msg)
+                                    stats['errors'].append(error_msg)
+                            else:
+                                # Правильного клиента нет - нужно создать его
+                                # Находим подписку по correct_email
+                                try:
+                                    subscription_id = int(correct_email.split('_')[1])
+                                    from ..db.subscribers_db import get_subscription_by_id_only
+                                    sub = await get_subscription_by_id_only(subscription_id)
+                                    
+                                    if not sub:
+                                        logger.warning(f"Подписка {subscription_id} не найдена для миграции {client_email}")
+                                        continue
+                                    
+                                    # Создаем правильного клиента через ensure_client_on_server
+                                    client_exists, client_created = await self.subscription_manager.ensure_client_on_server(
+                                        subscription_id=subscription_id,
+                                        server_name=server_name,
+                                        client_email=correct_email,
+                                        user_id=user_id_part,
+                                        expires_at=sub['expires_at'],
+                                        token=sub['subscription_token'],
+                                        device_limit=sub.get('device_limit', 1)
+                                    )
+                                    
+                                    if client_exists:
+                                        # Удаляем старый клиент
+                                        try:
+                                            xui.deleteClient(client_email)
+                                            stats['migrated_count'] += 1
+                                            logger.info(f"✅ Мигрирован клиент {client_email} -> {correct_email} на сервере {server_name}")
+                                        except Exception as e:
+                                            logger.warning(f"Ошибка удаления старого клиента {client_email} после миграции: {e}")
+                                except (ValueError, Exception) as e:
+                                    error_msg = f"Ошибка создания правильного клиента {correct_email} на {server_name}: {e}"
+                                    logger.error(error_msg)
+                                    stats['errors'].append(error_msg)
+                    
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Ошибка парсинга settings для inbound на сервере {server_name}: {e}")
+                        continue
+                    except Exception as e:
+                        error_msg = f"Ошибка обработки inbound на сервере {server_name}: {e}"
+                        logger.error(error_msg)
+                        stats['errors'].append(error_msg)
+            
+            except Exception as e:
+                error_msg = f"Ошибка проверки сервера {server_name}: {e}"
+                logger.error(error_msg)
+                stats['errors'].append(error_msg)
+        
+        logger.info(f"✅ Миграция завершена: мигрировано {stats['migrated_count']} клиентов с {stats['servers_checked']} серверов")
         return stats
     
     async def diagnose_server_client_mismatch(self, server_name: str = None):

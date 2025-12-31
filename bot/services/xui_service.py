@@ -716,6 +716,41 @@ class X3:
         except Exception as e:
             logger.error(f"Ошибка получения информации о клиенте {user_email}: {e}")
             return None
+    
+    def get_clients_by_tg_id(self, tg_id, timeout=15):
+        """
+        Получает список всех клиентов для указанного Telegram ID.
+        
+        Args:
+            tg_id: Telegram ID пользователя
+            
+        Returns:
+            list: Список словарей с информацией о клиентах:
+                  [{'email': str, 'client': dict, 'inbound_id': str, 'protocol': str}, ...]
+        """
+        self._ensure_connected()
+        clients_list = []
+        try:
+            inbounds_list = self.list(timeout=timeout)
+            if inbounds_list.get('success', False) and inbounds_list.get('obj'):
+                for inbound in inbounds_list['obj']:
+                    settings = json.loads(inbound.get('settings', '{}'))
+                    clients = settings.get('clients', [])
+                    for client in clients:
+                        # Проверяем tgId (может быть строкой или числом)
+                        client_tg_id = str(client.get('tgId', ''))
+                        if client_tg_id == str(tg_id):
+                            protocol = inbound.get('protocol', 'vless').lower()
+                            clients_list.append({
+                                'email': client.get('email'),
+                                'client': client,
+                                'inbound_id': inbound.get('id'),
+                                'protocol': protocol
+                            })
+            return clients_list
+        except Exception as e:
+            logger.error(f"Ошибка получения клиентов по tg_id {tg_id}: {e}")
+            return []
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def setClientExpiry(self, user_email, expiry_timestamp, timeout=15):
