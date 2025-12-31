@@ -4641,11 +4641,12 @@ function moveNavIndicator(index) {
     const navRect = nav.getBoundingClientRect();
     const itemRect = targetItem.getBoundingClientRect();
     
-    // Вычисляем позицию относительно навбара
-    const leftPosition = itemRect.left - navRect.left;
+    // Вычисляем позицию относительно навбара с отступом от краев
+    const indicatorPadding = 8; // Отступ от краев островка
+    const leftPosition = itemRect.left - navRect.left + indicatorPadding;
     
-    // Устанавливаем ширину равной ширине иконки
-    indicator.style.width = `${itemRect.width}px`;
+    // Устанавливаем ширину равной ширине иконки минус отступы
+    indicator.style.width = `${itemRect.width - (indicatorPadding * 2)}px`;
     
     // Устанавливаем CSS переменную для адаптации
     const itemWidthPercent = (100 / navItems.length);
@@ -4726,14 +4727,17 @@ function initNavIndicator() {
         const clampedX = Math.max(minX, Math.min(maxX, newTransform));
         
         // Обновляем ширину индикатора при перетаскивании на основе ближайшей иконки
+        const indicatorPadding = 8; // Отступ от краев островка
         const currentItemIndex = Math.round(clampedX / itemWidth);
         if (currentItemIndex >= 0 && currentItemIndex < navItems.length) {
             const currentItem = navItems[currentItemIndex];
             const currentItemRect = currentItem.getBoundingClientRect();
-            indicator.style.width = `${currentItemRect.width}px`;
+            indicator.style.width = `${currentItemRect.width - (indicatorPadding * 2)}px`;
         }
         
-        indicator.style.transform = `translateX(${clampedX}px) translateY(-50%) scale(1.05)`;
+        // Добавляем отступ к позиции при перетаскивании
+        const adjustedX = clampedX + indicatorPadding;
+        indicator.style.transform = `translateX(${adjustedX}px) translateY(-50%) scale(1.05)`;
     });
     
     nav.addEventListener('touchend', (e) => {

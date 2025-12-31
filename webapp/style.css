@@ -544,17 +544,20 @@ h1 {
 /* Детальная страница подписки */
 .back-button {
     position: absolute;
-    left: 0;
+    left: 50%;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
     background: none;
     border: none;
     color: #b0b0b0;
     font-size: 16px;
     cursor: pointer;
-    padding: 8px 16px;
+    padding: 8px 0;
     transition: color 0.2s ease;
     z-index: 11;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .back-button:hover {
