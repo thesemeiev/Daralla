@@ -4159,7 +4159,7 @@ const instructionSteps = {
                     <p>Выберите одно из приложений для Android:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
                         <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" style="color: #4a9eff;">v2RayTun из Google Play</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happ.vpn" target="_blank" style="color: #4a9eff;">Happ из Google Play</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/search?q=happ+plus&c=apps" target="_blank" style="color: #4a9eff;">Happ из Google Play</a></li>
                     </ul>
                     <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
                 `
@@ -4222,7 +4222,7 @@ const instructionSteps = {
                     <p>Выберите одно из приложений для iPhone:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
                         <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank" style="color: #4a9eff;">v2RayTun из App Store</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ/id1635156981" target="_blank" style="color: #4a9eff;">Happ из App Store</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973" target="_blank" style="color: #4a9eff;">Happ из App Store</a></li>
                     </ul>
                     <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
                 `
@@ -4278,7 +4278,7 @@ const instructionSteps = {
                     <p>Выберите и скачайте одно из приложений:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
                         <li style="margin-bottom: 8px;"><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank" style="color: #4a9eff;">v2RayTun для Windows</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://happvpn.help/download-pc/" target="_blank" style="color: #4a9eff;">Happ для Windows</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" target="_blank" style="color: #4a9eff;">Happ для Windows</a></li>
                     </ul>
                     <p>Установите приложение на ваш компьютер.</p>
                 `
@@ -4328,7 +4328,7 @@ const instructionSteps = {
                     <p>Выберите и скачайте одно из приложений:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
                         <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank" style="color: #4a9eff;">v2RayTun для Mac</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://happvpn.help/download-pc/" target="_blank" style="color: #4a9eff;">Happ для Mac</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?platform=mac" target="_blank" style="color: #4a9eff;">Happ для Mac</a></li>
                     </ul>
                     <p>Установите приложение на ваш Mac.</p>
                 `
@@ -4375,7 +4375,7 @@ const instructionSteps = {
             {
                 title: 'Шаг 1: Скачайте Happ',
                 content: `
-                    <p><a href="https://happvpn.help/download-pc/" target="_blank" style="color: #4a9eff;">Скачайте Happ для Linux</a> и установите на ваш компьютер.</p>
+                    <p><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/Happ.linux.x64.deb" target="_blank" style="color: #4a9eff;">Скачайте Happ для Linux</a> и установите на ваш компьютер.</p>
                 `
             },
             {
@@ -4422,7 +4422,7 @@ const instructionSteps = {
                     <p>Выберите одно из приложений для Android TV:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
                         <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" style="color: #4a9eff;">v2RayTun для Android TV</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happ.vpn" target="_blank" style="color: #4a9eff;">Happ для Android TV</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank" style="color: #4a9eff;">Happ для Android TV</a></li>
                     </ul>
                 `
             },
