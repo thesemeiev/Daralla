@@ -99,7 +99,10 @@ function showSubscriptionDetail(sub) {
     // Сохраняем подписку для использования в функциях переименования
     currentSubscriptionDetail = sub;
     
-    nameEl.textContent = escapeHtml(sub.name);
+    // Проверяем существование элемента перед использованием
+    if (nameEl) {
+        nameEl.textContent = escapeHtml(sub.name);
+    }
     
     const statusClass = sub.status === 'active' ? 'active' : 'expired';
     const statusText = sub.status === 'active' ? 'Активна' : 
@@ -1428,7 +1431,10 @@ async function renameSubscription(subId, newName) {
         currentSubscriptionDetail.name = newName;
         
         // Обновляем отображение
-        document.getElementById('detail-subscription-name').textContent = escapeHtml(newName);
+        const nameEl = document.getElementById('detail-subscription-name');
+        if (nameEl) {
+            nameEl.textContent = escapeHtml(newName);
+        }
         document.getElementById('subscription-name-display').textContent = escapeHtml(newName);
         
         // Показываем уведомление об успехе
@@ -1769,7 +1775,9 @@ async function showAdminUserDetail(userId) {
         const data = await response.json();
         
         document.getElementById('admin-user-detail-loading').style.display = 'none';
-        document.getElementById('admin-user-detail-title').textContent = `Пользователь ${userId}`;
+        
+        // Сохраняем userId для использования при возврате назад
+        currentAdminUserDetailUserId = userId;
         
         const contentEl = document.getElementById('admin-user-detail-content');
         
@@ -2272,10 +2280,8 @@ function goBackFromSubscriptionEdit() {
     switchSubscriptionTab('params');
     if (previousAdminPage === 'admin-user-detail') {
         // Нужно перезагрузить информацию о пользователе
-        const titleEl = document.getElementById('admin-user-detail-title');
-        if (titleEl) {
-            const userId = titleEl.textContent.replace('Пользователь ', '');
-            showAdminUserDetail(userId);
+        if (currentAdminUserDetailUserId) {
+            showAdminUserDetail(currentAdminUserDetailUserId);
         } else {
             showPage('admin-users');
         }
