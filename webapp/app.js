@@ -42,18 +42,29 @@ function showPage(pageName) {
     // Активируем нужный пункт навигации (если это не детальная страница)
     if (pageName !== 'subscription-detail' && pageName !== 'admin-user-detail' && pageName !== 'admin-subscription-edit') {
         const navItems = document.querySelectorAll('.nav-item');
+        let activeIndex = -1;
+        
         if (pageName === 'subscriptions') {
             navItems[0]?.classList.add('active');
+            activeIndex = 0;
         } else if (pageName === 'servers') {
             navItems[1]?.classList.add('active');
+            activeIndex = 1;
         } else if (pageName === 'instructions') {
             navItems[2]?.classList.add('active');
+            activeIndex = 2;
         } else if (pageName === 'about') {
             navItems[3]?.classList.add('active');
+            activeIndex = 3;
         } else if (pageName === 'admin-stats' && document.getElementById('admin-nav-button')) {
             document.getElementById('admin-nav-button').classList.add('active');
         } else if (pageName === 'admin-users' && document.getElementById('admin-nav-button')) {
             document.getElementById('admin-nav-button').classList.add('active');
+        }
+        
+        // Перемещаем индикатор к активной кнопке
+        if (activeIndex >= 0) {
+            moveNavIndicator(activeIndex);
         }
     }
     
@@ -3859,6 +3870,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Проверяем права админа
     await checkAdminAccess();
+    
+    // Инициализируем навигацию с индикатором
+    initNavIndicator();
 });
 
 // Загрузка статистики подписок
@@ -4605,5 +4619,112 @@ function closeInstructionModal() {
     currentInstructionPlatform = null;
     currentInstructionStep = 0;
     currentInstructionSteps = [];
+}
+
+// Функция для перемещения индикатора к активной кнопке
+function moveNavIndicator(index) {
+    const indicator = document.querySelector('.nav-glass-indicator');
+    const navItems = document.querySelectorAll('.nav-item:not(#admin-nav-button)');
+    
+    if (!indicator || !navItems[index]) return;
+    
+    const nav = document.querySelector('.bottom-nav');
+    const navWidth = nav.offsetWidth;
+    const itemWidth = navWidth / navItems.length;
+    const leftPosition = itemWidth * index;
+    
+    indicator.style.transform = `translateX(${leftPosition}px)`;
+}
+
+// Инициализация навигации с индикатором
+function initNavIndicator() {
+    const navItems = document.querySelectorAll('.nav-item:not(#admin-nav-button)');
+    const indicator = document.querySelector('.nav-glass-indicator');
+    const nav = document.querySelector('.bottom-nav');
+    
+    if (!indicator || !nav) return;
+    
+    // Устанавливаем начальную позицию для активной кнопки
+    const activeItem = document.querySelector('.nav-item.active:not(#admin-nav-button)');
+    if (activeItem) {
+        const activeIndex = Array.from(navItems).indexOf(activeItem);
+        if (activeIndex >= 0) {
+            moveNavIndicator(activeIndex);
+        }
+    }
+    
+    // Добавляем обработчики для перетаскивания
+    let isDragging = false;
+    let startX = 0;
+    let startTransform = 0;
+    
+    nav.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        const navRect = nav.getBoundingClientRect();
+        const touchX = touch.clientX - navRect.left;
+        
+        // Проверяем, находится ли касание в области индикатора
+        const indicatorRect = indicator.getBoundingClientRect();
+        const indicatorLeft = indicatorRect.left - navRect.left;
+        const indicatorRight = indicatorRect.right - navRect.left;
+        
+        if (touchX >= indicatorLeft && touchX <= indicatorRight) {
+            isDragging = true;
+            startX = touchX;
+            const transform = indicator.style.transform;
+            startTransform = transform ? parseFloat(transform.match(/translateX\(([^)]+)\)/)?.[1] || '0') : 0;
+            indicator.style.transition = 'none';
+        }
+    });
+    
+    nav.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        
+        e.preventDefault();
+        const touch = e.touches[0];
+        const navRect = nav.getBoundingClientRect();
+        const touchX = touch.clientX - navRect.left;
+        const deltaX = touchX - startX;
+        const newTransform = startTransform + deltaX;
+        
+        // Ограничиваем перемещение в пределах бара
+        const navWidth = nav.offsetWidth;
+        const itemWidth = navWidth / navItems.length;
+        const minX = 0;
+        const maxX = navWidth - itemWidth;
+        
+        const clampedX = Math.max(minX, Math.min(maxX, newTransform));
+        indicator.style.transform = `translateX(${clampedX}px)`;
+    });
+    
+    nav.addEventListener('touchend', (e) => {
+        if (!isDragging) return;
+        
+        isDragging = false;
+        indicator.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        
+        // "Примагничиваем" к ближайшей кнопке
+        const navRect = nav.getBoundingClientRect();
+        const touchX = e.changedTouches[0].clientX - navRect.left;
+        const navWidth = nav.offsetWidth;
+        const itemWidth = navWidth / navItems.length;
+        const nearestIndex = Math.round(touchX / itemWidth);
+        const clampedIndex = Math.max(0, Math.min(navItems.length - 1, nearestIndex));
+        
+        moveNavIndicator(clampedIndex);
+        
+        // Активируем соответствующую кнопку
+        const targetButton = navItems[clampedIndex];
+        if (targetButton && targetButton.dataset.page) {
+            showPage(targetButton.dataset.page);
+        }
+    });
+    
+    // Обработка кликов на кнопки
+    navItems.forEach((item, index) => {
+        item.addEventListener('click', () => {
+            moveNavIndicator(index);
+        });
+    });
 }
 
