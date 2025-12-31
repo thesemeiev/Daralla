@@ -4643,7 +4643,7 @@ function moveNavIndicator(index) {
     // Устанавливаем ширину индикатора динамически
     const itemWidthPercent = (100 / navItems.length);
     indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
-    indicator.style.width = `calc(${itemWidthPercent}% - 24px)`;
+    indicator.style.width = `${itemWidthPercent}%`;
     
     // Добавляем класс для анимации масштабирования и устанавливаем transform
     indicator.classList.add('moving');
