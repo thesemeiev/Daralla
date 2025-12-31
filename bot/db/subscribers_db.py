@@ -134,14 +134,20 @@ async def create_subscription(subscriber_id: int, period: str, device_limit: int
             return sub_id, token
 
 async def get_all_active_subscriptions():
-    """Возвращает все активные подписки"""
+    """Возвращает все активные подписки (с учетом expires_at и исключая canceled/deleted)"""
+    import time
+    current_time = int(time.time())
+    
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             """SELECT s.*, u.user_id 
                FROM subscriptions s 
                JOIN users u ON s.subscriber_id = u.id 
-               WHERE s.status = 'active'"""
+               WHERE s.status = 'active' 
+               AND s.expires_at > ?
+               AND s.status NOT IN ('canceled', 'deleted')""",
+            (current_time,)
         ) as cur:
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
@@ -171,8 +177,35 @@ async def update_subscription_name(subscription_id: int, name: str):
         await db.commit()
 
 async def update_subscription_expiry(subscription_id: int, new_expires_at: int):
+    """Обновляет expires_at и автоматически обновляет статус на основе expires_at"""
+    import time
+    current_time = int(time.time())
+    
     async with aiosqlite.connect(DB_PATH) as db:
+        # Получаем текущий статус
+        async with db.execute("SELECT status FROM subscriptions WHERE id = ?", (subscription_id,)) as cur:
+            row = await cur.fetchone()
+            if not row:
+                logger.warning(f"Подписка {subscription_id} не найдена при обновлении expires_at")
+                return
+            current_status = row[0]
+        
+        # Обновляем expires_at
         await db.execute("UPDATE subscriptions SET expires_at = ? WHERE id = ?", (new_expires_at, subscription_id))
+        
+        # Автоматически обновляем статус (только если не canceled/deleted)
+        if current_status not in ('canceled', 'deleted'):
+            if new_expires_at > current_time:
+                # Продлеваем - меняем на active, если был expired
+                if current_status == 'expired':
+                    await db.execute("UPDATE subscriptions SET status = 'active' WHERE id = ?", (subscription_id,))
+                    logger.info(f"Подписка {subscription_id} автоматически активирована (продлена до {new_expires_at})")
+            else:
+                # Истекла - меняем на expired, если был active
+                if current_status == 'active':
+                    await db.execute("UPDATE subscriptions SET status = 'expired' WHERE id = ?", (subscription_id,))
+                    logger.info(f"Подписка {subscription_id} автоматически истекла (expires_at: {new_expires_at})")
+        
         await db.commit()
 
 async def update_subscription_device_limit(subscription_id: int, new_device_limit: int):
@@ -180,6 +213,71 @@ async def update_subscription_device_limit(subscription_id: int, new_device_limi
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE subscriptions SET device_limit = ? WHERE id = ?", (new_device_limit, subscription_id))
         await db.commit()
+
+def is_subscription_active(sub: dict) -> bool:
+    """Проверяет, активна ли подписка (единая логика для всех мест)
+    
+    Args:
+        sub: Словарь с данными подписки (должен содержать 'status' и 'expires_at')
+    
+    Returns:
+        True если подписка активна, False иначе
+    """
+    import time
+    current_time = int(time.time())
+    
+    # canceled и deleted всегда неактивны
+    if sub.get('status') in ('canceled', 'deleted'):
+        return False
+    
+    # Проверяем статус и expires_at
+    return sub.get('status') == 'active' and sub.get('expires_at', 0) > current_time
+
+async def sync_subscription_statuses():
+    """Периодически проверяет и обновляет статусы подписок на основе expires_at
+    
+    Автоматически меняет:
+    - active -> expired (если expires_at < current_time)
+    - expired -> active (если expires_at > current_time)
+    
+    Не трогает canceled и deleted статусы (они только ручные)
+    
+    Returns:
+        dict с результатами: {'expired_count': int, 'activated_count': int}
+    """
+    import time
+    current_time = int(time.time())
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Находим подписки, которые должны быть expired, но имеют status='active'
+        async with db.execute("""
+            UPDATE subscriptions 
+            SET status = 'expired' 
+            WHERE status = 'active' 
+            AND expires_at < ? 
+            AND status NOT IN ('canceled', 'deleted')
+        """, (current_time,)) as cur:
+            expired_count = cur.rowcount
+        
+        # Находим подписки, которые должны быть active, но имеют status='expired'
+        async with db.execute("""
+            UPDATE subscriptions 
+            SET status = 'active' 
+            WHERE status = 'expired' 
+            AND expires_at > ? 
+            AND status NOT IN ('canceled', 'deleted')
+        """, (current_time,)) as cur:
+            activated_count = cur.rowcount
+        
+        await db.commit()
+        
+        if expired_count > 0 or activated_count > 0:
+            logger.info(f"Синхронизировано статусов: {expired_count} истекло, {activated_count} активировано")
+        
+        return {
+            'expired_count': expired_count,
+            'activated_count': activated_count
+        }
 
 async def get_subscription_by_token(token: str):
     async with aiosqlite.connect(DB_PATH) as db:

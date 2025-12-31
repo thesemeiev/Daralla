@@ -11,7 +11,8 @@ from ..db.subscribers_db import (
     get_all_active_subscriptions,
     get_subscription_servers,
     update_subscription_status,
-    remove_subscription_server
+    remove_subscription_server,
+    sync_subscription_statuses
 )
 from .subscription_manager import SubscriptionManager
 

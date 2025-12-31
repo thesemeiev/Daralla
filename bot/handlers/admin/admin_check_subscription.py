@@ -80,9 +80,10 @@ async def admin_check_subscription(update: Update, context: ContextTypes.DEFAULT
         expires_at = datetime.datetime.fromtimestamp(sub["expires_at"])
         current_time = datetime.datetime.now()
         
-        # Проверяем статус
+        # Проверяем статус (используем единую функцию)
+        from ...db.subscribers_db import is_subscription_active
+        is_active = is_subscription_active(sub)
         is_expired = sub["expires_at"] < int(current_time.timestamp())
-        is_active = sub["status"] == "active" and not is_expired
         
         status_emoji = UIEmojis.SUCCESS if is_active else UIEmojis.ERROR
         status_text = "Активна" if is_active else f"Неактивна (status: {sub['status']}, expired: {is_expired})"

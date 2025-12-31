@@ -63,8 +63,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Проверяем, нет ли уже активных подписок (на всякий случай)
                 existing_subs = await get_all_active_subscriptions_by_user(user_id)
                 now = int(time.time())
-                # Фильтруем только действительно активные (не истекшие по времени)
-                active_subs = [sub for sub in existing_subs if sub.get('status') == 'active' and sub.get('expires_at', 0) > now]
+                # Фильтруем только действительно активные (используем единую функцию)
+                from ...db.subscribers_db import is_subscription_active
+                active_subs = [sub for sub in existing_subs if is_subscription_active(sub)]
                 
                 # Создаем пробную подписку только если у нового пользователя нет активных подписок
                 if len(active_subs) == 0:

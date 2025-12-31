@@ -147,25 +147,15 @@ def create_webhook_app(bot_app):
             # Логируем информацию о подписке для отладки
             logger.info(f"Запрос подписки: token={token}, subscription_id={sub['id']}, status={sub['status']}, expires_at={sub['expires_at']}")
             
-            # Проверяем статус подписки
-            if sub["status"] != "active":
+            # Проверяем активность подписки (единая логика)
+            from ...db.subscribers_db import is_subscription_active
+            if not is_subscription_active(sub):
                 import datetime
+                import time
                 expires_str = datetime.datetime.fromtimestamp(sub["expires_at"]).strftime('%Y-%m-%d %H:%M:%S')
-                error_msg = f"Subscription is not active (status: {sub['status']}, expires_at: {expires_str})"
+                current_str = datetime.datetime.fromtimestamp(int(time.time())).strftime('%Y-%m-%d %H:%M:%S')
+                error_msg = f"Subscription is not active (status: {sub['status']}, expires_at: {expires_str}, current: {current_str})"
                 logger.warning(f"Подписка с токеном {token} не активна: {error_msg}")
-                return (error_msg, 403)
-            
-            # Проверяем срок действия
-            import time
-            current_time = int(time.time())
-            expires_at = sub["expires_at"]
-            
-            if expires_at < current_time:
-                import datetime
-                expires_str = datetime.datetime.fromtimestamp(expires_at).strftime('%Y-%m-%d %H:%M:%S')
-                current_str = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
-                error_msg = f"Subscription expired (expired: {expires_str}, current: {current_str})"
-                logger.warning(f"Подписка с токеном {token} истекла: {error_msg}")
                 return (error_msg, 403)
             
             logger.info(f"Подписка {sub['id']} валидна, генерируем ссылки...")
@@ -516,10 +506,12 @@ def create_webhook_app(bot_app):
             import datetime
             current_time = int(time.time())
             
+            from ...db.subscribers_db import is_subscription_active
+            
             formatted_subs = []
             for sub in subscriptions:
                 expires_at = sub['expires_at']
-                is_active = sub['status'] == 'active' and expires_at > current_time
+                is_active = is_subscription_active(sub)
                 is_expired = expires_at < current_time
                 
                 expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
@@ -1221,10 +1213,12 @@ def create_webhook_app(bot_app):
             current_time = int(time.time())
             
             # Форматируем подписки
+            from ...db.subscribers_db import is_subscription_active
+            
             formatted_subs = []
             for sub in subscriptions:
                 expires_at = sub['expires_at']
-                is_active = sub['status'] == 'active' and expires_at > current_time
+                is_active = is_subscription_active(sub)
                 
                 formatted_subs.append({
                     'id': sub['id'],
@@ -1598,10 +1592,25 @@ def create_webhook_app(bot_app):
                 old_expires_at = sub['expires_at']
                 old_device_limit = sub['device_limit']
                 
+                # Проверяем изменение статуса: запрещаем ручное изменение active ↔ expired
+                if 'status' in updates:
+                    new_status = updates['status']
+                    # Запрещаем ручное изменение active ↔ expired (они управляются автоматически через expires_at)
+                    if (old_status in ('active', 'expired') and new_status in ('active', 'expired') and old_status != new_status):
+                        return jsonify({
+                            'error': 'Нельзя вручную менять статус между "active" и "expired". Статус обновляется автоматически при изменении даты истечения (expires_at).'
+                        }), 400
+                    # Разрешаем только изменение на canceled или deleted (ручное управление)
+                    if new_status not in ('canceled', 'deleted') and old_status in ('canceled', 'deleted'):
+                        return jsonify({
+                            'error': f'Нельзя изменить статус "{old_status}" на "{new_status}". Статусы "canceled" и "deleted" являются финальными.'
+                        }), 400
+                
                 # Обновляем поля в БД
                 if 'name' in updates:
                     loop.run_until_complete(update_subscription_name(sub_id, updates['name']))
                 
+                # expires_at обновляется ПЕРЕД статусом, чтобы автоматическое обновление статуса сработало
                 if 'expires_at' in updates:
                     loop.run_until_complete(update_subscription_expiry(sub_id, updates['expires_at']))
                 
@@ -1615,8 +1624,13 @@ def create_webhook_app(bot_app):
                             await db.commit()
                     loop.run_until_complete(update_device_limit())
                 
+                # Статус обновляется последним (только для canceled/deleted, active/expired управляются через expires_at)
                 if 'status' in updates:
-                    loop.run_until_complete(update_subscription_status(sub_id, updates['status']))
+                    new_status = updates['status']
+                    # Обновляем только если это canceled или deleted
+                    if new_status in ('canceled', 'deleted'):
+                        loop.run_until_complete(update_subscription_status(sub_id, new_status))
+                    # Если пытались установить active/expired - игнорируем (уже обновлено через expires_at)
                 
                 # Получаем обновленную подписку
                 updated_sub = loop.run_until_complete(get_subscription_by_id_only(sub_id))
@@ -1659,13 +1673,14 @@ def create_webhook_app(bot_app):
                         logger.warning(f"Не найден user_id для subscriber_id={subscriber_id}, синхронизация невозможна")
                         return
                     
-                    new_status = updated_sub['status']
+                    new_status = updated_sub['status']  # Используем актуальный статус (может быть обновлен автоматически через expires_at)
                     new_expires_at = updated_sub['expires_at']
                     new_device_limit = updated_sub['device_limit']
                     token = updated_sub['subscription_token']
                     
                     # 1. Если статус изменился на expired/canceled/deleted - удаляем клиентов
-                    if 'status' in updates and new_status in ['expired', 'canceled', 'deleted']:
+                    # Проверяем изменение статуса (может быть изменен автоматически через expires_at)
+                    if new_status in ['expired', 'canceled', 'deleted']:
                         if old_status != new_status:
                             logger.info(f"Статус подписки {sub_id} изменился на {new_status}, удаляем клиентов с серверов")
                             
@@ -1750,7 +1765,8 @@ def create_webhook_app(bot_app):
                                 logger.warning(f"Не удалось удалить клиентов ни с одного сервера для подписки {sub_id}, связи не удаляются из БД (будут удалены при следующей синхронизации)")
                     
                     # 2. Если статус изменился на active - создаем/восстанавливаем клиентов
-                    elif 'status' in updates and new_status == 'active' and old_status != 'active':
+                    # (может быть изменен автоматически через expires_at)
+                    elif new_status == 'active' and old_status != 'active' and old_status not in ('canceled', 'deleted'):
                         logger.info(f"Статус подписки {sub_id} изменился на active, создаем/восстанавливаем клиентов")
                         for server_info in servers:
                             server_name = server_info['server_name']
@@ -1771,8 +1787,10 @@ def create_webhook_app(bot_app):
                                 logger.error(f"Ошибка создания/обновления клиента {client_email} на сервере {server_name}: {e}")
                     
                     # 3. Если изменилась дата истечения или лимит устройств - обновляем клиентов
-                    elif 'expires_at' in updates or 'device_limit' in updates:
-                        if new_status == 'active':
+                    # (статус может быть автоматически обновлен через expires_at)
+                    if ('expires_at' in updates or 'device_limit' in updates) and new_status == 'active':
+                        # Проверяем, что статус не изменился с неактивного на активный (это обрабатывается в пункте 2)
+                        if old_status == 'active' or (old_status == 'expired' and 'expires_at' in updates):
                             logger.info(f"Обновление клиентов подписки {sub_id}: expires_at или device_limit изменились")
                             for server_info in servers:
                                 server_name = server_info['server_name']
