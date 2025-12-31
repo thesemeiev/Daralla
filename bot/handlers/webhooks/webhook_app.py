@@ -469,6 +469,174 @@ def create_webhook_app(bot_app):
             return ("Internal server error", 500)
     
     # API endpoint для получения подписок пользователя (для Telegram Mini App)
+    @app.route('/api/user/register', methods=['POST', 'OPTIONS'])
+    def api_user_register():
+        """
+        Регистрация пользователя при первом открытии мини-приложения.
+        Создает пользователя в БД и пробную подписку на 5 дней, если пользователь новый.
+        """
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            # Проверяем авторизацию через Telegram
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            user_id = str(user_id)
+            
+            # Создаем новый event loop для асинхронных операций
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                from ...db import is_known_user, register_simple_user
+                from ...db.subscribers_db import (
+                    get_all_active_subscriptions_by_user, 
+                    get_or_create_subscriber, 
+                    create_subscription,
+                    is_subscription_active
+                )
+                import time
+                
+                # Проверяем, новый ли пользователь
+                was_known_user = loop.run_until_complete(is_known_user(user_id))
+                
+                # Регистрируем пользователя
+                loop.run_until_complete(register_simple_user(user_id))
+                
+                trial_created = False
+                subscription_id = None
+                
+                # Если пользователь новый - создаем пробную подписку
+                if not was_known_user:
+                    try:
+                        # Проверяем, нет ли уже активных подписок
+                        existing_subs = loop.run_until_complete(get_all_active_subscriptions_by_user(user_id))
+                        now = int(time.time())
+                        active_subs = [sub for sub in existing_subs if is_subscription_active(sub)]
+                        
+                        # Создаем пробную подписку только если нет активных
+                        if len(active_subs) == 0:
+                            logger.info(f"Создание пробной подписки для нового пользователя: {user_id}")
+                            subscriber_id = loop.run_until_complete(get_or_create_subscriber(user_id))
+                            expires_at = now + (5 * 24 * 60 * 60)  # 5 дней
+                            
+                            subscription_id, token = loop.run_until_complete(create_subscription(
+                                subscriber_id=subscriber_id,
+                                period='month',
+                                device_limit=1,
+                                price=0.0,
+                                expires_at=expires_at,
+                                name="Пробная подписка"
+                            ))
+                            
+                            trial_created = True
+                            logger.info(f"✅ Пробная подписка создана: subscription_id={subscription_id}")
+                            
+                            # Создаем клиентов на всех серверах
+                            def get_managers():
+                                try:
+                                    from ... import bot as bot_module
+                                    return {
+                                        'subscription_manager': getattr(bot_module, 'subscription_manager', None),
+                                        'server_manager': getattr(bot_module, 'new_client_manager', None)
+                                    }
+                                except (ImportError, AttributeError):
+                                    return {'subscription_manager': None, 'server_manager': None}
+                            
+                            managers = get_managers()
+                            subscription_manager = managers.get('subscription_manager')
+                            server_manager = managers.get('server_manager')
+                            
+                            if subscription_manager and server_manager:
+                                unique_email = f"{user_id}_{subscription_id}"
+                                
+                                # Получаем все серверы из конфигурации
+                                all_configured_servers = []
+                                for server in server_manager.servers:
+                                    server_name = server["name"]
+                                    if server.get("x3") is not None:
+                                        all_configured_servers.append(server_name)
+                                
+                                if all_configured_servers:
+                                    # Привязываем серверы к подписке
+                                    async def attach_servers():
+                                        for server_name in all_configured_servers:
+                                            try:
+                                                await subscription_manager.attach_server_to_subscription(
+                                                    subscription_id=subscription_id,
+                                                    server_name=server_name,
+                                                    client_email=unique_email,
+                                                    client_id=None,
+                                                )
+                                            except Exception as attach_e:
+                                                if "UNIQUE constraint" not in str(attach_e) and "already exists" not in str(attach_e).lower():
+                                                    logger.error(f"Ошибка привязки сервера {server_name}: {attach_e}")
+                                    
+                                    loop.run_until_complete(attach_servers())
+                                    
+                                    # Создаем клиентов на серверах
+                                    async def create_clients():
+                                        successful = []
+                                        for server_name in all_configured_servers:
+                                            try:
+                                                client_exists, client_created = await subscription_manager.ensure_client_on_server(
+                                                    subscription_id=subscription_id,
+                                                    server_name=server_name,
+                                                    client_email=unique_email,
+                                                    user_id=user_id,
+                                                    expires_at=expires_at,
+                                                    token=token,
+                                                    device_limit=1
+                                                )
+                                                if client_exists:
+                                                    successful.append(server_name)
+                                            except Exception as e:
+                                                logger.error(f"Ошибка создания клиента на {server_name}: {e}")
+                                        return successful
+                                    
+                                    successful_servers = loop.run_until_complete(create_clients())
+                                    logger.info(f"Пробная подписка: создано на {len(successful_servers)}/{len(all_configured_servers)} серверах")
+                    except Exception as e:
+                        logger.error(f"Ошибка создания пробной подписки: {e}", exc_info=True)
+                
+                return jsonify({
+                    'success': True,
+                    'was_new_user': not was_known_user,
+                    'trial_created': trial_created,
+                    'subscription_id': subscription_id
+                })
+                
+            finally:
+                # Закрываем event loop
+                try:
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    if pending:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                except Exception:
+                    pass
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+                    
+        except Exception as e:
+            logger.error(f"Ошибка регистрации пользователя: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     @app.route('/api/subscriptions', methods=['GET', 'OPTIONS'])
     def api_subscriptions():
         """API endpoint для получения подписок пользователя через Telegram Mini App"""

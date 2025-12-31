@@ -204,6 +204,48 @@
             </div>
         </div>
 
+        <!-- Раздел Инструкции -->
+        <div id="page-instructions" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="goBackFromInstructions()">← Назад</button>
+                <h1>Инструкции</h1>
+            </header>
+            
+            <div class="instructions-content" style="padding: 24px;">
+                <div class="instructions-menu" id="instructions-menu">
+                    <h2 style="margin-bottom: 16px; color: #fff;">Выберите вашу платформу:</h2>
+                    <div class="instructions-grid">
+                        <button class="instruction-platform-btn" onclick="showInstruction('android')">
+                            <span>📱 Android</span>
+                        </button>
+                        <button class="instruction-platform-btn" onclick="showInstruction('ios')">
+                            <span>🍎 iOS</span>
+                        </button>
+                        <button class="instruction-platform-btn" onclick="showInstruction('windows')">
+                            <span>🪟 Windows</span>
+                        </button>
+                        <button class="instruction-platform-btn" onclick="showInstruction('macos')">
+                            <span>💻 macOS</span>
+                        </button>
+                        <button class="instruction-platform-btn" onclick="showInstruction('linux')">
+                            <span>🐧 Linux</span>
+                        </button>
+                        <button class="instruction-platform-btn" onclick="showInstruction('tv')">
+                            <span>📺 Android TV</span>
+                        </button>
+                        <button class="instruction-platform-btn" onclick="showInstruction('faq')" style="grid-column: 1 / -1;">
+                            <span>❓ FAQ</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="instruction-detail" id="instruction-detail" style="display: none;">
+                    <div id="instruction-content" style="color: #fff; line-height: 1.6;"></div>
+                    <button class="btn-primary" onclick="goBackToInstructionsMenu()" style="margin-top: 24px; width: 100%;">← Назад к выбору платформы</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Раздел О нас -->
         <div id="page-about" class="page" style="display: none;">
             <header>
@@ -768,6 +810,9 @@
         </button>
         <button class="nav-item" onclick="showPage('servers')">
             <span class="nav-label">Серверы</span>
+        </button>
+        <button class="nav-item" onclick="showPage('instructions')">
+            <span class="nav-label">Инструкции</span>
         </button>
         <button class="nav-item" onclick="showPage('about')">
             <span class="nav-label">О нас</span>

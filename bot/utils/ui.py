@@ -82,12 +82,30 @@ class UIButtons:
     @staticmethod
     def main_menu_buttons(is_admin=False):
         """Кнопки главного меню"""
-        buttons = [
+        # Получаем WEBAPP_URL из bot.py
+        webapp_url = None
+        try:
+            import sys
+            bot_module = sys.modules.get('bot.bot')
+            if bot_module:
+                webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
+        except (ImportError, AttributeError):
+            pass
+        
+        buttons = []
+        
+        # Добавляем кнопку мини-приложения, если доступна
+        if webapp_url:
+            from telegram import WebAppInfo
+            buttons.append([InlineKeyboardButton("📱 Открыть мини-приложение", web_app=WebAppInfo(url=webapp_url))])
+        
+        # Оставляем старые кнопки для плавного перехода
+        buttons.extend([
             [InlineKeyboardButton("Купить", callback_data=CallbackData.BUY_VPN)],
             [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU), 
              InlineKeyboardButton("Инструкция", callback_data=CallbackData.INSTRUCTION)],
             [InlineKeyboardButton("Наш канал", url="https://t.me/DarallaNews")],
-        ]
+        ])
         
         if is_admin:
             buttons.append([InlineKeyboardButton("Админ-меню", callback_data=CallbackData.ADMIN_MENU)])
@@ -111,12 +129,32 @@ class UIMessages:
     @staticmethod
     def welcome_message():
         """Приветственное сообщение"""
+        # Проверяем, доступно ли мини-приложение
+        webapp_available = False
+        try:
+            import sys
+            bot_module = sys.modules.get('bot.bot')
+            if bot_module:
+                webapp_available = bool(getattr(bot_module, 'WEBAPP_URL', None))
+        except (ImportError, AttributeError):
+            pass
+        
         terms_url = "https://teletype.in/@daralla/support"
         warning_msg = "Используя данный сервис, вы соглашаетесь с <a href=\"" + terms_url + "\">условиями использования</a> и обязуетесь соблюдать законодательство РФ."
-        return (
+        
+        message = (
             f"{UIStyles.header('Добро пожаловать в Daralla VPN!')}\n\n"
-            f"{UIStyles.warning_message(warning_msg)}"
+            f"{UIStyles.description('Мультисерверный VPN-сервис с высокой скоростью и надежностью.')}\n\n"
         )
+        
+        if webapp_available:
+            message += (
+                f"{UIStyles.info_message('💡 Рекомендуем использовать мини-приложение для удобного управления подписками, покупок и просмотра инструкций.')}\n\n"
+            )
+        
+        message += f"{UIStyles.warning_message(warning_msg)}"
+        
+        return message
     
     @staticmethod
     def buy_menu_message():
