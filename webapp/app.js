@@ -4640,7 +4640,20 @@ function moveNavIndicator(index) {
     const itemWidth = navWidth / navItems.length;
     const leftPosition = itemWidth * index;
     
-    indicator.style.transform = `translateX(${leftPosition}px)`;
+    // Устанавливаем ширину индикатора динамически
+    const itemWidthPercent = (100 / navItems.length);
+    indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
+    indicator.style.width = `calc(${itemWidthPercent}% - 24px)`;
+    
+    // Добавляем класс для анимации масштабирования и устанавливаем transform
+    indicator.classList.add('moving');
+    indicator.style.transform = `translateX(${leftPosition}px) scale(1.05)`;
+    
+    // Убираем класс после завершения анимации и возвращаем нормальный масштаб
+    setTimeout(() => {
+        indicator.classList.remove('moving');
+        indicator.style.transform = `translateX(${leftPosition}px)`;
+    }, 200);
 }
 
 // Инициализация навигации с индикатором
@@ -4651,6 +4664,11 @@ function initNavIndicator() {
     
     if (!indicator || !nav) return;
     
+    // Устанавливаем начальную ширину индикатора в зависимости от количества иконок
+    const itemWidthPercent = (100 / navItems.length);
+    indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
+    indicator.style.width = `calc(${itemWidthPercent}% - 24px)`;
+    
     // Устанавливаем начальную позицию для активной кнопки
     const activeItem = document.querySelector('.nav-item.active');
     if (activeItem) {
@@ -4658,6 +4676,9 @@ function initNavIndicator() {
         if (activeIndex >= 0) {
             moveNavIndicator(activeIndex);
         }
+    } else {
+        // Если нет активной кнопки, устанавливаем начальную позицию
+        moveNavIndicator(0);
     }
     
     // Добавляем обработчики для перетаскивания
@@ -4681,6 +4702,7 @@ function initNavIndicator() {
             const transform = indicator.style.transform;
             startTransform = transform ? parseFloat(transform.match(/translateX\(([^)]+)\)/)?.[1] || '0') : 0;
             indicator.style.transition = 'none';
+            indicator.classList.add('moving');
         }
     });
     
@@ -4701,14 +4723,14 @@ function initNavIndicator() {
         const maxX = navWidth - itemWidth;
         
         const clampedX = Math.max(minX, Math.min(maxX, newTransform));
-        indicator.style.transform = `translateX(${clampedX}px)`;
+        indicator.style.transform = `translateX(${clampedX}px) scale(1.05)`;
     });
     
     nav.addEventListener('touchend', (e) => {
         if (!isDragging) return;
         
         isDragging = false;
-        indicator.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        indicator.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), scale 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
         
         // "Примагничиваем" к ближайшей кнопке
         const navRect = nav.getBoundingClientRect();
@@ -4719,6 +4741,11 @@ function initNavIndicator() {
         const clampedIndex = Math.max(0, Math.min(navItems.length - 1, nearestIndex));
         
         moveNavIndicator(clampedIndex);
+        
+        // Убираем класс moving после завершения анимации (moveNavIndicator уже добавит его снова)
+        setTimeout(() => {
+            indicator.classList.remove('moving');
+        }, 400);
         
         // Активируем соответствующую кнопку
         const targetButton = navItems[clampedIndex];
