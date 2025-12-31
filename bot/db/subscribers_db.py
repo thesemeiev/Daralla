@@ -152,6 +152,32 @@ async def get_all_active_subscriptions():
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
 
+async def get_subscriptions_to_sync():
+    """
+    Возвращает подписки, которые нужно синхронизировать с серверами.
+    
+    Включает:
+    - Активные подписки (status='active' и expires_at > current_time)
+    - Истекшие подписки (status='expired' или expires_at < current_time), но не удаленные
+    
+    Исключает:
+    - Удаленные подписки (status='deleted')
+    """
+    import time
+    current_time = int(time.time())
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT s.*, u.user_id 
+               FROM subscriptions s 
+               JOIN users u ON s.subscriber_id = u.id 
+               WHERE s.status != 'deleted'
+               AND (s.status = 'active' OR s.status = 'expired')""",
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
+
 async def get_all_active_subscriptions_by_user(user_id: str):
     """Возвращает активные подписки конкретного пользователя"""
     async with aiosqlite.connect(DB_PATH) as db:

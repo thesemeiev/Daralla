@@ -17,6 +17,7 @@ from ..db.subscribers_db import (
     get_subscription_servers,
     remove_subscription_server,
     get_all_active_subscriptions,
+    get_subscriptions_to_sync,
     update_subscription_name,
 )
 from .server_manager import MultiServerManager
@@ -441,32 +442,33 @@ class SubscriptionManager:
 
     async def sync_servers_with_config(self, auto_create_clients: bool = True) -> dict:
         """
-        Синхронизирует серверы в подписках с текущей конфигурацией серверов.
+        Синхронизирует подписки с серверами (БД → Серверы).
+        
+        Принцип: БД - источник истины. Гарантирует, что все подписки имеют клиентов
+        на всех серверах из конфигурации.
         
         Логика:
-        1. Для каждой активной подписки:
-           - Получаем список серверов из конфигурации (SERVERS_BY_LOCATION)
-           - Получаем список серверов, привязанных к подписке
-           - Добавляем новые серверы (есть в конфигурации, но нет в подписке)
-           - Удаляем старые серверы (есть в подписке, но нет в конфигурации)
+        1. Для каждой подписки (active или expired, но не deleted):
+           - Для каждого сервера из конфигурации:
+             * Проверяет связь в БД (subscription_servers)
+             * Создает связь, если отсутствует
+             * Если auto_create_clients=True:
+               - Гарантирует наличие клиента на сервере через ensure_client_on_server
+               - Создает клиента, если его нет
+               - Синхронизирует параметры (expires_at, device_limit), если клиент существует
         
-        2. При добавлении нового сервера:
-           - Если auto_create_clients=True, создаем клиента на новом сервере
-           - Привязываем сервер к подписке в БД
-        
-        3. При удалении сервера:
-           - Удаляем связь из БД (клиент на сервере остается, но не используется в подписке)
+        2. Удаляет связи с серверами, которых нет в конфигурации
         
         Args:
-            auto_create_clients: Если True, автоматически создает клиентов на новых серверах
+            auto_create_clients: Если True, автоматически создает/восстанавливает клиентов на всех серверах
         
         Returns:
             dict со статистикой синхронизации
         """
-        logger.info("Начало синхронизации серверов в подписках с конфигурацией")
+        logger.info("Начало синхронизации подписок с серверами (БД → Серверы)")
         
-        # Получаем все активные подписки
-        all_subscriptions = await get_all_active_subscriptions()
+        # Получаем все подписки, которые нужно синхронизировать (активные и истекшие, но не удаленные)
+        all_subscriptions = await get_subscriptions_to_sync()
         
         # Получаем список всех серверов из конфигурации
         configured_servers = set()
@@ -474,7 +476,13 @@ class SubscriptionManager:
             for server_config in servers:
                 configured_servers.add(server_config["name"])
         
-        logger.info(f"Найдено {len(all_subscriptions)} активных подписок")
+        # Подсчитываем активные и истекшие подписки
+        import time
+        current_time = int(time.time())
+        active_count = sum(1 for sub in all_subscriptions if sub.get('status') == 'active' and sub.get('expires_at', 0) > current_time)
+        expired_count = len(all_subscriptions) - active_count
+        
+        logger.info(f"Найдено {len(all_subscriptions)} подписок для синхронизации: {active_count} активных, {expired_count} истекших (но не удаленных)")
         logger.info(f"В конфигурации {len(configured_servers)} серверов: {configured_servers}")
         
         stats = {
@@ -482,6 +490,7 @@ class SubscriptionManager:
             "servers_added": 0,
             "servers_removed": 0,
             "clients_created": 0,
+            "clients_restored": 0,
             "errors": [],
         }
         
@@ -490,45 +499,52 @@ class SubscriptionManager:
             user_id = sub["user_id"]
             token = sub["subscription_token"]
             expires_at = sub["expires_at"]
+            device_limit = sub.get("device_limit", 1)
             
             try:
                 # Получаем список серверов, привязанных к этой подписке
                 current_servers = await get_subscription_servers(subscription_id)
                 current_server_names = {s["server_name"] for s in current_servers}
                 
-                # Находим серверы, которые нужно добавить (есть в конфигурации, но нет в подписке)
-                servers_to_add = configured_servers - current_server_names
+                # Определяем email клиента (единый для всех серверов подписки)
+                client_email = None
+                if current_servers:
+                    client_email = current_servers[0]["client_email"]
+                else:
+                    # Если это первая подписка без серверов, создаем новый email
+                    # Формат: {user_id}_{subscription_id} (единый стандарт для всех подписок)
+                    client_email = f"{user_id}_{subscription_id}"
                 
-                # Находим серверы, которые нужно удалить (есть в подписке, но нет в конфигурации)
-                servers_to_remove = current_server_names - configured_servers
-                
-                if servers_to_add or servers_to_remove:
-                    logger.info(
-                        f"Подписка {subscription_id} (user={user_id}): "
-                        f"добавить {len(servers_to_add)} серверов, "
-                        f"удалить {len(servers_to_remove)} серверов"
+                if not client_email:
+                    logger.warning(
+                        f"Не удалось определить email для подписки {subscription_id}, пропускаем"
                     )
+                    continue
                 
-                # Добавляем новые серверы
-                for server_name in servers_to_add:
+                # Для каждого сервера из конфигурации гарантируем наличие клиента
+                # БД - источник истины: если подписка есть в БД, клиент должен быть на сервере
+                for server_name in configured_servers:
                     try:
-                        # Получаем email клиента из первого существующего сервера подписки
-                        # (все серверы в подписке используют один email)
-                        client_email = None
-                        if current_servers:
-                            client_email = current_servers[0]["client_email"]
-                        else:
-                            # Если это первая подписка без серверов, создаем новый email
-                            # Формат: {user_id}_{subscription_id} (единый стандарт для всех подписок)
-                            client_email = f"{user_id}_{subscription_id}"
+                        # Шаг 1: Проверяем и создаем связь в БД (subscription_servers)
+                        server_in_db = server_name in current_server_names
                         
-                        if not client_email:
-                            logger.warning(
-                                f"Не удалось определить email для подписки {subscription_id}, пропускаем сервер {server_name}"
+                        if not server_in_db:
+                            # Связи нет - создаем её в БД
+                            await add_subscription_server(
+                                subscription_id=subscription_id,
+                                server_name=server_name,
+                                client_email=client_email,
+                                client_id=None,
                             )
-                            continue
+                            stats["servers_added"] += 1
+                            logger.info(
+                                f"Добавлена связь подписки {subscription_id} с сервером {server_name} в БД"
+                            )
                         
-                        # Если auto_create_clients=True, создаем клиента на новом сервере
+                        # Шаг 2: Гарантируем наличие клиента на сервере (если auto_create_clients=True)
+                        # Это работает и для активных, и для истекших подписок
+                        # Для истекших подписок клиент будет создан с правильным временем истечения,
+                        # и X-UI сам заблокирует его, но клиент должен существовать на сервере
                         if auto_create_clients:
                             client_exists, client_created = await self.ensure_client_on_server(
                                 subscription_id=subscription_id,
@@ -537,62 +553,46 @@ class SubscriptionManager:
                                 user_id=user_id,
                                 expires_at=expires_at,
                                 token=token,
+                                device_limit=device_limit,
                             )
                             
                             if client_created:
                                 stats["clients_created"] += 1
-                            
-                            if not client_exists:
+                                sub_status = sub.get('status', 'unknown')
+                                logger.info(
+                                    f"Создан клиент {client_email} на сервере {server_name} для подписки {subscription_id} (статус: {sub_status})"
+                                )
+                            elif client_exists:
+                                stats["clients_restored"] += 1
+                                logger.debug(
+                                    f"Клиент {client_email} уже существует на сервере {server_name} для подписки {subscription_id}"
+                                )
+                            else:
                                 logger.error(
-                                    f"Не удалось создать клиента на сервере {server_name} для подписки {subscription_id}"
+                                    f"Не удалось создать/восстановить клиента на сервере {server_name} для подписки {subscription_id}"
                                 )
                                 stats["errors"].append(
-                                    f"Подписка {subscription_id}, сервер {server_name}: не удалось создать клиента"
+                                    f"Подписка {subscription_id}, сервер {server_name}: не удалось создать/восстановить клиента"
                                 )
-                                # Продолжаем - привязываем сервер даже если создание не удалось
-                                # (клиент может быть создан вручную позже)
-                        
-                        # Привязываем сервер к подписке в БД
-                        await add_subscription_server(
-                            subscription_id=subscription_id,
-                            server_name=server_name,
-                            client_email=client_email,
-                            client_id=None,
-                        )
-                        stats["servers_added"] += 1
-                        logger.info(
-                            f"Сервер {server_name} добавлен в подписку {subscription_id}"
-                        )
-                        
+                    
                     except Exception as e:
-                        logger.error(
-                            f"Ошибка добавления сервера {server_name} в подписку {subscription_id}: {e}"
-                        )
-                        stats["errors"].append(
-                            f"Подписка {subscription_id}, сервер {server_name}: {str(e)}"
-                        )
+                        error_msg = f"Ошибка синхронизации сервера {server_name} для подписки {subscription_id}: {e}"
+                        logger.error(error_msg)
+                        stats["errors"].append(error_msg)
                 
-                # Удаляем старые серверы
+                # Удаляем связи с серверами, которых нет в конфигурации
+                servers_to_remove = current_server_names - configured_servers
                 for server_name in servers_to_remove:
                     try:
-                        removed = await remove_subscription_server(subscription_id, server_name)
-                        if removed:
-                            stats["servers_removed"] += 1
-                            logger.info(
-                                f"Сервер {server_name} удален из подписки {subscription_id} "
-                                f"(больше нет в конфигурации)"
-                            )
-                        else:
-                            logger.warning(
-                                f"Сервер {server_name} не найден в подписке {subscription_id} при попытке удаления"
-                            )
+                        await remove_subscription_server(subscription_id, server_name)
+                        stats["servers_removed"] += 1
+                        logger.info(
+                            f"Удалена связь подписки {subscription_id} с сервером {server_name} (сервер удален из конфигурации)"
+                        )
                     except Exception as e:
-                        logger.error(
-                            f"Ошибка удаления сервера {server_name} из подписки {subscription_id}: {e}"
-                        )
-                        stats["errors"].append(
-                            f"Подписка {subscription_id}, удаление {server_name}: {str(e)}"
-                        )
+                        error_msg = f"Ошибка удаления связи подписки {subscription_id} с сервером {server_name}: {e}"
+                        logger.error(error_msg)
+                        stats["errors"].append(error_msg)
                 
             except Exception as e:
                 logger.error(
@@ -606,6 +606,7 @@ class SubscriptionManager:
             f"добавлено {stats['servers_added']} серверов, "
             f"удалено {stats['servers_removed']} серверов, "
             f"создано {stats['clients_created']} клиентов, "
+            f"восстановлено {stats['clients_restored']} клиентов, "
             f"ошибок {len(stats['errors'])}"
         )
         
