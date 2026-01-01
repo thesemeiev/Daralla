@@ -4331,6 +4331,10 @@ function changeConversionSubscriptionsPeriod() {
 
 // ==================== РАССЫЛКА ====================
 
+// Глобальные переменные для рассылки
+let broadcastSelectedUsers = []; // Массив выбранных user_id
+let broadcastUserSearchTimeout = null;
+
 // Загрузка страницы рассылки
 async function loadBroadcastPage() {
     const loadingEl = document.getElementById('admin-broadcast-loading');
@@ -4371,6 +4375,14 @@ async function loadBroadcastPage() {
         // Структура ответа: stats.users.total (как в loadAdminStats)
         const totalUsers = statsData.stats?.users?.total || 0;
         
+        // Сбрасываем выбор пользователей при загрузке страницы
+        broadcastSelectedUsers = [];
+        const selectUsersCheckbox = document.getElementById('broadcast-select-users');
+        if (selectUsersCheckbox) {
+            selectUsersCheckbox.checked = false;
+            toggleUserSelection();
+        }
+        
         // Показываем количество получателей (исключая админов, но показываем общее количество)
         recipientsCountEl.textContent = totalUsers;
         
@@ -4383,6 +4395,159 @@ async function loadBroadcastPage() {
         loadingEl.style.display = 'none';
         errorEl.style.display = 'block';
         document.getElementById('broadcast-error-text').textContent = error.message || 'Ошибка загрузки данных';
+    }
+}
+
+// Переключение режима выбора пользователей
+function toggleUserSelection() {
+    const checkbox = document.getElementById('broadcast-select-users');
+    const selectionDiv = document.getElementById('broadcast-user-selection');
+    
+    if (checkbox.checked) {
+        selectionDiv.style.display = 'block';
+        // Загружаем список пользователей при первом открытии
+        if (document.getElementById('broadcast-users-list').innerHTML === '') {
+            searchUsersForBroadcast();
+        }
+    } else {
+        selectionDiv.style.display = 'none';
+        // Очищаем выбор при отключении режима
+        broadcastSelectedUsers = [];
+        updateBroadcastRecipientsCount();
+        updateSelectedCount();
+    }
+}
+
+// Поиск пользователей для рассылки
+async function searchUsersForBroadcast() {
+    clearTimeout(broadcastUserSearchTimeout);
+    const searchInput = document.getElementById('broadcast-user-search');
+    const search = searchInput.value.trim();
+    const listEl = document.getElementById('broadcast-users-list');
+    
+    broadcastUserSearchTimeout = setTimeout(async () => {
+        try {
+            const initData = tg.initData;
+            if (!initData) {
+                listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Ошибка авторизации</div>';
+                return;
+            }
+            
+            listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Поиск...</div>';
+            
+            const response = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    initData,
+                    page: 1,
+                    limit: 50, // Ограничиваем до 50 результатов
+                    search
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Ошибка поиска пользователей');
+            }
+            
+            const data = await response.json();
+            
+            if (!data.users || data.users.length === 0) {
+                listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Пользователи не найдены</div>';
+                return;
+            }
+            
+            listEl.innerHTML = '';
+            data.users.forEach(user => {
+                const isSelected = broadcastSelectedUsers.includes(user.user_id);
+                const userCard = document.createElement('div');
+                userCard.style.cssText = 'padding: 12px; border-bottom: 1px solid #3a3a3a; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
+                userCard.style.background = isSelected ? '#2a3a2a' : 'transparent';
+                
+                userCard.onclick = () => toggleUserForBroadcast(user.user_id);
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = isSelected;
+                checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
+                checkbox.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleUserForBroadcast(user.user_id);
+                };
+                
+                const userInfo = document.createElement('div');
+                userInfo.style.cssText = 'flex: 1;';
+                userInfo.innerHTML = `
+                    <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">ID: ${escapeHtml(user.user_id)}</div>
+                    <div style="color: #a0a0a0; font-size: 12px;">Подписок: ${user.subscriptions_count || 0}</div>
+                `;
+                
+                userCard.appendChild(checkbox);
+                userCard.appendChild(userInfo);
+                listEl.appendChild(userCard);
+            });
+            
+        } catch (error) {
+            console.error('Ошибка поиска пользователей:', error);
+            listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #cf7f7f;">Ошибка загрузки пользователей</div>';
+        }
+    }, 500);
+}
+
+// Переключение выбора пользователя
+function toggleUserForBroadcast(userId) {
+    const index = broadcastSelectedUsers.indexOf(userId);
+    if (index > -1) {
+        broadcastSelectedUsers.splice(index, 1);
+    } else {
+        broadcastSelectedUsers.push(userId);
+    }
+    
+    // Обновляем отображение списка
+    searchUsersForBroadcast();
+    updateSelectedCount();
+    updateBroadcastRecipientsCount();
+}
+
+// Очистить выбор пользователей
+function clearUserSelection() {
+    broadcastSelectedUsers = [];
+    updateSelectedCount();
+    updateBroadcastRecipientsCount();
+    // Обновляем отображение списка
+    const searchInput = document.getElementById('broadcast-user-search');
+    if (searchInput) {
+        searchUsersForBroadcast();
+    }
+}
+
+// Обновить счетчик выбранных пользователей
+function updateSelectedCount() {
+    const countEl = document.getElementById('broadcast-selected-count');
+    if (countEl) {
+        countEl.textContent = broadcastSelectedUsers.length;
+    }
+}
+
+// Обновить счетчик получателей рассылки
+function updateBroadcastRecipientsCount() {
+    const recipientsCountEl = document.getElementById('broadcast-recipients-count');
+    const selectUsersCheckbox = document.getElementById('broadcast-select-users');
+    
+    if (!recipientsCountEl) return;
+    
+    if (selectUsersCheckbox && selectUsersCheckbox.checked) {
+        // Если выбран режим выбора пользователей - показываем количество выбранных
+        recipientsCountEl.textContent = broadcastSelectedUsers.length;
+    } else {
+        // Если не выбран - показываем общее количество (нужно загрузить, если еще не загружено)
+        // Используем значение из loadBroadcastPage или загружаем заново
+        if (recipientsCountEl.textContent === '-') {
+            // Если еще не загружено, загружаем статистику
+            loadBroadcastPage();
+        }
     }
 }
 
@@ -4406,8 +4571,27 @@ async function sendBroadcast() {
         return;
     }
     
-    // Подтверждение
-    const confirmText = 'Вы уверены, что хотите отправить рассылку всем пользователям?';
+    // Проверяем, выбран ли режим выбора пользователей
+    const selectUsersCheckbox = document.getElementById('broadcast-select-users');
+    const isSelectMode = selectUsersCheckbox && selectUsersCheckbox.checked;
+    
+    if (isSelectMode && broadcastSelectedUsers.length === 0) {
+        if (tg && tg.showAlert) {
+            tg.showAlert('Пожалуйста, выберите хотя бы одного пользователя');
+        } else {
+            alert('Пожалуйста, выберите хотя бы одного пользователя');
+        }
+        return;
+    }
+    
+    // Формируем текст подтверждения
+    let confirmText;
+    if (isSelectMode) {
+        confirmText = `Вы уверены, что хотите отправить рассылку ${broadcastSelectedUsers.length} выбранным пользователям?`;
+    } else {
+        confirmText = 'Вы уверены, что хотите отправить рассылку всем пользователям?';
+    }
+    
     if (tg && tg.showConfirm) {
         const confirmed = await new Promise((resolve) => {
             tg.showConfirm(confirmText, (result) => resolve(result));
@@ -4436,15 +4620,23 @@ async function sendBroadcast() {
             throw new Error('Ошибка авторизации');
         }
         
+        // Формируем тело запроса
+        const requestBody = {
+            initData,
+            message: message
+        };
+        
+        // Если выбран режим выбора пользователей - добавляем user_ids
+        if (isSelectMode && broadcastSelectedUsers.length > 0) {
+            requestBody.user_ids = broadcastSelectedUsers;
+        }
+        
         const response = await fetch('/api/admin/broadcast', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                initData,
-                message: message
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (!response.ok) {

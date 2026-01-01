@@ -3014,6 +3014,9 @@ def create_webhook_app(bot_app):
             if not message_text:
                 return jsonify({'error': 'Message text is required'}), 400
             
+            # Получаем список выбранных пользователей (опционально)
+            user_ids = data.get('user_ids', [])
+            
             # Импортируем необходимые модули
             from ...db import get_all_user_ids
             import telegram
@@ -3021,14 +3024,20 @@ def create_webhook_app(bot_app):
             # Получаем список админов для исключения
             from ... import bot as bot_module
             ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
+            admin_set = set(str(a) for a in ADMIN_IDS)
             
             # Асинхронная функция для отправки рассылки
             async def send_broadcast_async():
                 try:
-                    # Получаем список всех пользователей
-                    recipients = await get_all_user_ids()
-                    admin_set = set(str(a) for a in ADMIN_IDS)
-                    recipients = [uid for uid in recipients if str(uid) not in admin_set]
+                    # Если указаны конкретные пользователи - используем их, иначе всех
+                    if user_ids and len(user_ids) > 0:
+                        # Отправка только выбранным пользователям
+                        recipients = [str(uid) for uid in user_ids if str(uid) not in admin_set]
+                    else:
+                        # Отправка всем пользователям
+                        recipients = await get_all_user_ids()
+                        recipients = [str(uid) for uid in recipients if str(uid) not in admin_set]
+                    
                     total = len(recipients)
                     
                     if total == 0:
