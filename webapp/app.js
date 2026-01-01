@@ -2341,8 +2341,8 @@ function showDeleteUserConfirm(userId) {
                         <strong style="color: #ff6b6b;">Это действие нельзя отменить!</strong>
                     </p>
                     <div style="display: flex; gap: 12px; margin-top: 24px;">
-                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500;">Отмена</button>
-                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Удалить</button>
+                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; height: 44px; box-sizing: border-box; border: 1px solid #3a3a3a;">Отмена</button>
+                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; height: 44px; box-sizing: border-box;">Удалить</button>
                     </div>
                 </div>
             </div>

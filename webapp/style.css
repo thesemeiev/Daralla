@@ -83,9 +83,9 @@ body {
 
 /* Фиксация размера модального окна инструкций */
 .instruction-modal-content {
-    height: 80vh !important;
-    min-height: 500px !important;
-    max-height: 80vh !important;
+    height: 65vh !important;
+    min-height: 400px !important;
+    max-height: 65vh !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
@@ -364,8 +364,8 @@ h1 {
 
 .plan-card {
     background: #2a2a2a;
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 14px;
     border: 1px solid #333;
     cursor: pointer;
     transition: all 0.2s;
@@ -381,17 +381,17 @@ h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 
 .plan-header h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: 18px;
     color: #fff;
 }
 
 .plan-price {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
     color: #4a9eff;
 }
@@ -416,7 +416,7 @@ h1 {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .feature-item {
