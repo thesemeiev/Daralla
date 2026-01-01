@@ -56,7 +56,7 @@ function showPage(pageName) {
         } else if (pageName === 'about') {
             navItems[3]?.classList.add('active');
             activeIndex = 3;
-        } else if ((pageName === 'admin-stats' || pageName === 'admin-users' || pageName === 'admin-subscriptions' || pageName === 'admin-notifications') && document.getElementById('admin-nav-button')) {
+        } else if ((pageName === 'admin-stats' || pageName === 'admin-users' || pageName === 'admin-subscriptions' || pageName === 'admin-notifications' || pageName === 'admin-broadcast') && document.getElementById('admin-nav-button')) {
             const adminButton = document.getElementById('admin-nav-button');
             adminButton.classList.add('active');
             const allNavItems = document.querySelectorAll('.nav-item');
@@ -84,6 +84,8 @@ function showPage(pageName) {
         loadNotificationStats();
     } else if (pageName === 'admin-subscriptions') {
         loadSubscriptionStats();
+    } else if (pageName === 'admin-broadcast') {
+        loadBroadcastPage();
     }
 }
 
@@ -2340,9 +2342,9 @@ function showDeleteUserConfirm(userId) {
                         </ul>
                         <strong style="color: #ff6b6b;">Это действие нельзя отменить!</strong>
                     </p>
-                    <div style="display: flex; gap: 12px; margin-top: 24px; align-items: center;">
-                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; height: 44px; box-sizing: border-box; border: 1px solid #3a3a3a; display: flex; align-items: center; justify-content: center;">Отмена</button>
-                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;">Удалить</button>
+                    <div style="display: flex; gap: 12px; margin-top: 24px; align-items: stretch;">
+                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; border: 1px solid #3a3a3a; display: flex; align-items: center; justify-content: center; margin: 0;">Отмена</button>
+                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: 1px solid #d32f2f; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Удалить</button>
                     </div>
                 </div>
             </div>
@@ -4325,6 +4327,162 @@ function changeConversionSubscriptionsPeriod() {
     const select = document.getElementById('conversion-subscriptions-period');
     const days = parseInt(select.value);
     loadSubscriptionStats(days);
+}
+
+// ==================== РАССЫЛКА ====================
+
+// Загрузка страницы рассылки
+async function loadBroadcastPage() {
+    const loadingEl = document.getElementById('admin-broadcast-loading');
+    const errorEl = document.getElementById('admin-broadcast-error');
+    const contentEl = document.getElementById('admin-broadcast-content');
+    const recipientsCountEl = document.getElementById('broadcast-recipients-count');
+    const resultEl = document.getElementById('broadcast-result');
+    
+    // Скрываем ошибки и результаты
+    errorEl.style.display = 'none';
+    resultEl.style.display = 'none';
+    
+    // Показываем загрузку
+    loadingEl.style.display = 'flex';
+    document.getElementById('broadcast-loading-text').textContent = 'Загрузка данных...';
+    contentEl.style.display = 'none';
+    
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            throw new Error('Ошибка авторизации');
+        }
+        
+        // Получаем статистику для определения количества пользователей
+        const statsResponse = await fetch('/api/admin/stats', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData })
+        });
+        
+        if (!statsResponse.ok) {
+            throw new Error('Ошибка загрузки данных');
+        }
+        
+        const statsData = await statsResponse.json();
+        const totalUsers = statsData.stats?.total_users || 0;
+        
+        // Показываем количество получателей (исключая админов, но показываем общее количество)
+        recipientsCountEl.textContent = totalUsers;
+        
+        // Скрываем загрузку и показываем контент
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Ошибка загрузки страницы рассылки:', error);
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('broadcast-error-text').textContent = error.message || 'Ошибка загрузки данных';
+    }
+}
+
+// Отправка рассылки
+async function sendBroadcast() {
+    const messageEl = document.getElementById('broadcast-message');
+    const sendBtn = document.getElementById('broadcast-send-btn');
+    const loadingEl = document.getElementById('admin-broadcast-loading');
+    const errorEl = document.getElementById('admin-broadcast-error');
+    const resultEl = document.getElementById('broadcast-result');
+    const contentEl = document.getElementById('admin-broadcast-content');
+    
+    const message = messageEl.value.trim();
+    
+    if (!message) {
+        if (tg && tg.showAlert) {
+            tg.showAlert('Пожалуйста, введите текст сообщения');
+        } else {
+            alert('Пожалуйста, введите текст сообщения');
+        }
+        return;
+    }
+    
+    // Подтверждение
+    const confirmText = 'Вы уверены, что хотите отправить рассылку всем пользователям?';
+    if (tg && tg.showConfirm) {
+        const confirmed = await new Promise((resolve) => {
+            tg.showConfirm(confirmText, (result) => resolve(result));
+        });
+        if (!confirmed) {
+            return;
+        }
+    } else {
+        if (!confirm(confirmText)) {
+            return;
+        }
+    }
+    
+    // Блокируем кнопку и показываем загрузку
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Отправка...';
+    loadingEl.style.display = 'flex';
+    document.getElementById('broadcast-loading-text').textContent = 'Отправка рассылки...';
+    errorEl.style.display = 'none';
+    resultEl.style.display = 'none';
+    contentEl.style.display = 'none';
+    
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            throw new Error('Ошибка авторизации');
+        }
+        
+        const response = await fetch('/api/admin/broadcast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                initData,
+                message: message
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Ошибка отправки рассылки');
+        }
+        
+        const data = await response.json();
+        
+        // Показываем результат
+        document.getElementById('broadcast-sent-count').textContent = data.sent || 0;
+        document.getElementById('broadcast-failed-count').textContent = data.failed || 0;
+        document.getElementById('broadcast-total-count').textContent = data.total || 0;
+        
+        resultEl.style.display = 'block';
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        
+        // Очищаем поле сообщения
+        messageEl.value = '';
+        
+        // Показываем уведомление
+        if (tg && tg.showAlert) {
+            tg.showAlert(
+                `Рассылка завершена!\n\nОтправлено: ${data.sent}\nОшибок: ${data.failed}\nВсего: ${data.total}`
+            );
+        }
+        
+    } catch (error) {
+        console.error('Ошибка отправки рассылки:', error);
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('broadcast-error-text').textContent = error.message || 'Ошибка отправки рассылки';
+        contentEl.style.display = 'block';
+    } finally {
+        // Разблокируем кнопку
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Отправить рассылку';
+    }
 }
 
 // Глобальные переменные для инструкций

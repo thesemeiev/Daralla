@@ -378,6 +378,13 @@ h1 {
     border-color: #3a3a3a;
 }
 
+.plan-card .btn-primary:hover {
+    background: #4a9eff;
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(74, 158, 255, 0.3);
+}
+
 .plan-header {
     display: flex;
     justify-content: space-between;
@@ -1150,6 +1157,12 @@ h1 {
 .btn-primary {
     background: #4a4a4a;
     color: #f5f5f5;
+}
+
+.btn-primary:hover {
+    background: #5a5a5a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .btn-primary:active {

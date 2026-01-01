@@ -2986,6 +2986,127 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/charts/subscriptions: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/broadcast', methods=['POST', 'OPTIONS'])
+    def api_admin_broadcast():
+        """Отправка рассылки всем пользователям"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            message_text = data.get('message', '').strip()
+            if not message_text:
+                return jsonify({'error': 'Message text is required'}), 400
+            
+            # Импортируем необходимые модули
+            from ...db import get_all_user_ids
+            import telegram
+            
+            # Получаем список админов для исключения
+            from ... import bot as bot_module
+            ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
+            
+            # Асинхронная функция для отправки рассылки
+            async def send_broadcast_async():
+                try:
+                    # Получаем список всех пользователей
+                    recipients = await get_all_user_ids()
+                    admin_set = set(str(a) for a in ADMIN_IDS)
+                    recipients = [uid for uid in recipients if str(uid) not in admin_set]
+                    total = len(recipients)
+                    
+                    if total == 0:
+                        return {'sent': 0, 'failed': 0, 'total': 0}
+                    
+                    sent = 0
+                    failed = 0
+                    batch = 40
+                    
+                    # Создаем кнопку для открытия мини-приложения
+                    from ...utils import UIButtons
+                    webapp_button = UIButtons.create_webapp_button()
+                    reply_markup = None
+                    if webapp_button:
+                        from telegram import InlineKeyboardMarkup
+                        reply_markup = InlineKeyboardMarkup([[webapp_button]])
+                    
+                    # Отправляем сообщения батчами
+                    for i in range(0, total, batch):
+                        chunk = recipients[i:i+batch]
+                        tasks = []
+                        for user_id in chunk:
+                            try:
+                                await bot_app.send_message(
+                                    chat_id=int(user_id),
+                                    text=message_text,
+                                    parse_mode="HTML",
+                                    disable_web_page_preview=True,
+                                    reply_markup=reply_markup
+                                )
+                                sent += 1
+                            except telegram.error.Forbidden:
+                                failed += 1
+                            except telegram.error.BadRequest:
+                                failed += 1
+                            except telegram.error.RetryAfter as e:
+                                # Ждем указанное время и повторяем
+                                await asyncio.sleep(int(getattr(e, 'retry_after', 1)))
+                                try:
+                                    await bot_app.send_message(
+                                        chat_id=int(user_id),
+                                        text=message_text,
+                                        parse_mode="HTML",
+                                        disable_web_page_preview=True,
+                                        reply_markup=reply_markup
+                                    )
+                                    sent += 1
+                                except Exception:
+                                    failed += 1
+                            except Exception as e:
+                                logger.error(f"Ошибка отправки сообщения пользователю {user_id}: {e}")
+                                failed += 1
+                        
+                        # Небольшая задержка между батчами для избежания rate limiting
+                        if i + batch < total:
+                            await asyncio.sleep(0.1)
+                    
+                    return {'sent': sent, 'failed': failed, 'total': total}
+                except Exception as e:
+                    logger.error(f"Ошибка в send_broadcast_async: {e}", exc_info=True)
+                    raise
+            
+            # Запускаем асинхронную функцию
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(send_broadcast_async())
+                return jsonify(result), 200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                }
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/broadcast: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     return app
 
 

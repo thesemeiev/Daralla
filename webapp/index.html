@@ -392,6 +392,7 @@
                         <button class="btn-primary" onclick="showPage('admin-subscriptions')" style="flex: 1; min-width: 120px;">Подписки</button>
                         <button class="btn-primary" onclick="showPage('admin-notifications')" style="flex: 1; min-width: 120px;">Уведомления</button>
                         <button class="btn-primary" onclick="showPage('admin-users')" style="flex: 1; min-width: 120px;">Пользователи</button>
+                        <button class="btn-primary" onclick="showPage('admin-broadcast')" style="flex: 1; min-width: 120px;">Рассылка</button>
                     </div>
                 </div>
             </div>
@@ -651,6 +652,62 @@
                 <div id="admin-users-list"></div>
                 
                 <div id="admin-users-pagination" class="pagination" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Раздел Рассылка -->
+        <div id="page-admin-broadcast" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1>Рассылка</h1>
+            </header>
+            
+            <div id="admin-broadcast-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p id="broadcast-loading-text">Загрузка...</p>
+            </div>
+            
+            <div id="admin-broadcast-error" class="error" style="display: none;">
+                <p id="broadcast-error-text">Ошибка</p>
+                <button onclick="loadBroadcastPage()">Повторить</button>
+            </div>
+            
+            <div id="admin-broadcast-content" style="padding: 24px;">
+                <div style="background: #2a2a2a; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                    <p style="color: #a0a0a0; font-size: 14px; margin: 0;">
+                        Получателей: <span id="broadcast-recipients-count" style="color: #f5f5f5; font-weight: 600;">-</span>
+                    </p>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <label for="broadcast-message" style="display: block; margin-bottom: 8px; color: #e0e0e0; font-size: 14px; font-weight: 500;">Текст сообщения:</label>
+                    <textarea 
+                        id="broadcast-message" 
+                        placeholder="Введите текст сообщения для рассылки..."
+                        style="width: 100%; min-height: 200px; padding: 12px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; color: #e0e0e0; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                    ></textarea>
+                    <p style="color: #8a8a8a; font-size: 12px; margin-top: 8px; margin-bottom: 0;">
+                        Поддерживается HTML разметка (жирный текст, ссылки и т.д.)
+                    </p>
+                </div>
+                
+                <button 
+                    id="broadcast-send-btn" 
+                    class="btn-primary" 
+                    onclick="sendBroadcast()" 
+                    style="width: 100%; padding: 12px; font-size: 16px; font-weight: 500;"
+                >
+                    Отправить рассылку
+                </button>
+                
+                <div id="broadcast-result" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
+                    <h3 style="color: #f5f5f5; font-size: 16px; margin-top: 0; margin-bottom: 12px;">Результат рассылки:</h3>
+                    <div style="color: #e0e0e0; font-size: 14px;">
+                        <p style="margin: 8px 0;">Отправлено: <span id="broadcast-sent-count" style="color: #7fcf7f; font-weight: 600;">0</span></p>
+                        <p style="margin: 8px 0;">Ошибок: <span id="broadcast-failed-count" style="color: #cf7f7f; font-weight: 600;">0</span></p>
+                        <p style="margin: 8px 0;">Всего получателей: <span id="broadcast-total-count" style="color: #f5f5f5; font-weight: 600;">0</span></p>
+                    </div>
+                </div>
             </div>
         </div>
 
