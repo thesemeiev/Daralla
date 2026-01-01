@@ -228,18 +228,18 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             f"{UIStyles.description('Имя будет отображаться в списке ваших подписок.')}"
         )
         
-            from ...utils import UIButtons
-            webapp_button = UIButtons.create_webapp_button(
-                action='subscriptions',
-                text="Мои подписки"
-            )
+        from ...utils import UIButtons
+        webapp_button = UIButtons.create_webapp_button(
+            action='subscriptions',
+            text="Мои подписки"
+        )
             
-            buttons = []
-            if webapp_button:
-                buttons.append([webapp_button])
-            buttons.append([NavigationBuilder.create_back_button()])
+        buttons = []
+        if webapp_button:
+            buttons.append([webapp_button])
+        buttons.append([NavigationBuilder.create_back_button()])
             
-            keyboard = InlineKeyboardMarkup(buttons)
+        keyboard = InlineKeyboardMarkup(buttons)
         
         await safe_edit_message_with_photo(
             context.bot,

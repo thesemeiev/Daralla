@@ -175,28 +175,22 @@ class UIMessages:
                 webapp_available = bool(getattr(bot_module, 'WEBAPP_URL', None))
         except (ImportError, AttributeError):
             pass
-        
-        terms_url = "https://teletype.in/@daralla/support"
-        warning_msg = "Используя данный сервис, вы соглашаетесь с <a href=\"" + terms_url + "\">условиями использования</a> и обязуетесь соблюдать законодательство РФ."
-        
         # Разный заголовок для нового и существующего пользователя
         if is_new_user:
             header_text = 'Добро пожаловать в Daralla VPN!'
         else:
-            header_text = 'С возвращением в Daralla VPN!'
+            header_text = 'Рады снова видеть вас в Daralla VPN!'
         
         message = (
             f"{UIStyles.header(header_text)}\n\n"
-            f"{UIStyles.description('Мультисерверный VPN-сервис с высокой скоростью и надежностью.')}\n\n"
+            f"{UIStyles.description('Быстрый и стабильный доступ к серверам по всему миру.')}\n\n"
         )
         
         if webapp_available:
             message += (
-                f"{UIStyles.info_message('💡 Рекомендуем использовать мини-приложение для удобного управления подписками, покупок и просмотра инструкций.')}\n\n"
+                f"{UIStyles.info_message('💡 Откройте мини-приложение, чтобы управлять подписками, продлевать и смотреть инструкции в пару нажатий.')}"
             )
-        
-        message += f"{UIStyles.warning_message(warning_msg)}"
-        
+
         return message
     
     @staticmethod
