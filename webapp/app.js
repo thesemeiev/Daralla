@@ -4368,7 +4368,8 @@ async function loadBroadcastPage() {
         }
         
         const statsData = await statsResponse.json();
-        const totalUsers = statsData.stats?.total_users || 0;
+        // Структура ответа: stats.users.total (как в loadAdminStats)
+        const totalUsers = statsData.stats?.users?.total || 0;
         
         // Показываем количество получателей (исключая админов, но показываем общее количество)
         recipientsCountEl.textContent = totalUsers;
