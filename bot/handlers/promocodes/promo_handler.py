@@ -342,10 +342,18 @@ async def apply_promo_purchase(update: Update, context: ContextTypes.DEFAULT_TYP
         f"<b>Наслаждайтесь!</b>"
     )
     
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-        [NavigationBuilder.create_back_button()]
-    ])
+    from ...utils import UIButtons
+    webapp_button = UIButtons.create_webapp_button(
+        action='subscriptions',
+        text="Мои подписки"
+    )
+    
+    buttons = []
+    if webapp_button:
+        buttons.append([webapp_button])
+    buttons.append([NavigationBuilder.create_back_button()])
+    
+    keyboard = InlineKeyboardMarkup(buttons)
     
     # Обновляем навигационный стек - добавляем состояние для сообщения о взломе
     from ...navigation import nav_manager, NavStates
@@ -475,10 +483,18 @@ async def apply_promo_extension(update: Update, context: ContextTypes.DEFAULT_TY
         f"<b>Наслаждайтесь!</b>"
     )
     
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-        [NavigationBuilder.create_back_button()]
-    ])
+    from ...utils import UIButtons
+    webapp_button = UIButtons.create_webapp_button(
+        action='subscriptions',
+        text="Мои подписки"
+    )
+    
+    buttons = []
+    if webapp_button:
+        buttons.append([webapp_button])
+    buttons.append([NavigationBuilder.create_back_button()])
+    
+    keyboard = InlineKeyboardMarkup(buttons)
     
     # Обновляем навигационный стек - добавляем состояние для сообщения о взломе
     from ...navigation import nav_manager, NavStates

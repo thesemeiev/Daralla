@@ -97,15 +97,10 @@ class UIButtons:
         # Добавляем кнопку мини-приложения, если доступна
         if webapp_url:
             from telegram import WebAppInfo
-            buttons.append([InlineKeyboardButton("📱 Открыть мини-приложение", web_app=WebAppInfo(url=webapp_url))])
+            buttons.append([InlineKeyboardButton("Открыть в приложении", web_app=WebAppInfo(url=webapp_url))])
         
-        # Оставляем старые кнопки для плавного перехода
-        buttons.extend([
-            [InlineKeyboardButton("Купить", callback_data=CallbackData.BUY_VPN)],
-            [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU), 
-             InlineKeyboardButton("Инструкция", callback_data=CallbackData.INSTRUCTION)],
-            [InlineKeyboardButton("Наш канал", url="https://t.me/DarallaNews")],
-        ])
+        # Кнопка канала
+        buttons.append([InlineKeyboardButton("Наш канал", url="https://t.me/DarallaNews")])
         
         if is_admin:
             buttons.append([InlineKeyboardButton("Админ-меню", callback_data=CallbackData.ADMIN_MENU)])

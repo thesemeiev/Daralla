@@ -242,13 +242,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     if webapp_button:
                         buttons.append([webapp_button])
                     
-                    # Оставляем старые кнопки для совместимости
-                    buttons.extend([
-                        [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-                        [NavigationBuilder.create_main_menu_button()]
-                    ])
-                    
-                    keyboard = InlineKeyboardMarkup(buttons)
+                    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                     await safe_edit_message_with_photo(
                         bot_app.bot,
                         chat_id=int(user_id),
@@ -325,13 +319,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     if webapp_button:
                         buttons.append([webapp_button])
                     
-                    # Оставляем старые кнопки для совместимости
-                    buttons.extend([
-                        [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-                        [NavigationBuilder.create_main_menu_button()]
-                    ])
-                    
-                    keyboard = InlineKeyboardMarkup(buttons)
+                    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                     
                     await safe_edit_message_with_photo(
                         bot_app.bot,
@@ -455,10 +443,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 if webapp_button:
                     buttons.append([webapp_button])
                 
-                # Оставляем старые кнопки для совместимости
-                buttons.append([NavigationBuilder.create_main_menu_button()])
-                
-                keyboard = InlineKeyboardMarkup(buttons)
+                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                 await safe_edit_message_with_photo(
                     bot_app.bot,
                     chat_id=int(user_id),
@@ -568,10 +553,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 if webapp_button:
                     buttons.append([webapp_button])
                 
-                # Оставляем старые кнопки для совместимости
-                buttons.append([NavigationBuilder.create_main_menu_button()])
-                
-                keyboard = InlineKeyboardMarkup(buttons)
+                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                 await safe_edit_message_with_photo(
                     bot_app.bot,
                     chat_id=int(user_id),
@@ -685,13 +667,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             if webapp_button:
                 buttons.append([webapp_button])
             
-            # Оставляем старые кнопки для совместимости
-            buttons.extend([
-                [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-                [NavigationBuilder.create_main_menu_button()]
-            ])
-            
-            keyboard = InlineKeyboardMarkup(buttons)
+            keyboard = InlineKeyboardMarkup(buttons) if buttons else None
             
             # Получаем message_id из мета-данных платежа
             payment_info = await get_payment_by_id(payment_id)
@@ -823,13 +799,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 if webapp_button:
                     buttons.append([webapp_button])
                 
-                # Оставляем старые кнопки для совместимости
-                buttons.extend([
-                    [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-                    [NavigationBuilder.create_main_menu_button()]
-                ])
-                
-                keyboard = InlineKeyboardMarkup(buttons)
+                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                 
                 menu_type = MenuTypes.SUBSCRIPTIONS_MENU
             else:
@@ -852,13 +822,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 if webapp_button:
                     buttons.append([webapp_button])
                 
-                # Оставляем старые кнопки для совместимости
-                buttons.extend([
-                    [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.BUY_VPN)],
-                    [NavigationBuilder.create_main_menu_button()]
-                ])
-                
-                keyboard = InlineKeyboardMarkup(buttons)
+                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                 
                 menu_type = MenuTypes.PAYMENT_FAILED
             

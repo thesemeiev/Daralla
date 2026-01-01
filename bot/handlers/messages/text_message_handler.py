@@ -116,9 +116,18 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                     f"{UIEmojis.ERROR} <b>Ошибка:</b> Подписка не найдена или не принадлежит вам!\n\n"
                     f"{UIStyles.description('Попробуйте выбрать подписку из списка.')}"
                 )
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-                ])
+                from ...utils import UIButtons
+                webapp_button = UIButtons.create_webapp_button(
+                    action='subscriptions',
+                    text="Назад к списку"
+                )
+                
+                if webapp_button:
+                    keyboard = InlineKeyboardMarkup([[webapp_button]])
+                else:
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+                    ])
                 await safe_edit_message_with_photo(
                     context.bot,
                     chat_id=chat_id,
@@ -151,9 +160,18 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                 f"{UIEmojis.ERROR} <b>Ошибка:</b> Имя подписки слишком длинное!\n\n"
                 f"{UIStyles.description('Максимум 50 символов. Попробуйте еще раз.')}"
             )
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-            ])
+            from ...utils import UIButtons
+            webapp_button = UIButtons.create_webapp_button(
+                action='subscriptions',
+                text="Отмена"
+            )
+            
+            if webapp_button:
+                keyboard = InlineKeyboardMarkup([[webapp_button]])
+            else:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+                ])
             await safe_edit_message_with_photo(
                 context.bot,
                 chat_id=chat_id,
@@ -171,9 +189,18 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
                 f"{UIEmojis.ERROR} <b>Ошибка:</b> Имя не может быть пустым!\n\n"
                 f"{UIStyles.description('Введите корректное имя для подписки.')}"
             )
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-            ])
+            from ...utils import UIButtons
+            webapp_button = UIButtons.create_webapp_button(
+                action='subscriptions',
+                text="Отмена"
+            )
+            
+            if webapp_button:
+                keyboard = InlineKeyboardMarkup([[webapp_button]])
+            else:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+                ])
             await safe_edit_message_with_photo(
                 context.bot,
                 chat_id=chat_id,
@@ -201,10 +228,18 @@ async def handle_rename_subscription(update: Update, context: ContextTypes.DEFAU
             f"{UIStyles.description('Имя будет отображаться в списке ваших подписок.')}"
         )
         
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Мои подписки", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
-            [NavigationBuilder.create_back_button()]
-        ])
+            from ...utils import UIButtons
+            webapp_button = UIButtons.create_webapp_button(
+                action='subscriptions',
+                text="Мои подписки"
+            )
+            
+            buttons = []
+            if webapp_button:
+                buttons.append([webapp_button])
+            buttons.append([NavigationBuilder.create_back_button()])
+            
+            keyboard = InlineKeyboardMarkup(buttons)
         
         await safe_edit_message_with_photo(
             context.bot,

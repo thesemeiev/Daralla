@@ -99,11 +99,21 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
             f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент.')}"
         )
         
+        from ...utils import UIButtons
+        webapp_button = UIButtons.create_webapp_button(
+            action='subscriptions',
+            text="Назад к списку"
+        )
+        
         keyboard_buttons = [
             [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")],
-            [InlineKeyboardButton(f"{UIEmojis.EDIT} Переименовать", callback_data=f"{CallbackData.RENAME_SUB}{sub['id']}")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
+            [InlineKeyboardButton(f"{UIEmojis.EDIT} Переименовать", callback_data=f"{CallbackData.RENAME_SUB}{sub['id']}")]
         ]
+        
+        if webapp_button:
+            keyboard_buttons.append([webapp_button])
+        else:
+            keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.SUBSCRIPTIONS_MENU)])
     else:
         subscription_message = (
             f"{UIStyles.header(f'Подписка: {sub_name}')}\n\n"
@@ -115,10 +125,20 @@ async def show_subscription_details(message, sub: dict, subscription_manager, up
             f"{UIStyles.description('Ваша подписка истекла. Продлите её для продолжения использования.')}"
         )
         
+        from ...utils import UIButtons
+        webapp_button = UIButtons.create_webapp_button(
+            action='subscriptions',
+            text="Назад к списку"
+        )
+        
         keyboard_buttons = [
-            [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")],
-            [InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.SUBSCRIPTIONS_MENU)],
+            [InlineKeyboardButton("Продлить подписку", callback_data=f"{CallbackData.EXTEND_SUB}{sub['id']}")]
         ]
+        
+        if webapp_button:
+            keyboard_buttons.append([webapp_button])
+        else:
+            keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.BACK} Назад к списку", callback_data=CallbackData.SUBSCRIPTIONS_MENU)])
     
     keyboard = InlineKeyboardMarkup(keyboard_buttons)
     
@@ -212,9 +232,18 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 f"{UIEmojis.ERROR} <b>Ошибка:</b> Подписка не найдена или не принадлежит вам!\n\n"
                                 f"{UIStyles.description('Попробуйте выбрать подписку из списка.')}"
                             )
-                            keyboard = InlineKeyboardMarkup([
-                                [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-                            ])
+                            from ...utils import UIButtons
+                            webapp_back_button = UIButtons.create_webapp_button(
+                                action='subscriptions',
+                                text="Назад"
+                            )
+                            
+                            if webapp_back_button:
+                                keyboard = InlineKeyboardMarkup([[webapp_back_button]])
+                            else:
+                                keyboard = InlineKeyboardMarkup([
+                                    [InlineKeyboardButton(f"{UIEmojis.BACK} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+                                ])
                             if update.callback_query:
                                 await safe_edit_message_with_photo(
                                     context.bot,
@@ -239,9 +268,18 @@ async def mykey(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"{UIStyles.header('Переименование подписки')}\n\n"
                             f"{UIStyles.description('Введите новое имя для подписки (максимум 50 символов):')}"
                         )
-                        keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-                        ])
+                        from ...utils import UIButtons
+                        webapp_cancel_button = UIButtons.create_webapp_button(
+                            action='subscriptions',
+                            text="Отмена"
+                        )
+                        
+                        if webapp_cancel_button:
+                            keyboard = InlineKeyboardMarkup([[webapp_cancel_button]])
+                        else:
+                            keyboard = InlineKeyboardMarkup([
+                                [InlineKeyboardButton(f"{UIEmojis.BACK} Отмена", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+                            ])
                         if update.callback_query:
                             await safe_edit_message_with_photo(
                                 context.bot,

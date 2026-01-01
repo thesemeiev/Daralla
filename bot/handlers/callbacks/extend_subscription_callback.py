@@ -132,12 +132,24 @@ async def extend_subscription_callback(update: Update, context: ContextTypes.DEF
     logger.info(f"Запрос на продление подписки: user_id={user_id}, subscription_id={subscription_id}")
     
     # Показываем меню выбора периода продления
-    keyboard = InlineKeyboardMarkup([
+    from ...utils import UIButtons
+    webapp_button = UIButtons.create_webapp_button(
+        action='subscriptions',
+        text="Назад к списку"
+    )
+    
+    keyboard_buttons = [
         [InlineKeyboardButton("1 месяц - 150₽", callback_data=f"{CallbackData.EXT_SUB_PER}month:{subscription_id}")],
         [InlineKeyboardButton("3 месяца - 350₽", callback_data=f"{CallbackData.EXT_SUB_PER}3month:{subscription_id}")],
-        [InlineKeyboardButton("Промокод", callback_data=f"{CallbackData.PROMO_EXTEND}:{subscription_id}")],
-        [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-    ])
+        [InlineKeyboardButton("Промокод", callback_data=f"{CallbackData.PROMO_EXTEND}:{subscription_id}")]
+    ]
+    
+    if webapp_button:
+        keyboard_buttons.append([webapp_button])
+    else:
+        keyboard_buttons.append([InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)])
+    
+    keyboard = InlineKeyboardMarkup(keyboard_buttons)
     
     # Получаем количество серверов подписки
     from ...db.subscribers_db import get_subscription_servers
@@ -251,9 +263,18 @@ async def extend_subscription_period_callback(update: Update, context: ContextTy
         
     except Exception as e:
         logger.error(f"Ошибка создания платежа для продления подписки: {e}")
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
-        ])
+        from ...utils import UIButtons
+        webapp_button = UIButtons.create_webapp_button(
+            action='subscriptions',
+            text="Назад к списку"
+        )
+        
+        if webapp_button:
+            keyboard = InlineKeyboardMarkup([[webapp_button]])
+        else:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"{UIEmojis.PREV} Назад", callback_data=CallbackData.SUBSCRIPTIONS_MENU)]
+            ])
         await safe_edit_or_reply_universal(
             query.message,
             "Ошибка при создании платежа. Попробуйте позже.",
