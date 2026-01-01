@@ -1315,6 +1315,11 @@ h1 {
     color: #ffd76a;
 }
 
+.broadcast-empty-state {
+    font-size: 14px;
+    color: #a0a0a0;
+}
+
 .pagination {
     display: flex;
     justify-content: center;

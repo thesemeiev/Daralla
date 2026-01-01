@@ -4335,7 +4335,8 @@ function changeConversionSubscriptionsPeriod() {
 let broadcastSelectedUsers = []; // Массив выбранных user_id
 let broadcastUserSearchTimeout = null;
 let broadcastSendMode = 'all'; // 'all' | 'selected'
-let broadcastLastSearchResults = []; // Последняя выдача поиска (для выделить все)
+let broadcastCurrentQuery = '';
+let broadcastCurrentResults = []; // Последняя выдача API (объекты users)
 let broadcastTotalUsers = 0; // Общее число пользователей из статистики
 
 // Загрузка страницы рассылки
@@ -4381,7 +4382,8 @@ async function loadBroadcastPage() {
         
         // Сбрасываем выбор пользователей при загрузке страницы
         broadcastSelectedUsers = [];
-        broadcastLastSearchResults = [];
+        broadcastCurrentQuery = '';
+        broadcastCurrentResults = [];
         
         // Инициализируем режим отправки
         const modeAll = document.getElementById('broadcast-mode-all');
@@ -4414,18 +4416,20 @@ function setBroadcastMode(mode) {
     broadcastSendMode = mode;
     const selectionDiv = document.getElementById('broadcast-user-selection');
     const hintEl = document.getElementById('broadcast-mode-hint');
+    const searchInput = document.getElementById('broadcast-user-search');
     
     if (mode === 'selected') {
         if (selectionDiv) selectionDiv.style.display = 'block';
         if (hintEl) hintEl.textContent = 'Отправка только выбранным пользователям';
-        // Загружаем список при первом входе
-        if (document.getElementById('broadcast-users-list').innerHTML === '') {
-            searchUsersForBroadcast();
-        }
+        // В режиме выбранных по умолчанию показываем пустой state до ввода поиска
+        broadcastCurrentQuery = (searchInput?.value || '').trim();
+        renderBroadcastUserResults();
     } else {
         if (selectionDiv) selectionDiv.style.display = 'none';
         broadcastSelectedUsers = [];
-        broadcastLastSearchResults = [];
+        broadcastCurrentQuery = '';
+        broadcastCurrentResults = [];
+        if (searchInput) searchInput.value = '';
         if (hintEl) hintEl.textContent = 'Отправка всем пользователям';
     }
     
@@ -4434,13 +4438,74 @@ function setBroadcastMode(mode) {
     updateSendButtonState();
 }
 
+function renderBroadcastUserResults() {
+    const listEl = document.getElementById('broadcast-users-list');
+    if (!listEl) return;
+    
+    const query = (broadcastCurrentQuery || '').trim();
+    if (!query) {
+        listEl.innerHTML = '<div class="broadcast-empty-state" style="padding: 16px; text-align: center; color: #a0a0a0;">Введите ID для поиска</div>';
+        return;
+    }
+    
+    // Фильтруем: выбранные показываем только в чипах
+    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
+    if (usersToShow.length === 0) {
+        listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Нет результатов</div>';
+        return;
+    }
+    
+    listEl.innerHTML = '';
+    const qLower = query.toLowerCase();
+    
+    usersToShow.forEach(user => {
+        const userCard = document.createElement('div');
+        userCard.style.cssText = 'padding: 12px; border-bottom: 1px solid #3a3a3a; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
+        userCard.style.background = 'transparent';
+        
+        userCard.onclick = () => toggleUserForBroadcast(user.user_id);
+        
+        // В этой модели чекбокс можно убрать, но оставляем как визуальный affordance (всегда unchecked)
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = false;
+        checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
+        checkbox.onclick = (e) => {
+            e.stopPropagation();
+            toggleUserForBroadcast(user.user_id);
+        };
+        
+        const userInfo = document.createElement('div');
+        userInfo.style.cssText = 'flex: 1;';
+        
+        const idLine = highlightMatchRaw(`ID: ${String(user.user_id)}`, qLower);
+        const subsText = `Подписок: ${user.subscriptions_count || 0}`;
+        userInfo.innerHTML = `
+            <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${idLine}</div>
+            <div style="color: #a0a0a0; font-size: 12px;">${escapeHtml(subsText)}</div>
+        `;
+        
+        userCard.appendChild(checkbox);
+        userCard.appendChild(userInfo);
+        listEl.appendChild(userCard);
+    });
+}
+
 // Поиск пользователей для рассылки
 async function searchUsersForBroadcast() {
     clearTimeout(broadcastUserSearchTimeout);
     const searchInput = document.getElementById('broadcast-user-search');
-    const search = searchInput.value.trim();
+    const search = (searchInput?.value || '').trim();
     const listEl = document.getElementById('broadcast-users-list');
-    const query = search.toLowerCase();
+    
+    broadcastCurrentQuery = search;
+    
+    // Пустой поиск — не дергаем API, показываем подсказку
+    if (!search) {
+        broadcastCurrentResults = [];
+        renderBroadcastUserResults();
+        return;
+    }
     
     broadcastUserSearchTimeout = setTimeout(async () => {
         try {
@@ -4476,39 +4541,8 @@ async function searchUsersForBroadcast() {
                 return;
             }
             
-            broadcastLastSearchResults = data.users.map(u => u.user_id);
-            listEl.innerHTML = '';
-            data.users.forEach(user => {
-                const isSelected = broadcastSelectedUsers.includes(user.user_id);
-                const userCard = document.createElement('div');
-                userCard.style.cssText = 'padding: 12px; border-bottom: 1px solid #3a3a3a; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
-                userCard.style.background = isSelected ? '#2a3a2a' : 'transparent';
-                
-                userCard.onclick = () => toggleUserForBroadcast(user.user_id);
-                
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = isSelected;
-                checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
-                checkbox.onclick = (e) => {
-                    e.stopPropagation();
-                    toggleUserForBroadcast(user.user_id);
-                };
-                
-                const userInfo = document.createElement('div');
-                userInfo.style.cssText = 'flex: 1;';
-                
-                const highlightedId = highlightMatch(`ID: ${escapeHtml(user.user_id)}`, query);
-                const subsText = `Подписок: ${user.subscriptions_count || 0}`;
-                userInfo.innerHTML = `
-                    <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${highlightedId}</div>
-                    <div style="color: #a0a0a0; font-size: 12px;">${subsText}</div>
-                `;
-                
-                userCard.appendChild(checkbox);
-                userCard.appendChild(userInfo);
-                listEl.appendChild(userCard);
-            });
+            broadcastCurrentResults = data.users;
+            renderBroadcastUserResults();
             
         } catch (error) {
             console.error('Ошибка поиска пользователей:', error);
@@ -4520,17 +4554,17 @@ async function searchUsersForBroadcast() {
 // Переключение выбора пользователя
 function toggleUserForBroadcast(userId) {
     const index = broadcastSelectedUsers.indexOf(userId);
-    if (index > -1) {
-        broadcastSelectedUsers.splice(index, 1);
-    } else {
+    if (index === -1) {
         broadcastSelectedUsers.push(userId);
+    } else {
+        // В текущей UX модели повторный клик в выдаче не должен случаться, т.к. выбранный исчезает.
+        broadcastSelectedUsers.splice(index, 1);
     }
     
-    // Обновляем отображение списка
-    searchUsersForBroadcast();
     updateSelectedCount();
     updateBroadcastRecipientsCount();
     updateSendButtonState();
+    renderBroadcastUserResults();
 }
 
 // Очистить выбор пользователей
@@ -4539,11 +4573,7 @@ function clearUserSelection() {
     updateSelectedCount();
     updateBroadcastRecipientsCount();
     updateSendButtonState();
-    // Обновляем отображение списка
-    const searchInput = document.getElementById('broadcast-user-search');
-    if (searchInput) {
-        searchUsersForBroadcast();
-    }
+    renderBroadcastUserResults();
 }
 
 // Обновить счетчик выбранных пользователей
@@ -4611,32 +4641,30 @@ function removeUserFromSelection(userId) {
         updateSelectedCount();
         updateBroadcastRecipientsCount();
         updateSendButtonState();
-        searchUsersForBroadcast();
+        renderBroadcastUserResults();
     }
 }
 
 // Выбрать все в текущей выдаче
 function selectAllBroadcastResults() {
-    if (!broadcastLastSearchResults || broadcastLastSearchResults.length === 0) return;
-    broadcastLastSearchResults.forEach((userId) => {
-        if (!broadcastSelectedUsers.includes(userId)) {
-            broadcastSelectedUsers.push(userId);
-        }
-    });
+    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
+    if (!usersToShow.length) return;
+    usersToShow.forEach((u) => broadcastSelectedUsers.push(u.user_id));
     updateSelectedCount();
     updateBroadcastRecipientsCount();
     updateSendButtonState();
-    searchUsersForBroadcast();
+    renderBroadcastUserResults();
 }
 
-// Подсветка совпадений
-function highlightMatch(text, query) {
-    if (!query) return text;
-    const idx = text.toLowerCase().indexOf(query);
-    if (idx === -1) return text;
+// Подсветка совпадений для сырого текста
+function highlightMatchRaw(text, queryLower) {
+    if (!queryLower) return escapeHtml(text);
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(queryLower);
+    if (idx === -1) return escapeHtml(text);
     const before = text.slice(0, idx);
-    const match = text.slice(idx, idx + query.length);
-    const after = text.slice(idx + query.length);
+    const match = text.slice(idx, idx + queryLower.length);
+    const after = text.slice(idx + queryLower.length);
     return `${escapeHtml(before)}<span class="highlight-match">${escapeHtml(match)}</span>${escapeHtml(after)}`;
 }
 
