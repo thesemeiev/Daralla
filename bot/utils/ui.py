@@ -189,7 +189,7 @@ class UIMessages:
     """Шаблоны сообщений"""
     
     @staticmethod
-    def welcome_message():
+    def welcome_message(is_new_user=False):
         """Приветственное сообщение"""
         # Проверяем, доступно ли мини-приложение
         webapp_available = False
@@ -204,8 +204,14 @@ class UIMessages:
         terms_url = "https://teletype.in/@daralla/support"
         warning_msg = "Используя данный сервис, вы соглашаетесь с <a href=\"" + terms_url + "\">условиями использования</a> и обязуетесь соблюдать законодательство РФ."
         
+        # Разный заголовок для нового и существующего пользователя
+        if is_new_user:
+            header_text = 'Добро пожаловать в Daralla VPN!'
+        else:
+            header_text = 'С возвращением в Daralla VPN!'
+        
         message = (
-            f"{UIStyles.header('Добро пожаловать в Daralla VPN!')}\n\n"
+            f"{UIStyles.header(header_text)}\n\n"
             f"{UIStyles.description('Мультисерверный VPN-сервис с высокой скоростью и надежностью.')}\n\n"
         )
         

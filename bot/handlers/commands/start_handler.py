@@ -167,8 +167,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Register user failed: {e}", exc_info=True)
     
-    # Формируем приветственное сообщение
-    welcome_text = UIMessages.welcome_message()
+    # Формируем приветственное сообщение (передаем информацию о том, новый ли пользователь)
+    welcome_text = UIMessages.welcome_message(is_new_user=not was_known_user)
     
     # Если создана пробная подписка - добавляем информацию о ней
     if trial_created:
@@ -205,8 +205,8 @@ async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
     keyboard = InlineKeyboardMarkup(buttons)
     
-    # Используем единый стиль для приветственного сообщения
-    welcome_text = UIMessages.welcome_message()
+    # Используем единый стиль для приветственного сообщения (для существующего пользователя)
+    welcome_text = UIMessages.welcome_message(is_new_user=False)
     
     # Если это callback_query, используем safe_edit_message_with_photo для редактирования
     if update.callback_query:

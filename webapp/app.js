@@ -2341,8 +2341,8 @@ function showDeleteUserConfirm(userId) {
                         <strong style="color: #ff6b6b;">Это действие нельзя отменить!</strong>
                     </p>
                     <div style="display: flex; gap: 12px; margin-top: 24px;">
-                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1;">Отмена</button>
-                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer;">Удалить</button>
+                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500;">Отмена</button>
+                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Удалить</button>
                     </div>
                 </div>
             </div>
@@ -4770,44 +4770,55 @@ function moveNavIndicator(index) {
     
     if (!indicator || !navItems[index] || !nav) return;
     
-    // Используем requestAnimationFrame для более точного расчета после рендеринга
+    // Используем двойной requestAnimationFrame для гарантии полного рендеринга всех элементов
     requestAnimationFrame(() => {
-        // Получаем позицию конкретной иконки
-        const targetItem = navItems[index];
-        const navRect = nav.getBoundingClientRect();
-        const itemRect = targetItem.getBoundingClientRect();
-        
-        // Вычисляем позицию относительно навбара с отступом от краев
-        const indicatorPadding = 8; // Отступ от краев островка
-        const itemCenterX = itemRect.left - navRect.left + itemRect.width / 2;
-        const itemWidth = itemRect.width;
-        
-        // Вычисляем позицию так, чтобы индикатор был центрирован относительно кнопки
-        const indicatorWidth = itemWidth - (indicatorPadding * 2);
-        let leftPosition = itemCenterX - indicatorWidth / 2;
-        
-        // Проверка границ: индикатор не должен выходить за пределы навбара
-        const navWidth = nav.offsetWidth;
-        const minLeft = indicatorPadding;
-        const maxLeft = navWidth - indicatorWidth - indicatorPadding;
-        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, leftPosition));
-        
-        // Устанавливаем ширину равной ширине иконки минус отступы
-        indicator.style.width = `${indicatorWidth}px`;
-        
-        // Устанавливаем CSS переменную для адаптации
-        const itemWidthPercent = (100 / navItems.length);
-        indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
-        
-        // Добавляем класс для анимации масштабирования и устанавливаем transform
-        indicator.classList.add('moving');
-        indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%) scale(1.05)`;
-        
-        // Убираем класс после завершения анимации и возвращаем нормальный масштаб
-        setTimeout(() => {
-            indicator.classList.remove('moving');
-            indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%)`;
-        }, 200);
+        requestAnimationFrame(() => {
+            // Получаем позицию конкретной иконки
+            const targetItem = navItems[index];
+            const navRect = nav.getBoundingClientRect();
+            const navWidth = nav.offsetWidth;
+            const itemRect = targetItem.getBoundingClientRect();
+            
+            // Вычисляем позицию относительно навбара с отступом от краев
+            const indicatorPadding = 8; // Отступ от краев островка
+            const itemCenterX = itemRect.left - navRect.left + itemRect.width / 2;
+            const itemWidth = itemRect.width;
+            
+            // Вычисляем позицию так, чтобы индикатор был центрирован относительно кнопки
+            const indicatorWidth = itemWidth - (indicatorPadding * 2);
+            let leftPosition = itemCenterX - indicatorWidth / 2;
+            
+            // Проверка границ: индикатор не должен выходить за пределы навбара
+            const minLeft = indicatorPadding;
+            const maxLeft = navWidth - indicatorWidth - indicatorPadding;
+            let clampedLeft = Math.max(minLeft, Math.min(maxLeft, leftPosition));
+            
+            // Дополнительная проверка: убеждаемся, что индикатор не выходит за границы
+            // с учетом возможных погрешностей округления
+            if (clampedLeft < indicatorPadding) {
+                clampedLeft = indicatorPadding;
+            }
+            if (clampedLeft + indicatorWidth > navWidth - indicatorPadding) {
+                clampedLeft = navWidth - indicatorWidth - indicatorPadding;
+            }
+            
+            // Устанавливаем ширину равной ширине иконки минус отступы
+            indicator.style.width = `${indicatorWidth}px`;
+            
+            // Устанавливаем CSS переменную для адаптации
+            const itemWidthPercent = (100 / navItems.length);
+            indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
+            
+            // Добавляем класс для анимации масштабирования и устанавливаем transform
+            indicator.classList.add('moving');
+            indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%) scale(1.05)`;
+            
+            // Убираем класс после завершения анимации и возвращаем нормальный масштаб
+            setTimeout(() => {
+                indicator.classList.remove('moving');
+                indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%)`;
+            }, 200);
+        });
     });
 }
 
