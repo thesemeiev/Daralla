@@ -123,66 +123,46 @@ class UIButtons:
         return InlineKeyboardButton(f"{UIEmojis.REFRESH} Обновить", callback_data=callback_data)
     
     @staticmethod
-    def create_webapp_button(action=None, params=None, text="📱 Открыть в приложении"):
+    def create_webapp_button(action=None, params=None, text="Открыть в приложении"):
         """
-        Создает кнопку для открытия мини-приложения через deep link.
+        Создает кнопку для открытия мини-приложения.
         
         Args:
             action: Действие (например, 'extend_subscription', 'subscription', 'subscriptions')
             params: Параметры для действия (например, subscription_id)
-            text: Текст кнопки
+            text: Текст кнопки (без эмодзи)
         
         Returns:
             InlineKeyboardButton или None, если WEBAPP_URL недоступен
         """
         # Получаем WEBAPP_URL из bot.py
         webapp_url = None
-        bot_username = None
-        
         try:
             import sys
             bot_module = sys.modules.get('bot.bot')
             if bot_module:
                 webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-                # Получаем bot username для fallback
-                try:
-                    bot_instance = getattr(bot_module, 'app', None)
-                    if bot_instance and hasattr(bot_instance, 'bot'):
-                        bot_info = bot_instance.bot.get_me()
-                        if bot_info:
-                            bot_username = bot_info.username
-                except:
-                    pass
         except (ImportError, AttributeError):
             pass
         
-        if not webapp_url and not bot_username:
+        if not webapp_url:
             return None
         
-        # Формируем deep link
-        if action:
-            if params:
-                startapp = f"{action}_{params}"
-            else:
-                startapp = action
+        # Если нужны параметры, добавляем их как query параметры
+        if action or params:
+            from urllib.parse import urlencode
+            query_params = {}
+            if action:
+                if params:
+                    query_params['startapp'] = f"{action}_{params}"
+                else:
+                    query_params['startapp'] = action
+            url_with_params = f"{webapp_url}?{urlencode(query_params)}"
         else:
-            startapp = None
+            url_with_params = webapp_url
         
-        if webapp_url:
-            if startapp:
-                deep_link = f"{webapp_url}?startapp={startapp}"
-            else:
-                deep_link = webapp_url
-        elif bot_username:
-            if startapp:
-                deep_link = f"https://t.me/{bot_username}/webapp?startapp={startapp}"
-            else:
-                deep_link = f"https://t.me/{bot_username}/webapp"
-        else:
-            return None
-        
-        from telegram import InlineKeyboardButton
-        return InlineKeyboardButton(text, url=deep_link)
+        from telegram import InlineKeyboardButton, WebAppInfo
+        return InlineKeyboardButton(text, web_app=WebAppInfo(url=url_with_params))
 
 
 class UIMessages:

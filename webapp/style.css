@@ -489,6 +489,10 @@ h1 {
 
 /* Медиа-запросы для блюра: меньше на мобильных, больше на десктопе */
 @media (max-width: 768px) {
+    body {
+        padding-bottom: calc(200px + env(safe-area-inset-bottom));
+    }
+    
     .bottom-nav {
         backdrop-filter: blur(30px) saturate(200%);
         -webkit-backdrop-filter: blur(30px) saturate(200%);
@@ -897,7 +901,7 @@ h1 {
 
 @media (max-width: 480px) {
     body {
-        padding: 16px 12px 80px 12px;
+        padding: 16px 12px calc(200px + env(safe-area-inset-bottom)) 12px;
     }
     
     h1 {

@@ -192,11 +192,12 @@ class NotificationManager:
             
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
             
-            # Создаем кнопку для открытия мини-приложения через deep link
+            # Создаем кнопку для открытия мини-приложения
             from ..utils import UIButtons
             webapp_button = UIButtons.create_webapp_button(
                 action='extend_subscription',
-                params=subscription_id
+                params=subscription_id,
+                text="Открыть в приложении"
             )
             
             # Создаем клавиатуру только с deep link кнопкой

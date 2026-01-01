@@ -3049,7 +3049,7 @@ def create_webhook_app(bot_app):
                     
                     # Создаем кнопку для открытия мини-приложения
                     from ...utils import UIButtons
-                    webapp_button = UIButtons.create_webapp_button()
+                    webapp_button = UIButtons.create_webapp_button(text="Открыть в приложении")
                     reply_markup = None
                     if webapp_button:
                         from telegram import InlineKeyboardMarkup
