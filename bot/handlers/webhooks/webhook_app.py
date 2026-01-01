@@ -2956,8 +2956,13 @@ def create_webhook_app(bot_app):
                 total_purchased = types_stats.get('purchased_active', 0)
                 total_active = types_stats.get('total_active', 0)
                 
-                # Находим пользователей с пробными, которые потом купили
-                conversion_rate = conversion_data.get('conversion_rate', 0.0)
+                # Конверсия = отношение активных купленных к активным пробным
+                # Если есть пробные подписки, считаем процент купленных от пробных
+                if total_trial > 0:
+                    conversion_rate = (total_purchased / total_trial) * 100
+                else:
+                    # Если пробных нет, используем данные из conversion_data (историческая конверсия)
+                    conversion_rate = conversion_data.get('conversion_rate', 0.0)
                 
                 result = {
                     'success': True,

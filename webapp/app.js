@@ -22,6 +22,11 @@ let serverLoadChartInterval = null;
 
 // Функция переключения страниц
 function showPage(pageName) {
+    // Сбрасываем скролл наверх при переключении страниц
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    
     // Показываем нижний навбар только на главных разделах
     const bottomNav = document.querySelector('.bottom-nav');
     const isMainSectionPage = (
@@ -107,6 +112,11 @@ let currentSubscriptionDetail = null;
 
 // Функция показа детальной информации о подписке
 function showSubscriptionDetail(sub) {
+    // Сбрасываем скролл наверх перед открытием деталей
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    
     const pageEl = document.getElementById('page-subscription-detail');
     const nameEl = document.getElementById('detail-subscription-name');
     const contentEl = document.getElementById('subscription-detail-content');
@@ -4205,7 +4215,8 @@ async function loadSubscriptionDynamicsChart(dynamicsData) {
                         borderColor: 'rgb(255, 206, 86)',
                         backgroundColor: 'rgba(255, 206, 86, 0.2)',
                         tension: 0.1,
-                        fill: true
+                        fill: false,
+                        borderWidth: 2
                     },
                     {
                         label: 'Купленные (активные)',
@@ -4213,7 +4224,28 @@ async function loadSubscriptionDynamicsChart(dynamicsData) {
                         borderColor: 'rgb(75, 192, 192)',
                         backgroundColor: 'rgba(75, 192, 192, 0.2)',
                         tension: 0.1,
-                        fill: true
+                        fill: false,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Пробные (созданные)',
+                        data: dynamicsData.map(item => item.trial_created || 0),
+                        borderColor: 'rgba(255, 206, 86, 0.5)',
+                        backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                        tension: 0.1,
+                        fill: false,
+                        borderWidth: 1,
+                        borderDash: [5, 5]
+                    },
+                    {
+                        label: 'Купленные (созданные)',
+                        data: dynamicsData.map(item => item.purchased_created || 0),
+                        borderColor: 'rgba(75, 192, 192, 0.5)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        tension: 0.1,
+                        fill: false,
+                        borderWidth: 1,
+                        borderDash: [5, 5]
                     }
                 ]
             },
@@ -4278,28 +4310,75 @@ async function loadSubscriptionConversionChart(conversionData) {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Процент конверсии (%)',
+                        label: 'Конверсия (%)',
                         data: daily.map(item => item.conversion_rate || 0),
                         borderColor: 'rgb(153, 102, 255)',
                         backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                        tension: 0.1,
-                        fill: true
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Пробных пользователей',
+                        data: daily.map(item => item.trial_users || 0),
+                        type: 'bar',
+                        backgroundColor: 'rgba(255, 206, 86, 0.5)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Конвертировалось',
+                        data: daily.map(item => item.converted || 0),
+                        type: 'bar',
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
                     }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
                 plugins: {
                     legend: {
-                        position: 'top',
+                        position: 'bottom',
+                        align: 'start',
                         labels: {
-                            color: '#fff'
+                            color: '#fff',
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const index = context.dataIndex;
+                                const item = daily[index];
+                                if (context.datasetIndex === 0) {
+                                    return `Пробных: ${item.trial_users || 0}, Конвертировалось: ${item.converted || 0}`;
+                                }
+                                return '';
+                            }
                         }
                     }
                 },
                 scales: {
                     y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
                         beginAtZero: true,
                         max: 100,
                         ticks: {
@@ -4309,7 +4388,31 @@ async function loadSubscriptionConversionChart(conversionData) {
                             }
                         },
                         grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
+                            color: 'rgba(255, 255, 255, 0.1)',
+                            drawOnChartArea: true
+                        },
+                        title: {
+                            display: true,
+                            text: 'Конверсия (%)',
+                            color: 'rgb(153, 102, 255)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawOnChartArea: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Количество пользователей',
+                            color: 'rgb(255, 206, 86)'
                         }
                     },
                     x: {

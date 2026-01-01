@@ -964,22 +964,26 @@ async def get_subscription_types_statistics():
             row = await cur.fetchone()
             purchased_active = row['count'] if row else 0
         
-        # Активные подписки на 1 месяц
+        # Активные купленные подписки на 1 месяц (исключаем пробные)
         async with db.execute("""
             SELECT COUNT(*) as count 
             FROM subscriptions 
             WHERE status = 'active' 
             AND period = 'month'
+            AND price > 0
+            AND status != 'trial'
         """) as cur:
             row = await cur.fetchone()
             month_active = row['count'] if row else 0
         
-        # Активные подписки на 3 месяца
+        # Активные купленные подписки на 3 месяца (исключаем пробные)
         async with db.execute("""
             SELECT COUNT(*) as count 
             FROM subscriptions 
             WHERE status = 'active' 
             AND period = '3month'
+            AND price > 0
+            AND status != 'trial'
         """) as cur:
             row = await cur.fetchone()
             month3_active = row['count'] if row else 0
@@ -1026,54 +1030,19 @@ async def get_subscription_dynamics_data(days: int = 30):
         now = int(datetime.datetime.now().timestamp())
         start_timestamp = now - (days * 24 * 60 * 60)
         
-        # Получаем все подписки, созданные или активные в период
+        # Получаем все подписки, которые могут быть релевантны для периода
         async with db.execute("""
             SELECT 
                 created_at,
-                DATE(datetime(created_at, 'unixepoch')) as date,
+                expires_at,
                 status,
-                price,
-                period,
-                expires_at
+                price
             FROM subscriptions
             WHERE created_at >= ? OR expires_at >= ?
-            ORDER BY created_at
         """, (start_timestamp, start_timestamp)) as cur:
             rows = await cur.fetchall()
         
-        # Группируем по датам
-        daily_data = {}
-        
-        for row in rows:
-            date_str = row['date']
-            if date_str not in daily_data:
-                daily_data[date_str] = {
-                    'trial_active': 0,
-                    'purchased_active': 0,
-                    'trial_created': 0,
-                    'purchased_created': 0
-                }
-            
-            # Определяем тип подписки
-            is_trial = row['status'] == 'trial' or row['price'] == 0
-            is_active = row['status'] == 'active'
-            created_timestamp = row['created_at']
-            
-            # Если подписка была создана в этот день
-            if created_timestamp >= start_timestamp:
-                if is_trial:
-                    daily_data[date_str]['trial_created'] += 1
-                else:
-                    daily_data[date_str]['purchased_created'] += 1
-            
-            # Если подписка активна в этот день
-            if is_active:
-                if is_trial:
-                    daily_data[date_str]['trial_active'] += 1
-                else:
-                    daily_data[date_str]['purchased_active'] += 1
-        
-        # Преобразуем в список и заполняем пропущенные даты
+        # Инициализируем результат для всех дат в периоде
         result = []
         start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
         end_date = datetime.datetime.now().date()
@@ -1081,19 +1050,45 @@ async def get_subscription_dynamics_data(days: int = 30):
         current_date = start_date
         while current_date <= end_date:
             date_str = current_date.strftime('%Y-%m-%d')
-            if date_str in daily_data:
-                result.append({
-                    'date': date_str,
-                    **daily_data[date_str]
-                })
-            else:
-                result.append({
-                    'date': date_str,
-                    'trial_active': 0,
-                    'purchased_active': 0,
-                    'trial_created': 0,
-                    'purchased_created': 0
-                })
+            date_timestamp = int(datetime.datetime.combine(current_date, datetime.time.min).timestamp())
+            next_date_timestamp = date_timestamp + 86400
+            
+            daily_stats = {
+                'date': date_str,
+                'trial_active': 0,
+                'purchased_active': 0,
+                'trial_created': 0,
+                'purchased_created': 0
+            }
+            
+            # Проверяем каждую подписку для этой даты
+            for row in rows:
+                created_at = row['created_at']
+                expires_at = row['expires_at']
+                status = row['status']
+                price = row['price']
+                
+                # Определяем тип подписки
+                is_trial = status == 'trial' or price == 0
+                
+                # Проверяем, была ли подписка создана в этот день
+                if date_timestamp <= created_at < next_date_timestamp:
+                    if is_trial:
+                        daily_stats['trial_created'] += 1
+                    else:
+                        daily_stats['purchased_created'] += 1
+                
+                # Проверяем, была ли подписка активна в этот день
+                # Подписка активна, если: создана до или в этот день И истекает после этого дня И статус active
+                if (created_at < next_date_timestamp and 
+                    expires_at >= date_timestamp and 
+                    status == 'active'):
+                    if is_trial:
+                        daily_stats['trial_active'] += 1
+                    else:
+                        daily_stats['purchased_active'] += 1
+            
+            result.append(daily_stats)
             current_date += datetime.timedelta(days=1)
         
         return result
