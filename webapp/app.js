@@ -4334,6 +4334,9 @@ function changeConversionSubscriptionsPeriod() {
 // Глобальные переменные для рассылки
 let broadcastSelectedUsers = []; // Массив выбранных user_id
 let broadcastUserSearchTimeout = null;
+let broadcastSendMode = 'all'; // 'all' | 'selected'
+let broadcastLastSearchResults = []; // Последняя выдача поиска (для выделить все)
+let broadcastTotalUsers = 0; // Общее число пользователей из статистики
 
 // Загрузка страницы рассылки
 async function loadBroadcastPage() {
@@ -4374,14 +4377,22 @@ async function loadBroadcastPage() {
         const statsData = await statsResponse.json();
         // Структура ответа: stats.users.total (как в loadAdminStats)
         const totalUsers = statsData.stats?.users?.total || 0;
+        broadcastTotalUsers = totalUsers;
         
         // Сбрасываем выбор пользователей при загрузке страницы
         broadcastSelectedUsers = [];
-        const selectUsersCheckbox = document.getElementById('broadcast-select-users');
-        if (selectUsersCheckbox) {
-            selectUsersCheckbox.checked = false;
-            toggleUserSelection();
+        broadcastLastSearchResults = [];
+        
+        // Инициализируем режим отправки
+        const modeAll = document.getElementById('broadcast-mode-all');
+        const modeSelected = document.getElementById('broadcast-mode-selected');
+        if (modeAll && modeSelected) {
+            modeAll.onchange = () => setBroadcastMode('all');
+            modeSelected.onchange = () => setBroadcastMode('selected');
+            modeAll.checked = true;
+            modeSelected.checked = false;
         }
+        setBroadcastMode('all');
         
         // Показываем количество получателей (исключая админов, но показываем общее количество)
         recipientsCountEl.textContent = totalUsers;
@@ -4398,24 +4409,29 @@ async function loadBroadcastPage() {
     }
 }
 
-// Переключение режима выбора пользователей
-function toggleUserSelection() {
-    const checkbox = document.getElementById('broadcast-select-users');
+// Установка режима отправки (всем / выбранным)
+function setBroadcastMode(mode) {
+    broadcastSendMode = mode;
     const selectionDiv = document.getElementById('broadcast-user-selection');
+    const hintEl = document.getElementById('broadcast-mode-hint');
     
-    if (checkbox.checked) {
-        selectionDiv.style.display = 'block';
-        // Загружаем список пользователей при первом открытии
+    if (mode === 'selected') {
+        if (selectionDiv) selectionDiv.style.display = 'block';
+        if (hintEl) hintEl.textContent = 'Отправка только выбранным пользователям';
+        // Загружаем список при первом входе
         if (document.getElementById('broadcast-users-list').innerHTML === '') {
             searchUsersForBroadcast();
         }
     } else {
-        selectionDiv.style.display = 'none';
-        // Очищаем выбор при отключении режима
+        if (selectionDiv) selectionDiv.style.display = 'none';
         broadcastSelectedUsers = [];
-        updateBroadcastRecipientsCount();
-        updateSelectedCount();
+        broadcastLastSearchResults = [];
+        if (hintEl) hintEl.textContent = 'Отправка всем пользователям';
     }
+    
+    updateSelectedCount();
+    updateBroadcastRecipientsCount();
+    updateSendButtonState();
 }
 
 // Поиск пользователей для рассылки
@@ -4424,6 +4440,7 @@ async function searchUsersForBroadcast() {
     const searchInput = document.getElementById('broadcast-user-search');
     const search = searchInput.value.trim();
     const listEl = document.getElementById('broadcast-users-list');
+    const query = search.toLowerCase();
     
     broadcastUserSearchTimeout = setTimeout(async () => {
         try {
@@ -4459,6 +4476,7 @@ async function searchUsersForBroadcast() {
                 return;
             }
             
+            broadcastLastSearchResults = data.users.map(u => u.user_id);
             listEl.innerHTML = '';
             data.users.forEach(user => {
                 const isSelected = broadcastSelectedUsers.includes(user.user_id);
@@ -4479,9 +4497,12 @@ async function searchUsersForBroadcast() {
                 
                 const userInfo = document.createElement('div');
                 userInfo.style.cssText = 'flex: 1;';
+                
+                const highlightedId = highlightMatch(`ID: ${escapeHtml(user.user_id)}`, query);
+                const subsText = `Подписок: ${user.subscriptions_count || 0}`;
                 userInfo.innerHTML = `
-                    <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">ID: ${escapeHtml(user.user_id)}</div>
-                    <div style="color: #a0a0a0; font-size: 12px;">Подписок: ${user.subscriptions_count || 0}</div>
+                    <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${highlightedId}</div>
+                    <div style="color: #a0a0a0; font-size: 12px;">${subsText}</div>
                 `;
                 
                 userCard.appendChild(checkbox);
@@ -4509,6 +4530,7 @@ function toggleUserForBroadcast(userId) {
     searchUsersForBroadcast();
     updateSelectedCount();
     updateBroadcastRecipientsCount();
+    updateSendButtonState();
 }
 
 // Очистить выбор пользователей
@@ -4516,6 +4538,7 @@ function clearUserSelection() {
     broadcastSelectedUsers = [];
     updateSelectedCount();
     updateBroadcastRecipientsCount();
+    updateSendButtonState();
     // Обновляем отображение списка
     const searchInput = document.getElementById('broadcast-user-search');
     if (searchInput) {
@@ -4529,26 +4552,92 @@ function updateSelectedCount() {
     if (countEl) {
         countEl.textContent = broadcastSelectedUsers.length;
     }
+    updateSelectedChips();
 }
 
 // Обновить счетчик получателей рассылки
 function updateBroadcastRecipientsCount() {
     const recipientsCountEl = document.getElementById('broadcast-recipients-count');
-    const selectUsersCheckbox = document.getElementById('broadcast-select-users');
-    
     if (!recipientsCountEl) return;
     
-    if (selectUsersCheckbox && selectUsersCheckbox.checked) {
-        // Если выбран режим выбора пользователей - показываем количество выбранных
+    if (broadcastSendMode === 'selected') {
         recipientsCountEl.textContent = broadcastSelectedUsers.length;
     } else {
-        // Если не выбран - показываем общее количество (нужно загрузить, если еще не загружено)
-        // Используем значение из loadBroadcastPage или загружаем заново
-        if (recipientsCountEl.textContent === '-') {
-            // Если еще не загружено, загружаем статистику
-            loadBroadcastPage();
-        }
+        recipientsCountEl.textContent = broadcastTotalUsers || '-';
     }
+}
+
+// Обновить состояние кнопки отправки
+function updateSendButtonState() {
+    const sendBtn = document.getElementById('broadcast-send-btn');
+    if (!sendBtn) return;
+    
+    if (broadcastSendMode === 'selected' && broadcastSelectedUsers.length === 0) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Отправить рассылку';
+    } else {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Отправить рассылку';
+    }
+}
+
+// Плашки выбранных пользователей
+function updateSelectedChips() {
+    const chipsEl = document.getElementById('broadcast-selected-chips');
+    if (!chipsEl) return;
+    
+    chipsEl.innerHTML = '';
+    if (broadcastSelectedUsers.length === 0) {
+        chipsEl.style.display = 'none';
+        return;
+    }
+    chipsEl.style.display = 'flex';
+    
+    broadcastSelectedUsers.forEach((userId) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `
+            <span>${escapeHtml(userId)}</span>
+            <button aria-label="Удалить" onclick="removeUserFromSelection('${userId}')">×</button>
+        `;
+        chipsEl.appendChild(chip);
+    });
+}
+
+function removeUserFromSelection(userId) {
+    const idx = broadcastSelectedUsers.indexOf(userId);
+    if (idx > -1) {
+        broadcastSelectedUsers.splice(idx, 1);
+        updateSelectedCount();
+        updateBroadcastRecipientsCount();
+        updateSendButtonState();
+        searchUsersForBroadcast();
+    }
+}
+
+// Выбрать все в текущей выдаче
+function selectAllBroadcastResults() {
+    if (!broadcastLastSearchResults || broadcastLastSearchResults.length === 0) return;
+    broadcastLastSearchResults.forEach((userId) => {
+        if (!broadcastSelectedUsers.includes(userId)) {
+            broadcastSelectedUsers.push(userId);
+        }
+    });
+    updateSelectedCount();
+    updateBroadcastRecipientsCount();
+    updateSendButtonState();
+    searchUsersForBroadcast();
+}
+
+// Подсветка совпадений
+function highlightMatch(text, query) {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query);
+    if (idx === -1) return text;
+    const before = text.slice(0, idx);
+    const match = text.slice(idx, idx + query.length);
+    const after = text.slice(idx + query.length);
+    return `${escapeHtml(before)}<span class="highlight-match">${escapeHtml(match)}</span>${escapeHtml(after)}`;
 }
 
 // Отправка рассылки
@@ -4571,9 +4660,7 @@ async function sendBroadcast() {
         return;
     }
     
-    // Проверяем, выбран ли режим выбора пользователей
-    const selectUsersCheckbox = document.getElementById('broadcast-select-users');
-    const isSelectMode = selectUsersCheckbox && selectUsersCheckbox.checked;
+    const isSelectMode = broadcastSendMode === 'selected';
     
     if (isSelectMode && broadcastSelectedUsers.length === 0) {
         if (tg && tg.showAlert) {

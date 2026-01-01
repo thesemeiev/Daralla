@@ -22,7 +22,7 @@ async def notify_admin(bot, admin_ids, text):
             async with asyncio.timeout(10):
                 await bot.send_message(
                     chat_id=admin_id,
-                    text=f"❗️[VPNBot ERROR]\n{text}",
+                    text=f"[VPNBot ERROR]\n{text}",
                     disable_web_page_preview=True
                 )
                 logger.info(f"Успешно отправлено уведомление админу {admin_id}")
@@ -33,7 +33,7 @@ async def notify_admin(bot, admin_ids, text):
 async def notify_server_issues(bot, admin_ids, server_name, issue_type, details=""):
     """Уведомляет админа о проблемах с серверами"""
     try:
-        message = f"🚨 Проблема с сервером {server_name}\n\n"
+        message = f" Проблема с сервером {server_name}\n\n"
         message += f"Тип проблемы: {issue_type}\n"
         message += f"Время: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
         message += f"Статус: Требует внимания\n\n"
