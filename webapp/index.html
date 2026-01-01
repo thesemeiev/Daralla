@@ -315,11 +315,17 @@
                         <div class="stat-card-value revenue" id="stats-revenue">0 ₽</div>
                         <div class="stat-card-subtitle">Успешных платежей: <span id="stats-succeeded-payments">0</span></div>
                     </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">MRR</div>
+                        <div class="stat-card-value revenue" id="stats-mrr">0 ₽</div>
+                        <div class="stat-card-subtitle" id="stats-mrr-change">Изменение: <span id="stats-mrr-change-value">0 ₽</span> (<span id="stats-mrr-change-percent">0%</span>)</div>
+                    </div>
                 </div>
                 
                 <div style="margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">График роста пользователей</h2>
+                        <h2 style="margin: 0;">Новых пользователей</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <select id="user-growth-period" onchange="changeUserGrowthPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
                                 <option value="1">24 часа</option>
@@ -336,6 +342,20 @@
                     <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                         <div style="position: relative; height: 300px; min-width: 700px;">
                             <canvas id="user-growth-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 style="margin: 0;">Всего пользователей (накопительно)</h2>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('user-total-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                            <div style="position: relative; height: 300px; min-width: 700px;">
+                                <canvas id="user-total-chart"></canvas>
+                            </div>
                         </div>
                     </div>
                     
@@ -358,6 +378,28 @@
                         <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                             <div style="position: relative; height: 300px; min-width: 700px;">
                                 <canvas id="conversion-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 style="margin: 0;">Динамика дохода</h2>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select id="revenue-trend-period" onchange="changeRevenueTrendPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                                    <option value="7">7 дней</option>
+                                    <option value="14">14 дней</option>
+                                    <option value="30" selected>30 дней</option>
+                                    <option value="90">90 дней</option>
+                                </select>
+                                <button class="fullscreen-btn" onclick="toggleFullscreen('revenue-trend-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                    <span>⛶</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                            <div style="position: relative; height: 300px; min-width: 700px;">
+                                <canvas id="revenue-trend-chart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -463,42 +505,14 @@
                     
                     <div style="margin-top: 24px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">Процент успешности доставки</h2>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-success-rate-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                            <h2 style="margin: 0;">Аналитика уведомлений</h2>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-analytics-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                 <span>⛶</span>
                             </button>
                         </div>
                         <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                             <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="notification-success-rate-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">Заблокированные пользователи</h2>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-blocked-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                            <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="notification-blocked-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">По типам уведомлений</h2>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-types-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                            <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="notification-types-chart"></canvas>
+                                <canvas id="notification-analytics-chart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -563,20 +577,6 @@
                 
                 <div style="margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Типы активных подписок</h2>
-                        <button class="fullscreen-btn" onclick="toggleFullscreen('subscription-types-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                            <span>⛶</span>
-                        </button>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="subscription-types-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Динамика подписок</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <select id="subscriptions-period" onchange="changeSubscriptionsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
@@ -615,6 +615,28 @@
                     <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                         <div style="position: relative; height: 300px; min-width: 700px;">
                             <canvas id="subscription-conversion-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0;">Churn Rate (Отток пользователей)</h2>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="churn-rate-period" onchange="changeChurnRatePeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                                <option value="7">7 дней</option>
+                                <option value="14">14 дней</option>
+                                <option value="30" selected>30 дней</option>
+                                <option value="90">90 дней</option>
+                            </select>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('churn-rate-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                        <div style="position: relative; height: 300px; min-width: 700px;">
+                            <canvas id="churn-rate-chart"></canvas>
                         </div>
                     </div>
                 </div>

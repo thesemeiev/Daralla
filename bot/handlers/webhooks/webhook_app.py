@@ -2595,6 +2595,11 @@ def create_webhook_app(bot_app):
                         'total': total_payments,
                         'succeeded': succeeded_payments,
                         'revenue': round(total_revenue, 2)
+                    },
+                    'business': {
+                        'mrr': stats.get('mrr', 0),
+                        'mrr_change': stats.get('mrr_change', 0),
+                        'mrr_change_percent': stats.get('mrr_change_percent', 0)
                     }
                 }
             }), 200, {
@@ -2821,6 +2826,52 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка в /api/admin/charts/conversion: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
+    @app.route('/api/admin/charts/revenue-trend', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_revenue_trend():
+        """Данные для графика динамики дохода"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            days = int(data.get('days', 30))
+            
+            from ...db.subscribers_db import get_revenue_trend_data
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                revenue_data = loop.run_until_complete(get_revenue_trend_data(days))
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'data': revenue_data
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/revenue-trend: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
     @app.route('/api/admin/charts/notifications', methods=['POST', 'OPTIONS'])
     def api_admin_charts_notifications():
         """Данные для графиков уведомлений"""
@@ -2989,6 +3040,52 @@ def create_webhook_app(bot_app):
             }
         except Exception as e:
             logger.error(f"Ошибка в /api/admin/charts/subscriptions: {e}", exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.route('/api/admin/charts/churn-rate', methods=['POST', 'OPTIONS'])
+    def api_admin_charts_churn_rate():
+        """Данные для графика Churn Rate (отток пользователей)"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id:
+                return jsonify({'error': 'Invalid authentication'}), 401
+            
+            if not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            days = int(data.get('days', 30))
+            
+            from ...db.subscribers_db import get_churn_rate_data
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                churn_data = loop.run_until_complete(get_churn_rate_data(days))
+            finally:
+                loop.close()
+            
+            return jsonify({
+                'success': True,
+                'data': churn_data
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/charts/churn-rate: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
     
     @app.route('/api/admin/broadcast', methods=['POST', 'OPTIONS'])

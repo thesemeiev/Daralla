@@ -5,6 +5,7 @@ import aiosqlite
 import datetime
 import logging
 import uuid
+import json
 from . import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -404,6 +405,8 @@ async def get_subscription_statistics():
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         
+        now = int(datetime.datetime.now().timestamp())
+        
         # Общее количество пользователей
         async with db.execute("SELECT COUNT(*) as count FROM users") as cur:
             row = await cur.fetchone()
@@ -459,6 +462,65 @@ async def get_subscription_statistics():
             row = await cur.fetchone()
             active_server_clients = row['count'] if row else 0
         
+        # Расчет MRR (Monthly Recurring Revenue)
+        # MRR = сумма месячных стоимостей всех активных подписок
+        async with db.execute("""
+            SELECT period, price, COUNT(*) as count
+            FROM subscriptions
+            WHERE status = 'active' AND price > 0
+            GROUP BY period, price
+        """) as cur:
+            rows = await cur.fetchall()
+        
+        mrr = 0.0
+        for row in rows:
+            period = row['period']
+            price = row['price']
+            count = row['count']
+            
+            # Определяем месячную стоимость подписки
+            if period == 'month':
+                monthly_price = price
+            elif period == '3month':
+                monthly_price = price / 3.0
+            else:
+                # Для других периодов считаем как месячные (можно расширить логику)
+                monthly_price = price
+            
+            mrr += monthly_price * count
+        
+        # Расчет MRR за предыдущий месяц для сравнения
+        # Берем подписки, которые были активны месяц назад
+        month_ago_timestamp = now - (30 * 24 * 60 * 60)
+        async with db.execute("""
+            SELECT period, price, COUNT(*) as count
+            FROM subscriptions
+            WHERE status IN ('active', 'expired')
+            AND price > 0
+            AND created_at <= ?
+            AND (expires_at >= ? OR status = 'active')
+            GROUP BY period, price
+        """, (month_ago_timestamp, month_ago_timestamp)) as cur:
+            prev_rows = await cur.fetchall()
+        
+        prev_mrr = 0.0
+        for row in prev_rows:
+            period = row['period']
+            price = row['price']
+            count = row['count']
+            
+            if period == 'month':
+                monthly_price = price
+            elif period == '3month':
+                monthly_price = price / 3.0
+            else:
+                monthly_price = price
+            
+            prev_mrr += monthly_price * count
+        
+        mrr_change = mrr - prev_mrr
+        mrr_change_percent = (mrr_change / prev_mrr * 100) if prev_mrr > 0 else 0.0
+        
         return {
             'total_users': total_users,
             'users_with_active_subs': users_with_active_subs,
@@ -475,7 +537,11 @@ async def get_subscription_statistics():
             'deleted_subscriptions': deleted_subscriptions,
             'trial_subscriptions': trial_subscriptions,
             'total_server_clients': total_server_clients,
-            'active_server_clients': active_server_clients
+            'active_server_clients': active_server_clients,
+            # MRR метрики
+            'mrr': round(mrr, 2),
+            'mrr_change': round(mrr_change, 2),
+            'mrr_change_percent': round(mrr_change_percent, 2)
         }
 
 async def get_user_by_id(user_id: str):
@@ -1093,6 +1159,147 @@ async def get_subscription_dynamics_data(days: int = 30):
         
         return result
 
+async def get_churn_rate_data(days: int = 30):
+    """
+    Возвращает данные об оттоке пользователей (Churn Rate)
+    
+    Churn Rate = процент пользователей, которые не продлили подписку после истечения
+    
+    Args:
+        days: Количество дней для анализа
+    
+    Returns:
+        dict: {
+            'total_churned': int,        # Всего пользователей с истекшими подписками
+            'not_renewed': int,          # Не продлили подписку
+            'renewed': int,              # Продлили подписку
+            'churn_rate': float,         # Процент оттока
+            'daily': [                   # Ежедневная статистика
+                {
+                    'date': str,
+                    'expired_count': int,
+                    'renewed_count': int,
+                    'churn_rate': float
+                },
+                ...
+            ]
+        }
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Находим все подписки, которые истекли в период
+        async with db.execute("""
+            SELECT 
+                id,
+                subscriber_id,
+                expires_at,
+                DATE(datetime(expires_at, 'unixepoch')) as date
+            FROM subscriptions
+            WHERE status = 'expired'
+            AND expires_at >= ?
+            AND expires_at <= ?
+            AND price > 0
+            ORDER BY expires_at
+        """, (start_timestamp, now)) as cur:
+            expired_rows = await cur.fetchall()
+        
+        if not expired_rows:
+            return {
+                'total_churned': 0,
+                'not_renewed': 0,
+                'renewed': 0,
+                'churn_rate': 0.0,
+                'daily': []
+            }
+        
+        # Проверяем, какие подписки были продлены
+        renewed_count = 0
+        not_renewed_count = 0
+        
+        # Группируем по датам для ежедневной статистики
+        daily_churn = {}
+        
+        for expired_row in expired_rows:
+            subscriber_id = expired_row['subscriber_id']
+            expires_at = expired_row['expires_at']
+            date_str = expired_row['date']
+            
+            if date_str not in daily_churn:
+                daily_churn[date_str] = {
+                    'expired_count': 0,
+                    'renewed_count': 0
+                }
+            
+            daily_churn[date_str]['expired_count'] += 1
+            
+            # Проверяем, есть ли новая активная подписка у этого пользователя после истечения
+            # Даем окно в 7 дней после истечения для продления
+            renewal_window = expires_at + (7 * 24 * 60 * 60)
+            
+            async with db.execute("""
+                SELECT COUNT(*) as count
+                FROM subscriptions
+                WHERE subscriber_id = ?
+                AND status = 'active'
+                AND created_at > ?
+                AND created_at <= ?
+                AND price > 0
+            """, (subscriber_id, expires_at, renewal_window)) as cur:
+                renewal_row = await cur.fetchone()
+                has_renewed = (renewal_row['count'] if renewal_row else 0) > 0
+            
+            if has_renewed:
+                renewed_count += 1
+                daily_churn[date_str]['renewed_count'] += 1
+            else:
+                not_renewed_count += 1
+        
+        total_churned = len(expired_rows)
+        churn_rate = (not_renewed_count / total_churned * 100) if total_churned > 0 else 0.0
+        
+        # Формируем ежедневную статистику
+        daily = []
+        start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
+        end_date = datetime.datetime.now().date()
+        
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            if date_str in daily_churn:
+                expired = daily_churn[date_str]['expired_count']
+                renewed = daily_churn[date_str]['renewed_count']
+                not_renewed = expired - renewed
+                daily_churn_rate = (not_renewed / expired * 100) if expired > 0 else 0.0
+                
+                daily.append({
+                    'date': date_str,
+                    'expired_count': expired,
+                    'renewed_count': renewed,
+                    'not_renewed_count': not_renewed,
+                    'churn_rate': round(daily_churn_rate, 2)
+                })
+            else:
+                daily.append({
+                    'date': date_str,
+                    'expired_count': 0,
+                    'renewed_count': 0,
+                    'not_renewed_count': 0,
+                    'churn_rate': 0.0
+                })
+            current_date += datetime.timedelta(days=1)
+        
+        return {
+            'total_churned': total_churned,
+            'not_renewed': not_renewed_count,
+            'renewed': renewed_count,
+            'churn_rate': round(churn_rate, 2),
+            'daily': daily
+        }
+
 async def delete_user_completely(user_id: str) -> dict:
     """
     Полностью удаляет пользователя и все связанные данные из БД.
@@ -1322,5 +1529,234 @@ async def get_subscription_conversion_data(days: int = 30):
             'total_trial_users': total_trial_users,
             'converted_users': converted_users,
             'conversion_rate': round(conversion_rate, 2),
+            'daily': daily
+        }
+
+async def get_revenue_trend_data(days: int = 30):
+    """
+    Возвращает динамику дохода по дням за указанный период
+    
+    Args:
+        days: Количество дней для анализа
+    
+    Returns:
+        list: [
+            {
+                'date': str,              # Дата в формате YYYY-MM-DD
+                'revenue': float,         # Доход за день
+                'payments_count': int     # Количество успешных платежей
+            },
+            ...
+        ]
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Получаем успешные платежи за период
+        async with db.execute("""
+            SELECT 
+                created_at,
+                DATE(datetime(created_at, 'unixepoch')) as date,
+                meta
+            FROM payments
+            WHERE status = 'succeeded'
+            AND created_at >= ?
+            ORDER BY created_at
+        """, (start_timestamp,)) as cur:
+            rows = await cur.fetchall()
+        
+        # Группируем по датам
+        daily_revenue = {}
+        
+        for row in rows:
+            date_str = row['date']
+            if date_str not in daily_revenue:
+                daily_revenue[date_str] = {
+                    'revenue': 0.0,
+                    'payments_count': 0
+                }
+            
+            # Извлекаем сумму из meta
+            meta = row['meta']
+            if meta:
+                try:
+                    meta_dict = json.loads(meta) if isinstance(meta, str) else meta
+                    amount = meta_dict.get('amount') or meta_dict.get('price', 0)
+                    if isinstance(amount, str):
+                        try:
+                            amount = float(amount)
+                        except (ValueError, TypeError):
+                            amount = 0
+                    if isinstance(amount, (int, float)) and amount > 0:
+                        daily_revenue[date_str]['revenue'] += amount
+                        daily_revenue[date_str]['payments_count'] += 1
+                except Exception:
+                    pass
+        
+        # Преобразуем в список и заполняем пропущенные даты
+        result = []
+        start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
+        end_date = datetime.datetime.now().date()
+        
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            if date_str in daily_revenue:
+                result.append({
+                    'date': date_str,
+                    'revenue': round(daily_revenue[date_str]['revenue'], 2),
+                    'payments_count': daily_revenue[date_str]['payments_count']
+                })
+            else:
+                result.append({
+                    'date': date_str,
+                    'revenue': 0.0,
+                    'payments_count': 0
+                })
+            current_date += datetime.timedelta(days=1)
+        
+        return result
+
+async def get_churn_rate_data(days: int = 30):
+    """
+    Возвращает данные об оттоке пользователей (Churn Rate)
+    
+    Churn Rate = процент пользователей, которые не продлили подписку после истечения
+    
+    Args:
+        days: Количество дней для анализа
+    
+    Returns:
+        dict: {
+            'total_churned': int,        # Всего пользователей с истекшими подписками
+            'not_renewed': int,          # Не продлили подписку
+            'renewed': int,              # Продлили подписку
+            'churn_rate': float,         # Процент оттока
+            'daily': [                   # Ежедневная статистика
+                {
+                    'date': str,
+                    'expired_count': int,
+                    'renewed_count': int,
+                    'churn_rate': float
+                },
+                ...
+            ]
+        }
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        now = int(datetime.datetime.now().timestamp())
+        start_timestamp = now - (days * 24 * 60 * 60)
+        
+        # Находим все подписки, которые истекли в период
+        async with db.execute("""
+            SELECT 
+                id,
+                subscriber_id,
+                expires_at,
+                DATE(datetime(expires_at, 'unixepoch')) as date
+            FROM subscriptions
+            WHERE status = 'expired'
+            AND expires_at >= ?
+            AND expires_at <= ?
+            AND price > 0
+            ORDER BY expires_at
+        """, (start_timestamp, now)) as cur:
+            expired_rows = await cur.fetchall()
+        
+        if not expired_rows:
+            return {
+                'total_churned': 0,
+                'not_renewed': 0,
+                'renewed': 0,
+                'churn_rate': 0.0,
+                'daily': []
+            }
+        
+        # Проверяем, какие подписки были продлены
+        renewed_count = 0
+        not_renewed_count = 0
+        
+        # Группируем по датам для ежедневной статистики
+        daily_churn = {}
+        
+        for expired_row in expired_rows:
+            subscriber_id = expired_row['subscriber_id']
+            expires_at = expired_row['expires_at']
+            date_str = expired_row['date']
+            
+            if date_str not in daily_churn:
+                daily_churn[date_str] = {
+                    'expired_count': 0,
+                    'renewed_count': 0
+                }
+            
+            daily_churn[date_str]['expired_count'] += 1
+            
+            # Проверяем, есть ли новая активная подписка у этого пользователя после истечения
+            # Даем окно в 7 дней после истечения для продления
+            renewal_window = expires_at + (7 * 24 * 60 * 60)
+            
+            async with db.execute("""
+                SELECT COUNT(*) as count
+                FROM subscriptions
+                WHERE subscriber_id = ?
+                AND status = 'active'
+                AND created_at > ?
+                AND created_at <= ?
+                AND price > 0
+            """, (subscriber_id, expires_at, renewal_window)) as cur:
+                renewal_row = await cur.fetchone()
+                has_renewed = (renewal_row['count'] if renewal_row else 0) > 0
+            
+            if has_renewed:
+                renewed_count += 1
+                daily_churn[date_str]['renewed_count'] += 1
+            else:
+                not_renewed_count += 1
+        
+        total_churned = len(expired_rows)
+        churn_rate = (not_renewed_count / total_churned * 100) if total_churned > 0 else 0.0
+        
+        # Формируем ежедневную статистику
+        daily = []
+        start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
+        end_date = datetime.datetime.now().date()
+        
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            if date_str in daily_churn:
+                expired = daily_churn[date_str]['expired_count']
+                renewed = daily_churn[date_str]['renewed_count']
+                not_renewed = expired - renewed
+                daily_churn_rate = (not_renewed / expired * 100) if expired > 0 else 0.0
+                
+                daily.append({
+                    'date': date_str,
+                    'expired_count': expired,
+                    'renewed_count': renewed,
+                    'not_renewed_count': not_renewed,
+                    'churn_rate': round(daily_churn_rate, 2)
+                })
+            else:
+                daily.append({
+                    'date': date_str,
+                    'expired_count': 0,
+                    'renewed_count': 0,
+                    'not_renewed_count': 0,
+                    'churn_rate': 0.0
+                })
+            current_date += datetime.timedelta(days=1)
+        
+        return {
+            'total_churned': total_churned,
+            'not_renewed': not_renewed_count,
+            'renewed': renewed_count,
+            'churn_rate': round(churn_rate, 2),
             'daily': daily
         }

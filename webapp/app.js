@@ -2653,9 +2653,35 @@ async function loadAdminStats() {
         document.getElementById('stats-revenue').textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
         document.getElementById('stats-succeeded-payments').textContent = data.stats.payments.succeeded || 0;
         
+        // Обновляем MRR
+        const mrr = data.stats.business?.mrr || 0;
+        const mrrChange = data.stats.business?.mrr_change || 0;
+        const mrrChangePercent = data.stats.business?.mrr_change_percent || 0;
+        document.getElementById('stats-mrr').textContent = mrr.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
+        
+        const mrrChangeValueEl = document.getElementById('stats-mrr-change-value');
+        const mrrChangePercentEl = document.getElementById('stats-mrr-change-percent');
+        const mrrChangeEl = document.getElementById('stats-mrr-change');
+        
+        if (mrrChangeValueEl && mrrChangePercentEl && mrrChangeEl) {
+            const changeSign = mrrChange >= 0 ? '+' : '';
+            mrrChangeValueEl.textContent = changeSign + mrrChange.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
+            mrrChangePercentEl.textContent = changeSign + mrrChangePercent.toFixed(1) + '%';
+            
+            // Цвет в зависимости от изменения
+            if (mrrChange > 0) {
+                mrrChangeEl.style.color = '#4caf50';
+            } else if (mrrChange < 0) {
+                mrrChangeEl.style.color = '#f44336';
+            } else {
+                mrrChangeEl.style.color = '#999';
+            }
+        }
+        
         // Загружаем графики
         await loadUserGrowthChart();
         await loadConversionChart();
+        await loadRevenueTrendChart();
         await loadServerLoadChart();
         
         // Запускаем автоматическое обновление графика каждые 2 минуты
@@ -2676,15 +2702,15 @@ async function loadAdminStats() {
 
 // Переменные для хранения экземпляров графиков
 let userGrowthChart = null;
+let userTotalChart = null;
 let serverLoadChart = null;
 let conversionChart = null;
+let revenueTrendChart = null;
 let notificationDeliveryChart = null;
-let notificationSuccessRateChart = null;
-let notificationBlockedChart = null;
-let notificationTypesChart = null;
-let subscriptionTypesChart = null;
+let notificationAnalyticsChart = null;
 let subscriptionDynamicsChart = null;
 let subscriptionConversionChart = null;
+let churnRateChart = null;
 
 // Загрузка графика роста пользователей
 async function loadUserGrowthChart(days = 30) {
@@ -2729,27 +2755,18 @@ async function loadUserGrowthChart(days = 30) {
         const counts = result.data.map(item => item.count);
         const cumulative = result.data.map(item => item.cumulative);
         
-        // Создаем график
+        // Создаем график новых пользователей (столбцы)
         userGrowthChart = new Chart(ctx, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
                     {
                         label: 'Новых пользователей',
                         data: counts,
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
                         borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        tension: 0.1,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: 'Всего пользователей (накопительно)',
-                        data: cumulative,
-                        borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        tension: 0.1,
-                        yAxisID: 'y1'
+                        borderWidth: 1
                     }
                 ]
             },
@@ -2779,27 +2796,89 @@ async function loadUserGrowthChart(days = 30) {
                     y: {
                         type: 'linear',
                         display: true,
-                        position: 'left',
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
                         title: {
                             display: true,
                             text: 'Новых пользователей'
                         }
                     },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Всего пользователей'
-                        },
+                    x: {
                         grid: {
-                            drawOnChartArea: false
+                            display: false
                         }
                     }
                 }
             }
         });
+        
+        // Создаем второй график - всего пользователей (накопительно)
+        const ctxTotal = document.getElementById('user-total-chart');
+        if (ctxTotal) {
+            if (userTotalChart) {
+                userTotalChart.destroy();
+            }
+            
+            userTotalChart = new Chart(ctxTotal, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Всего пользователей',
+                            data: cumulative,
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            tension: 0.1,
+                            fill: true,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            align: 'start',
+                            labels: {
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                padding: 8,
+                                usePointStyle: false,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        title: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Всего пользователей'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
     } catch (error) {
         console.error('Ошибка загрузки графика роста пользователей:', error);
     }
@@ -2978,6 +3057,171 @@ function changeConversionPeriod() {
     const select = document.getElementById('conversion-period');
     const days = parseInt(select.value);
     loadConversionChart(days);
+}
+
+// Загрузка графика динамики дохода
+async function loadRevenueTrendChart(days = 30) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            return;
+        }
+        
+        const response = await fetch('/api/admin/charts/revenue-trend', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData, days: days })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных графика');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            return;
+        }
+        
+        const ctx = document.getElementById('revenue-trend-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        // Уничтожаем предыдущий график, если он существует
+        if (revenueTrendChart) {
+            revenueTrendChart.destroy();
+        }
+        
+        // Подготавливаем данные
+        const labels = result.data.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        const revenues = result.data.map(item => item.revenue || 0);
+        const paymentsCounts = result.data.map(item => item.payments_count || 0);
+        
+        // Создаем комбинированный график
+        revenueTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Доход (₽)',
+                        data: revenues,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Количество платежей',
+                        data: paymentsCounts,
+                        type: 'bar',
+                        backgroundColor: 'rgba(255, 206, 86, 0.5)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('ru-RU') + ' ₽';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)',
+                            drawOnChartArea: true
+                        },
+                        title: {
+                            display: true,
+                            text: 'Доход (₽)',
+                            color: 'rgb(75, 192, 192)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawOnChartArea: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Количество платежей',
+                            color: 'rgb(255, 206, 86)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const index = context.dataIndex;
+                                const item = result.data[index];
+                                if (context.datasetIndex === 0) {
+                                    return `Доход: ${item.revenue.toLocaleString('ru-RU')} ₽ (${item.payments_count} платежей)`;
+                                } else {
+                                    return `Платежей: ${item.payments_count}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика динамики дохода:', error);
+    }
+}
+
+// Изменение периода для графика динамики дохода
+function changeRevenueTrendPeriod() {
+    const select = document.getElementById('revenue-trend-period');
+    const days = parseInt(select.value);
+    loadRevenueTrendChart(days);
 }
 
 // Загрузка графика нагрузки на серверы
@@ -3206,7 +3450,7 @@ async function loadServerLoadChart() {
 function changeUserGrowthPeriod() {
     const select = document.getElementById('user-growth-period');
     const days = parseInt(select.value);
-    loadUserGrowthChart(days);
+    loadUserGrowthChart(days); // Эта функция теперь создает оба графика
 }
 
 // Переменная для отслеживания полноэкранного режима
@@ -3630,9 +3874,7 @@ async function loadNotificationStats(days = 7) {
         
         // Загружаем графики
         await loadNotificationDeliveryChart(data.daily);
-        await loadNotificationSuccessRateChart(data.daily);
-        await loadNotificationBlockedChart(data.daily);
-        await loadNotificationTypesChart(stats.by_type || []);
+        await loadNotificationAnalyticsChart(data.daily, stats.by_type || []);
         
     } catch (error) {
         console.error('Ошибка загрузки статистики уведомлений:', error);
@@ -3668,10 +3910,144 @@ async function loadNotificationDeliveryChart(dailyData) {
                         data: dailyData.map(item => item.success || 0),
                         backgroundColor: 'rgba(75, 192, 192, 0.8)',
                         borderColor: 'rgb(75, 192, 192)',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        yAxisID: 'y'
                     },
                     {
                         label: 'Не доставлено',
+                        data: dailyData.map(item => item.failed || 0),
+                        backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                        borderColor: 'rgb(255, 99, 132)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Процент успешности (%)',
+                        data: dailyData.map(item => item.success_rate || 0),
+                        type: 'line',
+                        borderColor: 'rgb(153, 102, 255)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y1',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const index = context.dataIndex;
+                                const item = dailyData[index];
+                                if (context.datasetIndex === 2) {
+                                    return `Процент успешности: ${item.success_rate.toFixed(1)}% (Всего: ${item.total}, Успешно: ${item.success}, Не доставлено: ${item.failed})`;
+                                }
+                                return context.dataset.label + ': ' + context.parsed.y;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        title: {
+                            display: true,
+                            text: 'Количество уведомлений',
+                            color: 'rgb(75, 192, 192)'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)',
+                            drawOnChartArea: true
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Процент успешности (%)',
+                            color: 'rgb(153, 102, 255)'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawOnChartArea: false
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика доставки:', error);
+    }
+}
+
+// Загрузка графика аналитики уведомлений (объединяет заблокированных и по типам)
+async function loadNotificationAnalyticsChart(dailyData, byTypeData) {
+    try {
+        const ctx = document.getElementById('notification-analytics-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        if (notificationAnalyticsChart) {
+            notificationAnalyticsChart.destroy();
+        }
+        
+        const labels = dailyData.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        notificationAnalyticsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Не доставлено (включая заблокированных)',
                         data: dailyData.map(item => item.failed || 0),
                         backgroundColor: 'rgba(255, 99, 132, 0.8)',
                         borderColor: 'rgb(255, 99, 132)',
@@ -3686,11 +4062,33 @@ async function loadNotificationDeliveryChart(dailyData) {
                     legend: {
                         display: true,
                         position: 'bottom',
+                        align: 'start',
                         labels: {
                             boxWidth: 12,
                             boxHeight: 12,
                             padding: 8,
                             font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            footer: function(tooltipItems) {
+                                if (byTypeData && byTypeData.length > 0) {
+                                    const typeNames = {
+                                        'expiry_3d': 'За 3 дня до истечения',
+                                        'expiry_1d': 'За 1 день до истечения',
+                                        'expired': 'Истекла'
+                                    };
+                                    let footer = '\nПо типам:\n';
+                                    byTypeData.forEach(item => {
+                                        const type = item.notification_type || item.type || '';
+                                        const typeName = typeNames[type] || type;
+                                        footer += `${typeName}: ${item.total || item.count || 0}\n`;
+                                    });
+                                    return footer;
+                                }
+                                return '';
+                            }
                         }
                     }
                 },
@@ -3699,6 +4097,11 @@ async function loadNotificationDeliveryChart(dailyData) {
                         beginAtZero: true,
                         ticks: {
                             stepSize: 1
+                        },
+                        title: {
+                            display: true,
+                            text: 'Количество не доставленных',
+                            color: 'rgb(255, 99, 132)'
                         }
                     },
                     x: {
@@ -3711,11 +4114,11 @@ async function loadNotificationDeliveryChart(dailyData) {
             }
         });
     } catch (error) {
-        console.error('Ошибка загрузки графика доставки:', error);
+        console.error('Ошибка загрузки графика аналитики:', error);
     }
 }
 
-// Загрузка графика процента успешности
+// Загрузка графика процента успешности (удалена - объединена с доставкой)
 async function loadNotificationSuccessRateChart(dailyData) {
     try {
         const ctx = document.getElementById('notification-success-rate-chart');
@@ -4086,9 +4489,9 @@ async function loadSubscriptionStats(days = 30) {
         document.getElementById('subscriptions-total-active').textContent = types.total_active || 0;
         
         // Загружаем графики
-        await loadSubscriptionTypesChart(types);
         await loadSubscriptionDynamicsChart(data.dynamics || []);
         await loadSubscriptionConversionChart(data.conversion || {});
+        await loadChurnRateChart(days);
         
     } catch (error) {
         console.error('Ошибка загрузки статистики подписок:', error);
@@ -4443,6 +4846,184 @@ function changeConversionSubscriptionsPeriod() {
     const select = document.getElementById('conversion-subscriptions-period');
     const days = parseInt(select.value);
     loadSubscriptionStats(days);
+}
+
+// Загрузка графика Churn Rate
+async function loadChurnRateChart(days = 30) {
+    try {
+        const initData = tg.initData;
+        if (!initData) {
+            return;
+        }
+        
+        const response = await fetch('/api/admin/charts/churn-rate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ initData, days: days })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных графика');
+        }
+        
+        const result = await response.json();
+        if (!result.success || !result.data) {
+            return;
+        }
+        
+        const ctx = document.getElementById('churn-rate-chart');
+        if (!ctx) {
+            return;
+        }
+        
+        // Уничтожаем предыдущий график, если он существует
+        if (churnRateChart) {
+            churnRateChart.destroy();
+        }
+        
+        const churnData = result.data;
+        const daily = churnData.daily || [];
+        
+        // Подготавливаем данные
+        const labels = daily.map(item => {
+            const date = new Date(item.date + 'T00:00:00');
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        });
+        
+        // Создаем комбинированный график
+        churnRateChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Churn Rate (%)',
+                        data: daily.map(item => item.churn_rate || 0),
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Истекло подписок',
+                        data: daily.map(item => item.expired_count || 0),
+                        type: 'bar',
+                        backgroundColor: 'rgba(255, 206, 86, 0.5)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Продлено',
+                        data: daily.map(item => item.renewed_count || 0),
+                        type: 'bar',
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)',
+                            drawOnChartArea: true
+                        },
+                        title: {
+                            display: true,
+                            text: 'Churn Rate (%)',
+                            color: 'rgb(255, 99, 132)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawOnChartArea: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Количество подписок',
+                            color: 'rgb(255, 206, 86)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 8,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const index = context.dataIndex;
+                                const item = daily[index];
+                                if (context.datasetIndex === 0) {
+                                    return `Churn Rate: ${item.churn_rate}% (Истекло: ${item.expired_count}, Продлено: ${item.renewed_count}, Не продлено: ${item.not_renewed_count})`;
+                                } else if (context.datasetIndex === 1) {
+                                    return `Истекло: ${item.expired_count}`;
+                                } else {
+                                    return `Продлено: ${item.renewed_count}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки графика Churn Rate:', error);
+    }
+}
+
+// Изменение периода для графика Churn Rate
+function changeChurnRatePeriod() {
+    const select = document.getElementById('churn-rate-period');
+    const days = parseInt(select.value);
+    loadChurnRateChart(days);
 }
 
 // ==================== РАССЫЛКА ====================
