@@ -166,32 +166,16 @@ class UIMessages:
     @staticmethod
     def welcome_message(is_new_user=False):
         """Приветственное сообщение"""
-        # Проверяем, доступно ли мини-приложение
-        webapp_available = False
-        try:
-            import sys
-            bot_module = sys.modules.get('bot.bot')
-            if bot_module:
-                webapp_available = bool(getattr(bot_module, 'WEBAPP_URL', None))
-        except (ImportError, AttributeError):
-            pass
         # Разный заголовок для нового и существующего пользователя
         if is_new_user:
             header_text = 'Добро пожаловать в Daralla VPN!'
         else:
             header_text = 'Рады снова видеть вас в Daralla VPN!'
         
-        message = (
+        return (
             f"{UIStyles.header(header_text)}\n\n"
-            f"{UIStyles.description('Быстрый и стабильный доступ к серверам по всему миру.')}\n\n"
+            f"{UIStyles.description('Быстрый и стабильный доступ к серверам по всему миру.')}"
         )
-        
-        if webapp_available:
-            message += (
-                f"{UIStyles.info_message('Откройте мини-приложение, чтобы управлять подписками, продлевать и смотреть инструкции в пару нажатий.')}"
-            )
-
-        return message
     
     @staticmethod
     def buy_menu_message():

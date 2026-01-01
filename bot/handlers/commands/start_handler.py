@@ -173,7 +173,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если создана пробная подписка - добавляем информацию о ней
     if trial_created:
         trial_info = (
-            f"\n\n{UIStyles.success_message(' Вам выдана пробная подписка!')}\n"
+            f"\n\n{UIStyles.success_message('Вам выдана пробная подписка!')}\n"
             f"{UIStyles.description('Откройте мини-приложение, чтобы управлять подписками, продлевать и смотреть инструкции в пару нажатий.')}"
         )
         welcome_text += trial_info
