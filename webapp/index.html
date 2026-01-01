@@ -83,15 +83,15 @@
             
             <div class="buy-subscription-content">
                 <div class="subscription-plans">
-                    <div class="plan-card" onclick="createPayment('month')">
+                    <div class="plan-card">
                         <div class="plan-header">
                             <h2>1 месяц</h2>
                             <div class="plan-price">150₽</div>
                         </div>
-                        <button class="btn-primary" style="width: 100%; margin-top: 12px;">Купить</button>
+                        <button class="btn-primary" onclick="createPayment('month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                     
-                    <div class="plan-card" onclick="createPayment('3month')">
+                    <div class="plan-card">
                         <div class="plan-header">
                             <h2>3 месяца</h2>
                             <div class="plan-price-container">
@@ -99,7 +99,7 @@
                                 <div class="plan-badge">Выгодно</div>
                             </div>
                         </div>
-                        <button class="btn-primary" style="width: 100%; margin-top: 12px;">Купить</button>
+                        <button class="btn-primary" onclick="createPayment('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                 </div>
             </div>
@@ -113,15 +113,15 @@
             
             <div class="buy-subscription-content">
                 <div class="subscription-plans">
-                    <div class="plan-card" onclick="createPayment('month', currentExtendSubscriptionId)">
+                    <div class="plan-card">
                         <div class="plan-header">
                             <h2>1 месяц</h2>
                             <div class="plan-price">150₽</div>
                         </div>
-                        <button class="btn-primary" style="width: 100%; margin-top: 12px;">Продлить</button>
+                        <button class="btn-primary" onclick="createPayment('month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
                     
-                    <div class="plan-card" onclick="createPayment('3month', currentExtendSubscriptionId)">
+                    <div class="plan-card">
                         <div class="plan-header">
                             <h2>3 месяца</h2>
                             <div class="plan-price-container">
@@ -129,7 +129,7 @@
                                 <div class="plan-badge">Выгодно</div>
                             </div>
                         </div>
-                        <button class="btn-primary" style="width: 100%; margin-top: 12px;">Продлить</button>
+                        <button class="btn-primary" onclick="createPayment('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
                 </div>
             </div>
