@@ -22,6 +22,19 @@ let serverLoadChartInterval = null;
 
 // Функция переключения страниц
 function showPage(pageName) {
+    // Показываем нижний навбар только на главных разделах
+    const bottomNav = document.querySelector('.bottom-nav');
+    const isMainSectionPage = (
+        pageName === 'subscriptions' ||
+        pageName === 'instructions' ||
+        pageName === 'about' ||
+        pageName === 'servers' ||
+        pageName === 'admin-stats'
+    );
+    if (bottomNav) {
+        bottomNav.style.display = isMainSectionPage ? 'flex' : 'none';
+    }
+
     // Скрываем все страницы
     document.querySelectorAll('.page').forEach(page => {
         page.style.display = 'none';
@@ -39,8 +52,8 @@ function showPage(pageName) {
         item.classList.remove('active');
     });
     
-    // Активируем нужный пункт навигации (если это не детальная страница)
-    if (pageName !== 'subscription-detail' && pageName !== 'admin-user-detail' && pageName !== 'admin-subscription-edit') {
+    // Активируем нужный пункт навигации (только для главных разделов)
+    if (isMainSectionPage) {
         const navItems = document.querySelectorAll('.nav-item');
         let activeIndex = -1;
         
@@ -56,7 +69,7 @@ function showPage(pageName) {
         } else if (pageName === 'about') {
             navItems[3]?.classList.add('active');
             activeIndex = 3;
-        } else if ((pageName === 'admin-stats' || pageName === 'admin-users' || pageName === 'admin-subscriptions' || pageName === 'admin-notifications' || pageName === 'admin-broadcast') && document.getElementById('admin-nav-button')) {
+        } else if (pageName === 'admin-stats' && document.getElementById('admin-nav-button')) {
             const adminButton = document.getElementById('admin-nav-button');
             adminButton.classList.add('active');
             const allNavItems = document.querySelectorAll('.nav-item');
