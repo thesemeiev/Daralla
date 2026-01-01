@@ -3055,13 +3055,16 @@ def create_webhook_app(bot_app):
                         from telegram import InlineKeyboardMarkup
                         reply_markup = InlineKeyboardMarkup([[webapp_button]])
                     
+                    # Получаем бот из приложения
+                    bot = bot_app.bot
+                    
                     # Отправляем сообщения батчами
                     for i in range(0, total, batch):
                         chunk = recipients[i:i+batch]
                         tasks = []
                         for user_id in chunk:
                             try:
-                                await bot_app.send_message(
+                                await bot.send_message(
                                     chat_id=int(user_id),
                                     text=message_text,
                                     parse_mode="HTML",
@@ -3077,7 +3080,7 @@ def create_webhook_app(bot_app):
                                 # Ждем указанное время и повторяем
                                 await asyncio.sleep(int(getattr(e, 'retry_after', 1)))
                                 try:
-                                    await bot_app.send_message(
+                                    await bot.send_message(
                                         chat_id=int(user_id),
                                         text=message_text,
                                         parse_mode="HTML",
