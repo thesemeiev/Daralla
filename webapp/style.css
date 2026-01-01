@@ -81,6 +81,23 @@ body {
     line-height: 1.5;
 }
 
+/* Фиксация размера модального окна инструкций */
+.instruction-modal-content {
+    height: 80vh !important;
+    min-height: 500px !important;
+    max-height: 80vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+#instruction-steps-container {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    margin-bottom: 24px;
+}
+
 .container {
     max-width: 600px;
     margin: 0 auto;
@@ -209,8 +226,8 @@ h1 {
     background: #222222;
     border: 1px solid #2a2a2a;
     border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
     transition: all 0.2s ease;
     position: relative;
     cursor: pointer;
@@ -239,11 +256,11 @@ h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .subscription-name {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: #f5f5f5;
     letter-spacing: -0.3px;
@@ -280,8 +297,8 @@ h1 {
 .subscription-info {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-top: 12px;
+    gap: 8px;
+    margin-top: 8px;
 }
 
 .info-item {
@@ -299,7 +316,7 @@ h1 {
 }
 
 .info-value {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
     color: #d0d0d0;
 }
@@ -311,8 +328,8 @@ h1 {
 }
 
 .subscription-actions {
-    margin-top: 20px;
-    padding-top: 20px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid #2a2a2a;
 }
 
@@ -890,7 +907,7 @@ h1 {
     }
     
     .subscription-card {
-        padding: 16px;
+        padding: 12px;
     }
     
     .detail-info-grid {
@@ -922,9 +939,9 @@ h1 {
 
 .admin-stats {
     display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
-    padding: 12px;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 10px;
     background: #2a2a2a;
     border-radius: 8px;
 }
@@ -933,8 +950,8 @@ h1 {
     background: #2a2a2a;
     border: 1px solid #3a3a3a;
     border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -949,22 +966,22 @@ h1 {
 }
 
 .admin-user-id {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 600;
     color: #f5f5f5;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .admin-user-meta {
     display: flex;
-    gap: 16px;
-    font-size: 14px;
+    gap: 12px;
+    font-size: 12px;
     color: #a0a0a0;
 }
 
 .admin-user-subscriptions {
-    margin-top: 8px;
-    font-size: 14px;
+    margin-top: 6px;
+    font-size: 12px;
     color: #6a6a6a;
 }
 
@@ -972,21 +989,21 @@ h1 {
     background: #2a2a2a;
     border: 1px solid #3a3a3a;
     border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 16px;
+    padding: 12px;
+    margin-bottom: 12px;
 }
 
 .admin-user-detail-section h3 {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 600;
     color: #f5f5f5;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .admin-detail-item {
     display: flex;
     justify-content: space-between;
-    padding: 8px 0;
+    padding: 6px 0;
     border-bottom: 1px solid #3a3a3a;
 }
 
@@ -996,12 +1013,12 @@ h1 {
 
 .admin-detail-label {
     color: #a0a0a0;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 .admin-detail-value {
     color: #e0e0e0;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 500;
 }
 
@@ -1009,8 +1026,8 @@ h1 {
     background: #2a2a2a;
     border: 1px solid #3a3a3a;
     border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -1024,10 +1041,10 @@ h1 {
 }
 
 .admin-subscription-name {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: #f5f5f5;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .admin-subscription-status {
@@ -1415,30 +1432,30 @@ h1 {
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
 .stat-card {
     background: #2a2a2a;
     border: 1px solid #3a3a3a;
     border-radius: 8px;
-    padding: 20px;
+    padding: 14px;
     text-align: center;
 }
 
 .stat-card-title {
-    font-size: 14px;
+    font-size: 12px;
     color: #a0a0a0;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     font-weight: 500;
 }
 
 .stat-card-value {
-    font-size: 32px;
+    font-size: 24px;
     font-weight: 700;
     color: #f5f5f5;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .stat-card-value.active {

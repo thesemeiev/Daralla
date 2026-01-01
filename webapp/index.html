@@ -850,23 +850,23 @@
 
     <!-- Модальное окно инструкций -->
     <div id="instruction-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div class="modal-content instruction-modal-content" style="max-width: 600px; height: 80vh; min-height: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
                 <h2 id="instruction-modal-title" style="margin: 0;">Инструкция</h2>
                 <button onclick="closeInstructionModal()" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">&times;</button>
             </div>
             
-            <div id="instruction-steps-container" style="margin-bottom: 24px;">
+            <div id="instruction-steps-container" style="flex: 1; overflow-y: auto; margin-bottom: 24px; min-height: 0;">
                 <!-- Шаги будут добавлены динамически -->
             </div>
             
-            <div style="display: flex; gap: 12px; margin-top: 24px;">
+            <div style="display: flex; gap: 12px; margin-top: 24px; flex-shrink: 0;">
                 <button type="button" class="btn-secondary" onclick="prevInstructionStep()" id="instruction-prev-btn" style="flex: 1; display: none;">Назад</button>
                 <button type="button" class="btn-primary" onclick="nextInstructionStep()" id="instruction-next-btn" style="flex: 1;">Далее</button>
                 <button type="button" class="btn-primary" onclick="closeInstructionModal()" id="instruction-close-btn" style="flex: 1; display: none;">Закрыть</button>
             </div>
             
-            <div style="margin-top: 16px; text-align: center;">
+            <div style="margin-top: 16px; text-align: center; flex-shrink: 0;">
                 <span id="instruction-step-indicator" style="color: #999; font-size: 14px;">Шаг 1 из 5</span>
             </div>
         </div>
