@@ -19,9 +19,34 @@ async def init_subscribers_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT UNIQUE NOT NULL,
                 first_seen INTEGER NOT NULL,
-                last_seen INTEGER NOT NULL
+                last_seen INTEGER NOT NULL,
+                username TEXT UNIQUE,          -- Логин для веб-доступа
+                password_hash TEXT,            -- Хэш пароля
+                is_web INTEGER DEFAULT 0,      -- Флаг веб-пользователя
+                auth_token TEXT                -- Токен для сессии (запомнить меня)
             )
         """)
+
+        # Миграция: добавляем новые колонки в users, если их нет
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN username TEXT UNIQUE")
+            logger.info("Добавлена колонка username в таблицу users")
+        except Exception: pass
+        
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+            logger.info("Добавлена колонка password_hash в таблицу users")
+        except Exception: pass
+        
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN is_web INTEGER DEFAULT 0")
+            logger.info("Добавлена колонка is_web в таблицу users")
+        except Exception: pass
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN auth_token TEXT")
+            logger.info("Добавлена колонка auth_token в таблицу users")
+        except Exception: pass
 
         # Таблица подписок
         await db.execute("""
@@ -1669,6 +1694,52 @@ async def delete_user_completely(user_id: str) -> dict:
             raise
         
         return stats
+
+async def delete_user_completely(user_id: str) -> dict:
+# ... (код функции) ...
+        return stats
+
+# ==================== АУТЕНТИФИКАЦИЯ (ВЕБ) ====================
+
+async def register_web_user(username: str, password_hash: str):
+    """Регистрирует нового веб-пользователя"""
+    now = int(datetime.datetime.now().timestamp())
+    # Для веб-пользователей user_id будет иметь префикс web_
+    user_id = f"web_{username.lower()}"
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute(
+                """INSERT INTO users (user_id, username, password_hash, is_web, first_seen, last_seen) 
+                   VALUES (?, ?, ?, 1, ?, ?)""",
+                (user_id, username.lower(), password_hash, now, now)
+            )
+            await db.commit()
+            return user_id
+        except aiosqlite.IntegrityError:
+            raise Exception("Пользователь с таким логином уже существует")
+
+async def get_web_user_by_username(username: str):
+    """Получает веб-пользователя по логину"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE username = ? AND is_web = 1", (username.lower(),)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+async def update_user_auth_token(user_id: str, token: str):
+    """Обновляет токен авторизации (для 'запомнить меня')"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET auth_token = ? WHERE user_id = ?", (token, user_id))
+        await db.commit()
+
+async def get_user_by_auth_token(token: str):
+    """Получает пользователя по токену авторизации"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE auth_token = ?", (token,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
 
 async def get_subscription_conversion_data(days: int = 30):
     """

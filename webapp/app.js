@@ -1,9 +1,45 @@
 // Telegram Web App API
 const tg = window.Telegram.WebApp;
 
+// Глобальные переменные для веб-авторизации
+let webAuthToken = localStorage.getItem('web_token');
+let currentUserId = null;
+let isWebMode = !tg.initData;
+
+// Функция для выполнения защищенных запросов к API
+async function apiFetch(url, options = {}) {
+    if (!options.headers) options.headers = {};
+    
+    // Добавляем авторизацию
+    if (tg.initData) {
+        // Режим Telegram
+        const separator = url.includes('?') ? '&' : '?';
+        url = `${url}${separator}initData=${encodeURIComponent(tg.initData)}`;
+    } else if (webAuthToken) {
+        // Режим Веб
+        options.headers['Authorization'] = `Bearer ${webAuthToken}`;
+    }
+    
+    const response = await fetch(url, options);
+    if (response.status === 401 && isWebMode) {
+        // Токен протух
+        logout();
+    }
+    return response;
+}
+
+function logout() {
+    localStorage.removeItem('web_token');
+    webAuthToken = null;
+    currentUserId = null;
+    showPage('login');
+}
+
 // Инициализация Telegram Web App
-tg.ready();
-tg.expand();
+if (tg.initData) {
+    tg.ready();
+    tg.expand();
+}
 
 // Отключаем вертикальные свайпы для закрытия приложения (предотвращает закрытие при скролле вверх)
 if (tg.disableVerticalSwipes) {
@@ -224,23 +260,16 @@ async function loadSubscriptions() {
     const errorEl = document.getElementById('error');
     const emptyEl = document.getElementById('empty');
     const subscriptionsEl = document.getElementById('subscriptions');
-    const subscriptionsListEl = document.getElementById('subscriptions-list');
     
     // Показываем загрузку
-    loadingEl.style.display = 'block';
-    errorEl.style.display = 'none';
-    emptyEl.style.display = 'none';
-    subscriptionsEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (errorEl) errorEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (subscriptionsEl) subscriptionsEl.style.display = 'none';
     
     try {
-        // Получаем initData от Telegram
-        const initData = tg.initData;
-        if (!initData) {
-            throw new Error('initData не доступен');
-        }
-        
-        // Запрашиваем подписки через API
-        const response = await fetch(`/api/subscriptions?initData=${encodeURIComponent(initData)}`);
+        // Запрашиваем подписки через защищенный API
+        const response = await apiFetch(`/api/subscriptions`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -253,18 +282,21 @@ async function loadSubscriptions() {
         }
         
         // Скрываем загрузку
-        loadingEl.style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'none';
         
         // Обновляем статистику
-        document.getElementById('total-count').textContent = data.total || 0;
-        document.getElementById('active-count').textContent = data.active || 0;
+        const totalEl = document.getElementById('total-count');
+        const activeEl = document.getElementById('active-count');
+        if (totalEl) totalEl.textContent = data.total || 0;
+        if (activeEl) activeEl.textContent = data.active || 0;
         
         if (!data.subscriptions || data.subscriptions.length === 0) {
             // Нет подписок
-            emptyEl.style.display = 'block';
+            if (emptyEl) emptyEl.style.display = 'block';
         } else {
             // Показываем подписки
-            subscriptionsEl.style.display = 'block';
+            if (subscriptionsEl) subscriptionsEl.style.display = 'block';
+            window.allSubscriptions = data.subscriptions;
             renderSubscriptions(data.subscriptions);
         }
         
@@ -282,8 +314,8 @@ async function loadSubscriptions() {
         
     } catch (error) {
         console.error('Ошибка загрузки подписок:', error);
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'block';
     }
 }
 
@@ -345,17 +377,12 @@ async function loadServers() {
     const contentEl = document.getElementById('servers-content');
     const listEl = document.getElementById('servers-list');
     
-    loadingEl.style.display = 'block';
-    errorEl.style.display = 'none';
-    contentEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (errorEl) errorEl.style.display = 'none';
+    if (contentEl) contentEl.style.display = 'none';
     
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            throw new Error('initData не доступен');
-        }
-        
-        const response = await fetch(`/api/servers?initData=${encodeURIComponent(initData)}`);
+        const response = await apiFetch(`/api/servers`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -367,22 +394,22 @@ async function loadServers() {
             throw new Error(data.error || 'Ошибка получения данных');
         }
         
-        loadingEl.style.display = 'none';
-        contentEl.style.display = 'block';
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
         
         // Загружаем карту серверов
         loadServerMap();
         
         if (!data.servers || data.servers.length === 0) {
-            listEl.innerHTML = '<div class="empty"><p>Серверы не найдены</p></div>';
+            if (listEl) listEl.innerHTML = '<div class="empty"><p>Серверы не найдены</p></div>';
         } else {
             renderServers(data.servers);
         }
         
     } catch (error) {
         console.error('Ошибка загрузки серверов:', error);
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'block';
     }
 }
 
@@ -1069,7 +1096,7 @@ async function loadServerMap() {
         }
         
         // Запрашиваем данные о серверах
-        const response = await fetch(`/api/user/server-usage?initData=${encodeURIComponent(initData)}`);
+        const response = await apiFetch(`/api/user/server-usage`);
         
         if (!response.ok) {
             throw new Error('Ошибка загрузки данных серверов');
@@ -1298,13 +1325,12 @@ async function createPayment(period, subscriptionId = null) {
         currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
         showPaymentPage();
         
-        const response = await fetch('/api/user/payment/create', {
+        const response = await apiFetch('/api/user/payment/create', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 period,
                 subscription_id: subscriptionId
             })
@@ -1402,38 +1428,31 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
                 
-                // Проверяем финальный статус перед остановкой
-                const finalResponse = await fetch(`/api/user/payment/status/${paymentId}?initData=${encodeURIComponent(initData)}`);
-                if (finalResponse.ok) {
-                    const finalData = await finalResponse.json();
-                    if (finalData.success && finalData.status === 'pending') {
-                        // Платеж все еще pending - возможно, пользователь не оплатил
-                        if (tg && tg.showAlert) {
-                            tg.showAlert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
-                        } else {
-                            alert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
-                        }
-                        goBackFromPayment();
+            // Конечная проверка статуса
+            const finalResponse = await apiFetch(`/api/user/payment/status/${paymentId}`);
+            if (finalResponse.ok) {
+                const finalData = await finalResponse.json();
+                if (finalData.success && finalData.status === 'pending') {
+                    // Платеж все еще pending - возможно, пользователь не оплатил
+                    if (tg && tg.showAlert) {
+                        tg.showAlert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
+                    } else {
+                        alert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
                     }
+                    goBackFromPayment();
                 }
-                return;
             }
-            
-            const initData = tg.initData;
-            if (!initData) {
-                clearInterval(paymentCheckInterval);
-                paymentCheckInterval = null;
-                return;
-            }
-            
-            const response = await fetch(`/api/user/payment/status/${paymentId}?initData=${encodeURIComponent(initData)}`);
-            
-            if (!response.ok) {
-                return; // Продолжаем проверку
-            }
-            
-            const data = await response.json();
-            
+            return;
+        }
+        
+        const response = await apiFetch(`/api/user/payment/status/${paymentId}`);
+        
+        if (!response.ok) {
+            return; // Продолжаем проверку
+        }
+        
+        const data = await response.json();
+
             // Проверяем, что платеж успешен И обработан вебхуком (activated = true)
             // Вебхук обрабатывает платеж и устанавливает activated = true
             if (data.success && data.status === 'succeeded' && data.activated) {
@@ -1488,19 +1507,12 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
 // Функция переименования подписки
 async function renameSubscription(subId, newName) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
-        const response = await fetch(`/api/user/subscription/${subId}/rename`, {
+        const response = await apiFetch(`/api/user/subscription/${subId}/rename`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 name: newName
             })
         });
@@ -1605,38 +1617,14 @@ let currentEditingSubscriptionId = null;
 let previousAdminPage = 'admin-users';
 
 // Проверка прав админа
+// Функция проверки прав админа
 async function checkAdminAccess() {
     try {
-        // Пробуем получить initData разными способами
-        let initData = tg.initData;
-        
-        // Если initData нет, пробуем получить из initDataUnsafe
-        if (!initData && tg.initDataUnsafe) {
-            // Формируем initData из initDataUnsafe
-            const user = tg.initDataUnsafe.user;
-            if (user) {
-                const authDate = Math.floor(Date.now() / 1000);
-                initData = `user=${JSON.stringify(user)}&auth_date=${authDate}`;
-            }
-        }
-        
-        if (!initData) {
-            console.warn('initData недоступен, пробуем позже...');
-            // Пробуем еще раз через небольшую задержку
-            setTimeout(async () => {
-                await checkAdminAccess();
-            }, 1000);
-            return false;
-        }
-        
-        console.log('Проверка прав админа, initData:', initData.substring(0, 50) + '...');
-        
-        const response = await fetch(`/api/admin/check?initData=${encodeURIComponent(initData)}`, {
+        const response = await apiFetch(`/api/admin/check`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (response.ok) {
@@ -1714,23 +1702,12 @@ function addAdminNavButton() {
 // Загрузка списка пользователей
 async function loadAdminUsers(page = 1, search = '') {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            showError('admin-users-error', 'Ошибка авторизации');
-            return;
-        }
-        
-        document.getElementById('admin-users-loading').style.display = 'block';
-        document.getElementById('admin-users-error').style.display = 'none';
-        document.getElementById('admin-users-content').style.display = 'none';
-        
-        const response = await fetch('/api/admin/users', {
+        const response = await apiFetch('/api/admin/users', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 page,
                 limit: 20,
                 search
@@ -1854,12 +1831,11 @@ async function showAdminUserDetail(userId) {
         document.getElementById('admin-user-detail-loading').style.display = 'block';
         document.getElementById('admin-user-detail-content').innerHTML = '';
         
-        const response = await fetch(`/api/admin/user/${userId}`, {
+        const response = await apiFetch(`/api/admin/user/${userId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (!response.ok) {
@@ -1955,12 +1931,11 @@ async function showAdminSubscriptionEdit(subId) {
         document.getElementById('admin-subscription-edit-loading').style.display = 'block';
         document.getElementById('admin-subscription-edit-content').style.display = 'none';
         
-        const response = await fetch(`/api/admin/subscription/${subId}`, {
+        const response = await apiFetch(`/api/admin/subscription/${subId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (!response.ok) {
@@ -2159,13 +2134,12 @@ async function confirmSaveSubscriptionChanges() {
             confirmBtn.disabled = true;
         }
         
-        const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/update`, {
+        const response = await apiFetch(`/api/admin/subscription/${currentEditingSubscriptionId}/update`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 ...window.pendingSubscriptionUpdate
             })
         });
@@ -2206,12 +2180,6 @@ async function confirmSaveSubscriptionChanges() {
 // Синхронизация подписки
 async function syncSubscription() {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         if (!currentEditingSubscriptionId) {
             alert('Ошибка: ID подписки не найден');
             return;
@@ -2221,12 +2189,11 @@ async function syncSubscription() {
         syncBtn.disabled = true;
         syncBtn.textContent = 'Синхронизация...';
         
-        const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/sync`, {
+        const response = await apiFetch(`/api/admin/subscription/${currentEditingSubscriptionId}/sync`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (!response.ok) {
@@ -2483,13 +2450,12 @@ async function confirmDeleteUser(userId) {
             confirmBtn.textContent = 'Удаление...';
         }
         
-        const response = await fetch(`/api/admin/user/${userId}/delete`, {
+        const response = await apiFetch(`/api/admin/user/${userId}/delete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 confirm: true
             })
         });
@@ -2573,13 +2539,12 @@ async function createSubscription(event) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Создание...';
         
-        const response = await fetch(`/api/admin/user/${currentCreatingSubscriptionUserId}/create-subscription`, {
+        const response = await apiFetch(`/api/admin/user/${currentCreatingSubscriptionUserId}/create-subscription`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 ...formData
             })
         });
@@ -2627,12 +2592,6 @@ function confirmDeleteSubscription() {
 // Удаление подписки
 async function deleteSubscription() {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         if (!currentEditingSubscriptionId) {
             alert('Ошибка: ID подписки не найден');
             return;
@@ -2642,13 +2601,12 @@ async function deleteSubscription() {
         deleteBtn.disabled = true;
         deleteBtn.textContent = 'Удаление...';
         
-        const response = await fetch(`/api/admin/subscription/${currentEditingSubscriptionId}/delete`, {
+        const response = await apiFetch(`/api/admin/subscription/${currentEditingSubscriptionId}/delete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                initData,
                 confirm: true
             })
         });
@@ -2685,22 +2643,19 @@ function showError(elementId, message) {
 // Загрузка статистики
 async function loadAdminStats() {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            showError('admin-stats-error', 'Ошибка авторизации');
-            return;
-        }
+        const loadingEl = document.getElementById('admin-stats-loading');
+        const errorEl = document.getElementById('admin-stats-error');
+        const contentEl = document.getElementById('admin-stats-content');
         
-        document.getElementById('admin-stats-loading').style.display = 'block';
-        document.getElementById('admin-stats-error').style.display = 'none';
-        document.getElementById('admin-stats-content').style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (errorEl) errorEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'none';
         
-        const response = await fetch('/api/admin/stats', {
+        const response = await apiFetch('/api/admin/stats', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (!response.ok) {
@@ -2789,12 +2744,12 @@ async function loadUserGrowthChart(days = 30) {
             return;
         }
         
-        const response = await fetch('/api/admin/charts/user-growth', {
+        const response = await apiFetch('/api/admin/charts/user-growth', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ initData, days: days })
+            body: JSON.stringify({ days: days })
         });
         
         if (!response.ok) {
@@ -2961,12 +2916,12 @@ async function loadConversionChart(days = 30) {
             return;
         }
         
-        const response = await fetch('/api/admin/charts/conversion', {
+        const response = await apiFetch('/api/admin/charts/conversion', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ initData, days: days })
+            body: JSON.stringify({ days: days })
         });
         
         if (!response.ok) {
@@ -3136,12 +3091,12 @@ async function loadRevenueTrendChart(days = 30) {
             return;
         }
         
-        const response = await fetch('/api/admin/charts/revenue-trend', {
+        const response = await apiFetch('/api/admin/charts/revenue-trend', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ initData, days: days })
+            body: JSON.stringify({ days: days })
         });
         
         if (!response.ok) {
@@ -3301,12 +3256,11 @@ async function loadServerLoadChart() {
             return;
         }
         
-        const response = await fetch('/api/admin/charts/server-load', {
+        const response = await apiFetch('/api/admin/charts/server-load', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (!response.ok) {
@@ -3907,12 +3861,12 @@ async function loadNotificationStats(days = 7) {
         document.getElementById('admin-notifications-error').style.display = 'none';
         document.getElementById('admin-notifications-content').style.display = 'none';
         
-        const response = await fetch('/api/admin/charts/notifications', {
+        const response = await apiFetch('/api/admin/charts/notifications', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ initData, days: days })
+            body: JSON.stringify({ days: days })
         });
         
         if (!response.ok) {
@@ -4430,6 +4384,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Включаем защиту от закрытия при скролле вверх
     preventCloseOnScroll();
     
+    // Если это веб-режим, проверяем токен
+    if (isWebMode) {
+        document.body.classList.add('web-mode');
+        if (webAuthToken) {
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: webAuthToken })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    currentUserId = result.user_id;
+                    showPage('subscriptions');
+                } else {
+                    showPage('login');
+                }
+            } catch (e) {
+                showPage('login');
+            }
+        } else {
+            showPage('login');
+        }
+    } else {
+        // Режим Telegram
+        await initTelegramFlow();
+    }
+    
+    // Инициализируем навигацию с индикатором
+    initNavIndicator();
+});
+
+async function initTelegramFlow() {
     // Регистрация пользователя при первом открытии мини-приложения
     try {
         const initData = tg.initData;
@@ -4445,14 +4432,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (response.ok) {
                 const data = await response.json();
                 if (data.trial_created) {
-                    // Пробная подписка создана - можно показать уведомление
                     console.log('Пробная подписка создана для нового пользователя');
                 }
             }
         }
     } catch (error) {
         console.error('Ошибка регистрации пользователя:', error);
-        // Не критично - продолжаем работу
     }
     
     // Проверяем deep link параметры
@@ -4461,26 +4446,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if (startapp) {
         if (startapp.startsWith('extend_subscription_')) {
-            // Прямой переход на продление подписки
             const subscriptionId = parseInt(startapp.replace('extend_subscription_', ''));
             if (subscriptionId && !isNaN(subscriptionId)) {
-                // Сначала загружаем подписки, чтобы убедиться, что данные загружены
                 await loadSubscriptions();
-                // Небольшая задержка для загрузки данных, затем открываем страницу продления
                 setTimeout(() => {
                     showExtendSubscriptionModal(subscriptionId);
                 }, 300);
-                // Проверяем права админа в фоне
                 checkAdminAccess();
                 return;
             }
         } else if (startapp.startsWith('subscription_')) {
-            // Прямой переход на конкретную подписку
             const subscriptionId = parseInt(startapp.replace('subscription_', ''));
             if (subscriptionId && !isNaN(subscriptionId)) {
-                // Загружаем подписки
                 await loadSubscriptions();
-                // Находим подписку и открываем её детали
                 setTimeout(() => {
                     const subscriptions = window.allSubscriptions || [];
                     const sub = subscriptions.find(s => s.id === subscriptionId);
@@ -4490,28 +4468,99 @@ document.addEventListener('DOMContentLoaded', async () => {
                         showPage('subscriptions');
                     }
                 }, 300);
-                // Проверяем права админа в фоне
                 checkAdminAccess();
                 return;
             }
         } else if (startapp === 'subscriptions') {
-            // Прямой переход на список подписок
             showPage('subscriptions');
             await loadSubscriptions();
-            // Проверяем права админа в фоне
             checkAdminAccess();
             return;
         }
     }
     
     showPage('subscriptions');
-    
-    // Проверяем права админа
     await checkAdminAccess();
+}
+
+// Обработчики веб-авторизации
+async function handleWebLogin(event) {
+    event.preventDefault();
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    const remember = document.getElementById('login-remember').checked;
     
-    // Инициализируем навигацию с индикатором
-    initNavIndicator();
-});
+    const btn = event.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Вход...';
+
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, remember })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            webAuthToken = result.token;
+            if (remember) {
+                localStorage.setItem('web_token', result.token);
+            }
+            currentUserId = result.user_id;
+            showPage('subscriptions');
+        } else {
+            alert(result.error || 'Ошибка входа');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+async function handleWebRegister(event) {
+    event.preventDefault();
+    const username = document.getElementById('register-username').value;
+    const password = document.getElementById('register-password').value;
+    const confirm = document.getElementById('register-confirm').value;
+    
+    if (password !== confirm) {
+        alert('Пароли не совпадают');
+        return;
+    }
+
+    const btn = event.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Регистрация...';
+
+    try {
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            webAuthToken = result.token;
+            localStorage.setItem('web_token', result.token);
+            currentUserId = result.user_id;
+            alert('Регистрация успешна!');
+            showPage('subscriptions');
+        } else {
+            alert(result.error || 'Ошибка регистрации');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
 
 // Загрузка статистики подписок
 async function loadSubscriptionStats(days = 30) {
@@ -4526,12 +4575,12 @@ async function loadSubscriptionStats(days = 30) {
         document.getElementById('admin-subscriptions-error').style.display = 'none';
         document.getElementById('admin-subscriptions-content').style.display = 'none';
         
-        const response = await fetch('/api/admin/charts/subscriptions', {
+        const response = await apiFetch('/api/admin/charts/subscriptions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ initData, days: days })
+            body: JSON.stringify({ days: days })
         });
         
         if (!response.ok) {
@@ -4925,12 +4974,12 @@ async function loadChurnRateChart(days = 30) {
             return;
         }
         
-        const response = await fetch('/api/admin/charts/churn-rate', {
+        const response = await apiFetch('/api/admin/charts/churn-rate', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ initData, days: days })
+            body: JSON.stringify({ days: days })
         });
         
         if (!response.ok) {
@@ -5129,12 +5178,11 @@ async function loadBroadcastPage() {
         }
         
         // Получаем статистику для определения количества пользователей
-        const statsResponse = await fetch('/api/admin/stats', {
+        const statsResponse = await apiFetch('/api/admin/stats', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ initData })
+            }
         });
         
         if (!statsResponse.ok) {
@@ -5283,13 +5331,12 @@ async function searchUsersForBroadcast() {
             
             listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Поиск...</div>';
             
-            const response = await fetch('/api/admin/users', {
+            const response = await apiFetch('/api/admin/users', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    initData,
                     page: 1,
                     limit: 50, // Ограничиваем до 50 результатов
                     search
@@ -5496,14 +5543,8 @@ async function sendBroadcast() {
     contentEl.style.display = 'none';
     
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            throw new Error('Ошибка авторизации');
-        }
-        
         // Формируем тело запроса
         const requestBody = {
-            initData,
             message: message
         };
         
@@ -5512,7 +5553,7 @@ async function sendBroadcast() {
             requestBody.user_ids = broadcastSelectedUsers;
         }
         
-        const response = await fetch('/api/admin/broadcast', {
+        const response = await apiFetch('/api/admin/broadcast', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -6274,10 +6315,10 @@ async function loadServerGroups() {
     const listEl = document.getElementById('admin-server-groups-list');
     
     try {
-        const response = await fetch('/api/admin/server-groups', {
+        const response = await apiFetch('/api/admin/server-groups', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: tg.initData, action: 'list' })
+            body: JSON.stringify({ action: 'list' })
         });
         
         if (!response.ok) {
@@ -6391,13 +6432,12 @@ async function saveServerGroup(event) {
     try {
         const url = id ? '/api/admin/server-group/update' : '/api/admin/server-groups';
         const body = {
-            initData: tg.initData,
             name, description, is_default,
             action: id ? undefined : 'add',
             id: id || undefined
         };
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -6437,10 +6477,10 @@ async function loadServersInGroup(groupId, groupName) {
     listEl.innerHTML = '<div class="spinner"></div>';
 
     try {
-        const response = await fetch('/api/admin/servers-config', {
+        const response = await apiFetch('/api/admin/servers-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: tg.initData, action: 'list', group_id: groupId })
+            body: JSON.stringify({ action: 'list', group_id: groupId })
         });
         const result = await response.json();
         if (result.success) {
@@ -6517,7 +6557,6 @@ async function saveServerConfig(event) {
     event.preventDefault();
     const id = document.getElementById('server-id-input').value;
     const body = {
-        initData: tg.initData,
         group_id: currentSelectedGroupId,
         name: document.getElementById('server-name-input').value,
         display_name: document.getElementById('server-display-input').value,
@@ -6533,7 +6572,7 @@ async function saveServerConfig(event) {
 
     try {
         const url = id ? '/api/admin/server-config/update' : '/api/admin/servers-config';
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -6557,10 +6596,10 @@ async function deleteServerConfig(serverId) {
     if (!confirm('Вы уверены, что хотите удалить конфигурацию сервера? Это не удалит клиентов с самого сервера, но бот перестанет его использовать.')) return;
 
     try {
-        const response = await fetch('/api/admin/server-config/delete', {
+        const response = await apiFetch('/api/admin/server-config/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: tg.initData, id: serverId })
+            body: JSON.stringify({ id: serverId })
         });
         const result = await response.json();
         if (result.success) {
@@ -6593,10 +6632,9 @@ async function syncAllServers() {
     tg.MainButton.disable();
 
     try {
-        const response = await fetch('/api/admin/sync-all', {
+        const response = await apiFetch('/api/admin/sync-all', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: tg.initData })
+            headers: { 'Content-Type': 'application/json' }
         });
         const result = await response.json();
         if (result.success) {

@@ -1818,3 +1818,17 @@ button[onclick*="toggleFullscreen"]:hover {
 button[onclick*="toggleFullscreen"]:active {
     background: #3a3a3a !important;
 }
+
+
+/* РЎС‚РёР»Рё РґР»СЏ РІРµР±-РІРµСЂСЃРёРё */
+.web-only {
+    display: none !important;
+}
+
+body.web-mode .web-only {
+    display: block !important;
+}
+
+body.web-mode .tg-only {
+    display: none !important;
+}

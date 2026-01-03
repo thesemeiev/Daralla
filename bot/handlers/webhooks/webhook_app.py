@@ -4,7 +4,9 @@ Flask приложение для обработки webhook'ов от YooKassa
 import logging
 import threading
 import asyncio
+import secrets
 from flask import Flask, request, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from .payment_processors import process_payment_webhook
 from ...db.subscribers_db import get_subscription_by_token
@@ -473,7 +475,6 @@ def create_webhook_app(bot_app):
     def api_user_register():
         """
         Регистрация пользователя при первом открытии мини-приложения.
-        Создает пользователя в БД и пробную подписку на 5 дней, если пользователь новый.
         """
         if request.method == 'OPTIONS':
             return ('', 200, {
@@ -483,18 +484,12 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            # Проверяем авторизацию через Telegram
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
-            user_id = str(user_id)
+            # Проверяем, является ли пользователь веб-пользователем (у них нет триала)
+            is_web = user_id.startswith('web_')
             
             # Создаем новый event loop для асинхронных операций
             loop = asyncio.new_event_loop()
@@ -517,10 +512,9 @@ def create_webhook_app(bot_app):
                 loop.run_until_complete(register_simple_user(user_id))
                 
                 trial_created = False
-                subscription_id = None
                 
-                # Если пользователь новый - создаем пробную подписку
-                if not was_known_user:
+                # Если пользователь новый И не веб-пользователь - создаем пробную подписку
+                if not was_known_user and not is_web:
                     try:
                         # Проверяем, нет ли уже активных подписок
                         existing_subs = loop.run_until_complete(get_all_active_subscriptions_by_user(user_id))
@@ -639,8 +633,7 @@ def create_webhook_app(bot_app):
     
     @app.route('/api/subscriptions', methods=['GET', 'OPTIONS'])
     def api_subscriptions():
-        """API endpoint для получения подписок пользователя через Telegram Mini App"""
-        # Обрабатываем OPTIONS запрос (CORS preflight)
+        """API endpoint для получения подписок пользователя"""
         if request.method == 'OPTIONS':
             return ('', 200, {
                 "Access-Control-Allow-Origin": "*",
@@ -649,15 +642,8 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            # Получаем initData из query параметров
-            init_data = request.args.get('initData')
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            # Проверяем initData от Telegram
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
-                logger.warning("Invalid initData from Telegram Mini App")
                 return jsonify({'error': 'Invalid authentication'}), 401
             
             # Получаем подписки пользователя
@@ -731,18 +717,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            # Проверяем initData от Telegram
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
-                logger.warning("Invalid initData from Telegram Mini App")
                 return jsonify({'error': 'Invalid authentication'}), 401
             
+            data = request.get_json() or {}
             # Получаем параметры платежа
             period = data.get('period')  # 'month' или '3month'
             subscription_id = data.get('subscription_id')  # Для продления
@@ -864,15 +843,8 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            init_data = request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            # Проверяем initData от Telegram
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
-                logger.warning("Invalid initData from Telegram Mini App")
                 return jsonify({'error': 'Invalid authentication'}), 401
             
             # Получаем информацию о платеже
@@ -919,18 +891,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            # Проверяем initData от Telegram
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
-                logger.warning("Invalid initData from Telegram Mini App")
                 return jsonify({'error': 'Invalid authentication'}), 401
             
+            data = request.get_json() or {}
             # Получаем новое имя
             new_name = data.get('name', '').strip()
             if not new_name:
@@ -977,11 +942,7 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            init_data = request.args.get('initData')
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
@@ -1050,7 +1011,7 @@ def create_webhook_app(bot_app):
     # API endpoint для получения статуса серверов (для Telegram Mini App)
     @app.route('/api/servers', methods=['GET', 'OPTIONS'])
     def api_servers():
-        """API endpoint для получения статуса серверов через Telegram Mini App"""
+        """API endpoint для получения статуса серверов"""
         # Обрабатываем OPTIONS запрос (CORS preflight)
         if request.method == 'OPTIONS':
             return ('', 200, {
@@ -1060,15 +1021,9 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            # Получаем initData из query параметров
-            init_data = request.args.get('initData')
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            # Проверяем initData от Telegram
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
-                return jsonify({'error': 'Invalid initData'}), 401
+                return jsonify({'error': 'Invalid authentication'}), 401
             
             # Получаем server_manager из bot_app
             def get_server_manager():
@@ -1225,13 +1180,7 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
@@ -1259,21 +1208,17 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            search = data.get('search', '').strip()
-            page = int(data.get('page', 1))
-            limit = int(data.get('limit', 20))
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            user_id = verify_telegram_init_data(init_data)
+            user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
             if not check_admin_access(user_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
+            search = data.get('search', '').strip()
+            page = int(data.get('page', 1))
+            limit = int(data.get('limit', 20))
             
             from ...db.subscribers_db import DB_PATH
             import aiosqlite
@@ -1356,18 +1301,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             from ...db.subscribers_db import get_user_by_id, get_all_subscriptions_by_user
             from ...db.payments_db import get_payments_by_user
@@ -1477,18 +1415,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             # Получаем параметры из запроса
             period = data.get('period', 'month')  # month или 3month
@@ -1661,18 +1592,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
             
@@ -1724,18 +1648,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             # Получаем данные для обновления
             updates = {}
@@ -2080,19 +1997,13 @@ def create_webhook_app(bot_app):
                 "Access-Control-Allow-Headers": "*",
             })
         
+        data = {}
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
             
@@ -2215,22 +2126,15 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            confirm = data.get('confirm', False)  # Требуем подтверждение
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
             
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
+            data = request.get_json() or {}
+            confirm = data.get('confirm', False)  # Требуем подтверждение
             
             if not confirm:
                 return jsonify({'error': 'Confirmation required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
-                return jsonify({'error': 'Access denied'}), 403
             
             from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, remove_subscription_server, DB_PATH
             import aiosqlite
@@ -2356,23 +2260,17 @@ def create_webhook_app(bot_app):
                 "Access-Control-Allow-Headers": "*",
             })
         
+        data = {}
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            confirm = data.get('confirm', False)
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
             
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
+            data = request.get_json() or {}
+            confirm = data.get('confirm', False)
             
             if not confirm:
                 return jsonify({'error': 'Confirmation required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
-                return jsonify({'error': 'Access denied'}), 403
             
             from ...db.subscribers_db import delete_user_completely, get_all_subscriptions_by_user, get_subscription_servers
             import aiosqlite
@@ -2492,18 +2390,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             from ...db.subscribers_db import DB_PATH, get_subscription_statistics
             import aiosqlite
@@ -2629,18 +2520,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             days = int(data.get('days', 30))  # По умолчанию 30 дней
             
@@ -2675,18 +2559,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             from ...db.subscribers_db import get_server_load_data
             
@@ -2799,18 +2676,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             days = int(data.get('days', 30))  # По умолчанию 30 дней
             
@@ -2845,18 +2715,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             days = int(data.get('days', 30))
             
@@ -2891,18 +2754,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             days = int(data.get('days', 7))  # По умолчанию 7 дней
             
@@ -2974,18 +2830,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             days = int(data.get('days', 30))
             
@@ -3061,18 +2910,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             days = int(data.get('days', 30))
             
@@ -3107,18 +2949,11 @@ def create_webhook_app(bot_app):
             })
         
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            
-            if not check_admin_access(admin_id):
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
+            
+            data = request.get_json() or {}
             
             message_text = data.get('message', '').strip()
             if not message_text:
@@ -3239,17 +3074,13 @@ def create_webhook_app(bot_app):
                 "Access-Control-Allow-Headers": "*",
             })
         
+        data = {}
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData') or request.args.get('initData')
-            
-            if not init_data:
-                return jsonify({'error': 'initData is required'}), 400
-            
-            admin_id = verify_telegram_init_data(init_data)
+            admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
+            data = request.get_json() or {}
             from ...db.subscribers_db import get_server_groups, add_server_group, get_group_load_statistics
             
             loop = asyncio.new_event_loop()
@@ -3278,12 +3109,15 @@ def create_webhook_app(bot_app):
     def api_admin_server_group_update():
         """Обновление группы серверов"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        
+        data = {}
+        group_id = None
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData')
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
             
+            data = request.get_json() or {}
             group_id = data.get('id')
             if not group_id: return jsonify({'error': 'Group ID is required'}), 400
             
@@ -3308,12 +3142,14 @@ def create_webhook_app(bot_app):
     def api_admin_servers_config():
         """Получение и добавление конфигурации серверов"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        
+        data = {}
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData')
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
             
+            data = request.get_json() or {}
             from ...db.subscribers_db import get_servers_config, add_server_config
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -3359,12 +3195,14 @@ def create_webhook_app(bot_app):
     def api_admin_server_config_update():
         """Обновление конфигурации сервера"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        
+        data = {}
+        server_id = None
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData')
-            admin_id = verify_telegram_init_data(init_data)
+            admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
             
+            data = request.get_json() or {}
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
             
@@ -3396,12 +3234,14 @@ def create_webhook_app(bot_app):
     def api_admin_server_config_delete():
         """Удаление конфигурации сервера"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        
+        data = {}
+        server_id = None
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData')
-            admin_id = verify_telegram_init_data(init_data)
+            admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
             
+            data = request.get_json() or {}
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
             
@@ -3421,10 +3261,9 @@ def create_webhook_app(bot_app):
         """Полная синхронизация всех серверов"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            data = request.get_json() or {}
-            init_data = data.get('initData')
-            admin_id = verify_telegram_init_data(init_data)
-            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
             
             from ...bot import sync_manager
             loop = asyncio.new_event_loop()
@@ -3437,7 +3276,126 @@ def create_webhook_app(bot_app):
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
+    def api_auth_register():
+        """Регистрация нового веб-пользователя"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            username = data.get('username', '').strip().lower()
+            password = data.get('password', '')
+            
+            if not username or not password:
+                return jsonify({'error': 'Логин и пароль обязательны'}), 400
+            
+            if len(username) < 3: return jsonify({'error': 'Логин слишком короткий'}), 400
+            if len(password) < 6: return jsonify({'error': 'Пароль слишком короткий (минимум 6 символов)'}), 400
+            
+            from ...db.subscribers_db import register_web_user
+            password_hash = generate_password_hash(password)
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user_id = loop.run_until_complete(register_web_user(username, password_hash))
+                token = secrets.token_hex(32)
+                from ...db.subscribers_db import update_user_auth_token
+                loop.run_until_complete(update_user_auth_token(user_id, token))
+                return jsonify({'success': True, 'token': token, 'user_id': user_id})
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка регистрации: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
+    def api_auth_login():
+        """Вход веб-пользователя"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            username = data.get('username', '').strip().lower()
+            password = data.get('password', '')
+            remember = data.get('remember', False)
+            
+            if not username or not password:
+                return jsonify({'error': 'Введите логин и пароль'}), 400
+            
+            from ...db.subscribers_db import get_web_user_by_username
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_web_user_by_username(username))
+                if not user or not check_password_hash(user['password_hash'], password):
+                    return jsonify({'error': 'Неверный логин или пароль'}), 401
+                
+                token = secrets.token_hex(32)
+                from ...db.subscribers_db import update_user_auth_token
+                loop.run_until_complete(update_user_auth_token(user['user_id'], token))
+                return jsonify({
+                    'success': True, 
+                    'token': token, 
+                    'user_id': user['user_id'],
+                    'username': user['username']
+                })
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка входа: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/auth/verify', methods=['POST', 'OPTIONS'])
+    def api_auth_verify():
+        """Проверка токена (автоматический вход)"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            token = data.get('token')
+            if not token: return jsonify({'error': 'Token required'}), 400
+            
+            from ...db.subscribers_db import get_user_by_auth_token
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_auth_token(token))
+                if not user: return jsonify({'error': 'Invalid token'}), 401
+                return jsonify({
+                    'success': True, 
+                    'user_id': user['user_id'],
+                    'username': user['username']
+                })
+            finally:
+                loop.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     return app
+
+def authenticate_request():
+    """Универсальная функция аутентификации (TG initData или Web Token)"""
+    # 1. Проверяем заголовок Authorization (Web Token)
+    web_token = request.headers.get('Authorization')
+    if web_token and web_token.startswith('Bearer '):
+        token = web_token.split(' ')[1]
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            from ...db.subscribers_db import get_user_by_auth_token
+            user = loop.run_until_complete(get_user_by_auth_token(token))
+            if user: return user['user_id']
+        finally:
+            loop.close()
+            
+    # 2. Проверяем initData (Telegram) - в URL или в теле JSON
+    init_data = request.args.get('initData')
+    if not init_data and request.is_json:
+        data = request.get_json(silent=True)
+        if data: init_data = data.get('initData')
+        
+    if init_data:
+        return verify_telegram_init_data(init_data)
+        
+    return None
 
 
 def verify_telegram_init_data(init_data: str) -> str:
