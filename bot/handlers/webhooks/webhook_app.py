@@ -1305,7 +1305,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             from ...db.subscribers_db import get_user_by_id, get_all_subscriptions_by_user
             from ...db.payments_db import get_payments_by_user
@@ -1419,7 +1419,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             # Получаем параметры из запроса
             period = data.get('period', 'month')  # month или 3month
@@ -1596,7 +1596,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
             
@@ -1652,7 +1652,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             # Получаем данные для обновления
             updates = {}
@@ -2003,7 +2003,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             from ...db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
             
@@ -2130,7 +2130,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             confirm = data.get('confirm', False)  # Требуем подтверждение
             
             if not confirm:
@@ -2266,7 +2266,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             confirm = data.get('confirm', False)
             
             if not confirm:
@@ -2394,7 +2394,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             from ...db.subscribers_db import DB_PATH, get_subscription_statistics
             import aiosqlite
@@ -2524,7 +2524,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             days = int(data.get('days', 30))  # По умолчанию 30 дней
             
@@ -2563,7 +2563,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             from ...db.subscribers_db import get_server_load_data
             
@@ -2680,7 +2680,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             days = int(data.get('days', 30))  # По умолчанию 30 дней
             
@@ -2719,7 +2719,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             days = int(data.get('days', 30))
             
@@ -2758,7 +2758,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             days = int(data.get('days', 7))  # По умолчанию 7 дней
             
@@ -2834,7 +2834,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             days = int(data.get('days', 30))
             
@@ -2914,7 +2914,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             days = int(data.get('days', 30))
             
@@ -2953,7 +2953,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             
             message_text = data.get('message', '').strip()
             if not message_text:
@@ -3080,7 +3080,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             from ...db.subscribers_db import get_server_groups, add_server_group, get_group_load_statistics
             
             loop = asyncio.new_event_loop()
@@ -3117,7 +3117,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             group_id = data.get('id')
             if not group_id: return jsonify({'error': 'Group ID is required'}), 400
             
@@ -3149,7 +3149,7 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             from ...db.subscribers_db import get_servers_config, add_server_config
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -3202,7 +3202,7 @@ def create_webhook_app(bot_app):
             admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
             
@@ -3241,7 +3241,7 @@ def create_webhook_app(bot_app):
             admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
             
@@ -3281,7 +3281,7 @@ def create_webhook_app(bot_app):
         """Регистрация нового веб-пользователя"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             username = data.get('username', '').strip().lower()
             password = data.get('password', '')
             
@@ -3313,7 +3313,7 @@ def create_webhook_app(bot_app):
         """Вход веб-пользователя"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             username = data.get('username', '').strip().lower()
             password = data.get('password', '')
             remember = data.get('remember', False)
@@ -3349,7 +3349,7 @@ def create_webhook_app(bot_app):
         """Проверка токена (автоматический вход)"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             token = data.get('token')
             if not token: return jsonify({'error': 'Token required'}), 400
             
