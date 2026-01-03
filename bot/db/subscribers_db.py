@@ -36,9 +36,48 @@ async def init_subscribers_db():
                 subscription_token TEXT UNIQUE NOT NULL,
                 price REAL NOT NULL,
                 name TEXT,
-                FOREIGN KEY (subscriber_id) REFERENCES users(id)
+                group_id INTEGER,              -- ID группы серверов
+                FOREIGN KEY (subscriber_id) REFERENCES users(id),
+                FOREIGN KEY (group_id) REFERENCES server_groups(id)
             )
         """)
+
+        # Таблица групп серверов
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS server_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                is_active INTEGER DEFAULT 1,
+                is_default INTEGER DEFAULT 0
+            )
+        """)
+
+        # Таблица конфигурации серверов
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS servers_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                name TEXT NOT NULL UNIQUE,
+                display_name TEXT,
+                host TEXT NOT NULL,
+                login TEXT NOT NULL,
+                password TEXT NOT NULL,
+                vpn_host TEXT,
+                lat REAL,
+                lng REAL,
+                is_active INTEGER DEFAULT 1,
+                FOREIGN KEY (group_id) REFERENCES server_groups(id)
+            )
+        """)
+
+        # Миграция: добавляем group_id в subscriptions, если его нет
+        try:
+            await db.execute("ALTER TABLE subscriptions ADD COLUMN group_id INTEGER REFERENCES server_groups(id)")
+            logger.info("Добавлена колонка group_id в таблицу subscriptions")
+        except Exception:
+            # Колонка уже существует
+            pass
 
         # Таблица связей подписки с серверами
         await db.execute("""
@@ -119,16 +158,16 @@ async def get_or_create_subscriber(user_id: str) -> int:
             await db.commit()
             return user_internal_id
 
-async def create_subscription(subscriber_id: int, period: str, device_limit: int, price: float, expires_at: int, name: str = None):
+async def create_subscription(subscriber_id: int, period: str, device_limit: int, price: float, expires_at: int, name: str = None, group_id: int = None):
     """Создаёт новую подписку"""
     token = uuid.uuid4().hex[:24]
     now = int(datetime.datetime.now().timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """INSERT INTO subscriptions 
-               (subscriber_id, status, period, device_limit, created_at, expires_at, subscription_token, price, name)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (subscriber_id, 'active', period, device_limit, now, expires_at, token, price, name)
+               (subscriber_id, status, period, device_limit, created_at, expires_at, subscription_token, price, name, group_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (subscriber_id, 'active', period, device_limit, now, expires_at, token, price, name, group_id)
         ) as cur:
             sub_id = cur.lastrowid
             await db.commit()
@@ -884,6 +923,229 @@ async def get_server_load_data():
     server_data.sort(key=lambda x: x['online_clients'], reverse=True)
     
     return server_data
+
+# ==================== ГРУППЫ СЕРВЕРОВ И КОНФИГУРАЦИЯ ====================
+
+async def get_server_groups(only_active: bool = True):
+    """Возвращает все группы серверов"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM server_groups"
+        if only_active:
+            query += " WHERE is_active = 1"
+        async with db.execute(query) as cur:
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
+
+async def get_servers_config(group_id: int = None, only_active: bool = True):
+    """Возвращает конфигурацию серверов, опционально фильтруя по группе"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM servers_config"
+        params = []
+        
+        conditions = []
+        if group_id is not None:
+            conditions.append("group_id = ?")
+            params.append(group_id)
+        if only_active:
+            conditions.append("is_active = 1")
+            
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+            
+        async with db.execute(query, params) as cur:
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
+
+async def get_default_server_group():
+    """Возвращает группу серверов по умолчанию"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM server_groups WHERE is_default = 1 LIMIT 1") as cur:
+            row = await cur.fetchone()
+            if row:
+                return dict(row)
+            # Если нет дефолтной, берем первую активную
+            async with db.execute("SELECT * FROM server_groups WHERE is_active = 1 LIMIT 1") as cur:
+                row = await cur.fetchone()
+                return dict(row) if row else None
+
+async def add_server_group(name: str, description: str = None, is_default: bool = False):
+    """Добавляет новую группу серверов"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if is_default:
+            # Снимаем флаг дефолтной с других групп
+            await db.execute("UPDATE server_groups SET is_default = 0")
+            
+        async with db.execute(
+            "INSERT INTO server_groups (name, description, is_default) VALUES (?, ?, ?)",
+            (name, description, 1 if is_default else 0)
+        ) as cur:
+            group_id = cur.lastrowid
+            await db.commit()
+            return group_id
+
+async def add_server_config(group_id: int, name: str, host: str, login: str, password: str, 
+                           display_name: str = None, vpn_host: str = None, lat: float = None, lng: float = None):
+    """Добавляет конфигурацию сервера"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """INSERT INTO servers_config 
+               (group_id, name, display_name, host, login, password, vpn_host, lat, lng)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (group_id, name, display_name, host, login, password, vpn_host, lat, lng)
+        ) as cur:
+            server_id = cur.lastrowid
+            await db.commit()
+            return server_id
+
+async def get_least_loaded_group_id():
+    """Возвращает ID наименее загруженной группы (по количеству активных подписок)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Считаем количество активных подписок в каждой группе
+        query = """
+            SELECT g.id, COUNT(s.id) as sub_count
+            FROM server_groups g
+            LEFT JOIN subscriptions s ON g.id = s.group_id AND s.status = 'active'
+            WHERE g.is_active = 1
+            GROUP BY g.id
+            ORDER BY sub_count ASC
+            LIMIT 1
+        """
+        async with db.execute(query) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+async def update_server_group(group_id: int, name: str = None, description: str = None, is_active: int = None, is_default: int = None):
+    """Обновляет информацию о группе серверов"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        updates = []
+        params = []
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+        if is_active is not None:
+            updates.append("is_active = ?")
+            params.append(is_active)
+        if is_default is not None:
+            if is_default == 1:
+                await db.execute("UPDATE server_groups SET is_default = 0")
+            updates.append("is_default = ?")
+            params.append(is_default)
+            
+        if updates:
+            params.append(group_id)
+            query = f"UPDATE server_groups SET {', '.join(updates)} WHERE id = ?"
+            await db.execute(query, params)
+            await db.commit()
+            return True
+        return False
+
+async def delete_server_group(group_id: int):
+    """Удаляет группу серверов (если в ней нет серверов)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Проверяем, есть ли серверы в группе
+        async with db.execute("SELECT COUNT(*) FROM servers_config WHERE group_id = ?", (group_id,)) as cur:
+            row = await cur.fetchone()
+            if row and row[0] > 0:
+                raise Exception("Нельзя удалить группу, в которой есть серверы")
+                
+        await db.execute("DELETE FROM server_groups WHERE id = ?", (group_id,))
+        await db.commit()
+        return True
+
+async def update_server_config(server_id: int, **kwargs):
+    """Обновляет конфигурацию сервера"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        updates = []
+        params = []
+        for key, value in kwargs.items():
+            if key in ['group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host', 'lat', 'lng', 'is_active']:
+                updates.append(f"{key} = ?")
+                params.append(value)
+                
+        if updates:
+            params.append(server_id)
+            query = f"UPDATE servers_config SET {', '.join(updates)} WHERE id = ?"
+            await db.execute(query, params)
+            await db.commit()
+            return True
+        return False
+
+async def delete_server_config(server_id: int):
+    """Удаляет конфигурацию сервера"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM servers_config WHERE id = ?", (server_id,))
+        await db.commit()
+        return True
+
+async def get_group_load_statistics():
+    """Возвращает статистику загрузки по группам"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = """
+            SELECT 
+                g.id, g.name, g.is_active, g.is_default,
+                COUNT(DISTINCT s.id) as active_subscriptions,
+                (SELECT COUNT(*) FROM servers_config WHERE group_id = g.id AND is_active = 1) as active_servers
+            FROM server_groups g
+            LEFT JOIN subscriptions s ON g.id = s.group_id AND s.status = 'active'
+            GROUP BY g.id
+        """
+        async with db.execute(query) as cur:
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
+
+async def check_and_run_initial_migration(servers_by_location: dict):
+    """
+    Проверяет, нужна ли начальная миграция данных из bot.py в БД.
+    Если групп серверов нет, создает дефолтную группу и переносит туда серверы.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        # 1. Проверяем, есть ли группы
+        async with db.execute("SELECT COUNT(*) FROM server_groups") as cur:
+            row = await cur.fetchone()
+            if row and row[0] > 0:
+                # База уже содержит данные групп, миграция не нужна
+                return False
+
+        logger.info("🚀 Запуск автоматической миграции данных в БД...")
+        
+        # 2. Создаем дефолтную группу
+        await db.execute(
+            "INSERT INTO server_groups (name, description, is_default, is_active) VALUES (?, ?, ?, ?)",
+            ("Основная группа", "Автоматически созданная группа при миграции", 1, 1)
+        )
+        async with db.execute("SELECT last_insert_rowid()") as cur:
+            row = await cur.fetchone()
+            default_group_id = row[0]
+
+        # 3. Переносим серверы из конфига
+        for location, servers in servers_by_location.items():
+            for s in servers:
+                # Проверяем, что у сервера есть хост (что он настроен в .env)
+                host = s.get("host")
+                if not host:
+                    continue
+                    
+                await db.execute(
+                    """INSERT INTO servers_config 
+                       (group_id, name, display_name, host, login, password, vpn_host, lat, lng, is_active)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (default_group_id, s['name'], s.get('display_name'), host, 
+                     s['login'], s['password'], s.get('vpn_host'), s.get('lat'), s.get('lng'), 1)
+                )
+        
+        # 4. Привязываем всех существующих клиентов к этой группе
+        await db.execute("UPDATE subscriptions SET group_id = ? WHERE group_id IS NULL", (default_group_id,))
+        
+        await db.commit()
+        logger.info(f"✅ Автоматическая миграция завершена. Создана группа ID: {default_group_id}")
+        return True
 
 # ==================== ПРОМОКОДЫ ====================
 

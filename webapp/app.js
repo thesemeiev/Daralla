@@ -6216,3 +6216,286 @@ function initNavIndicator() {
     }, { passive: true });
 }
 
+// === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
+
+let currentAdminGroups = [];
+let currentAdminServers = [];
+let currentSelectedGroupId = null;
+
+// Загрузка страницы управления серверами
+async function loadServerManagement() {
+    showLoading('admin-server-management');
+    try {
+        await loadServerGroups();
+        document.getElementById('admin-server-management-loading').style.display = 'none';
+        document.getElementById('admin-server-management-content').style.display = 'block';
+    } catch (err) {
+        console.error('Ошибка загрузки управления серверами:', err);
+        showError('admin-server-management');
+    }
+}
+
+// Загрузка групп серверов
+async function loadServerGroups() {
+    const response = await fetch('/api/admin/server-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData, action: 'list' })
+    });
+    const result = await response.json();
+    if (result.success) {
+        currentAdminGroups = result.groups;
+        const stats = result.stats || [];
+        renderServerGroups(result.groups, stats);
+    } else {
+        throw new Error(result.error);
+    }
+}
+
+// Отрисовка списка групп
+function renderServerGroups(groups, stats) {
+    const listEl = document.getElementById('admin-server-groups-list');
+    if (!groups || groups.length === 0) {
+        listEl.innerHTML = '<p class="empty-hint">Нет созданных групп</p>';
+        return;
+    }
+
+    listEl.innerHTML = groups.map(group => {
+        const groupStats = stats.find(s => s.id === group.id) || {};
+        return `
+            <div class="admin-user-card" style="margin-bottom: 12px; cursor: pointer;" onclick="loadServersInGroup(${group.id}, '${group.name}')">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 16px;">
+                            ${group.name} 
+                            ${group.is_default ? '<span class="badge-primary" style="font-size: 10px; padding: 2px 6px;">DEFAULT</span>' : ''}
+                            ${!group.is_active ? '<span class="badge-expired" style="font-size: 10px; padding: 2px 6px;">INACTIVE</span>' : ''}
+                        </div>
+                        <div style="color: #999; font-size: 13px; margin-top: 4px;">${group.description || 'Нет описания'}</div>
+                        <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 12px;">
+                            <span>Подписок: <b>${groupStats.active_subscriptions || 0}</b></span>
+                            <span>Серверов: <b>${groupStats.active_servers || 0}</b></span>
+                        </div>
+                    </div>
+                    <button class="btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="event.stopPropagation(); editServerGroup(${group.id})">Редактировать</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Показать модалку добавления группы
+function showAddServerGroupModal() {
+    document.getElementById('server-group-modal-title').innerText = 'Добавить группу';
+    document.getElementById('group-id-input').value = '';
+    document.getElementById('group-name-input').value = '';
+    document.getElementById('group-desc-input').value = '';
+    document.getElementById('group-default-input').checked = false;
+    showModal('server-group-modal');
+}
+
+// Показать модалку редактирования группы
+function editServerGroup(groupId) {
+    const group = currentAdminGroups.find(g => g.id === groupId);
+    if (!group) return;
+
+    document.getElementById('server-group-modal-title').innerText = 'Редактировать группу';
+    document.getElementById('group-id-input').value = group.id;
+    document.getElementById('group-name-input').value = group.name;
+    document.getElementById('group-desc-input').value = group.description || '';
+    document.getElementById('group-default-input').checked = !!group.is_default;
+    showModal('server-group-modal');
+}
+
+// Сохранение группы
+async function saveServerGroup(event) {
+    event.preventDefault();
+    const id = document.getElementById('group-id-input').value;
+    const name = document.getElementById('group-name-input').value;
+    const description = document.getElementById('group-desc-input').value;
+    const is_default = document.getElementById('group-default-input').checked ? 1 : 0;
+
+    try {
+        const url = id ? '/api/admin/server-group/update' : '/api/admin/server-groups';
+        const body = {
+            initData: tg.initData,
+            name, description, is_default,
+            action: id ? undefined : 'add',
+            id: id || undefined
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const result = await response.json();
+        if (result.success) {
+            closeModal('server-group-modal');
+            loadServerGroups();
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Ошибка сохранения группы:', err);
+        alert('Ошибка при сохранении');
+    }
+}
+
+// Загрузка серверов в группе
+async function loadServersInGroup(groupId, groupName) {
+    currentSelectedGroupId = groupId;
+    document.getElementById('current-group-name').innerText = `Серверы в группе: ${groupName}`;
+    document.getElementById('admin-group-detail').style.display = 'block';
+    
+    const listEl = document.getElementById('admin-servers-in-group-list');
+    listEl.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const response = await fetch('/api/admin/servers-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: tg.initData, action: 'list', group_id: groupId })
+        });
+        const result = await response.json();
+        if (result.success) {
+            currentAdminServers = result.servers;
+            renderServersInGroup(result.servers);
+            // Прокрутка к списку серверов
+            document.getElementById('admin-group-detail').scrollIntoView({ behavior: 'smooth' });
+        }
+    } catch (err) {
+        console.error('Ошибка загрузки серверов:', err);
+        listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
+    }
+}
+
+// Отрисовка списка серверов
+function renderServersInGroup(servers) {
+    const listEl = document.getElementById('admin-servers-in-group-list');
+    if (!servers || servers.length === 0) {
+        listEl.innerHTML = '<p class="empty-hint">В этой группе пока нет серверов</p>';
+        return;
+    }
+
+    listEl.innerHTML = servers.map(server => `
+        <div class="admin-user-card" style="margin-bottom: 8px; background: #222;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: 600;">${server.display_name || server.name}</div>
+                    <div style="color: #777; font-size: 12px; margin-top: 2px;">${server.host} | ${server.name}</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editServerConfig(${server.id})">⚙</button>
+                    <button class="btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteServerConfig(${server.id})">🗑</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Показать модалку добавления сервера
+function showAddServerConfigModal() {
+    document.getElementById('server-config-modal-title').innerText = 'Добавить сервер';
+    document.getElementById('server-id-input').value = '';
+    document.getElementById('server-name-input').value = '';
+    document.getElementById('server-display-input').value = '';
+    document.getElementById('server-host-input').value = '';
+    document.getElementById('server-login-input').value = '';
+    document.getElementById('server-pass-input').value = '';
+    document.getElementById('server-vpnhost-input').value = '';
+    document.getElementById('server-lat-input').value = '';
+    document.getElementById('server-lng-input').value = '';
+    showModal('server-config-modal');
+}
+
+// Показать модалку редактирования сервера
+function editServerConfig(serverId) {
+    const server = currentAdminServers.find(s => s.id === serverId);
+    if (!server) return;
+
+    document.getElementById('server-config-modal-title').innerText = 'Редактировать сервер';
+    document.getElementById('server-id-input').value = server.id;
+    document.getElementById('server-name-input').value = server.name;
+    document.getElementById('server-display-input').value = server.display_name || '';
+    document.getElementById('server-host-input').value = server.host;
+    document.getElementById('server-login-input').value = server.login;
+    document.getElementById('server-pass-input').value = server.password;
+    document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
+    document.getElementById('server-lat-input').value = server.lat || '';
+    document.getElementById('server-lng-input').value = server.lng || '';
+    showModal('server-config-modal');
+}
+
+// Сохранение сервера
+async function saveServerConfig(event) {
+    event.preventDefault();
+    const id = document.getElementById('server-id-input').value;
+    const body = {
+        initData: tg.initData,
+        group_id: currentSelectedGroupId,
+        name: document.getElementById('server-name-input').value,
+        display_name: document.getElementById('server-display-input').value,
+        host: document.getElementById('server-host-input').value,
+        login: document.getElementById('server-login-input').value,
+        password: document.getElementById('server-pass-input').value,
+        vpn_host: document.getElementById('server-vpnhost-input').value || null,
+        lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
+        lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
+        id: id || undefined,
+        action: id ? undefined : 'add'
+    };
+
+    try {
+        const url = id ? '/api/admin/server-config/update' : '/api/admin/servers-config';
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const result = await response.json();
+        if (result.success) {
+            closeModal('server-config-modal');
+            const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
+            loadServersInGroup(currentSelectedGroupId, group.name);
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Ошибка сохранения сервера:', err);
+        alert('Ошибка при сохранении');
+    }
+}
+
+// Удаление сервера
+async function deleteServerConfig(serverId) {
+    if (!confirm('Вы уверены, что хотите удалить конфигурацию сервера? Это не удалит клиентов с самого сервера, но бот перестанет его использовать.')) return;
+
+    try {
+        const response = await fetch('/api/admin/server-config/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: tg.initData, id: serverId })
+        });
+        const result = await response.json();
+        if (result.success) {
+            const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
+            loadServersInGroup(currentSelectedGroupId, group.name);
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Ошибка удаления сервера:', err);
+        alert('Ошибка при удалении');
+    }
+}
+
+// Обновляем showPage для поддержки новой страницы
+const originalShowPage = showPage;
+showPage = function(pageName) {
+    originalShowPage(pageName);
+    if (pageName === 'admin-server-management') {
+        loadServerManagement();
+    }
+};
+

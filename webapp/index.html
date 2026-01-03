@@ -435,6 +435,7 @@
                         <button class="btn-primary" onclick="showPage('admin-notifications')" style="flex: 1; min-width: 120px;">Уведомления</button>
                         <button class="btn-primary" onclick="showPage('admin-users')" style="flex: 1; min-width: 120px;">Пользователи</button>
                         <button class="btn-primary" onclick="showPage('admin-broadcast')" style="flex: 1; min-width: 120px;">Рассылка</button>
+                        <button class="btn-primary" onclick="showPage('admin-server-management')" style="flex: 1; min-width: 120px;">Управление серверами</button>
                     </div>
                 </div>
             </div>
@@ -912,6 +913,110 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Управление серверами -->
+        <div id="page-admin-server-management" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1>Серверы и группы</h1>
+            </header>
+            
+            <div id="admin-server-management-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Загрузка конфигурации...</p>
+            </div>
+            
+            <div id="admin-server-management-content" style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 style="margin: 0;">Группы серверов</h2>
+                    <button class="btn-primary" onclick="showAddServerGroupModal()" style="padding: 8px 16px; font-size: 14px;">+ Группа</button>
+                </div>
+                
+                <div id="admin-server-groups-list"></div>
+                
+                <div id="admin-group-detail" style="display: none; margin-top: 24px; border-top: 1px solid #333; padding-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0;" id="current-group-name">Серверы в группе</h2>
+                        <button class="btn-primary" onclick="showAddServerConfigModal()" style="padding: 8px 16px; font-size: 14px;">+ Сервер</button>
+                    </div>
+                    <div id="admin-servers-in-group-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно: Добавить/Редактировать группу -->
+        <div id="server-group-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="server-group-modal-title">Группа серверов</h2>
+                <form id="server-group-form" onsubmit="saveServerGroup(event)" style="margin-top: 16px;">
+                    <input type="hidden" id="group-id-input">
+                    <div class="form-group">
+                        <label for="group-name-input">Название</label>
+                        <input type="text" id="group-name-input" required placeholder="Например: Группа 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="group-desc-input">Описание</label>
+                        <textarea id="group-desc-input" placeholder="Опционально"></textarea>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="group-default-input">
+                        <label for="group-default-input" style="margin: 0;">Группа по умолчанию</label>
+                    </div>
+                    <div class="form-actions" style="margin-top: 24px;">
+                        <button type="button" class="btn-secondary" onclick="closeModal('server-group-modal')">Отмена</button>
+                        <button type="submit" class="btn-primary">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Модальное окно: Добавить/Редактировать сервер -->
+        <div id="server-config-modal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 500px;">
+                <h2 id="server-config-modal-title">Конфигурация сервера</h2>
+                <form id="server-config-form" onsubmit="saveServerConfig(event)" style="margin-top: 16px; max-height: 70vh; overflow-y: auto; padding-right: 8px;">
+                    <input type="hidden" id="server-id-input">
+                    <div class="form-group">
+                        <label for="server-name-input">Идентификатор (уникальный)</label>
+                        <input type="text" id="server-name-input" required placeholder="Например: Poland-1">
+                    </div>
+                    <div class="form-group">
+                        <label for="server-display-input">Красивое название</label>
+                        <input type="text" id="server-display-input" required placeholder="Например: 🇵🇱 Poland - 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="server-host-input">Хост (IP/Домен панели)</label>
+                        <input type="text" id="server-host-input" required placeholder="http://1.2.3.4:2053">
+                    </div>
+                    <div class="form-group">
+                        <label for="server-login-input">Логин панели</label>
+                        <input type="text" id="server-login-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="server-pass-input">Пароль панели</label>
+                        <input type="password" id="server-pass-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="server-vpnhost-input">VPN Хост (если отличается)</label>
+                        <input type="text" id="server-vpnhost-input" placeholder="Опционально: ip/domain">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="server-lat-input">Широта</label>
+                            <input type="number" step="0.0001" id="server-lat-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="server-lng-input">Долгота</label>
+                            <input type="number" step="0.0001" id="server-lng-input">
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top: 24px;">
+                        <button type="button" class="btn-secondary" onclick="closeModal('server-config-modal')">Отмена</button>
+                        <button type="submit" class="btn-primary">Сохранить</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

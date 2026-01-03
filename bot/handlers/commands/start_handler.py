@@ -74,15 +74,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     now = int(time.time())
                     expires_at = now + (5 * 24 * 60 * 60)  # 5 дней
                     
-                    subscription_id, token = await create_subscription(
-                        subscriber_id=subscriber_id,
+                    # Создаем пробную подписку на 5 дней
+                    now = int(time.time())
+                    expires_at = now + (5 * 24 * 60 * 60)
+                    sub_dict, token = await subscription_manager.create_subscription_for_user(
+                        user_id=user_id,
                         period='month',  # Обычная подписка (можно продлить)
                         device_limit=1,
-                        price=0.0,  # Бесплатно
+                        price=0.0,
                         expires_at=expires_at,
                         name="Пробная подписка"
                     )
-                    logger.info(f" Пробная подписка создана в БД для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
+                    subscription_id = sub_dict['id']
+                    logger.info(f" Пробная подписка создана для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
+
                     
                     # Устанавливаем trial_created сразу после создания подписки в БД
                     trial_created = True

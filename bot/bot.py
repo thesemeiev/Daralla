@@ -229,6 +229,18 @@ SERVERS_BY_LOCATION = {
             "vpn_host": os.getenv("XUI_VPN_HOST_LATVIA_1")  # IP/домен VPN сервера (если отличается от панели)
         },
     ],
+            "Germany - 1": [
+        {
+            "name": "Germany-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
+            "display_name": "🇩🇪  Germany - 1",
+            "lat": 51.5074,  # Франкфурт
+            "lng": 6.7760,
+            "host": os.getenv("XUI_HOST_GERMANY_1"),
+            "login": os.getenv("XUI_LOGIN_GERMANY_1"),
+            "password": os.getenv("XUI_PASSWORD_GERMANY_1"),
+            "vpn_host": os.getenv("XUI_VPN_HOST_GERMANY_1")  # IP/домен VPN сервера (если отличается от панели)
+        },
+    ],
 }
 
 # Создаем плоский список всех серверов для обратной совместимости
@@ -274,14 +286,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Создаем глобальный экземпляр менеджера серверов
-server_manager = MultiServerManager(SERVERS_BY_LOCATION)
+server_manager = MultiServerManager()
 # Менеджер только для новых клиентов
-new_client_manager = MultiServerManager(SERVERS_BY_LOCATION)
-# Менеджер подписок (использует менеджер новых клиентов для создания клиентов на серверах)
+new_client_manager = MultiServerManager()
+# Менеджер подписок
 subscription_manager = SubscriptionManager(new_client_manager)
-# Менеджер синхронизации БД с X-UI серверами
-# Передаем subscription_manager для использования единой функции ensure_client_on_server
+# Менеджер синхронизации
 sync_manager = SyncManager(new_client_manager, subscription_manager)
+
+# Инициализация менеджеров серверов из БД
+async def init_server_managers():
+    try:
+        from .services.server_provider import ServerProvider
+        from .db.subscribers_db import check_and_run_initial_migration
+        
+        # 1. Проверяем и запускаем миграцию, если база пуста
+        # Передаем SERVERS_BY_LOCATION (которые берутся из .env продакшена)
+        await check_and_run_initial_migration(SERVERS_BY_LOCATION)
+        
+        # 2. Теперь загружаем конфиг из БД
+        config = await ServerProvider.get_all_servers_by_location()
+        server_manager.init_from_config(config)
+        new_client_manager.init_from_config(config)
+        logger.info("Менеджеры серверов успешно инициализированы из БД")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
 
 from .handlers.webhooks import create_webhook_app
 

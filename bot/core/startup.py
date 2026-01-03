@@ -134,6 +134,12 @@ async def on_startup(app):
         # 1. Инициализация БД
         await init_all_db()
         
+        # 1.1 Инициализация менеджеров серверов из БД
+        init_server_managers = getattr(bot_module, 'init_server_managers', None)
+        if init_server_managers:
+            await init_server_managers()
+            logger.info("Менеджеры серверов инициализированы из БД")
+        
         # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
         await notification_manager.initialize()

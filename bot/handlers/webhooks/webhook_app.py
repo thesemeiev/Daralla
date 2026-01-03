@@ -3220,6 +3220,193 @@ def create_webhook_app(bot_app):
         except Exception as e:
             logger.error(f"Ошибка в /api/admin/broadcast: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
+
+    @app.route('/api/admin/server-groups', methods=['POST', 'OPTIONS'])
+    def api_admin_server_groups():
+        """Получение и добавление групп серверов"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData') or request.args.get('initData')
+            
+            if not init_data:
+                return jsonify({'error': 'initData is required'}), 400
+            
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_server_groups, add_server_group, get_group_load_statistics
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                action = data.get('action', 'list')
+                if action == 'list':
+                    groups = loop.run_until_complete(get_server_groups(only_active=False))
+                    stats = loop.run_until_complete(get_group_load_statistics())
+                    return jsonify({'success': True, 'groups': groups, 'stats': stats})
+                elif action == 'add':
+                    name = data.get('name')
+                    description = data.get('description')
+                    is_default = data.get('is_default', False)
+                    if not name:
+                        return jsonify({'error': 'Name is required'}), 400
+                    group_id = loop.run_until_complete(add_server_group(name, description, is_default))
+                    return jsonify({'success': True, 'group_id': group_id})
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка в /api/admin/server-groups: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/admin/server-group/update', methods=['POST', 'OPTIONS'])
+    def api_admin_server_group_update():
+        """Обновление группы серверов"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData')
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            
+            group_id = data.get('id')
+            if not group_id: return jsonify({'error': 'Group ID is required'}), 400
+            
+            from ...db.subscribers_db import update_server_group
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(update_server_group(
+                    group_id, 
+                    name=data.get('name'),
+                    description=data.get('description'),
+                    is_active=data.get('is_active'),
+                    is_default=data.get('is_default')
+                ))
+                return jsonify({'success': True})
+            finally:
+                loop.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/admin/servers-config', methods=['POST', 'OPTIONS'])
+    def api_admin_servers_config():
+        """Получение и добавление конфигурации серверов"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData')
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            
+            from ...db.subscribers_db import get_servers_config, add_server_config
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                action = data.get('action', 'list')
+                if action == 'list':
+                    group_id = data.get('group_id')
+                    servers = loop.run_until_complete(get_servers_config(group_id=group_id, only_active=False))
+                    return jsonify({'success': True, 'servers': servers})
+                elif action == 'add':
+                    group_id = data.get('group_id')
+                    name = data.get('name')
+                    host = data.get('host')
+                    login = data.get('login')
+                    password = data.get('password')
+                    if not all([group_id, name, host, login, password]):
+                        return jsonify({'error': 'All fields are required'}), 400
+                    server_id = loop.run_until_complete(add_server_config(
+                        group_id, name, host, login, password,
+                        display_name=data.get('display_name'),
+                        vpn_host=data.get('vpn_host'),
+                        lat=data.get('lat'),
+                        lng=data.get('lng')
+                    ))
+                    
+                    # Обновляем MultiServerManager
+                    try:
+                        from ...bot import server_manager, new_client_manager
+                        from ...services.server_provider import ServerProvider
+                        new_config = loop.run_until_complete(ServerProvider.get_all_servers_by_location())
+                        if server_manager: server_manager.init_from_config(new_config)
+                        if new_client_manager: new_client_manager.init_from_config(new_config)
+                    except Exception as mgr_e:
+                        logger.error(f"Ошибка обновления менеджера серверов: {mgr_e}")
+                        
+                    return jsonify({'success': True, 'server_id': server_id})
+            finally:
+                loop.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/admin/server-config/update', methods=['POST', 'OPTIONS'])
+    def api_admin_server_config_update():
+        """Обновление конфигурации сервера"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData')
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            
+            server_id = data.get('id')
+            if not server_id: return jsonify({'error': 'Server ID is required'}), 400
+            
+            from ...db.subscribers_db import update_server_config
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Извлекаем все поля кроме initData и id
+                update_data = {k: v for k, v in data.items() if k not in ['initData', 'id']}
+                loop.run_until_complete(update_server_config(server_id, **update_data))
+                
+                # Обновляем MultiServerManager
+                try:
+                    from ...bot import server_manager, new_client_manager
+                    from ...services.server_provider import ServerProvider
+                    new_config = loop.run_until_complete(ServerProvider.get_all_servers_by_location())
+                    if server_manager: server_manager.init_from_config(new_config)
+                    if new_client_manager: new_client_manager.init_from_config(new_config)
+                except Exception as mgr_e:
+                    logger.error(f"Ошибка обновления менеджера серверов: {mgr_e}")
+                    
+                return jsonify({'success': True})
+            finally:
+                loop.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/admin/server-config/delete', methods=['POST', 'OPTIONS'])
+    def api_admin_server_config_delete():
+        """Удаление конфигурации сервера"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData')
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            
+            server_id = data.get('id')
+            if not server_id: return jsonify({'error': 'Server ID is required'}), 400
+            
+            from ...db.subscribers_db import delete_server_config
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(delete_server_config(server_id))
+                return jsonify({'success': True})
+            finally:
+                loop.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
     
     return app
 
