@@ -1700,6 +1700,15 @@ function addAdminNavButton() {
     
     nav.appendChild(adminButton);
     console.log('Кнопка админ-панели успешно добавлена');
+    
+    // Если мы уже на странице админа, нужно обновить индикатор
+    if (currentPage === 'admin-stats') {
+        const allNavItems = document.querySelectorAll('.nav-item');
+        const index = Array.from(allNavItems).indexOf(adminButton);
+        if (index >= 0) {
+            moveNavIndicator(index);
+        }
+    }
 }
 
 // Загрузка списка пользователей
@@ -5998,74 +6007,43 @@ function moveNavIndicator(index) {
     
     // Функция для расчета и установки позиции
     const calculateAndSetPosition = () => {
-        // Получаем позицию конкретной иконки
+        // Убеждаемся, что мы все еще на нужной странице (защита от race condition)
+        const currentActive = document.querySelector('.nav-item.active');
+        if (!currentActive) return;
+        
         const navRect = nav.getBoundingClientRect();
-        const navWidth = nav.offsetWidth;
         const itemRect = targetItem.getBoundingClientRect();
         
-        // Вычисляем позицию относительно навбара с отступом от краев
-        const indicatorPadding = 8; // Отступ от краев островка
-        const itemCenterX = itemRect.left - navRect.left + itemRect.width / 2;
-        const itemWidth = itemRect.width;
+        // Отступ индикатора от краев кнопки
+        const padding = 8;
         
-        // Вычисляем позицию так, чтобы индикатор был центрирован относительно кнопки
-        const indicatorWidth = itemWidth - (indicatorPadding * 2);
-        let leftPosition = itemCenterX - indicatorWidth / 2;
+        // Вычисляем ширину индикатора
+        const width = itemRect.width - (padding * 2);
         
-        // Проверка границ: индикатор не должен выходить за пределы навбара
-        const minLeft = indicatorPadding;
-        const maxLeft = navWidth - indicatorWidth - indicatorPadding;
-        let clampedLeft = Math.max(minLeft, Math.min(maxLeft, leftPosition));
+        // Вычисляем позицию X относительно навбара
+        const x = itemRect.left - navRect.left + padding;
         
-        // Дополнительная проверка: убеждаемся, что индикатор не выходит за границы
-        // с учетом возможных погрешностей округления
-        if (clampedLeft < indicatorPadding) {
-            clampedLeft = indicatorPadding;
-        }
-        if (clampedLeft + indicatorWidth > navWidth - indicatorPadding) {
-            clampedLeft = navWidth - indicatorWidth - indicatorPadding;
-        }
+        // Применяем стили напрямую без классов анимации для стабильности на больших экранах
+        indicator.style.width = `${width}px`;
+        indicator.style.transform = `translateX(${x}px) translateY(-50%)`;
         
-        // Устанавливаем ширину равной ширине иконки минус отступы
-        indicator.style.width = `${indicatorWidth}px`;
-        
-        // Устанавливаем CSS переменную для адаптации
-        const itemWidthPercent = (100 / navItems.length);
-        indicator.style.setProperty('--nav-item-width', `${itemWidthPercent}%`);
-        
-        // Добавляем класс для анимации масштабирования и устанавливаем transform
-        indicator.classList.add('moving');
-        indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%) scale(1.05)`;
-        
-        // Убираем класс после завершения анимации и возвращаем нормальный масштаб
-        setTimeout(() => {
-            indicator.classList.remove('moving');
-            indicator.style.transform = `translateX(${clampedLeft}px) translateY(-50%)`;
-        }, 200);
+        // Сохраняем индекс для обновлений при ресайзе
+        window.currentNavIndex = index;
     };
     
-    // Для админ-кнопки добавляем дополнительную задержку для полного рендеринга графиков
-    if (isAdminButton) {
-        // Используем двойной requestAnimationFrame + дополнительная задержка
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                // Дополнительная задержка для админ-кнопки (графики могут загружаться асинхронно)
-                setTimeout(() => {
-                    requestAnimationFrame(() => {
-                        calculateAndSetPosition();
-                    });
-                }, 150);
-            });
-        });
-    } else {
-        // Для обычных кнопок используем двойной requestAnimationFrame
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                calculateAndSetPosition();
-            });
-        });
-    }
+    // Используем задержку для стабилизации лейаута, особенно для админки
+    const delay = isAdminButton ? 100 : 50;
+    setTimeout(() => {
+        requestAnimationFrame(calculateAndSetPosition);
+    }, delay);
 }
+
+// Добавляем обработчик изменения размера окна для навбара
+window.addEventListener('resize', () => {
+    if (typeof window.currentNavIndex !== 'undefined') {
+        moveNavIndicator(window.currentNavIndex);
+    }
+});
 
 // Инициализация навигации с индикатором
 function initNavIndicator() {

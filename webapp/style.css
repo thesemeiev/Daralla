@@ -476,14 +476,10 @@ h1 {
     }
 }
 
-/* Адаптация для 4 иконок */
-.bottom-nav:has(.nav-item:nth-child(4):last-child) .nav-glass-indicator {
-    width: 25%;
-}
-
-/* Адаптация для 5 иконок */
-.bottom-nav:has(.nav-item:nth-child(5):last-child) .nav-glass-indicator {
-    width: 20%;
+/* Адаптация для иконок */
+.nav-glass-indicator {
+    /* Ширина будет установлена через JS или переменную */
+    width: var(--nav-item-width, 60px);
 }
 
 /* Медиа-запросы для блюра: меньше на мобильных, больше на десктопе */
@@ -525,7 +521,7 @@ h1 {
     position: absolute;
     top: 50%;
     left: 0;
-    width: calc(var(--nav-item-width, 20%));
+    width: var(--nav-item-width, 60px);
     height: calc(100% - 24px);
     transform: translateY(-50%);
     background: rgba(255, 255, 255, 0.12);
