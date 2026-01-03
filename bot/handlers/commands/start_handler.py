@@ -71,9 +71,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if len(active_subs) == 0:
                     logger.info(f"Создание пробной подписки для нового пользователя: {user_id}")
                     subscriber_id = await get_or_create_subscriber(user_id)
-                    now = int(time.time())
-                    expires_at = now + (5 * 24 * 60 * 60)  # 5 дней
                     
+                    # Получаем менеджеры для создания подписки и клиентов
+                    globals_dict = get_globals()
+                    subscription_manager = globals_dict.get('subscription_manager')
+                    new_client_manager = globals_dict.get('new_client_manager')
+                    
+                    if not subscription_manager:
+                        logger.error("SubscriptionManager не доступен, пробная подписка не создана")
+                        return
+
                     # Создаем пробную подписку на 5 дней
                     now = int(time.time())
                     expires_at = now + (5 * 24 * 60 * 60)
@@ -87,16 +94,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     subscription_id = sub_dict['id']
                     logger.info(f" Пробная подписка создана для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
-
                     
                     # Устанавливаем trial_created сразу после создания подписки в БД
                     trial_created = True
                     
                     # Создаем клиентов на всех серверах для пробной подписки
-                    globals_dict = get_globals()
-                    subscription_manager = globals_dict.get('subscription_manager')
-                    new_client_manager = globals_dict.get('new_client_manager')
-                    
                     if subscription_manager and new_client_manager:
                         try:
                             # Генерируем уникальный email для клиента
