@@ -1695,10 +1695,6 @@ async def delete_user_completely(user_id: str) -> dict:
         
         return stats
 
-async def delete_user_completely(user_id: str) -> dict:
-# ... (код функции) ...
-        return stats
-
 # ==================== АУТЕНТИФИКАЦИЯ (ВЕБ) ====================
 
 async def register_web_user(username: str, password_hash: str):
