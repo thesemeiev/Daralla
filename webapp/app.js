@@ -2,7 +2,12 @@
 const tg = window.Telegram.WebApp;
 
 // Глобальные переменные для веб-авторизации
-let webAuthToken = localStorage.getItem('web_token');
+let webAuthToken = null;
+try {
+    webAuthToken = localStorage.getItem('web_token');
+} catch (e) {
+    console.warn('LocalStorage access blocked by browser');
+}
 let currentUserId = null;
 let isWebMode = !tg.initData;
 
@@ -20,16 +25,25 @@ async function apiFetch(url, options = {}) {
         options.headers['Authorization'] = `Bearer ${webAuthToken}`;
     }
     
-    const response = await fetch(url, options);
-    if (response.status === 401 && isWebMode) {
-        // Токен протух
-        logout();
+    console.log(`[API] Запрос: ${url}`, { mode: isWebMode ? 'Web' : 'Telegram', hasToken: !!webAuthToken });
+    
+    try {
+        const response = await fetch(url, options);
+        if (response.status === 401 && isWebMode) {
+            console.warn('[API] Ошибка 401: Токен недействителен или истек');
+            logout();
+        }
+        return response;
+    } catch (e) {
+        console.error(`[API] Ошибка сетевого запроса (${url}):`, e);
+        throw e;
     }
-    return response;
 }
 
 function logout() {
-    localStorage.removeItem('web_token');
+    try {
+        localStorage.removeItem('web_token');
+    } catch (e) {}
     webAuthToken = null;
     currentUserId = null;
     showPage('login');
@@ -4506,7 +4520,11 @@ async function handleWebLogin(event) {
         if (result.success) {
             webAuthToken = result.token;
             if (remember) {
-                localStorage.setItem('web_token', result.token);
+                try {
+                    localStorage.setItem('web_token', result.token);
+                } catch (e) {
+                    console.error('Failed to save token to localStorage:', e);
+                }
             }
             currentUserId = result.user_id;
             showPage('subscriptions');
@@ -4547,7 +4565,11 @@ async function handleWebRegister(event) {
         
         if (result.success) {
             webAuthToken = result.token;
-            localStorage.setItem('web_token', result.token);
+            try {
+                localStorage.setItem('web_token', result.token);
+            } catch (e) {
+                console.error('Failed to save token to localStorage:', e);
+            }
             currentUserId = result.user_id;
             alert('Регистрация успешна!');
             showPage('subscriptions');
