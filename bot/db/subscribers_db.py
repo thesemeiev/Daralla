@@ -13,57 +13,14 @@ logger = logging.getLogger(__name__)
 async def init_subscribers_db():
     """Инициализирует таблицы пользователей и подписок в единой БД"""
     async with aiosqlite.connect(DB_PATH) as db:
-        # Единая таблица пользователей (бывшие users + subscribers)
+        # 1. Сначала создаем таблицы без зависимостей
+        # Единая таблица пользователей
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT UNIQUE NOT NULL,
                 first_seen INTEGER NOT NULL,
-                last_seen INTEGER NOT NULL,
-                username TEXT UNIQUE,          -- Логин для веб-доступа
-                password_hash TEXT,            -- Хэш пароля
-                is_web INTEGER DEFAULT 0,      -- Флаг веб-пользователя
-                auth_token TEXT                -- Токен для сессии (запомнить меня)
-            )
-        """)
-
-        # Миграция: добавляем новые колонки в users, если их нет
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN username TEXT UNIQUE")
-            logger.info("Добавлена колонка username в таблицу users")
-        except Exception: pass
-        
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-            logger.info("Добавлена колонка password_hash в таблицу users")
-        except Exception: pass
-        
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN is_web INTEGER DEFAULT 0")
-            logger.info("Добавлена колонка is_web в таблицу users")
-        except Exception: pass
-
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN auth_token TEXT")
-            logger.info("Добавлена колонка auth_token в таблицу users")
-        except Exception: pass
-
-        # Таблица подписок
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS subscriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subscriber_id INTEGER NOT NULL,
-                status TEXT NOT NULL,          -- active, expired, deleted
-                period TEXT NOT NULL,          -- month, 3month
-                device_limit INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                expires_at INTEGER NOT NULL,
-                subscription_token TEXT UNIQUE NOT NULL,
-                price REAL NOT NULL,
-                name TEXT,
-                group_id INTEGER,              -- ID группы серверов
-                FOREIGN KEY (subscriber_id) REFERENCES users(id),
-                FOREIGN KEY (group_id) REFERENCES server_groups(id)
+                last_seen INTEGER NOT NULL
             )
         """)
 
@@ -78,6 +35,42 @@ async def init_subscribers_db():
             )
         """)
 
+        # 2. Миграции для таблицы users
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN username TEXT")
+            logger.info("Добавлена колонка username в таблицу users")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (username): {e}")
+        
+        try:
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL")
+            logger.info("Создан уникальный индекс для username")
+        except Exception as e:
+            logger.error(f"Ошибка создания индекса для username: {e}")
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+            logger.info("Добавлена колонка password_hash в таблицу users")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (password_hash): {e}")
+        
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN is_web INTEGER DEFAULT 0")
+            logger.info("Добавлена колонка is_web в таблицу users")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (is_web): {e}")
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN auth_token TEXT")
+            logger.info("Добавлена колонка auth_token в таблицу users")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (auth_token): {e}")
+
+        # 3. Создаем таблицы с зависимостями
         # Таблица конфигурации серверов
         await db.execute("""
             CREATE TABLE IF NOT EXISTS servers_config (
@@ -96,13 +89,42 @@ async def init_subscribers_db():
             )
         """)
 
+        # Таблица подписок
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subscriber_id INTEGER NOT NULL,
+                status TEXT NOT NULL,          -- active, expired, deleted
+                period TEXT NOT NULL,          -- month, 3month
+                device_limit INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                subscription_token TEXT UNIQUE NOT NULL,
+                price REAL NOT NULL,
+                name TEXT,
+                FOREIGN KEY (subscriber_id) REFERENCES users(id)
+            )
+        """)
+
         # Миграция: добавляем group_id в subscriptions, если его нет
         try:
-            await db.execute("ALTER TABLE subscriptions ADD COLUMN group_id INTEGER REFERENCES server_groups(id)")
+            await db.execute("ALTER TABLE subscriptions ADD COLUMN group_id INTEGER")
             logger.info("Добавлена колонка group_id в таблицу subscriptions")
-        except Exception:
-            # Колонка уже существует
-            pass
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (group_id): {e}")
+
+        # Таблица связей подписки с серверами
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS subscription_servers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subscription_id INTEGER NOT NULL,
+                server_name TEXT NOT NULL,
+                client_email TEXT NOT NULL,
+                client_id TEXT,
+                FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+            )
+        """)
 
         # Таблица связей подписки с серверами
         await db.execute("""
