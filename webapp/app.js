@@ -6553,13 +6553,20 @@ async function deleteServerConfig(serverId) {
     }
 }
 
+// Обновляем showPage для поддержки новой страницы
+const originalShowPage = showPage;
+showPage = function(pageName) {
+    originalShowPage(pageName);
+    if (pageName === 'admin-server-management') {
+        loadServerManagement();
+    }
+};
 
-
-// РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РІСЃРµС… СЃРµСЂРІРµСЂРѕРІ
+// Синхронизация всех серверов
 async function syncAllServers() {
-    if (!confirm('Р’С‹РїРѕР»РЅРёС‚СЊ РїРѕР»РЅСѓСЋ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЋ РІСЃРµС… РїРѕРґРїРёСЃРѕРє СЃ СЃРµСЂРІРµСЂР°РјРё? Р­С‚Рѕ РјРѕР¶РµС‚ Р·Р°РЅСЏС‚СЊ РЅРµРєРѕС‚РѕСЂРѕРµ РІСЂРµРјСЏ.')) return;
+    if (!confirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.')) return;
     
-    tg.MainButton.setText('РЎРРќРҐР РћРќРР—РђР¦РРЇ...');
+    tg.MainButton.setText('СИНХРОНИЗАЦИЯ...');
     tg.MainButton.show();
     tg.MainButton.disable();
 
@@ -6571,16 +6578,16 @@ async function syncAllServers() {
         });
         const result = await response.json();
         if (result.success) {
-            alert('РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР°!\n' + 
-                  РџСЂРѕРІРµСЂРµРЅРѕ РїРѕРґРїРёСЃРѕРє: \n +
-                  РЎРѕР·РґР°РЅРѕ РєР»РёРµРЅС‚РѕРІ: );
+            alert('Синхронизация завершена!\n' + 
+                  'Проверено подписок: ' + result.stats.subscriptions_checked + '\n' +
+                  'Создано клиентов: ' + result.stats.total_clients_created);
             loadServerGroups();
         } else {
-            alert('РћС€РёР±РєР°: ' + result.error);
+            alert('Ошибка: ' + result.error);
         }
     } catch (err) {
-        console.error('РћС€РёР±РєР° СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё:', err);
-        alert('РћС€РёР±РєР° РїСЂРё РІС‹РїРѕР»РЅРµРЅРёРё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё');
+        console.error('Ошибка синхронизации:', err);
+        alert('Ошибка при выполнении синхронизации');
     } finally {
         tg.MainButton.hide();
     }

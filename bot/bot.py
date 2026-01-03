@@ -217,7 +217,7 @@ SERVERS_BY_LOCATION = {
             "vpn_host": os.getenv("XUI_VPN_HOST_RUSSIA_1")  # IP/домен VPN сервера (если отличается от панели)
         },
     ],
-            "Latvia ": [
+            "Latvia": [
         {
             "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
             "display_name": "🇱🇻  Latvia - 1",
@@ -229,7 +229,7 @@ SERVERS_BY_LOCATION = {
             "vpn_host": os.getenv("XUI_VPN_HOST_LATVIA_1")  # IP/домен VPN сервера (если отличается от панели)
         },
     ],
-            "Germany - 1": [
+            "Germany": [
         {
             "name": "Germany-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
             "display_name": "🇩🇪  Germany - 1",
