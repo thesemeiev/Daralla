@@ -721,7 +721,7 @@ def create_webhook_app(bot_app):
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             # Получаем параметры платежа
             period = data.get('period')  # 'month' или '3month'
             subscription_id = data.get('subscription_id')  # Для продления
@@ -895,7 +895,7 @@ def create_webhook_app(bot_app):
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             # Получаем новое имя
             new_name = data.get('name', '').strip()
             if not new_name:
@@ -1151,13 +1151,12 @@ def create_webhook_app(bot_app):
             ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
             
             # Логируем для отладки
-            logger.info(f"Проверка прав админа для user_id={user_id}, ADMIN_IDS={ADMIN_IDS}")
+            logger.info(f"Проверка прав админа для user_id={user_id} (type: {type(user_id)}), ADMIN_IDS={ADMIN_IDS}")
             
             # Преобразуем user_id в строку для сравнения
             user_id_str = str(user_id)
             
             # Проверяем, является ли user_id админом
-            # ADMIN_IDS может быть списком строк или чисел
             for admin_id in ADMIN_IDS:
                 if str(admin_id) == user_id_str:
                     logger.info(f"Пользователь {user_id} является админом")
@@ -1215,7 +1214,7 @@ def create_webhook_app(bot_app):
             if not check_admin_access(user_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             search = data.get('search', '').strip()
             page = int(data.get('page', 1))
             limit = int(data.get('limit', 20))
@@ -2394,7 +2393,12 @@ def create_webhook_app(bot_app):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({'error': 'Access denied'}), 403
             
-            data = request.get_json(silent=True) or {}
+            # Попытка получить JSON безопасно
+            try:
+                data = request.get_json(silent=True) or {}
+            except Exception as json_e:
+                logger.warning(f"Ошибка парсинга JSON в /api/admin/stats: {json_e}")
+                data = {}
             
             from ...db.subscribers_db import DB_PATH, get_subscription_statistics
             import aiosqlite
@@ -3410,15 +3414,22 @@ def authenticate_request():
         try:
             from ...db.subscribers_db import get_user_by_auth_token
             user = loop.run_until_complete(get_user_by_auth_token(token))
-            if user: return user['user_id']
+            if user: 
+                logger.info(f"Успешная веб-аутентификация для user_id={user['user_id']}")
+                return user['user_id']
+            else:
+                logger.warning(f"Веб-токен не найден в БД: {token[:10]}...")
         finally:
             loop.close()
             
     # 2. Проверяем initData (Telegram) - в URL или в теле JSON
     init_data = request.args.get('initData')
     if not init_data and request.is_json:
-        data = request.get_json(silent=True)
-        if data: init_data = data.get('initData')
+        try:
+            data = request.get_json(silent=True)
+            if data: init_data = data.get('initData')
+        except:
+            pass
         
     if init_data:
         return verify_telegram_init_data(init_data)

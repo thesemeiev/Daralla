@@ -25,7 +25,16 @@ async function apiFetch(url, options = {}) {
         options.headers['Authorization'] = `Bearer ${webAuthToken}`;
     }
     
-    console.log(`[API] Запрос: ${url}`, { mode: isWebMode ? 'Web' : 'Telegram', hasToken: !!webAuthToken });
+    // Если это POST/PUT запрос и нет тела, добавляем пустой объект
+    // Это предотвращает ошибки 400 на сервере при ожидании JSON
+    if ((options.method === 'POST' || options.method === 'PUT') && !options.body) {
+        options.body = JSON.stringify({});
+        if (!options.headers['Content-Type']) {
+            options.headers['Content-Type'] = 'application/json';
+        }
+    }
+    
+    console.log(`[API] Запрос: ${options.method || 'GET'} ${url}`, { mode: isWebMode ? 'Web' : 'Telegram', hasToken: !!webAuthToken });
     
     try {
         const response = await fetch(url, options);
@@ -115,6 +124,11 @@ function showPage(pageName) {
     
     // Активируем нужный пункт навигации (только для главных разделов)
     if (isMainSectionPage) {
+        // Убеждаемся, что кнопка админа видна, если есть права
+        if (isAdmin && !document.getElementById('admin-nav-button')) {
+            addAdminNavButton();
+        }
+        
         const navItems = document.querySelectorAll('.nav-item');
         let activeIndex = -1;
         
@@ -130,11 +144,11 @@ function showPage(pageName) {
         } else if (pageName === 'about') {
             navItems[3]?.classList.add('active');
             activeIndex = 3;
-        } else if (pageName === 'admin-stats' && document.getElementById('admin-nav-button')) {
+        } else if ((pageName === 'admin-stats' || pageName.startsWith('admin-')) && document.getElementById('admin-nav-button')) {
             const adminButton = document.getElementById('admin-nav-button');
             adminButton.classList.add('active');
-            const allNavItems = document.querySelectorAll('.nav-item');
-            activeIndex = Array.from(allNavItems).indexOf(adminButton);
+            const allNavItems = Array.from(document.querySelectorAll('.nav-item'));
+            activeIndex = allNavItems.indexOf(adminButton);
         }
         
         // Перемещаем индикатор к активной кнопке
@@ -1656,6 +1670,8 @@ async function checkAdminAccess() {
 
 // Добавление кнопки "Админ-панель" в навигацию
 function addAdminNavButton() {
+    if (!isAdmin) return; // Не добавляем, если не админ
+    
     const nav = document.querySelector('.bottom-nav');
     if (!nav) {
         console.warn('Навигация не найдена, пробуем позже...');
@@ -4333,6 +4349,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Если это веб-режим, проверяем токен
     if (isWebMode) {
         document.body.classList.add('web-mode');
+        const refreshSection = document.getElementById('web-admin-refresh-section');
+        if (refreshSection) refreshSection.style.display = 'block';
+        
         if (webAuthToken) {
             try {
                 const response = await fetch('/api/auth/verify', {
@@ -4344,6 +4363,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (result.success) {
                     currentUserId = result.user_id;
                     showPage('subscriptions');
+                    // Проверяем права админа для веб-сессии
+                    checkAdminAccess();
                 } else {
                     showPage('login');
                 }
@@ -4460,6 +4481,8 @@ async function handleWebLogin(event) {
             }
             currentUserId = result.user_id;
             showPage('subscriptions');
+            // Проверяем права админа после входа
+            checkAdminAccess();
         } else {
             alert(result.error || 'Ошибка входа');
         }
@@ -4505,6 +4528,8 @@ async function handleWebRegister(event) {
             currentUserId = result.user_id;
             alert('Регистрация успешна!');
             showPage('subscriptions');
+            // Проверяем права админа после регистрации
+            checkAdminAccess();
         } else {
             alert(result.error || 'Ошибка регистрации');
         }

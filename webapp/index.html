@@ -289,6 +289,20 @@
                     <p>Лучший чеченский мультисерверный VPN-сервис.</p>
                 </div>
                 
+                <!-- Блок настройки веб-доступа (только для ТГ) -->
+                <div class="about-section tg-only">
+                    <h3>Доступ через браузер</h3>
+                    <p class="hint" style="margin-bottom: 12px;">Установите пароль, чтобы заходить в свой аккаунт через сайт без Telegram.</p>
+                    <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
+                </div>
+
+                <!-- Блок для веб-админов -->
+                <div class="about-section web-only" id="web-admin-refresh-section" style="display: none;">
+                    <h3>Панель управления</h3>
+                    <p class="hint" style="margin-bottom: 12px;">Если вы админ, нажмите кнопку ниже, чтобы активировать функции управления.</p>
+                    <button class="btn-secondary" onclick="checkAdminAccess()" style="width: 100%; padding: 10px; border-radius: 10px;">Проверить права админа</button>
+                </div>
+                
                 <div class="about-section">
                     <h3>Разработчик</h3>
                     <a href="https://t.me/thesemeiev" class="link-button" target="_blank">
@@ -303,13 +317,6 @@
                         <span>@DarallaNews</span>
                         <span class="link-arrow">→</span>
                     </a>
-                </div>
-                
-                <!-- Блок настройки веб-доступа (только для ТГ) -->
-                <div class="about-section tg-only">
-                    <h3>Доступ через браузер</h3>
-                    <p class="hint" style="margin-bottom: 12px;">Установите пароль, чтобы заходить в свой аккаунт через сайт без Telegram.</p>
-                    <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
                 </div>
                 
                 <div class="about-section">
