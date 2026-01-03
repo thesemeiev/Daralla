@@ -1127,11 +1127,13 @@ async def check_and_run_initial_migration(servers_by_location: dict):
         # 3. Переносим серверы из конфига
         for location, servers in servers_by_location.items():
             for s in servers:
-                # Проверяем, что у сервера есть хост (что он настроен в .env)
+                # Проверяем, что у сервера есть хост
                 host = s.get("host")
                 if not host:
+                    logger.warning(f"Пропуск миграции сервера {s.get('name')}: хост не настроен")
                     continue
                     
+                logger.info(f"Миграция сервера: {s['name']} ({s.get('display_name')})")
                 await db.execute(
                     """INSERT INTO servers_config 
                        (group_id, name, display_name, host, login, password, vpn_host, lat, lng, is_active)

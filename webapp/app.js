@@ -22,6 +22,12 @@ let serverLoadChartInterval = null;
 
 // Функция переключения страниц
 function showPage(pageName) {
+    // Очищаем интервалы при уходе со страницы серверов
+    if (currentPage === 'servers' && pageName !== 'servers' && serverLoadChartInterval) {
+        clearInterval(serverLoadChartInterval);
+        serverLoadChartInterval = null;
+    }
+
     // Сбрасываем скролл наверх при переключении страниц
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
@@ -104,6 +110,28 @@ function showPage(pageName) {
         loadSubscriptionStats();
     } else if (pageName === 'admin-broadcast') {
         loadBroadcastPage();
+    } else if (pageName === 'admin-server-management') {
+        loadServerManagement();
+    }
+}
+
+// Функция показа модального окна
+function showModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'flex';
+        // Блокируем скролл основной страницы
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+// Функция закрытия модального окна
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'none';
+        // Возвращаем скролл основной страницы
+        document.body.style.overflow = '';
     }
 }
 
@@ -6224,60 +6252,87 @@ let currentSelectedGroupId = null;
 
 // Загрузка страницы управления серверами
 async function loadServerManagement() {
-    showLoading('admin-server-management');
+    const loadingEl = document.getElementById('admin-server-management-loading');
+    const contentEl = document.getElementById('admin-server-management-content');
+    
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (contentEl) contentEl.style.display = 'none';
+
     try {
         await loadServerGroups();
-        document.getElementById('admin-server-management-loading').style.display = 'none';
-        document.getElementById('admin-server-management-content').style.display = 'block';
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
     } catch (err) {
         console.error('Ошибка загрузки управления серверами:', err);
-        showError('admin-server-management');
+        if (loadingEl) loadingEl.style.display = 'none';
+        alert('Ошибка при загрузке данных: ' + err.message);
     }
 }
 
 // Загрузка групп серверов
 async function loadServerGroups() {
-    const response = await fetch('/api/admin/server-groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData, action: 'list' })
-    });
-    const result = await response.json();
-    if (result.success) {
-        currentAdminGroups = result.groups;
-        const stats = result.stats || [];
-        renderServerGroups(result.groups, stats);
-    } else {
-        throw new Error(result.error);
+    console.log('Загрузка групп серверов...');
+    const listEl = document.getElementById('admin-server-groups-list');
+    
+    try {
+        const response = await fetch('/api/admin/server-groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: tg.initData, action: 'list' })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка сети при получении групп');
+        }
+        
+        const result = await response.json();
+        console.log('Результат загрузки групп:', result);
+        if (result.success) {
+            currentAdminGroups = result.groups || [];
+            const stats = result.stats || [];
+            renderServerGroups(currentAdminGroups, stats);
+        } else {
+            throw new Error(result.error || 'Ошибка API');
+        }
+    } catch (err) {
+        console.error('Ошибка в loadServerGroups:', err);
+        if (listEl) {
+            listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">Ошибка: ${err.message}</p>`;
+        }
+        throw err;
     }
 }
 
 // Отрисовка списка групп
 function renderServerGroups(groups, stats) {
+    console.log('Отрисовка групп:', groups, stats);
     const listEl = document.getElementById('admin-server-groups-list');
+    if (!listEl) return;
+    
     if (!groups || groups.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint">Нет созданных групп</p>';
+        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Нет созданных групп серверов</p>';
         return;
     }
 
     listEl.innerHTML = groups.map(group => {
-        const groupStats = stats.find(s => s.id === group.id) || {};
+        const groupStats = (stats || []).find(s => s.id === group.id) || {};
+        const safeName = escapeHtml(group.name);
         return `
-            <div class="admin-user-card" style="margin-bottom: 12px; cursor: pointer;" onclick="loadServersInGroup(${group.id}, '${group.name}')">
+            <div class="admin-user-card" style="margin-bottom: 12px; cursor: pointer; padding: 16px; background: #222; border-radius: 12px; border: 1px solid #333;" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <div style="font-weight: 600; font-size: 16px;">
-                            ${group.name} 
-                            ${group.is_default ? '<span class="badge-primary" style="font-size: 10px; padding: 2px 6px;">DEFAULT</span>' : ''}
-                            ${!group.is_active ? '<span class="badge-expired" style="font-size: 10px; padding: 2px 6px;">INACTIVE</span>' : ''}
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 16px; color: #fff; display: flex; align-items: center; gap: 8px;">
+                            ${safeName} 
+                            ${group.is_default ? '<span style="background: #4a9eff; color: #fff; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">По умолчанию</span>' : ''}
+                            ${!group.is_active ? '<span style="background: #ff4444; color: #fff; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Неактивна</span>' : ''}
                         </div>
-                        <div style="color: #999; font-size: 13px; margin-top: 4px;">${group.description || 'Нет описания'}</div>
-                        <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 12px;">
-                            <span>Подписок: <b>${groupStats.active_subscriptions || 0}</b></span>
-                            <span>Серверов: <b>${groupStats.active_servers || 0}</b></span>
+                        <div style="color: #999; font-size: 13px; margin-top: 4px;">${escapeHtml(group.description || 'Нет описания')}</div>
+                        <div style="display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: #ccc;">
+                            <span>Активных подписок: <b style="color: #fff;">${groupStats.active_subscriptions || 0}</b></span>
+                            <span>Активных серверов: <b style="color: #fff;">${groupStats.active_servers || 0}</b></span>
                         </div>
                     </div>
-                    <button class="btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="event.stopPropagation(); editServerGroup(${group.id})">Редактировать</button>
+                    <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px; border-radius: 8px;" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
                 </div>
             </div>
         `;
@@ -6286,11 +6341,19 @@ function renderServerGroups(groups, stats) {
 
 // Показать модалку добавления группы
 function showAddServerGroupModal() {
-    document.getElementById('server-group-modal-title').innerText = 'Добавить группу';
-    document.getElementById('group-id-input').value = '';
-    document.getElementById('group-name-input').value = '';
-    document.getElementById('group-desc-input').value = '';
-    document.getElementById('group-default-input').checked = false;
+    console.log('Открытие модалки добавления группы');
+    const titleEl = document.getElementById('server-group-modal-title');
+    const idEl = document.getElementById('group-id-input');
+    const nameEl = document.getElementById('group-name-input');
+    const descEl = document.getElementById('group-desc-input');
+    const defaultEl = document.getElementById('group-default-input');
+
+    if (titleEl) titleEl.innerText = 'Добавить группу';
+    if (idEl) idEl.value = '';
+    if (nameEl) nameEl.value = '';
+    if (descEl) descEl.value = '';
+    if (defaultEl) defaultEl.checked = false;
+    
     showModal('server-group-modal');
 }
 
@@ -6490,12 +6553,35 @@ async function deleteServerConfig(serverId) {
     }
 }
 
-// Обновляем showPage для поддержки новой страницы
-const originalShowPage = showPage;
-showPage = function(pageName) {
-    originalShowPage(pageName);
-    if (pageName === 'admin-server-management') {
-        loadServerManagement();
-    }
-};
 
+
+// РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РІСЃРµС… СЃРµСЂРІРµСЂРѕРІ
+async function syncAllServers() {
+    if (!confirm('Р’С‹РїРѕР»РЅРёС‚СЊ РїРѕР»РЅСѓСЋ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЋ РІСЃРµС… РїРѕРґРїРёСЃРѕРє СЃ СЃРµСЂРІРµСЂР°РјРё? Р­С‚Рѕ РјРѕР¶РµС‚ Р·Р°РЅСЏС‚СЊ РЅРµРєРѕС‚РѕСЂРѕРµ РІСЂРµРјСЏ.')) return;
+    
+    tg.MainButton.setText('РЎРРќРҐР РћРќРР—РђР¦РРЇ...');
+    tg.MainButton.show();
+    tg.MainButton.disable();
+
+    try {
+        const response = await fetch('/api/admin/sync-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: tg.initData })
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert('РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР°!\n' + 
+                  РџСЂРѕРІРµСЂРµРЅРѕ РїРѕРґРїРёСЃРѕРє: \n +
+                  РЎРѕР·РґР°РЅРѕ РєР»РёРµРЅС‚РѕРІ: );
+            loadServerGroups();
+        } else {
+            alert('РћС€РёР±РєР°: ' + result.error);
+        }
+    } catch (err) {
+        console.error('РћС€РёР±РєР° СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё:', err);
+        alert('РћС€РёР±РєР° РїСЂРё РІС‹РїРѕР»РЅРµРЅРёРё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё');
+    } finally {
+        tg.MainButton.hide();
+    }
+}

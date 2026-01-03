@@ -3407,7 +3407,28 @@ def create_webhook_app(bot_app):
                 loop.close()
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-    
+
+    @app.route('/api/admin/sync-all', methods=['POST', 'OPTIONS'])
+    def api_admin_sync_all():
+        """Полная синхронизация всех серверов"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            data = request.get_json() or {}
+            init_data = data.get('initData')
+            admin_id = verify_telegram_init_data(init_data)
+            if not admin_id or not check_admin_access(admin_id): return jsonify({'error': 'Access denied'}), 403
+            
+            from ...bot import sync_manager
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                stats = loop.run_until_complete(sync_manager.sync_all_subscriptions(auto_fix=True))
+                return jsonify({'success': True, 'stats': stats})
+            finally:
+                loop.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     return app
 
 
