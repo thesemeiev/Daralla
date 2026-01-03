@@ -1329,12 +1329,6 @@ function openPaymentLink() {
 // Функция создания платежа
 async function createPayment(period, subscriptionId = null) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         // Показываем страницу оплаты с индикатором загрузки
         currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
         showPaymentPage();
@@ -1833,12 +1827,6 @@ function showAdminPagination(currentPage, totalPages) {
 // Показать детальную информацию о пользователе
 async function showAdminUserDetail(userId) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         previousAdminPage = 'admin-users';
         showPage('admin-user-detail');
         
@@ -1932,12 +1920,6 @@ let originalSubscriptionData = null;
 
 async function showAdminSubscriptionEdit(subId) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         previousAdminPage = 'admin-user-detail';
         currentEditingSubscriptionId = subId;
         showPage('admin-subscription-edit');
@@ -2135,13 +2117,6 @@ async function confirmSaveSubscriptionChanges() {
     const originalText = confirmBtn ? confirmBtn.textContent : 'Подтвердить и сохранить';
     
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            closeSubscriptionConfirmModal();
-            return;
-        }
-        
         // Показываем индикатор загрузки
         if (confirmBtn) {
             confirmBtn.textContent = 'Сохранение...';
@@ -2452,12 +2427,6 @@ function closeDeleteUserModal() {
 // Подтвердить удаление пользователя
 async function confirmDeleteUser(userId) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         const confirmBtn = document.getElementById('delete-user-confirm-btn');
         if (confirmBtn) {
             confirmBtn.disabled = true;
@@ -2526,12 +2495,6 @@ async function createSubscription(event) {
     event.preventDefault();
     
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            alert('Ошибка авторизации');
-            return;
-        }
-        
         if (!currentCreatingSubscriptionUserId) {
             alert('Ошибка: ID пользователя не найден');
             return;
@@ -3865,12 +3828,6 @@ function preventCloseOnScroll() {
 // Загрузка статистики уведомлений
 async function loadNotificationStats(days = 7) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            showError('admin-notifications-error', 'Ошибка авторизации');
-            return;
-        }
-        
         document.getElementById('admin-notifications-loading').style.display = 'block';
         document.getElementById('admin-notifications-error').style.display = 'none';
         document.getElementById('admin-notifications-content').style.display = 'none';
@@ -4587,12 +4544,6 @@ async function handleWebRegister(event) {
 // Загрузка статистики подписок
 async function loadSubscriptionStats(days = 30) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            showError('admin-subscriptions-error', 'Ошибка авторизации');
-            return;
-        }
-        
         document.getElementById('admin-subscriptions-loading').style.display = 'block';
         document.getElementById('admin-subscriptions-error').style.display = 'none';
         document.getElementById('admin-subscriptions-content').style.display = 'none';
@@ -5185,20 +5136,16 @@ async function loadBroadcastPage() {
     const resultEl = document.getElementById('broadcast-result');
     
     // Скрываем ошибки и результаты
-    errorEl.style.display = 'none';
-    resultEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+    if (resultEl) resultEl.style.display = 'none';
     
     // Показываем загрузку
-    loadingEl.style.display = 'flex';
-    document.getElementById('broadcast-loading-text').textContent = 'Загрузка данных...';
-    contentEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'flex';
+    const loadingTextEl = document.getElementById('broadcast-loading-text');
+    if (loadingTextEl) loadingTextEl.textContent = 'Загрузка данных...';
+    if (contentEl) contentEl.style.display = 'none';
     
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            throw new Error('Ошибка авторизации');
-        }
-        
         // Получаем статистику для определения количества пользователей
         const statsResponse = await apiFetch('/api/admin/stats', {
             method: 'POST',
@@ -5345,12 +5292,6 @@ async function searchUsersForBroadcast() {
     
     broadcastUserSearchTimeout = setTimeout(async () => {
         try {
-            const initData = tg.initData;
-            if (!initData) {
-                listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Ошибка авторизации</div>';
-                return;
-            }
-            
             listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Поиск...</div>';
             
             const response = await apiFetch('/api/admin/users', {
