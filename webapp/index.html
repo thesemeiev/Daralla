@@ -305,6 +305,13 @@
                     </a>
                 </div>
                 
+                <!-- Блок настройки веб-доступа (только для ТГ) -->
+                <div class="about-section tg-only">
+                    <h3>Доступ через браузер</h3>
+                    <p class="hint" style="margin-bottom: 12px;">Установите пароль, чтобы заходить в свой аккаунт через сайт без Telegram.</p>
+                    <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
+                </div>
+                
                 <div class="about-section">
                     <h3>Поддержка</h3>
                     <a href="https://t.me/DarallaSupport" class="link-button" target="_blank">
@@ -1141,6 +1148,26 @@
         </div>
     </div>
     
+    <!-- Модальное окно: Настройка веб-доступа -->
+    <div id="web-access-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Доступ через браузер</h2>
+            <p style="margin-bottom: 16px; color: #ccc;">
+                Ваш логин для входа на сайт: <b id="web-access-login-display" style="color: #4a9eff;">-</b>
+            </p>
+            <form id="web-access-form" onsubmit="handleWebAccessSetup(event)">
+                <div class="form-group">
+                    <label>Придумайте пароль</label>
+                    <input type="password" id="web-access-password" required placeholder="Минимум 6 символов">
+                </div>
+                <div class="form-actions" style="flex-direction: column;">
+                    <button type="submit" class="btn-primary">Сохранить пароль</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal('web-access-modal')">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/webapp/app.js"></script>
 </body>
 </html>

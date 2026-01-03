@@ -1759,6 +1759,30 @@ async def get_user_by_auth_token(token: str):
             row = await cur.fetchone()
             return dict(row) if row else None
 
+async def update_user_web_access(user_id: str, password_hash: str):
+    """Устанавливает или обновляет логин и пароль для существующего ТГ пользователя"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # В качестве логина (username) используем сам user_id (ТГ ID)
+        # Это обеспечит уникальность и удобство для поддержки
+        await db.execute(
+            "UPDATE users SET username = ?, password_hash = ? WHERE user_id = ?",
+            (user_id, password_hash, user_id)
+        )
+        await db.commit()
+        return True
+
+async def get_user_by_username_or_id(login: str):
+    """Находит пользователя по логину (username) или ТГ ID"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        # Сначала ищем по username, потом по user_id
+        async with db.execute(
+            "SELECT * FROM users WHERE username = ? OR user_id = ?", 
+            (login.lower(), login)
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
 async def get_subscription_conversion_data(days: int = 30):
     """
     Возвращает данные о конверсии пробных подписок в купленные

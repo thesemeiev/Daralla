@@ -3316,17 +3316,16 @@ def create_webhook_app(bot_app):
             data = request.get_json(silent=True) or {}
             username = data.get('username', '').strip().lower()
             password = data.get('password', '')
-            remember = data.get('remember', False)
             
             if not username or not password:
                 return jsonify({'error': 'Введите логин и пароль'}), 400
             
-            from ...db.subscribers_db import get_web_user_by_username
+            from ...db.subscribers_db import get_user_by_username_or_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_web_user_by_username(username))
-                if not user or not check_password_hash(user['password_hash'], password):
+                user = loop.run_until_complete(get_user_by_username_or_id(username))
+                if not user or not user['password_hash'] or not check_password_hash(user['password_hash'], password):
                     return jsonify({'error': 'Неверный логин или пароль'}), 401
                 
                 token = secrets.token_hex(32)
@@ -3336,12 +3335,41 @@ def create_webhook_app(bot_app):
                     'success': True, 
                     'token': token, 
                     'user_id': user['user_id'],
-                    'username': user['username']
+                    'username': user['username'] or user['user_id']
                 })
             finally:
                 loop.close()
         except Exception as e:
             logger.error(f"Ошибка входа: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/user/web-access/setup', methods=['POST', 'OPTIONS'])
+    def api_user_web_access_setup():
+        """Установка пароля для веб-доступа из Mini App"""
+        if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            # Важно: это работает только через Telegram (проверяем initData)
+            init_data = request.get_json(silent=True).get('initData')
+            if not init_data: return jsonify({'error': 'Telegram data required'}), 400
+            
+            user_id = verify_telegram_init_data(init_data)
+            if not user_id: return jsonify({'error': 'Invalid authentication'}), 401
+            
+            data = request.get_json(silent=True)
+            password = data.get('password', '')
+            if len(password) < 6: return jsonify({'error': 'Пароль слишком короткий (мин. 6 символов)'}), 400
+            
+            from ...db.subscribers_db import update_user_web_access
+            password_hash = generate_password_hash(password)
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(update_user_web_access(user_id, password_hash))
+                return jsonify({'success': True, 'message': 'Пароль успешно установлен. Теперь вы можете войти на сайт, используя ваш Telegram ID в качестве логина.'})
+            finally:
+                loop.close()
+        except Exception as e:
             return jsonify({'error': str(e)}), 500
 
     @app.route('/api/auth/verify', methods=['POST', 'OPTIONS'])

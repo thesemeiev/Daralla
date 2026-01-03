@@ -1104,12 +1104,7 @@ async function loadServerMap() {
             return;
         }
         
-        const initData = tg.initData;
-        if (!initData) {
-            return;
-        }
-        
-        // Запрашиваем данные о серверах
+        // Запрашиваем данные о серверах через защищенный API
         const response = await apiFetch(`/api/user/server-usage`);
         
         if (!response.ok) {
@@ -2716,11 +2711,6 @@ let churnRateChart = null;
 // Загрузка графика роста пользователей
 async function loadUserGrowthChart(days = 30) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            return;
-        }
-        
         const response = await apiFetch('/api/admin/charts/user-growth', {
             method: 'POST',
             headers: {
@@ -2888,11 +2878,6 @@ async function loadUserGrowthChart(days = 30) {
 // Загрузка графика конверсии
 async function loadConversionChart(days = 30) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            return;
-        }
-        
         const response = await apiFetch('/api/admin/charts/conversion', {
             method: 'POST',
             headers: {
@@ -3063,11 +3048,6 @@ function changeConversionPeriod() {
 // Загрузка графика динамики дохода
 async function loadRevenueTrendChart(days = 30) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            return;
-        }
-        
         const response = await apiFetch('/api/admin/charts/revenue-trend', {
             method: 'POST',
             headers: {
@@ -3228,11 +3208,6 @@ function changeRevenueTrendPeriod() {
 // Загрузка графика нагрузки на серверы
 async function loadServerLoadChart() {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            return;
-        }
-        
         const response = await apiFetch('/api/admin/charts/server-load', {
             method: 'POST',
             headers: {
@@ -4541,6 +4516,63 @@ async function handleWebRegister(event) {
     }
 }
 
+// === НАСТРОЙКА ВЕБ-ДОСТУПА (ИЗ ТГ) ===
+
+function showWebAccessModal() {
+    // Получаем ID пользователя из initData (если мы в ТГ)
+    let login = '-';
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        login = tg.initDataUnsafe.user.id;
+    }
+    
+    document.getElementById('web-access-login-display').innerText = login;
+    document.getElementById('web-access-password').value = '';
+    showModal('web-access-modal');
+}
+
+async function handleWebAccessSetup(event) {
+    event.preventDefault();
+    const password = document.getElementById('web-access-password').value;
+    
+    if (password.length < 6) {
+        alert('Пароль должен быть не менее 6 символов');
+        return;
+    }
+
+    const btn = event.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Сохранение...';
+
+    try {
+        const response = await fetch('/api/user/web-access/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                initData: tg.initData,
+                password: password 
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            closeModal('web-access-modal');
+            if (tg.showAlert) {
+                tg.showAlert(result.message);
+            } else {
+                alert(result.message);
+            }
+        } else {
+            alert(result.error || 'Ошибка при настройке');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
 // Загрузка статистики подписок
 async function loadSubscriptionStats(days = 30) {
     try {
@@ -4942,11 +4974,6 @@ function changeConversionSubscriptionsPeriod() {
 // Загрузка графика Churn Rate
 async function loadChurnRateChart(days = 30) {
     try {
-        const initData = tg.initData;
-        if (!initData) {
-            return;
-        }
-        
         const response = await apiFetch('/api/admin/charts/churn-rate', {
             method: 'POST',
             headers: {
