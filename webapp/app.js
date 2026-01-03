@@ -6003,39 +6003,28 @@ function moveNavIndicator(index) {
     if (!indicator || !navItems[index] || !nav) return;
     
     const targetItem = navItems[index];
-    const isAdminButton = targetItem.id === 'admin-nav-button';
     
-    // Функция для расчета и установки позиции
     const calculateAndSetPosition = () => {
-        // Убеждаемся, что мы все еще на нужной странице (защита от race condition)
-        const currentActive = document.querySelector('.nav-item.active');
-        if (!currentActive) return;
-        
         const navRect = nav.getBoundingClientRect();
         const itemRect = targetItem.getBoundingClientRect();
         
-        // Отступ индикатора от краев кнопки
-        const padding = 8;
+        // Фиксированная ширина индикатора из CSS
+        const indicatorWidth = 56; 
         
-        // Вычисляем ширину индикатора
-        const width = itemRect.width - (padding * 2);
+        // Находим центр кнопки относительно навбара
+        const itemCenterX = itemRect.left - navRect.left + (itemRect.width / 2);
         
-        // Вычисляем позицию X относительно навбара
-        const x = itemRect.left - navRect.left + padding;
+        // Вычисляем позицию X для центрирования индикатора
+        const x = itemCenterX - (indicatorWidth / 2);
         
-        // Применяем стили напрямую без классов анимации для стабильности на больших экранах
-        indicator.style.width = `${width}px`;
+        // Применяем позицию
         indicator.style.transform = `translateX(${x}px) translateY(-50%)`;
         
         // Сохраняем индекс для обновлений при ресайзе
         window.currentNavIndex = index;
     };
     
-    // Используем задержку для стабилизации лейаута, особенно для админки
-    const delay = isAdminButton ? 100 : 50;
-    setTimeout(() => {
-        requestAnimationFrame(calculateAndSetPosition);
-    }, delay);
+    requestAnimationFrame(calculateAndSetPosition);
 }
 
 // Добавляем обработчик изменения размера окна для навбара
