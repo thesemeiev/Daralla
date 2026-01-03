@@ -971,6 +971,12 @@ h1 {
     transition: all 0.2s;
 }
 
+.admin-user-card.active {
+    border-color: #4a9eff;
+    background: rgba(74, 158, 255, 0.1);
+    box-shadow: 0 0 15px rgba(74, 158, 255, 0.2);
+}
+
 /* Новые адаптивные стили для карточек */
 .card-content-wrapper {
     display: flex;

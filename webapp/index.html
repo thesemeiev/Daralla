@@ -924,8 +924,11 @@
                 
                 <div id="admin-group-detail" style="display: none; margin-top: 24px; border-top: 1px solid #333; padding-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;" id="current-group-name">Серверы в группе</h2>
-                        <button class="btn-primary" onclick="showAddServerConfigModal()" style="padding: 8px 16px; font-size: 14px;">+ Сервер</button>
+                        <div style="flex: 1;">
+                            <h2 style="margin: 0; font-size: 18px; color: #fff;" id="current-group-name">Серверы в группе</h2>
+                            <button class="link-button" onclick="hideGroupDetail()" style="background: none; border: none; color: #4a9eff; font-size: 13px; padding: 4px 0; cursor: pointer;">✕ Скрыть список</button>
+                        </div>
+                        <button class="btn-primary" onclick="showAddServerConfigModal()" style="padding: 8px 16px; font-size: 14px; border-radius: 10px;">+ Сервер</button>
                     </div>
                     <div id="admin-servers-in-group-list"></div>
                 </div>

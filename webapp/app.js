@@ -627,51 +627,74 @@ class CustomGlobe {
     drawMajorCities(ctx) {
         const cities = this.getMajorCities();
         const grayColor = '#888'; // Серый цвет
-        const groznyColor = '#FF6B35'; // Оранжево-красный цвет для Грозного
         const size = 4; // Размер точки меньше, чем у серверов
         
         cities.forEach(city => {
             const pos = this.latLngToXY(city.lat, city.lng);
             if (!pos.visible) return;
             
-            // Определяем цвет точки (особый для Грозного, Мекки и Медины)
-            const specialCities = ['Grozny', 'Mecca', 'Medina'];
-            const isSpecial = specialCities.includes(city.name);
-            const pointColor = isSpecial ? groznyColor : grayColor;
-            const strokeColor = isSpecial ? '#CC5528' : '#666';
-            const pointSize = isSpecial ? 5 : size; // Немного больше для особых городов
+            // Определяем стиль для особых городов
+            let pointColor = grayColor;
+            let strokeColor = '#666';
+            let pointSize = size;
+            let isGrozny = city.name === 'Grozny';
+            let isSacred = city.name === 'Mecca' || city.name === 'Medina';
+            
+            if (isGrozny) {
+                pointColor = '#00E5FF'; // Ярко-голубой (Циан) для Грозного
+                strokeColor = '#00B8D4';
+                pointSize = 6;
+            } else if (isSacred) {
+                pointColor = '#FFD700'; // Золотой для Мекки и Медины
+                strokeColor = '#B8860B';
+                pointSize = 5;
+            }
             
             // Рисуем точку
-            ctx.fillStyle = pointColor;
-            ctx.fillRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
+            if (isGrozny) {
+                // Грозный выделяем кружком со свечением
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, pointSize/2 + 1, 0, Math.PI * 2);
+                ctx.fillStyle = pointColor;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // Дополнительное свечение для Грозного
+                const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 12);
+                glow.addColorStop(0, pointColor + '60');
+                glow.addColorStop(1, pointColor + '00');
+                ctx.fillStyle = glow;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = pointColor;
+                ctx.fillRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
+            }
             
-            // Обводка
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
-            
-            // Подпись города (такой же стиль как у серверов)
+            // Подпись города
             const label = city.name;
-            const fontSize = 10;
-            ctx.font = `${fontSize}px Arial, sans-serif`;
+            const fontSize = isGrozny ? 12 : 10;
+            ctx.font = `${isGrozny ? 'bold ' : ''}${fontSize}px Arial, sans-serif`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             
-            const textMetrics = ctx.measureText(label);
-            const padding = 4;
-            // Выравниваем по пикселям для четкости
+            const padding = 6;
             const labelX = Math.round(pos.x + pointSize + padding);
             const labelY = Math.round(pos.y);
             
-            // Отключаем сглаживание для четкого текста
             ctx.imageSmoothingEnabled = false;
             
-            // Рисуем текст с обводкой (такой же стиль как у серверов)
-            ctx.fillStyle = '#fff';
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.lineWidth = 1.5;
+            // Рисуем текст с обводкой
+            ctx.fillStyle = isGrozny ? '#00E5FF' : (isSacred ? '#FFD700' : '#fff');
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.lineWidth = 2;
             ctx.lineJoin = 'round';
-            ctx.miterLimit = 2;
             ctx.strokeText(label, labelX, labelY);
             ctx.fillText(label, labelX, labelY);
         });
@@ -6326,8 +6349,9 @@ function renderServerGroups(groups, stats) {
     listEl.innerHTML = groups.map(group => {
         const groupStats = (stats || []).find(s => s.id === group.id) || {};
         const safeName = escapeHtml(group.name);
+        const isActive = currentSelectedGroupId === group.id;
         return `
-            <div class="admin-user-card group-card" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
+            <div id="group-card-${group.id}" class="admin-user-card group-card ${isActive ? 'active' : ''}" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
                 <div class="card-content-wrapper">
                     <div class="card-main-info">
                         <div class="card-title-row">
@@ -6348,6 +6372,14 @@ function renderServerGroups(groups, stats) {
             </div>
         `;
     }).join('');
+}
+
+// Скрыть детали группы
+function hideGroupDetail() {
+    currentSelectedGroupId = null;
+    document.getElementById('admin-group-detail').style.display = 'none';
+    // Снимаем подсветку со всех карточек
+    document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
 }
 
 // Показать модалку добавления группы
@@ -6418,7 +6450,19 @@ async function saveServerGroup(event) {
 
 // Загрузка серверов в группе
 async function loadServersInGroup(groupId, groupName) {
+    // Если нажали на уже активную группу - скрываем её
+    if (currentSelectedGroupId === groupId) {
+        hideGroupDetail();
+        return;
+    }
+
     currentSelectedGroupId = groupId;
+    
+    // Подсветка активной карточки
+    document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
+    const activeCard = document.getElementById(`group-card-${groupId}`);
+    if (activeCard) activeCard.classList.add('active');
+
     document.getElementById('current-group-name').innerText = `Серверы в группе: ${groupName}`;
     document.getElementById('admin-group-detail').style.display = 'block';
     
