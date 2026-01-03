@@ -1002,6 +1002,9 @@ def create_webhook_app(bot_app):
                     if not server_manager:
                         return []
                     
+                    # Проверяем здоровье серверов (быстрая проверка из кэша)
+                    health_status = server_manager.get_server_health_status()
+                    
                     servers_info = []
                     for location, servers in server_manager.servers_by_location.items():
                         for server in servers:
@@ -1012,6 +1015,10 @@ def create_webhook_app(bot_app):
                             
                             if lat is not None and lng is not None:
                                 usage_data = server_usage.get(server_name, {'count': 0, 'percentage': 0})
+                                # Получаем статус здоровья
+                                status_info = health_status.get(server_name, {})
+                                status = status_info.get('status', 'unknown')
+                                
                                 servers_info.append({
                                     'name': server_name,
                                     'display_name': display_name,
@@ -1019,7 +1026,8 @@ def create_webhook_app(bot_app):
                                     'lat': lat,
                                     'lng': lng,
                                     'usage_count': usage_data['count'],
-                                    'usage_percentage': usage_data['percentage']
+                                    'usage_percentage': usage_data['percentage'],
+                                    'status': status # Добавляем статус здоровья
                                 })
                     return servers_info
                 except (ImportError, AttributeError) as e:

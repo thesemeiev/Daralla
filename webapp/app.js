@@ -586,7 +586,8 @@ class CustomGlobe {
             'Poland': 'Warsaw',
             'Netherlands': 'Dronten',
             'Russia': 'Moscow',
-            'Latvia': 'Riga'
+            'Latvia': 'Riga',
+            'Germany': 'Frankfurt'
         };
         
         // Сначала пробуем по location
@@ -611,6 +612,10 @@ class CustomGlobe {
             // Riga: 56.9496, 24.1052
             if (Math.abs(server.lat - 56.9496) < 0.5 && Math.abs(server.lng - 24.1052) < 0.5) {
                 return 'Riga';
+            }
+            // Frankfurt: 51.5074, 6.7760
+            if (Math.abs(server.lat - 51.5074) < 0.5 && Math.abs(server.lng - 6.7760) < 0.5) {
+                return 'Frankfurt';
             }
         }
         
@@ -937,15 +942,19 @@ class CustomGlobe {
             const pos = this.latLngToXY(server.lat, server.lng);
             if (!pos.visible) return;
             
-            // Определяем цвет и размер (фиксированный размер, не масштабируется с зумом)
-            let color = '#4CAF50'; // Зеленый
+            // Определяем цвет и размер на основе здоровья сервера
+            let color = '#4CAF50'; // Зеленый (Online)
             let size = 6;
             
-            if (server.usage_percentage > 50) {
-                color = '#FF5722'; // Красный
-                size = 10;
-            } else if (server.usage_percentage > 25) {
-                color = '#FFC107'; // Желтый
+            if (server.status === 'offline') {
+                color = '#F44336'; // Красный (Offline)
+                size = 8;
+            } else if (server.status === 'unknown') {
+                color = '#9E9E9E'; // Серый (Unknown)
+                size = 6;
+            } else if (server.usage_percentage > 80) {
+                // Если сервер онлайн, но сильно загружен - оранжевый
+                color = '#FF9800'; 
                 size = 8;
             }
             
