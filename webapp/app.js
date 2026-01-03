@@ -6318,21 +6318,23 @@ function renderServerGroups(groups, stats) {
         const groupStats = (stats || []).find(s => s.id === group.id) || {};
         const safeName = escapeHtml(group.name);
         return `
-            <div class="admin-user-card" style="margin-bottom: 12px; cursor: pointer; padding: 16px; background: #222; border-radius: 12px; border: 1px solid #333;" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="flex: 1;">
-                        <div style="font-weight: 600; font-size: 16px; color: #fff; display: flex; align-items: center; gap: 8px;">
-                            ${safeName} 
-                            ${group.is_default ? '<span style="background: #4a9eff; color: #fff; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">По умолчанию</span>' : ''}
-                            ${!group.is_active ? '<span style="background: #ff4444; color: #fff; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Неактивна</span>' : ''}
+            <div class="admin-user-card group-card" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
+                <div class="card-content-wrapper">
+                    <div class="card-main-info">
+                        <div class="card-title-row">
+                            <span class="card-title">${safeName}</span>
+                            <div class="card-badges">
+                                ${group.is_default ? '<span class="badge-default">По умолчанию</span>' : ''}
+                                ${!group.is_active ? '<span class="badge-inactive">Неактивна</span>' : ''}
+                            </div>
                         </div>
-                        <div style="color: #999; font-size: 13px; margin-top: 4px;">${escapeHtml(group.description || 'Нет описания')}</div>
-                        <div style="display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: #ccc;">
-                            <span>Активных подписок: <b style="color: #fff;">${groupStats.active_subscriptions || 0}</b></span>
-                            <span>Активных серверов: <b style="color: #fff;">${groupStats.active_servers || 0}</b></span>
+                        <div class="card-description">${escapeHtml(group.description || 'Нет описания')}</div>
+                        <div class="card-stats-row">
+                            <span>Подписок: <b>${groupStats.active_subscriptions || 0}</b></span>
+                            <span>Серверов: <b>${groupStats.active_servers || 0}</b></span>
                         </div>
                     </div>
-                    <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px; border-radius: 8px;" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
+                    <button class="btn-secondary card-action-btn" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
                 </div>
             </div>
         `;
@@ -6437,20 +6439,20 @@ async function loadServersInGroup(groupId, groupName) {
 function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
     if (!servers || servers.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint">В этой группе пока нет серверов</p>';
+        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">В этой группе пока нет серверов</p>';
         return;
     }
 
     listEl.innerHTML = servers.map(server => `
-        <div class="admin-user-card" style="margin-bottom: 8px; background: #222;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div style="font-weight: 600;">${server.display_name || server.name}</div>
-                    <div style="color: #777; font-size: 12px; margin-top: 2px;">${server.host} | ${server.name}</div>
+        <div class="admin-user-card server-card">
+            <div class="card-content-wrapper">
+                <div class="card-main-info">
+                    <div class="card-title">${server.display_name || server.name}</div>
+                    <div class="card-description">${server.host} | ${server.name}</div>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editServerConfig(${server.id})">⚙</button>
-                    <button class="btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteServerConfig(${server.id})">🗑</button>
+                <div class="card-actions-row">
+                    <button class="btn-secondary small-btn" onclick="editServerConfig(${server.id})">⚙</button>
+                    <button class="btn-danger small-btn" onclick="deleteServerConfig(${server.id})">🗑</button>
                 </div>
             </div>
         </div>
