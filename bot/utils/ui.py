@@ -236,7 +236,7 @@ class UIMessages:
         if days_until_expiry == 0:
             # Менее чем через час - срочное уведомление
             message = (
-                f" <b>СРОЧНО! Ваша подписка истекает менее чем через час!</b>\n\n"
+                f" <b>СРОЧНО! Ваша подписка истекает!</b>\n\n"
                 f" Осталось: <b>{time_remaining}</b>\n"
             )
             if expiry_str:
@@ -251,9 +251,8 @@ class UIMessages:
             return message
         elif days_until_expiry <= 1:
             # Завтра или сегодня - важное уведомление
-            day_text = "завтра" if days_until_expiry == 1 else "сегодня"
             message = (
-                f" <b>Ваша подписка истекает {day_text}!</b>\n\n"
+                f" <b>Ваша подписка истекает!</b>\n\n"
                 f" Осталось: <b>{time_remaining}</b>\n"
             )
             if expiry_str:
@@ -269,7 +268,7 @@ class UIMessages:
         else:
             # За несколько дней - информационное напоминание
             message = (
-                f" <b>Напоминание: ваша подписка истекает через {days_until_expiry} дней</b>\n\n"
+                f" <b>Напоминание: ваша подписка истекает!</b>\n\n"
                 f" Осталось: <b>{time_remaining}</b>\n"
             )
             if expiry_str:
