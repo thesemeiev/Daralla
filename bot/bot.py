@@ -300,11 +300,18 @@ async def init_server_managers():
         from .services.server_provider import ServerProvider
         from .db.subscribers_db import check_and_run_initial_migration
         
-        # 1. Проверяем и запускаем миграцию, если база пуста
-        # Передаем SERVERS_BY_LOCATION (которые берутся из .env продакшена)
-        await check_and_run_initial_migration(SERVERS_BY_LOCATION)
+        # Проверяем, есть ли серверы в БД
+        has_servers = await check_and_run_initial_migration(SERVERS_BY_LOCATION)
         
-        # 2. Теперь загружаем конфиг из БД
+        if not has_servers:
+            logger.warning("⚠️ В БД нет серверов. Серверы должны быть добавлены через админ-панель.")
+            logger.warning("⚠️ Покупка VPN будет недоступна до добавления серверов.")
+            # Инициализируем менеджеры с пустым конфигом
+            server_manager.init_from_config({})
+            new_client_manager.init_from_config({})
+            return
+        
+        # Загружаем конфиг из БД
         config = await ServerProvider.get_all_servers_by_location()
         server_manager.init_from_config(config)
         new_client_manager.init_from_config(config)

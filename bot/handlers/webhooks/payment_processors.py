@@ -412,26 +412,24 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             await update_payment_status(payment_id, 'failed')
             return
         
-        # Шаг 2: Получаем ВСЕ серверы из конфигурации (не только здоровые)
+        # Шаг 2: Получаем ВСЕ серверы из БД (не только здоровые)
         # Гибридный подход: привязываем все серверы к подписке сразу,
         # но создаем клиентов только на доступных. Нездоровые серверы
         # будут синхронизированы автоматически при следующей синхронизации.
-        all_configured_servers = []
-        for server in new_client_manager.servers:
-            server_name = server["name"]
-            if server.get("x3") is not None:
-                all_configured_servers.append(server_name)
+        from ...db.subscribers_db import get_servers_config
         
-        if not all_configured_servers:
-            logger.error("Нет серверов в конфигурации")
+        servers_in_db = await get_servers_config(only_active=True)
+        
+        if not servers_in_db or len(servers_in_db) == 0:
+            logger.error("Нет серверов в БД для создания подписки")
             await update_payment_status(payment_id, 'failed')
             # Уведомляем пользователя
             try:
                 error_message = (
                     f"{UIStyles.header('Ошибка создания подписки')}\n\n"
                     f"{UIEmojis.ERROR} <b>Не удалось создать подписку!</b>\n\n"
-                    f"<b>Причина:</b> Нет серверов в конфигурации\n\n"
-                    f"{UIStyles.description('Обратитесь в поддержку')}"
+                    f"<b>Причина:</b> Серверы еще не добавлены в систему\n\n"
+                    f"{UIStyles.description('Обратитесь к администратору')}"
                 )
                 # Создаем кнопку для открытия мини-приложения
                 from ...utils import UIButtons
@@ -456,6 +454,9 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
+        
+        # Преобразуем список серверов из БД в список имен серверов
+        all_configured_servers = [s["name"] for s in servers_in_db]
         
         # Шаг 3: Создаём клиента на каждом сервере из конфигурации
         # Используем единую функцию ensure_client_on_server для гарантии наличия клиента

@@ -62,22 +62,32 @@ async def handle_payment(update, context, price, period):
     message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
     logger.info(f"handle_payment: message={message}, message_id={getattr(message, 'message_id', 'None')}")
     
-    # Проверяем доступность серверов ПЕРЕД созданием платежа (только для новых покупок, не для продления)
-    # Подписка включает все доступные серверы автоматически
+    # Проверяем наличие серверов в БД ПЕРЕД созданием платежа (только для новых покупок, не для продления)
     if not period.startswith('extend_'):
         try:
-            from ...bot import new_client_manager, SERVERS_BY_LOCATION
+            import asyncio
+            from ...db.subscribers_db import get_servers_config
+            from ...bot import new_client_manager
             
-            # Проверяем доступность серверов (проверяем все серверы, подписка включает все доступные)
+            # Проверяем наличие серверов в БД
+            servers_in_db = await get_servers_config(only_active=True)
+            
+            if not servers_in_db or len(servers_in_db) == 0:
+                logger.warning(f"Нет серверов в БД для создания подписки. user_id={user_id}")
+                error_message = (
+                    f"{UIEmojis.ERROR} <b>Серверы не настроены</b>\n\n"
+                    f"Серверы еще не добавлены в систему.\n\n"
+                    f"Пожалуйста, обратитесь к администратору."
+                )
+                keyboard = InlineKeyboardMarkup([
+                    [NavigationBuilder.create_back_button()]
+                ])
+                await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.BUY_MENU)
+                return
+            
+            # Дополнительно проверяем доступность серверов (если они есть в БД)
             all_health = new_client_manager.check_all_servers_health(force_check=False)
-            available_servers = 0
-            
-            # Проверяем все локации - подписка включает все доступные серверы
-            for location, servers in SERVERS_BY_LOCATION.items():
-                for server in servers:
-                    if server.get("host") and server.get("login") and server.get("password"):
-                        if all_health.get(server["name"], False):
-                            available_servers += 1
+            available_servers = sum(1 for s in servers_in_db if all_health.get(s["name"], False))
             
             if available_servers == 0:
                 logger.warning(f"Нет доступных серверов для создания подписки. user_id={user_id}")
@@ -92,7 +102,7 @@ async def handle_payment(update, context, price, period):
                 await safe_edit_or_reply_universal(message, error_message, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.BUY_MENU)
                 return
         except Exception as e:
-            logger.error(f"Ошибка проверки доступности серверов: {e}")
+            logger.error(f"Ошибка проверки серверов: {e}")
             # Продолжаем, но логируем ошибку
     
     # Добавляем PAYMENT в стек навигации (если еще не добавлено)

@@ -1149,52 +1149,19 @@ async def get_group_load_statistics():
 
 async def check_and_run_initial_migration(servers_by_location: dict):
     """
-    Проверяет, нужна ли начальная миграция данных из bot.py в БД.
-    Если групп серверов нет, создает дефолтную группу и переносит туда серверы.
+    Проверяет, есть ли серверы в БД.
+    Если групп серверов нет, возвращает False (миграция не выполнена).
+    Серверы должны добавляться через админ-панель.
     """
     async with aiosqlite.connect(DB_PATH) as db:
-        # 1. Проверяем, есть ли группы
+        # Проверяем, есть ли группы
         async with db.execute("SELECT COUNT(*) FROM server_groups") as cur:
             row = await cur.fetchone()
             if row and row[0] > 0:
-                # База уже содержит данные групп, миграция не нужна
-                return False
-
-        logger.info("🚀 Запуск автоматической миграции данных в БД...")
-        
-        # 2. Создаем дефолтную группу
-        await db.execute(
-            "INSERT INTO server_groups (name, description, is_default, is_active) VALUES (?, ?, ?, ?)",
-            ("Основная группа", "Автоматически созданная группа при миграции", 1, 1)
-        )
-        async with db.execute("SELECT last_insert_rowid()") as cur:
-            row = await cur.fetchone()
-            default_group_id = row[0]
-
-        # 3. Переносим серверы из конфига
-        for location, servers in servers_by_location.items():
-            for s in servers:
-                # Проверяем, что у сервера есть хост
-                host = s.get("host")
-                if not host:
-                    logger.warning(f"Пропуск миграции сервера {s.get('name')}: хост не настроен")
-                    continue
-                    
-                logger.info(f"Миграция сервера: {s['name']} ({s.get('display_name')})")
-                await db.execute(
-                    """INSERT INTO servers_config 
-                       (group_id, name, display_name, host, login, password, vpn_host, lat, lng, is_active)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (default_group_id, s['name'], s.get('display_name'), host, 
-                     s['login'], s['password'], s.get('vpn_host'), s.get('lat'), s.get('lng'), 1)
-                )
-        
-        # 4. Привязываем всех существующих клиентов к этой группе
-        await db.execute("UPDATE subscriptions SET group_id = ? WHERE group_id IS NULL", (default_group_id,))
-        
-        await db.commit()
-        logger.info(f"✅ Автоматическая миграция завершена. Создана группа ID: {default_group_id}")
-        return True
+                # База содержит данные групп
+                return True
+        # Групп нет - серверы должны быть добавлены через админку
+        return False
 
 # ==================== ПРОМОКОДЫ ====================
 

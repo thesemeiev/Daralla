@@ -364,10 +364,11 @@ class SubscriptionManager:
         """
         Собирает набор VLESS-ссылок для подписки на основе subscription_servers и конфигурации серверов.
         
-        Возвращает список VLESS ссылок для всех серверов, привязанных к подписке.
+        Возвращает список VLESS ссылок для всех серверов, привязанных к подписке (без дубликатов).
         """
         servers = await get_subscription_servers(subscription_id)
         links: List[str] = []
+        seen_links = set()  # Для дедупликации ссылок (без tag)
 
         for s in servers:
             server_name = s["server_name"]
@@ -400,10 +401,17 @@ class SubscriptionManager:
                 try:
                     xui_links = xui.get_subscription_links(client_email, server_name=display_name)
                     if xui_links:
-                        links.extend(xui_links)
+                        # Дедупликация: добавляем только уникальные ссылки (по части без tag)
+                        for link in xui_links:
+                            # Извлекаем часть ссылки без tag для сравнения
+                            link_without_tag = link.split('#')[0] if '#' in link else link
+                            if link_without_tag not in seen_links:
+                                seen_links.add(link_without_tag)
+                                links.append(link)
+                            else:
+                                logger.debug(f"Пропуск дубликата ссылки для {server_name}: {link[:100]}...")
                         logger.debug(
-                            "Получено %d ссылок из X-UI subscription endpoint: server=%s, email=%s",
-                            len(xui_links),
+                            "Обработано ссылок из X-UI subscription endpoint: server=%s, email=%s",
                             resolved_name,
                             client_email,
                         )
@@ -416,12 +424,17 @@ class SubscriptionManager:
                         )
                         vless_link = xui.link(client_email, server_name=display_name)
                         if vless_link and vless_link != 'Клиент не найден.':
-                            links.append(vless_link)
-                            logger.debug(
-                                "VLESS ссылка сгенерирована вручную: server=%s, email=%s",
-                                resolved_name,
-                                client_email,
-                            )
+                            link_without_tag = vless_link.split('#')[0] if '#' in vless_link else vless_link
+                            if link_without_tag not in seen_links:
+                                seen_links.add(link_without_tag)
+                                links.append(vless_link)
+                                logger.debug(
+                                    "VLESS ссылка сгенерирована вручную: server=%s, email=%s",
+                                    resolved_name,
+                                    client_email,
+                                )
+                            else:
+                                logger.debug(f"Пропуск дубликата ссылки (ручная генерация) для {server_name}: {vless_link[:100]}...")
                         else:
                             logger.warning(
                                 "Не удалось сгенерировать VLESS ссылку для server=%s, email=%s",
@@ -444,6 +457,7 @@ class SubscriptionManager:
                 )
                 continue
 
+        logger.info(f"Сгенерировано {len(links)} уникальных VLESS ссылок для подписки {subscription_id}")
         return links
 
     async def sync_servers_with_config(self, auto_create_clients: bool = True) -> dict:
