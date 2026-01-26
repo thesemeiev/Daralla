@@ -1108,6 +1108,16 @@ async def delete_server_group(group_id: int):
 async def update_server_config(server_id: int, **kwargs):
     """Обновляет конфигурацию сервера"""
     async with aiosqlite.connect(DB_PATH) as db:
+        # ИСПРАВЛЕНИЕ: Получаем старое название перед обновлением
+        # Это нужно для обновления связанных записей в subscription_servers
+        old_name = None
+        if 'name' in kwargs:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT name FROM servers_config WHERE id = ?", (server_id,)) as cur:
+                row = await cur.fetchone()
+                if row:
+                    old_name = row[0]
+        
         updates = []
         params = []
         for key, value in kwargs.items():
@@ -1119,6 +1129,21 @@ async def update_server_config(server_id: int, **kwargs):
             params.append(server_id)
             query = f"UPDATE servers_config SET {', '.join(updates)} WHERE id = ?"
             await db.execute(query, params)
+            
+            # ИСПРАВЛЕНИЕ: Если изменилось название, обновляем связанные записи в subscription_servers
+            # Это предотвращает раздвоение серверов при изменении названия в админке
+            if 'name' in kwargs and old_name and old_name != kwargs['name']:
+                new_name = kwargs['name']
+                async with db.execute(
+                    "UPDATE subscription_servers SET server_name = ? WHERE server_name = ?",
+                    (new_name, old_name)
+                ) as cur:
+                    updated_count = cur.rowcount
+                if updated_count > 0:
+                    logger.info(f"Обновлено {updated_count} записей в subscription_servers: '{old_name}' -> '{new_name}'")
+                else:
+                    logger.debug(f"Нет записей в subscription_servers для обновления: '{old_name}' -> '{new_name}'")
+            
             await db.commit()
             return True
         return False

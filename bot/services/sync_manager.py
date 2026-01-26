@@ -179,10 +179,29 @@ class SyncManager:
         now = int(time.time())
         cutoff = now - (days_limit * 24 * 60 * 60)
         
-        # Получаем список активных подписок для проверки
-        all_subs = await get_all_active_subscriptions()
+        # ИСПРАВЛЕНИЕ: Получаем подписки со статусом 'active' или 'expired',
+        # которые истекли более N дней назад (не только 'active')
+        # Это важно, так как sync_subscription_statuses() на шаге 1 может уже изменить статус на 'expired'
+        from ..db.subscribers_db import DB_PATH
+        import aiosqlite
         
-        for sub in all_subs:
+        expired_subs = []
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT s.*, u.user_id 
+                FROM subscriptions s 
+                JOIN users u ON s.subscriber_id = u.id 
+                WHERE s.status IN ('active', 'expired')
+                AND s.expires_at < ?
+                AND s.status != 'deleted'
+            """, (cutoff,)) as cur:
+                rows = await cur.fetchall()
+                expired_subs = [dict(row) for row in rows]
+        
+        logger.info(f"Найдено {len(expired_subs)} просроченных подписок для удаления (истекли {days_limit}+ дня назад)")
+        
+        for sub in expired_subs:
             sub_id = sub['id']
             
             # ВАЖНО: Проверяем актуальные данные из БД перед удалением
@@ -195,16 +214,16 @@ class SyncManager:
                 continue
             
             # Проверяем актуальный статус и expires_at
-            if actual_sub['status'] != 'active':
-                # Подписка уже не активна, пропускаем
+            if actual_sub['status'] == 'deleted':
+                # Подписка уже удалена, пропускаем
                 continue
             
             if actual_sub['expires_at'] >= cutoff:
                 # Подписка была продлена или еще не истекла, пропускаем
                 continue
             
-            # Подписка действительно истекла более N дней назад и все еще активна
-            logger.info(f"🗑 Удаление просроченной подписки {sub_id} (истекла {days_limit}+ дня назад)")
+            # Подписка действительно истекла более N дней назад
+            logger.info(f"🗑 Удаление просроченной подписки {sub_id} (истекла {days_limit}+ дня назад, статус: {actual_sub['status']})")
             
             # 1. Удаляем клиентов со всех серверов
             servers = await get_subscription_servers(sub_id)
