@@ -789,7 +789,6 @@ class CustomGlobe {
             { name: 'Podgorica', lat: 42.4304, lng: 19.2594 },
             { name: 'Chisinau', lat: 47.0104, lng: 28.8638 },
             { name: 'Vilnius', lat: 54.6872, lng: 25.2797 },
-            { name: 'Tallinn', lat: 59.4370, lng: 24.7536 },
             { name: 'Barcelona', lat: 41.3851, lng: 2.1734 },
             { name: 'Milan', lat: 45.4642, lng: 9.1900 },
             { name: 'Munich', lat: 48.1351, lng: 11.5820 },
