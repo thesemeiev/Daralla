@@ -6446,7 +6446,6 @@ async function loadServersInGroup(groupId, groupName) {
     const activeCard = document.getElementById(`group-card-${groupId}`);
     if (activeCard) activeCard.classList.add('active');
 
-    document.getElementById('current-group-name').innerText = `Серверы в группе: ${groupName}`;
     document.getElementById('admin-group-detail').style.display = 'block';
     
     const listEl = document.getElementById('admin-servers-in-group-list');
@@ -6487,8 +6486,8 @@ function renderServersInGroup(servers) {
                     <div class="card-description">${server.host} | ${server.name}</div>
                 </div>
                 <div class="card-actions-row">
-                    <button class="btn-secondary small-btn" onclick="editServerConfig(${server.id})">⚙</button>
-                    <button class="btn-danger small-btn" onclick="deleteServerConfig(${server.id})">🗑</button>
+                    <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
+                    <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
                 </div>
             </div>
         </div>

@@ -118,6 +118,12 @@ header {
     background: var(--bg-color, #1a1a1a);
 }
 
+/* Управление серверами: такой же верхний отступ у шапки, как на остальных страницах */
+#page-admin-server-management > header {
+    padding-top: calc(36px + env(safe-area-inset-top, 0px));
+    padding-bottom: 12px;
+}
+
 h1 {
     font-size: 24px;
     font-weight: 600;
@@ -996,6 +1002,78 @@ h1 {
 .card-actions-row {
     display: flex;
     gap: 8px;
+    align-items: center;
+}
+
+/* Кнопки действий в карточке сервера — в одном стиле с «Изменить» у групп */
+.server-action-btn {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+.server-action-btn.btn-secondary {
+    background: #2a2a2a;
+    color: #a0a0a0;
+    border-color: #3a3a3a;
+}
+.server-action-btn.btn-secondary:hover {
+    background: #353535;
+    color: #c0c0c0;
+}
+.server-action-btn.btn-danger {
+    background: #3a2020;
+    color: #e07a7a;
+    border-color: #4a2828;
+    width: auto;
+    margin: 0;
+}
+.server-action-btn.btn-danger:hover {
+    background: #4a2828;
+    color: #f09090;
+}
+.server-action-btn:active {
+    transform: scale(0.98);
+}
+
+/* Блок «Серверы» — продолжение выбранной карточки, без дублирования названия группы */
+.group-detail-block {
+    margin-top: 12px;
+    padding-top: 16px;
+    padding-left: 12px;
+    border-left: 3px solid rgba(74, 158, 255, 0.5);
+}
+
+/* Заголовок блока «Серверы» и кнопка «+ Сервер» */
+.group-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.group-detail-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    flex: 1;
+    min-width: 0;
+}
+.group-detail-add-btn {
+    flex: 0 0 auto;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 8px;
+}
+.group-detail-add-btn:hover {
+    background: #5a5a5a;
 }
 
 .small-btn {
