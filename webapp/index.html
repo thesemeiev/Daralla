@@ -357,30 +357,6 @@
                         <div class="stat-card-value" id="stats-total-users">0</div>
                         <div class="stat-card-subtitle">Новых за 30 дней: <span id="stats-new-users-30d">0</span></div>
                     </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Активные подписки</div>
-                        <div class="stat-card-value active" id="stats-active-subs">0</div>
-                        <div class="stat-card-subtitle">Всего подписок: <span id="stats-total-subs">0</span></div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Истекшие</div>
-                        <div class="stat-card-value expired" id="stats-expired-subs">0</div>
-                        <div class="stat-card-subtitle">Удаленных: <span id="stats-deleted-subs">0</span></div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Доход</div>
-                        <div class="stat-card-value revenue" id="stats-revenue">0 ₽</div>
-                        <div class="stat-card-subtitle">Успешных платежей: <span id="stats-succeeded-payments">0</span></div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">MRR</div>
-                        <div class="stat-card-value revenue" id="stats-mrr">0 ₽</div>
-                        <div class="stat-card-subtitle" id="stats-mrr-change">Изменение: <span id="stats-mrr-change-value">0 ₽</span> (<span id="stats-mrr-change-percent">0%</span>)</div>
-                    </div>
                 </div>
                 
                 <div style="margin-top: 24px;">
@@ -407,20 +383,6 @@
                     
                     <div style="margin-top: 24px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">Всего пользователей (накопительно)</h2>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('user-total-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                            <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="user-total-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h2 style="margin: 0;">Конверсия новых пользователей</h2>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <select id="conversion-period" onchange="changeConversionPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
@@ -442,47 +404,11 @@
                         </div>
                     </div>
                     
-                    <div style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">Динамика дохода</h2>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <select id="revenue-trend-period" onchange="changeRevenueTrendPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                    <option value="7">7 дней</option>
-                                    <option value="14">14 дней</option>
-                                    <option value="30" selected>30 дней</option>
-                                    <option value="90">90 дней</option>
-                                </select>
-                                <button class="fullscreen-btn" onclick="toggleFullscreen('revenue-trend-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                    <span>⛶</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                            <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="revenue-trend-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Нагрузка на канал серверов</h2>
                         <button class="fullscreen-btn" onclick="toggleFullscreen('server-load-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                             <span>⛶</span>
                         </button>
-                    </div>
-                    <div style="margin-bottom: 12px; padding: 12px; background: #1a1a1a; border-radius: 8px; font-size: 12px; color: #999;">
-                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                            <span style="display: inline-block; width: 12px; height: 12px; background: rgba(75, 192, 192, 0.8); border-radius: 2px; margin-right: 8px;"></span>
-                            <span>&lt;50% - норма</span>
-                        </div>
-                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                            <span style="display: inline-block; width: 12px; height: 12px; background: rgba(255, 206, 86, 0.8); border-radius: 2px; margin-right: 8px;"></span>
-                            <span>50-80% - внимание</span>
-                        </div>
-                        <div style="display: flex; align-items: center;">
-                            <span style="display: inline-block; width: 12px; height: 12px; background: rgba(255, 99, 132, 0.8); border-radius: 2px; margin-right: 8px;"></span>
-                            <span>&gt;80% - рекомендуется добавить сервер</span>
-                        </div>
                     </div>
                     <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                         <div style="position: relative; height: 400px; min-width: 700px;">
@@ -491,11 +417,68 @@
                     </div>
                     
                     <div style="display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap;">
+                        <button class="btn-primary" onclick="showPage('admin-finance')" style="flex: 1; min-width: 120px;">Финансы</button>
                         <button class="btn-primary" onclick="showPage('admin-subscriptions')" style="flex: 1; min-width: 120px;">Подписки</button>
                         <button class="btn-primary" onclick="showPage('admin-notifications')" style="flex: 1; min-width: 120px;">Уведомления</button>
                         <button class="btn-primary" onclick="showPage('admin-users')" style="flex: 1; min-width: 120px;">Пользователи</button>
                         <button class="btn-primary" onclick="showPage('admin-broadcast')" style="flex: 1; min-width: 120px;">Рассылка</button>
                         <button class="btn-primary" onclick="showPage('admin-server-management')" style="flex: 1; min-width: 120px;">Управление серверами</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Раздел Финансы -->
+        <div id="page-admin-finance" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1 style="margin: 0; font-size: 1.25rem;">Финансы</h1>
+            </header>
+            
+            <div id="admin-finance-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка финансов...</p>
+            </div>
+            
+            <div id="admin-finance-error" class="error" style="display: none;">
+                <p>Ошибка загрузки данных</p>
+                <button onclick="loadFinancePage()">Повторить</button>
+            </div>
+            
+            <div id="admin-finance-content" style="display: none;">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-title">Доход</div>
+                        <div class="stat-card-value revenue" id="finance-revenue">0 ₽</div>
+                        <div class="stat-card-subtitle">Успешных платежей: <span id="finance-succeeded-payments">0</span></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">MRR</div>
+                        <div class="stat-card-value revenue" id="finance-mrr">0 ₽</div>
+                        <div class="stat-card-subtitle" id="finance-mrr-change">Изменение: <span id="finance-mrr-change-value">0 ₽</span> (<span id="finance-mrr-change-percent">0%</span>)</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0;">Динамика дохода</h2>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="finance-revenue-trend-period" onchange="changeFinanceRevenueTrendPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                                <option value="7">7 дней</option>
+                                <option value="14">14 дней</option>
+                                <option value="30" selected>30 дней</option>
+                                <option value="90">90 дней</option>
+                            </select>
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('finance-revenue-trend-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <span>⛶</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                        <div style="position: relative; height: 300px; min-width: 700px;">
+                            <canvas id="finance-revenue-trend-chart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -632,6 +615,18 @@
                     <div class="stat-card">
                         <div class="stat-card-title">Всего активных</div>
                         <div class="stat-card-value" id="subscriptions-total-active">0</div>
+                        <div class="stat-card-subtitle">Подписок</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Истекшие</div>
+                        <div class="stat-card-value expired" id="subscriptions-expired">0</div>
+                        <div class="stat-card-subtitle">Подписок</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-card-title">Удалённых</div>
+                        <div class="stat-card-value" id="subscriptions-deleted">0</div>
                         <div class="stat-card-subtitle">Подписок</div>
                     </div>
                 </div>

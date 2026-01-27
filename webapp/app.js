@@ -168,6 +168,8 @@ function showPage(pageName) {
         loadAdminUsers(1, currentAdminUserSearch);
     } else if (pageName === 'admin-stats') {
         loadAdminStats();
+    } else if (pageName === 'admin-finance') {
+        loadFinancePage();
     } else if (pageName === 'admin-notifications') {
         loadNotificationStats();
     } else if (pageName === 'admin-subscriptions') {
@@ -2639,42 +2641,10 @@ async function loadAdminStats() {
         // Обновляем статистику
         document.getElementById('stats-total-users').textContent = data.stats.users.total || 0;
         document.getElementById('stats-new-users-30d').textContent = data.stats.users.new_30d || 0;
-        document.getElementById('stats-active-subs').textContent = data.stats.subscriptions.active || 0;
-        document.getElementById('stats-total-subs').textContent = data.stats.subscriptions.total || 0;
-        document.getElementById('stats-expired-subs').textContent = data.stats.subscriptions.expired || 0;
-        document.getElementById('stats-deleted-subs').textContent = data.stats.subscriptions.deleted || 0;
-        document.getElementById('stats-revenue').textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
-        document.getElementById('stats-succeeded-payments').textContent = data.stats.payments.succeeded || 0;
-        
-        // Обновляем MRR
-        const mrr = data.stats.business?.mrr || 0;
-        const mrrChange = data.stats.business?.mrr_change || 0;
-        const mrrChangePercent = data.stats.business?.mrr_change_percent || 0;
-        document.getElementById('stats-mrr').textContent = mrr.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
-        
-        const mrrChangeValueEl = document.getElementById('stats-mrr-change-value');
-        const mrrChangePercentEl = document.getElementById('stats-mrr-change-percent');
-        const mrrChangeEl = document.getElementById('stats-mrr-change');
-        
-        if (mrrChangeValueEl && mrrChangePercentEl && mrrChangeEl) {
-            const changeSign = mrrChange >= 0 ? '+' : '';
-            mrrChangeValueEl.textContent = changeSign + mrrChange.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
-            mrrChangePercentEl.textContent = changeSign + mrrChangePercent.toFixed(1) + '%';
-            
-            // Цвет в зависимости от изменения
-            if (mrrChange > 0) {
-                mrrChangeEl.style.color = '#4caf50';
-            } else if (mrrChange < 0) {
-                mrrChangeEl.style.color = '#f44336';
-            } else {
-                mrrChangeEl.style.color = '#999';
-            }
-        }
         
         // Загружаем графики
         await loadUserGrowthChart();
         await loadConversionChart();
-        await loadRevenueTrendChart();
         await loadServerLoadChart();
         
         // Запускаем автоматическое обновление графика каждые 2 минуты
@@ -2693,9 +2663,60 @@ async function loadAdminStats() {
     }
 }
 
+// Загрузка страницы «Финансы»
+async function loadFinancePage() {
+    try {
+        const loadingEl = document.getElementById('admin-finance-loading');
+        const errorEl = document.getElementById('admin-finance-error');
+        const contentEl = document.getElementById('admin-finance-content');
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (errorEl) errorEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'none';
+        
+        const response = await apiFetch('/api/admin/stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) throw new Error('Ошибка загрузки финансов');
+        
+        const data = await response.json();
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
+        
+        const revEl = document.getElementById('finance-revenue');
+        const payEl = document.getElementById('finance-succeeded-payments');
+        if (revEl) revEl.textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
+        if (payEl) payEl.textContent = data.stats.payments.succeeded || 0;
+        
+        const mrr = data.stats.business?.mrr || 0;
+        const mrrChange = data.stats.business?.mrr_change || 0;
+        const mrrChangePercent = data.stats.business?.mrr_change_percent || 0;
+        const mrrEl = document.getElementById('finance-mrr');
+        const mrrChangeValEl = document.getElementById('finance-mrr-change-value');
+        const mrrChangePctEl = document.getElementById('finance-mrr-change-percent');
+        const mrrChangeEl = document.getElementById('finance-mrr-change');
+        if (mrrEl) mrrEl.textContent = mrr.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
+        if (mrrChangeValEl) mrrChangeValEl.textContent = (mrrChange >= 0 ? '+' : '') + mrrChange.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
+        if (mrrChangePctEl) mrrChangePctEl.textContent = (mrrChange >= 0 ? '+' : '') + (mrrChangePercent || 0).toFixed(1) + '%';
+        if (mrrChangeEl) {
+            if (mrrChange > 0) mrrChangeEl.style.color = '#4caf50';
+            else if (mrrChange < 0) mrrChangeEl.style.color = '#f44336';
+            else mrrChangeEl.style.color = '#999';
+        }
+        
+        const periodEl = document.getElementById('finance-revenue-trend-period');
+        const days = periodEl ? parseInt(periodEl.value) || 30 : 30;
+        await loadRevenueTrendChart(days, 'finance-revenue-trend-chart');
+    } catch (error) {
+        console.error('Ошибка загрузки финансов:', error);
+        const loadingEl = document.getElementById('admin-finance-loading');
+        if (loadingEl) loadingEl.style.display = 'none';
+        showError('admin-finance-error', 'Ошибка загрузки финансов');
+    }
+}
+
 // Переменные для хранения экземпляров графиков
 let userGrowthChart = null;
-let userTotalChart = null;
 let serverLoadChart = null;
 let conversionChart = null;
 let revenueTrendChart = null;
@@ -2741,7 +2762,6 @@ async function loadUserGrowthChart(days = 30) {
             return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
         });
         const counts = result.data.map(item => item.count);
-        const cumulative = result.data.map(item => item.cumulative);
         
         // Создаем график новых пользователей (столбцы)
         userGrowthChart = new Chart(ctx, {
@@ -2801,72 +2821,6 @@ async function loadUserGrowthChart(days = 30) {
                 }
             }
         });
-        
-        // Создаем второй график - всего пользователей (накопительно)
-        const ctxTotal = document.getElementById('user-total-chart');
-        if (ctxTotal) {
-            if (userTotalChart) {
-                userTotalChart.destroy();
-            }
-            
-            userTotalChart = new Chart(ctxTotal, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Всего пользователей',
-                            data: cumulative,
-                            borderColor: 'rgb(255, 99, 132)',
-                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                            tension: 0.1,
-                            fill: true,
-                            pointRadius: 3,
-                            pointHoverRadius: 5
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            align: 'start',
-                            labels: {
-                                boxWidth: 12,
-                                boxHeight: 12,
-                                padding: 8,
-                                usePointStyle: false,
-                                font: {
-                                    size: 12
-                                }
-                            }
-                        },
-                        title: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Всего пользователей'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    }
-                }
-            });
-        }
     } catch (error) {
         console.error('Ошибка загрузки графика роста пользователей:', error);
     }
@@ -3042,8 +2996,9 @@ function changeConversionPeriod() {
     loadConversionChart(days);
 }
 
-// Загрузка графика динамики дохода
-async function loadRevenueTrendChart(days = 30) {
+// Загрузка графика динамики дохода (chartCanvasId — id canvas, для страницы «Финансы» передать 'finance-revenue-trend-chart')
+async function loadRevenueTrendChart(days = 30, chartCanvasId) {
+    const canvasId = chartCanvasId || 'revenue-trend-chart';
     try {
         const response = await apiFetch('/api/admin/charts/revenue-trend', {
             method: 'POST',
@@ -3062,7 +3017,7 @@ async function loadRevenueTrendChart(days = 30) {
             return;
         }
         
-        const ctx = document.getElementById('revenue-trend-chart');
+        const ctx = document.getElementById(canvasId);
         if (!ctx) {
             return;
         }
@@ -3195,11 +3150,18 @@ async function loadRevenueTrendChart(days = 30) {
     }
 }
 
-// Изменение периода для графика динамики дохода
+// Изменение периода для графика динамики дохода (основная статистика)
 function changeRevenueTrendPeriod() {
     const select = document.getElementById('revenue-trend-period');
     const days = parseInt(select.value);
     loadRevenueTrendChart(days);
+}
+
+// Изменение периода для графика динамики дохода на странице «Финансы»
+function changeFinanceRevenueTrendPeriod() {
+    const select = document.getElementById('finance-revenue-trend-period');
+    const days = select ? parseInt(select.value) || 30 : 30;
+    loadRevenueTrendChart(days, 'finance-revenue-trend-chart');
 }
 
 // Загрузка графика нагрузки на серверы
@@ -4586,22 +4548,21 @@ async function loadSubscriptionStats(days = 30) {
         document.getElementById('admin-subscriptions-error').style.display = 'none';
         document.getElementById('admin-subscriptions-content').style.display = 'none';
         
-        const response = await apiFetch('/api/admin/charts/subscriptions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ days: days })
-        });
+        const [chartsResponse, statsResponse] = await Promise.all([
+            apiFetch('/api/admin/charts/subscriptions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: days })
+            }),
+            apiFetch('/api/admin/stats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+        ]);
         
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки статистики подписок');
-        }
-        
-        const result = await response.json();
-        if (!result.success || !result.data) {
-            throw new Error('Неверный формат данных');
-        }
+        if (!chartsResponse.ok) throw new Error('Ошибка загрузки статистики подписок');
+        const result = await chartsResponse.json();
+        if (!result.success || !result.data) throw new Error('Неверный формат данных');
         
         const data = result.data;
         const types = data.types || {};
@@ -4609,13 +4570,23 @@ async function loadSubscriptionStats(days = 30) {
         document.getElementById('admin-subscriptions-loading').style.display = 'none';
         document.getElementById('admin-subscriptions-content').style.display = 'block';
         
-        // Обновляем карточки статистики
+        // Карточки из API подписок
         document.getElementById('subscriptions-trial').textContent = types.trial_active || 0;
         document.getElementById('subscriptions-purchased').textContent = types.purchased_active || 0;
         document.getElementById('subscriptions-conversion').textContent = (types.conversion_rate || 0).toFixed(1) + '%';
         document.getElementById('subscriptions-month').textContent = types.month_active || 0;
         document.getElementById('subscriptions-3month').textContent = types['3month_active'] || 0;
         document.getElementById('subscriptions-total-active').textContent = types.total_active || 0;
+        
+        // Истекшие и удалённые — из общей статистики
+        if (statsResponse.ok) {
+            const statsData = await statsResponse.json();
+            const subs = statsData.stats?.subscriptions || {};
+            const expiredEl = document.getElementById('subscriptions-expired');
+            const deletedEl = document.getElementById('subscriptions-deleted');
+            if (expiredEl) expiredEl.textContent = subs.expired ?? 0;
+            if (deletedEl) deletedEl.textContent = subs.deleted ?? 0;
+        }
         
         // Загружаем графики
         await loadSubscriptionDynamicsChart(data.dynamics || []);
@@ -5489,7 +5460,7 @@ async function sendBroadcast() {
     const message = messageEl.value.trim();
     
     if (!message) {
-        if (tg && tg.showAlert) {
+        if (!isWebMode && tg?.showAlert) {
             tg.showAlert('Пожалуйста, введите текст сообщения');
         } else {
             alert('Пожалуйста, введите текст сообщения');
@@ -5500,7 +5471,7 @@ async function sendBroadcast() {
     const isSelectMode = broadcastSendMode === 'selected';
     
     if (isSelectMode && broadcastSelectedUsers.length === 0) {
-        if (tg && tg.showAlert) {
+        if (!isWebMode && tg?.showAlert) {
             tg.showAlert('Пожалуйста, выберите хотя бы одного пользователя');
         } else {
             alert('Пожалуйста, выберите хотя бы одного пользователя');
@@ -5576,18 +5547,19 @@ async function sendBroadcast() {
         // Очищаем поле сообщения
         messageEl.value = '';
         
-        // Показываем уведомление
-        if (tg && tg.showAlert) {
-            tg.showAlert(
-                `Рассылка завершена!\n\nОтправлено: ${data.sent}\nОшибок: ${data.failed}\nВсего: ${data.total}`
-            );
+        // Показываем уведомление (в вебе — alert, иначе tg.showAlert может вернуть WebAppMethodUnsupported)
+        const resultMsg = `Рассылка завершена!\n\nОтправлено: ${data.sent}\nОшибок: ${data.failed}\nВсего: ${data.total}`;
+        if (!isWebMode && tg?.showAlert) {
+            tg.showAlert(resultMsg);
+        } else {
+            alert(resultMsg);
         }
         
     } catch (error) {
         console.error('Ошибка отправки рассылки:', error);
         loadingEl.style.display = 'none';
         errorEl.style.display = 'block';
-        document.getElementById('broadcast-error-text').textContent = error.message || 'Ошибка отправки рассылки';
+        document.getElementById('broadcast-error-text').textContent = (error && error.message) || 'Ошибка отправки рассылки';
         contentEl.style.display = 'block';
     } finally {
         // Разблокируем кнопку
