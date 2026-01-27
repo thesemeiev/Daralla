@@ -1,6 +1,7 @@
 """
 Сервис для работы с X-UI API
 """
+import base64
 import logging
 import json
 import uuid
@@ -1575,8 +1576,16 @@ class X3:
                             # Используем сессию без авторизации для публичного endpoint
                             response = requests.get(subscription_url, timeout=10, verify=False)
                             if response.status_code == 200:
-                                # X-UI возвращает ссылки в plain text формате (каждая на новой строке)
-                                links = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
+                                # X-UI может возвращать тело подписки в base64 (стандартный формат) или plain text
+                                text = response.text.strip()
+                                try:
+                                    decoded = base64.b64decode(text)
+                                    decoded_str = decoded.decode('utf-8')
+                                    if 'vless://' in decoded_str or 'trojan://' in decoded_str or 'vmess://' in decoded_str:
+                                        text = decoded_str
+                                except Exception:
+                                    pass
+                                links = [line.strip() for line in text.split('\n') if line.strip()]
                                 
                                 # Заменяем tag (название) в ссылках на название сервера, если указано
                                 # X-UI может возвращать ссылки с доменом в tag (например, ghosttunnel.space)

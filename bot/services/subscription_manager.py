@@ -3,6 +3,7 @@
 Пока используется только слой работы с БД и подготовка к мультисерверности.
 """
 
+import base64
 import datetime
 import json
 import logging
@@ -23,6 +24,28 @@ from ..db.subscribers_db import (
 from .server_manager import MultiServerManager
 
 logger = logging.getLogger(__name__)
+
+_PROTOCOL_PREFIXES = ('vless://', 'trojan://', 'vmess://', 'ss://', 'socks://')
+
+
+def _normalize_subscription_link(link: str) -> str:
+    """
+    Если ссылка пришла в base64 (часто от X-UI) — декодирует и возвращает plain vless:// или trojan://.
+    Иначе возвращает ссылку как есть.
+    """
+    if not link or not link.strip():
+        return link
+    s = link.strip()
+    if s.startswith(_PROTOCOL_PREFIXES):
+        return s
+    try:
+        raw = base64.b64decode(s)
+        decoded = raw.decode('utf-8')
+        if decoded.startswith(_PROTOCOL_PREFIXES):
+            return decoded
+    except Exception:
+        pass
+    return s
 
 
 class SubscriptionManager:
@@ -405,13 +428,13 @@ class SubscriptionManager:
                     if xui_links:
                         # Дедупликация: добавляем только уникальные ссылки (по части без tag)
                         for link in xui_links:
-                            # Извлекаем часть ссылки без tag для сравнения
-                            link_without_tag = link.split('#')[0] if '#' in link else link
+                            plain = _normalize_subscription_link(link)
+                            link_without_tag = plain.split('#')[0] if '#' in plain else plain
                             if link_without_tag not in seen_links:
                                 seen_links.add(link_without_tag)
-                                links.append(link)
+                                links.append(plain)
                             else:
-                                logger.debug(f"Пропуск дубликата ссылки для {server_name}: {link[:100]}...")
+                                logger.debug(f"Пропуск дубликата ссылки для {server_name}: {plain[:100]}...")
                         logger.debug(
                             "Обработано ссылок из X-UI subscription endpoint: server=%s, email=%s",
                             resolved_name,
@@ -426,17 +449,18 @@ class SubscriptionManager:
                         )
                         vless_link = xui.link(client_email, server_name=display_name)
                         if vless_link and vless_link != 'Клиент не найден.':
-                            link_without_tag = vless_link.split('#')[0] if '#' in vless_link else vless_link
+                            plain = _normalize_subscription_link(vless_link)
+                            link_without_tag = plain.split('#')[0] if '#' in plain else plain
                             if link_without_tag not in seen_links:
                                 seen_links.add(link_without_tag)
-                                links.append(vless_link)
+                                links.append(plain)
                                 logger.debug(
                                     "VLESS ссылка сгенерирована вручную: server=%s, email=%s",
                                     resolved_name,
                                     client_email,
                                 )
                             else:
-                                logger.debug(f"Пропуск дубликата ссылки (ручная генерация) для {server_name}: {vless_link[:100]}...")
+                                logger.debug(f"Пропуск дубликата ссылки (ручная генерация) для {server_name}: {plain[:100]}...")
                         else:
                             logger.warning(
                                 "Не удалось сгенерировать VLESS ссылку для server=%s, email=%s",
