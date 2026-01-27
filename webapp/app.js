@@ -204,6 +204,8 @@ function showPage(pageName) {
     } else if (pageName === 'admin-server-management') {
         loadServerManagement();
     } else if (pageName === 'landing') {
+        var landingScroll = document.getElementById('landing-scroll');
+        if (landingScroll) landingScroll.scrollTop = 0;
         initLandingObserver();
     }
 }
