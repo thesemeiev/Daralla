@@ -2325,6 +2325,16 @@ function showCreateSubscriptionForm(userId) {
     document.getElementById('create-sub-expires-at').value = '';
     document.getElementById('create-sub-device-limit').value = '1';
     document.getElementById('create-sub-period').value = 'month';
+    
+    // Сбрасываем кнопку отправки, чтобы не оставалась «Создание...» при повторном открытии
+    const form = document.getElementById('admin-create-subscription-form');
+    if (form) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Создать';
+        }
+    }
 }
 
 // Возврат назад из создания подписки
@@ -2512,15 +2522,25 @@ async function createSubscription(event) {
         
         alert(message);
         
+        // Сбрасываем кнопку до навигации, чтобы при повторном открытии формы она была в нужном состоянии
+        const formEl = event.target;
+        const btn = formEl && formEl.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Создать';
+        }
+        
         // Возвращаемся назад и обновляем информацию о пользователе
         goBackFromCreateSubscription();
     } catch (error) {
         console.error('Ошибка создания подписки:', error);
         alert('Ошибка создания: ' + error.message);
-        const form = event.target;
-        const submitBtn = form.querySelector('button[type="submit"]');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Создать';
+        const formEl = event.target;
+        const submitBtn = formEl && formEl.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Создать';
+        }
     }
 }
 
@@ -5496,7 +5516,7 @@ async function sendBroadcast() {
         confirmText = 'Вы уверены, что хотите отправить рассылку всем пользователям?';
     }
     
-    if (tg && tg.showConfirm) {
+    if (!isWebMode && tg?.showConfirm) {
         const confirmed = await new Promise((resolve) => {
             tg.showConfirm(confirmText, (result) => resolve(result));
         });

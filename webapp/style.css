@@ -124,6 +124,28 @@ header {
     padding-bottom: 12px;
 }
 
+/* Шапка «Назад» + заголовок: кнопка слева, заголовок по центру экрана */
+.header-with-back {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.header-with-back .back-button {
+    flex-shrink: 0;
+}
+.header-with-back h1 {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+}
+/* Невидимый блок справа той же ширины, что и «Назад», чтобы заголовок был ровно по центру */
+.header-with-back::after {
+    content: '';
+    display: block;
+    width: 80px;
+    flex-shrink: 0;
+}
+
 h1 {
     font-size: 24px;
     font-weight: 600;
