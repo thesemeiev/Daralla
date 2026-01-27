@@ -157,7 +157,34 @@ async def init_subscribers_db():
                 FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
             )
         """)
-        
+
+        # Миграция: удаление дублей (subscription_id, server_name) и уникальный индекс
+        try:
+            await db.execute("""
+                DELETE FROM subscription_servers
+                WHERE EXISTS (
+                    SELECT 1 FROM subscription_servers s2
+                    WHERE s2.subscription_id = subscription_servers.subscription_id
+                      AND s2.server_name = subscription_servers.server_name
+                      AND s2.id < subscription_servers.id
+                )
+            """)
+            logger.info("Миграция subscription_servers: удалены дубли по (subscription_id, server_name)")
+            await db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_servers_unique "
+                "ON subscription_servers(subscription_id, server_name)"
+            )
+            await db.commit()
+            logger.info("Создан уникальный индекс idx_subscription_servers_unique на subscription_servers")
+        except Exception as e:
+            if "UNIQUE constraint" in str(e) or "unique" in str(e).lower():
+                logger.warning(
+                    "Не удалось создать уникальный индекс subscription_servers: в таблице остались дубли. "
+                    "Выполните очистку вручную (см. scripts/fix_subscription_servers_duplicates.sql)"
+                )
+            else:
+                raise
+
         # Таблица промокодов
         await db.execute("""
             CREATE TABLE IF NOT EXISTS promo_codes (
@@ -446,10 +473,17 @@ async def get_subscription_servers(subscription_id: int):
             return [dict(row) for row in rows]
 
 async def add_subscription_server(subscription_id: int, server_name: str, client_email: str, client_id: str = None):
+    """Добавляет связь подписки с сервером. Идемпотентно: не создаёт дубль по (subscription_id, server_name)."""
     async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM subscription_servers WHERE subscription_id = ? AND server_name = ? LIMIT 1",
+            (subscription_id, server_name),
+        ) as cur:
+            if await cur.fetchone():
+                return
         await db.execute(
             "INSERT INTO subscription_servers (subscription_id, server_name, client_email, client_id) VALUES (?, ?, ?, ?)",
-            (subscription_id, server_name, client_email, client_id)
+            (subscription_id, server_name, client_email, client_id),
         )
         await db.commit()
 
