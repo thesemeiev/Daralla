@@ -334,28 +334,58 @@
             </div>
         </div>
 
-        <!-- АДМИН-ПАНЕЛЬ: Раздел Статистика -->
+        <!-- АДМИН-ПАНЕЛЬ: Главный экран -->
         <div id="page-admin-stats" class="page" style="display: none;">
             <header>
-                <h1>Статистика</h1>
+                <h1>Админ панель</h1>
             </header>
             
-            <div id="admin-stats-loading" class="loading">
+            <div id="admin-stats-content" style="padding: 24px;">
+                <div class="stat-card" style="margin-bottom: 24px; padding: 20px;">
+                    <div class="stat-card-title" style="margin-bottom: 16px;">Аналитика</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                        <button class="btn-primary" onclick="showPage('admin-users-analytics')" style="min-width: 140px;">Аналитика пользователей</button>
+                        <button class="btn-primary" onclick="showPage('admin-subscriptions')" style="min-width: 120px;">Подписки</button>
+                        <button class="btn-primary" onclick="showPage('admin-notifications')" style="min-width: 120px;">Уведомления</button>
+                        <button class="btn-primary" onclick="showPage('admin-finance')" style="min-width: 120px;">Финансы</button>
+                        <button class="btn-primary" onclick="showPage('admin-servers-analytics')" style="min-width: 140px;">Аналитика серверов</button>
+                    </div>
+                </div>
+                
+                <div class="stat-card" style="padding: 20px;">
+                    <div class="stat-card-title" style="margin-bottom: 16px;">Управление</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                        <button class="btn-primary" onclick="showPage('admin-users')" style="min-width: 180px;">Управление пользователями</button>
+                        <button class="btn-primary" onclick="showPage('admin-server-management')" style="min-width: 180px;">Управление серверами</button>
+                        <button class="btn-primary" onclick="showPage('admin-broadcast')" style="min-width: 120px;">Рассылка</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Аналитика пользователей -->
+        <div id="page-admin-users-analytics" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1 style="margin: 0; font-size: 1.25rem;">Аналитика пользователей</h1>
+            </header>
+            
+            <div id="admin-users-analytics-loading" class="loading">
                 <div class="spinner"></div>
-                <p>Загрузка статистики...</p>
+                <p>Загрузка...</p>
             </div>
             
-            <div id="admin-stats-error" class="error" style="display: none;">
+            <div id="admin-users-analytics-error" class="error" style="display: none;">
                 <p>Ошибка загрузки данных</p>
-                <button onclick="loadAdminStats()">Повторить</button>
+                <button onclick="loadUsersAnalyticsPage()">Повторить</button>
             </div>
             
-            <div id="admin-stats-content" style="display: none;">
+            <div id="admin-users-analytics-content" style="display: none;">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Пользователи</div>
-                        <div class="stat-card-value" id="stats-total-users">0</div>
-                        <div class="stat-card-subtitle">Новых за 30 дней: <span id="stats-new-users-30d">0</span></div>
+                        <div class="stat-card-value" id="users-analytics-total">0</div>
+                        <div class="stat-card-subtitle">Новых за 30 дней: <span id="users-analytics-new-30d">0</span></div>
                     </div>
                 </div>
                 
@@ -363,21 +393,21 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Новых пользователей</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="user-growth-period" onchange="changeUserGrowthPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                            <select id="users-analytics-growth-period" onchange="changeUsersAnalyticsGrowthPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
                                 <option value="1">24 часа</option>
                                 <option value="7">7 дней</option>
                                 <option value="14">14 дней</option>
                                 <option value="30" selected>30 дней</option>
                                 <option value="90">90 дней</option>
                             </select>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('user-growth-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('users-analytics-growth-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                 <span>⛶</span>
                             </button>
                         </div>
                     </div>
                     <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                         <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="user-growth-chart"></canvas>
+                            <canvas id="users-analytics-growth-chart"></canvas>
                         </div>
                     </div>
                     
@@ -385,44 +415,55 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h2 style="margin: 0;">Конверсия новых пользователей</h2>
                             <div style="display: flex; gap: 8px; align-items: center;">
-                                <select id="conversion-period" onchange="changeConversionPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                                <select id="users-analytics-conversion-period" onchange="changeUsersAnalyticsConversionPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
                                     <option value="1">24 часа</option>
                                     <option value="7">7 дней</option>
                                     <option value="14">14 дней</option>
                                     <option value="30" selected>30 дней</option>
                                     <option value="90">90 дней</option>
                                 </select>
-                                <button class="fullscreen-btn" onclick="toggleFullscreen('conversion-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                                <button class="fullscreen-btn" onclick="toggleFullscreen('users-analytics-conversion-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                     <span>⛶</span>
                                 </button>
                             </div>
                         </div>
                         <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
                             <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="conversion-chart"></canvas>
+                                <canvas id="users-analytics-conversion-chart"></canvas>
                             </div>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Нагрузка на канал серверов</h2>
-                        <button class="fullscreen-btn" onclick="toggleFullscreen('server-load-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                            <span>⛶</span>
-                        </button>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 400px; min-width: 700px;">
-                            <canvas id="server-load-chart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap;">
-                        <button class="btn-primary" onclick="showPage('admin-finance')" style="flex: 1; min-width: 120px;">Финансы</button>
-                        <button class="btn-primary" onclick="showPage('admin-subscriptions')" style="flex: 1; min-width: 120px;">Подписки</button>
-                        <button class="btn-primary" onclick="showPage('admin-notifications')" style="flex: 1; min-width: 120px;">Уведомления</button>
-                        <button class="btn-primary" onclick="showPage('admin-users')" style="flex: 1; min-width: 120px;">Пользователи</button>
-                        <button class="btn-primary" onclick="showPage('admin-broadcast')" style="flex: 1; min-width: 120px;">Рассылка</button>
-                        <button class="btn-primary" onclick="showPage('admin-server-management')" style="flex: 1; min-width: 120px;">Управление серверами</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Аналитика серверов -->
+        <div id="page-admin-servers-analytics" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1 style="margin: 0; font-size: 1.25rem;">Аналитика серверов</h1>
+            </header>
+            
+            <div id="admin-servers-analytics-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка...</p>
+            </div>
+            
+            <div id="admin-servers-analytics-error" class="error" style="display: none;">
+                <p>Ошибка загрузки данных</p>
+                <button onclick="loadServersAnalyticsPage()">Повторить</button>
+            </div>
+            
+            <div id="admin-servers-analytics-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 style="margin: 0;">Нагрузка на канал серверов</h2>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('servers-analytics-load-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
+                        <span>⛶</span>
+                    </button>
+                </div>
+                <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
+                    <div style="position: relative; height: 400px; min-width: 700px;">
+                        <canvas id="servers-analytics-load-chart"></canvas>
                     </div>
                 </div>
             </div>

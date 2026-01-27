@@ -168,6 +168,10 @@ function showPage(pageName) {
         loadAdminUsers(1, currentAdminUserSearch);
     } else if (pageName === 'admin-stats') {
         loadAdminStats();
+    } else if (pageName === 'admin-users-analytics') {
+        loadUsersAnalyticsPage();
+    } else if (pageName === 'admin-servers-analytics') {
+        loadServersAnalyticsPage();
     } else if (pageName === 'admin-finance') {
         loadFinancePage();
     } else if (pageName === 'admin-notifications') {
@@ -2611,55 +2615,89 @@ function showError(elementId, message) {
     }
 }
 
-// Загрузка статистики
-async function loadAdminStats() {
+// Главный экран админ-панели (две карточки «Аналитика» и «Управление») — данных не грузим
+function loadAdminStats() {
+    const contentEl = document.getElementById('admin-stats-content');
+    if (contentEl) contentEl.style.display = 'block';
+}
+
+// Загрузка страницы «Аналитика пользователей»
+async function loadUsersAnalyticsPage() {
     try {
-        const loadingEl = document.getElementById('admin-stats-loading');
-        const errorEl = document.getElementById('admin-stats-error');
-        const contentEl = document.getElementById('admin-stats-content');
-        
+        const loadingEl = document.getElementById('admin-users-analytics-loading');
+        const errorEl = document.getElementById('admin-users-analytics-error');
+        const contentEl = document.getElementById('admin-users-analytics-content');
         if (loadingEl) loadingEl.style.display = 'block';
         if (errorEl) errorEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'none';
         
         const response = await apiFetch('/api/admin/stats', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки статистики');
-        }
+        if (!response.ok) throw new Error('Ошибка загрузки');
         
         const data = await response.json();
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
         
-        document.getElementById('admin-stats-loading').style.display = 'none';
-        document.getElementById('admin-stats-content').style.display = 'block';
+        const totalEl = document.getElementById('users-analytics-total');
+        const newEl = document.getElementById('users-analytics-new-30d');
+        if (totalEl) totalEl.textContent = data.stats?.users?.total ?? 0;
+        if (newEl) newEl.textContent = data.stats?.users?.new_30d ?? 0;
         
-        // Обновляем статистику
-        document.getElementById('stats-total-users').textContent = data.stats.users.total || 0;
-        document.getElementById('stats-new-users-30d').textContent = data.stats.users.new_30d || 0;
-        
-        // Загружаем графики
-        await loadUserGrowthChart();
-        await loadConversionChart();
-        await loadServerLoadChart();
-        
-        // Запускаем автоматическое обновление графика каждые 2 минуты
-        if (serverLoadChartInterval) {
-            clearInterval(serverLoadChartInterval);
-        }
-        serverLoadChartInterval = setInterval(() => {
-            if (currentPage === 'admin-stats') {
-                loadServerLoadChart();
-            }
-        }, 2 * 60 * 1000); // 2 минуты
+        const growthPeriodEl = document.getElementById('users-analytics-growth-period');
+        const convPeriodEl = document.getElementById('users-analytics-conversion-period');
+        const growthDays = growthPeriodEl ? parseInt(growthPeriodEl.value) || 30 : 30;
+        const convDays = convPeriodEl ? parseInt(convPeriodEl.value) || 30 : 30;
+        await loadUserGrowthChart(growthDays, 'users-analytics-growth-chart');
+        await loadConversionChart(convDays, 'users-analytics-conversion-chart');
     } catch (error) {
-        console.error('Ошибка загрузки статистики:', error);
-        document.getElementById('admin-stats-loading').style.display = 'none';
-        showError('admin-stats-error', 'Ошибка загрузки статистики');
+        console.error('Ошибка загрузки аналитики пользователей:', error);
+        const loadingEl = document.getElementById('admin-users-analytics-loading');
+        if (loadingEl) loadingEl.style.display = 'none';
+        showError('admin-users-analytics-error', 'Ошибка загрузки данных');
+    }
+}
+
+function changeUsersAnalyticsGrowthPeriod() {
+    const el = document.getElementById('users-analytics-growth-period');
+    const days = el ? parseInt(el.value) || 30 : 30;
+    loadUserGrowthChart(days, 'users-analytics-growth-chart');
+}
+
+function changeUsersAnalyticsConversionPeriod() {
+    const el = document.getElementById('users-analytics-conversion-period');
+    const days = el ? parseInt(el.value) || 30 : 30;
+    loadConversionChart(days, 'users-analytics-conversion-chart');
+}
+
+// Загрузка страницы «Аналитика серверов»
+async function loadServersAnalyticsPage() {
+    try {
+        const loadingEl = document.getElementById('admin-servers-analytics-loading');
+        const errorEl = document.getElementById('admin-servers-analytics-error');
+        const contentEl = document.getElementById('admin-servers-analytics-content');
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (errorEl) errorEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'none';
+        
+        await loadServerLoadChart('servers-analytics-load-chart');
+        
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
+        
+        if (serverLoadChartInterval) clearInterval(serverLoadChartInterval);
+        serverLoadChartInterval = setInterval(() => {
+            if (currentPage === 'admin-servers-analytics') {
+                loadServerLoadChart('servers-analytics-load-chart');
+            }
+        }, 2 * 60 * 1000);
+    } catch (error) {
+        console.error('Ошибка загрузки аналитики серверов:', error);
+        const loadingEl = document.getElementById('admin-servers-analytics-loading');
+        if (loadingEl) loadingEl.style.display = 'none';
+        showError('admin-servers-analytics-error', 'Ошибка загрузки данных');
     }
 }
 
@@ -2726,8 +2764,9 @@ let subscriptionDynamicsChart = null;
 let subscriptionConversionChart = null;
 let churnRateChart = null;
 
-// Загрузка графика роста пользователей
-async function loadUserGrowthChart(days = 30) {
+// Загрузка графика роста пользователей (chartCanvasId — для страницы «Аналитика пользователей»: 'users-analytics-growth-chart')
+async function loadUserGrowthChart(days = 30, chartCanvasId) {
+    const canvasId = chartCanvasId || 'user-growth-chart';
     try {
         const response = await apiFetch('/api/admin/charts/user-growth', {
             method: 'POST',
@@ -2746,7 +2785,7 @@ async function loadUserGrowthChart(days = 30) {
             return;
         }
         
-        const ctx = document.getElementById('user-growth-chart');
+        const ctx = document.getElementById(canvasId);
         if (!ctx) {
             return;
         }
@@ -2826,8 +2865,9 @@ async function loadUserGrowthChart(days = 30) {
     }
 }
 
-// Загрузка графика конверсии
-async function loadConversionChart(days = 30) {
+// Загрузка графика конверсии (chartCanvasId — для страницы «Аналитика пользователей»: 'users-analytics-conversion-chart')
+async function loadConversionChart(days = 30, chartCanvasId) {
+    const canvasId = chartCanvasId || 'conversion-chart';
     try {
         const response = await apiFetch('/api/admin/charts/conversion', {
             method: 'POST',
@@ -2846,7 +2886,7 @@ async function loadConversionChart(days = 30) {
             return;
         }
         
-        const ctx = document.getElementById('conversion-chart');
+        const ctx = document.getElementById(canvasId);
         if (!ctx) {
             return;
         }
@@ -3164,8 +3204,9 @@ function changeFinanceRevenueTrendPeriod() {
     loadRevenueTrendChart(days, 'finance-revenue-trend-chart');
 }
 
-// Загрузка графика нагрузки на серверы
-async function loadServerLoadChart() {
+// Загрузка графика нагрузки на серверы (chartCanvasId — для страницы «Аналитика серверов»: 'servers-analytics-load-chart')
+async function loadServerLoadChart(chartCanvasId) {
+    const canvasId = chartCanvasId || 'server-load-chart';
     try {
         const response = await apiFetch('/api/admin/charts/server-load', {
             method: 'POST',
@@ -3189,7 +3230,7 @@ async function loadServerLoadChart() {
             return;
         }
         
-        const ctx = document.getElementById('server-load-chart');
+        let ctx = document.getElementById(canvasId);
         if (!ctx) {
             console.error('Canvas элемент не найден');
             return;
@@ -3208,7 +3249,6 @@ async function loadServerLoadChart() {
         
         if (serverData.length === 0) {
             console.warn('Нет данных о серверах для отображения');
-            // Показываем сообщение об отсутствии данных, но сохраняем canvas
             const parent = ctx.parentElement;
             const message = document.createElement('p');
             message.style.cssText = 'text-align: center; color: #999; padding: 20px;';
@@ -3219,10 +3259,10 @@ async function loadServerLoadChart() {
         }
         
         // Восстанавливаем canvas, если он был удален
-        if (!ctx || !ctx.getContext) {
-            const parent = document.getElementById('server-load-chart').parentElement;
-            parent.innerHTML = '<canvas id="server-load-chart"></canvas>';
-            ctx = document.getElementById('server-load-chart');
+        if (!ctx.getContext) {
+            const parent = document.getElementById(canvasId).parentElement;
+            parent.innerHTML = '<canvas id="' + canvasId + '"></canvas>';
+            ctx = document.getElementById(canvasId);
         }
         
         // Создаем график по серверам
@@ -3506,11 +3546,11 @@ async function toggleFullscreen(chartId) {
             
             // Обновляем размер графика после входа в полноэкранный режим
             setTimeout(() => {
-                if (chartId === 'user-growth-chart' && userGrowthChart) {
+                if ((chartId === 'user-growth-chart' || chartId === 'users-analytics-growth-chart') && userGrowthChart) {
                     userGrowthChart.resize();
-                } else if (chartId === 'conversion-chart' && conversionChart) {
+                } else if ((chartId === 'conversion-chart' || chartId === 'users-analytics-conversion-chart') && conversionChart) {
                     conversionChart.resize();
-                } else if (chartId === 'server-load-chart' && serverLoadChart) {
+                } else if ((chartId === 'server-load-chart' || chartId === 'servers-analytics-load-chart') && serverLoadChart) {
                     serverLoadChart.resize();
                 }
             }, 200);
@@ -3622,11 +3662,11 @@ function showChartModal(chartId) {
     
     // Получаем оригинальный Chart.js экземпляр
     let originalChart = null;
-    if (chartId === 'user-growth-chart' && userGrowthChart) {
+    if ((chartId === 'user-growth-chart' || chartId === 'users-analytics-growth-chart') && userGrowthChart) {
         originalChart = userGrowthChart;
-    } else if (chartId === 'conversion-chart' && conversionChart) {
+    } else if ((chartId === 'conversion-chart' || chartId === 'users-analytics-conversion-chart') && conversionChart) {
         originalChart = conversionChart;
-    } else if (chartId === 'server-load-chart' && serverLoadChart) {
+    } else if ((chartId === 'server-load-chart' || chartId === 'servers-analytics-load-chart') && serverLoadChart) {
         originalChart = serverLoadChart;
     }
     
