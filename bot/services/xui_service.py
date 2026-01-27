@@ -8,7 +8,7 @@ import datetime
 import requests
 import urllib3
 from typing import List
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
@@ -17,11 +17,13 @@ logger = logging.getLogger(__name__)
 class X3:
     """Класс для работы с X-UI панелью управления VPN"""
     
-    def __init__(self, login, password, host, vpn_host=None):
+    def __init__(self, login, password, host, vpn_host=None, subscription_port=2096, subscription_url=None):
         self.login = login
         self.password = password
         self.host = host
         self.vpn_host = vpn_host  # IP/домен VPN сервера (если отличается от панели)
+        self.subscription_port = subscription_port if subscription_port is not None else 2096
+        self.subscription_url = (subscription_url or "").strip() or None  # Базовый URL подписки (порт 2096 и т.п.)
         self.ses = requests.Session()
         
         # Определяем протокол и настраиваем SSL соответственно
@@ -1488,10 +1490,13 @@ class X3:
                             return []
                         
                         # Формируем URL subscription endpoint X-UI
-                        host_part = self.host.split('//')[-1]
-                        if '/panel' in host_part:
-                            host_part = host_part.split('/panel')[0]
-                        subscription_url = f"{self.host.split('//')[0]}//{host_part}/sub/{sub_id}"
+                        if self.subscription_url:
+                            base = self.subscription_url.rstrip('/')
+                        else:
+                            p = urlparse(self.host)
+                            hostname = p.hostname or (p.netloc.split(':')[0] if p.netloc else '')
+                            base = f"{p.scheme}://{hostname}:{self.subscription_port}"
+                        subscription_url = f"{base}/sub/{sub_id}"
                         
                         # Получаем ссылки из X-UI subscription endpoint
                         try:

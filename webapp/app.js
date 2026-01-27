@@ -6543,6 +6543,8 @@ function showAddServerConfigModal() {
     document.getElementById('server-login-input').value = '';
     document.getElementById('server-pass-input').value = '';
     document.getElementById('server-vpnhost-input').value = '';
+    document.getElementById('server-subscription-port-input').value = '2096';
+    document.getElementById('server-subscription-url-input').value = '';
     document.getElementById('server-lat-input').value = '';
     document.getElementById('server-lng-input').value = '';
     showModal('server-config-modal');
@@ -6561,6 +6563,8 @@ function editServerConfig(serverId) {
     document.getElementById('server-login-input').value = server.login;
     document.getElementById('server-pass-input').value = server.password;
     document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
+    document.getElementById('server-subscription-port-input').value = server.subscription_port != null ? String(server.subscription_port) : '2096';
+    document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
     document.getElementById('server-lat-input').value = server.lat || '';
     document.getElementById('server-lng-input').value = server.lng || '';
     showModal('server-config-modal');
@@ -6570,6 +6574,7 @@ function editServerConfig(serverId) {
 async function saveServerConfig(event) {
     event.preventDefault();
     const id = document.getElementById('server-id-input').value;
+    const portVal = document.getElementById('server-subscription-port-input').value;
     const body = {
         group_id: currentSelectedGroupId,
         name: document.getElementById('server-name-input').value,
@@ -6578,6 +6583,8 @@ async function saveServerConfig(event) {
         login: document.getElementById('server-login-input').value,
         password: document.getElementById('server-pass-input').value,
         vpn_host: document.getElementById('server-vpnhost-input').value || null,
+        subscription_port: portVal ? parseInt(portVal, 10) : null,
+        subscription_url: document.getElementById('server-subscription-url-input').value || null,
         lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
         lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
         id: id || undefined,

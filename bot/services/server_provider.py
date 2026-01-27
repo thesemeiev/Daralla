@@ -48,7 +48,9 @@ class ServerProvider:
                 "vpn_host": s["vpn_host"],
                 "lat": s["lat"],
                 "lng": s["lng"],
-                "group_id": s["group_id"]
+                "group_id": s["group_id"],
+                "subscription_port": s.get("subscription_port", 2096),
+                "subscription_url": s.get("subscription_url")
             })
             
         return result

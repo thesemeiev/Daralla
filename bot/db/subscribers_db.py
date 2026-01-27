@@ -114,6 +114,20 @@ async def init_subscribers_db():
             if "duplicate column name" not in str(e).lower():
                 logger.error(f"Ошибка миграции (group_id): {e}")
 
+        # Миграция: порт и URL подписки X-UI в настройках сервера
+        try:
+            await db.execute("ALTER TABLE servers_config ADD COLUMN subscription_port INTEGER DEFAULT 2096")
+            logger.info("Добавлена колонка subscription_port в таблицу servers_config")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (subscription_port): {e}")
+        try:
+            await db.execute("ALTER TABLE servers_config ADD COLUMN subscription_url TEXT")
+            logger.info("Добавлена колонка subscription_url в таблицу servers_config")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (subscription_url): {e}")
+
         # Таблица связей подписки с серверами
         await db.execute("""
             CREATE TABLE IF NOT EXISTS subscription_servers (
@@ -1034,14 +1048,16 @@ async def add_server_group(name: str, description: str = None, is_default: bool 
             return group_id
 
 async def add_server_config(group_id: int, name: str, host: str, login: str, password: str, 
-                           display_name: str = None, vpn_host: str = None, lat: float = None, lng: float = None):
+                           display_name: str = None, vpn_host: str = None, lat: float = None, lng: float = None,
+                           subscription_port: int = None, subscription_url: str = None):
     """Добавляет конфигурацию сервера"""
+    port = 2096 if subscription_port is None else subscription_port
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """INSERT INTO servers_config 
-               (group_id, name, display_name, host, login, password, vpn_host, lat, lng)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (group_id, name, display_name, host, login, password, vpn_host, lat, lng)
+               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (group_id, name, display_name, host, login, password, vpn_host, lat, lng, port, subscription_url)
         ) as cur:
             server_id = cur.lastrowid
             await db.commit()
@@ -1121,7 +1137,7 @@ async def update_server_config(server_id: int, **kwargs):
         updates = []
         params = []
         for key, value in kwargs.items():
-            if key in ['group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host', 'lat', 'lng', 'is_active']:
+            if key in ['group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host', 'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url']:
                 updates.append(f"{key} = ?")
                 params.append(value)
                 

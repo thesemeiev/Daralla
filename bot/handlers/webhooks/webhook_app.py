@@ -3176,7 +3176,9 @@ def create_webhook_app(bot_app):
                         display_name=data.get('display_name'),
                         vpn_host=data.get('vpn_host'),
                         lat=data.get('lat'),
-                        lng=data.get('lng')
+                        lng=data.get('lng'),
+                        subscription_port=data.get('subscription_port'),
+                        subscription_url=data.get('subscription_url') or None
                     ))
                     
                     # Обновляем MultiServerManager

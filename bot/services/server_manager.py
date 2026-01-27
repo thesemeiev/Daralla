@@ -44,7 +44,9 @@ class MultiServerManager:
                         login=server_config["login"],
                         password=server_config["password"], 
                         host=server_config["host"],
-                        vpn_host=server_config.get("vpn_host")  # IP/домен VPN сервера (если отличается от панели)
+                        vpn_host=server_config.get("vpn_host"),  # IP/домен VPN сервера (если отличается от панели)
+                        subscription_port=server_config.get("subscription_port", 2096),
+                        subscription_url=server_config.get("subscription_url")
                     )
                     # Всегда добавляем сервер в список, подключение произойдет при первом использовании
                     server_info = {
@@ -271,7 +273,10 @@ class MultiServerManager:
                 server_info["x3"] = X3(
                     login=server_config["login"],
                     password=server_config["password"], 
-                    host=server_config["host"]
+                    host=server_config["host"],
+                    vpn_host=server_config.get("vpn_host"),
+                    subscription_port=server_config.get("subscription_port", 2096),
+                    subscription_url=server_config.get("subscription_url")
                 )
             
             # Проверяем доступность API (используем быструю проверку без retry)

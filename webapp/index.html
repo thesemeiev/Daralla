@@ -1067,6 +1067,14 @@
                         <label for="server-vpnhost-input">VPN Host (IP/Домен для ключей)</label>
                         <input type="text" id="server-vpnhost-input" placeholder="Оставьте пустым, если совпадает с хостом">
                     </div>
+                    <div class="form-group">
+                        <label for="server-subscription-port-input">Порт подписки X-UI</label>
+                        <input type="number" id="server-subscription-port-input" min="1" max="65535" placeholder="2096" title="Порт, на котором X-UI отдаёт подписку (обычно 2096)">
+                    </div>
+                    <div class="form-group">
+                        <label for="server-subscription-url-input">URL подписки (необязательно)</label>
+                        <input type="text" id="server-subscription-url-input" placeholder="http://host:2096 — если пусто, считается из хоста и порта подписки">
+                    </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                         <div class="form-group">
                             <label for="server-lat-input">Широта (Lat)</label>
