@@ -688,65 +688,27 @@ class CustomGlobe {
             const pos = this.latLngToXY(city.lat, city.lng);
             if (!pos.visible) return;
             
-            // Определяем стиль для особых городов
-            let pointColor = grayColor;
-            let strokeColor = '#666';
-            let pointSize = size;
-            let isGrozny = city.name === 'Grozny';
-            let isSacred = city.name === 'Mecca' || city.name === 'Medina';
-            
-            if (isGrozny) {
-                pointColor = '#00E5FF'; // Ярко-голубой (Циан) для Грозного
-                strokeColor = '#00B8D4';
-                pointSize = 6;
-            } else if (isSacred) {
-                pointColor = '#FFD700'; // Золотой для Мекки и Медины
-                strokeColor = '#B8860B';
-                pointSize = 5;
-            }
-            
-            // Рисуем точку
-            if (isGrozny) {
-                // Грозный выделяем кружком со свечением
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, pointSize/2 + 1, 0, Math.PI * 2);
-                ctx.fillStyle = pointColor;
-                ctx.fill();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                
-                // Дополнительное свечение для Грозного
-                const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 12);
-                glow.addColorStop(0, pointColor + '60');
-                glow.addColorStop(1, pointColor + '00');
-                ctx.fillStyle = glow;
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
-                ctx.fill();
-            } else {
-                ctx.fillStyle = pointColor;
-                ctx.fillRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
-                ctx.strokeStyle = strokeColor;
-                ctx.lineWidth = 1;
-                ctx.strokeRect(Math.floor(pos.x - pointSize/2), Math.floor(pos.y - pointSize/2), pointSize, pointSize);
-            }
+            // Все города — одинаковый стиль (серые точки)
+            ctx.fillStyle = grayColor;
+            ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
             // Подпись города
             const label = city.name;
-            const fontSize = isGrozny ? 12 : 10;
-            ctx.font = `${isGrozny ? 'bold ' : ''}${fontSize}px Arial, sans-serif`;
+            const fontSize = 10;
+            ctx.font = `${fontSize}px Arial, sans-serif`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             
             const padding = 6;
-            const labelX = Math.round(pos.x + pointSize + padding);
+            const labelX = Math.round(pos.x + size + padding);
             const labelY = Math.round(pos.y);
             
             ctx.imageSmoothingEnabled = false;
             
-            // Рисуем текст с обводкой
-            ctx.fillStyle = isGrozny ? '#00E5FF' : (isSacred ? '#FFD700' : '#fff');
+            ctx.fillStyle = '#fff';
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.lineWidth = 2;
             ctx.lineJoin = 'round';
@@ -1054,8 +1016,8 @@ class CustomGlobe {
             ctx.fillStyle = glow;
             ctx.fillRect(Math.floor(pos.x - glowSize), Math.floor(pos.y - glowSize), glowSize * 2, glowSize * 2);
             
-            // Подпись сервера - используем названия городов вместо стран
-            const label = this.getCityName(server);
+            // Подпись сервера: приоритет — map_label из настроек, иначе display_name или location
+            const label = (server.map_label || server.display_name || server.location || server.name || '').trim();
             if (label) {
                 // Размер шрифта фиксированный, не масштабируется с зумом
                 const fontSize = 10;
@@ -6546,6 +6508,7 @@ function showAddServerConfigModal() {
     document.getElementById('server-subscription-port-input').value = '2096';
     document.getElementById('server-subscription-url-input').value = '';
     document.getElementById('server-client-flow-input').value = '';
+    document.getElementById('server-map-label-input').value = '';
     document.getElementById('server-lat-input').value = '';
     document.getElementById('server-lng-input').value = '';
     showModal('server-config-modal');
@@ -6567,6 +6530,7 @@ function editServerConfig(serverId) {
     document.getElementById('server-subscription-port-input').value = server.subscription_port != null ? String(server.subscription_port) : '2096';
     document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
     document.getElementById('server-client-flow-input').value = server.client_flow || '';
+    document.getElementById('server-map-label-input').value = server.map_label || '';
     document.getElementById('server-lat-input').value = server.lat || '';
     document.getElementById('server-lng-input').value = server.lng || '';
     showModal('server-config-modal');
@@ -6588,6 +6552,7 @@ async function saveServerConfig(event) {
         subscription_port: portVal ? parseInt(portVal, 10) : null,
         subscription_url: document.getElementById('server-subscription-url-input').value || null,
         client_flow: document.getElementById('server-client-flow-input').value?.trim() || null,
+        map_label: document.getElementById('server-map-label-input').value?.trim() || null,
         lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
         lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
         id: id || undefined,

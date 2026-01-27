@@ -42,6 +42,7 @@ class ServerProvider:
             result[location].append({
                 "name": s["name"],
                 "display_name": s["display_name"],
+                "map_label": (s.get("map_label") or "").strip() or None,
                 "host": s["host"],
                 "login": s["login"],
                 "password": s["password"],

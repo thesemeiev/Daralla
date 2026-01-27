@@ -956,7 +956,7 @@ def create_webhook_app(bot_app):
             finally:
                 loop.close()
             
-            # Получаем информацию о серверах (координаты, display_name) из конфигурации
+            # Получаем информацию о серверах (координаты, display_name, map_label) из конфигурации
             def get_servers_info():
                 try:
                     from ... import bot as bot_module
@@ -972,6 +972,7 @@ def create_webhook_app(bot_app):
                         for server in servers:
                             server_name = server['name']
                             display_name = server['config'].get('display_name', server_name)
+                            map_label = server['config'].get('map_label')
                             lat = server['config'].get('lat')
                             lng = server['config'].get('lng')
                             
@@ -984,6 +985,7 @@ def create_webhook_app(bot_app):
                                 servers_info.append({
                                     'name': server_name,
                                     'display_name': display_name,
+                                    'map_label': map_label,
                                     'location': location,
                                     'lat': lat,
                                     'lng': lng,
@@ -3180,7 +3182,8 @@ def create_webhook_app(bot_app):
                         lng=data.get('lng'),
                         subscription_port=data.get('subscription_port'),
                         subscription_url=data.get('subscription_url') or None,
-                        client_flow=data.get('client_flow') or None
+                        client_flow=data.get('client_flow') or None,
+                        map_label=data.get('map_label') or None
                     ))
                     
                     # Обновляем MultiServerManager
