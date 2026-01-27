@@ -364,10 +364,11 @@ def create_webhook_app(bot_app):
             if telegram_url and is_happ_client:
                 logger.debug(f"Пропущен announce в комментариях для Happ клиента (используются кнопки через заголовки)")
             
-            # Добавляем VLESS ссылки
-            response_lines.extend(links)
-            
-            response_text = "\n".join(response_lines) + "\n"
+            # Тело подписки — base64(ссылки по одной на строку).
+            # Happ, V2RayTun и большинство v2ray-клиентов ожидают именно такой формат.
+            import base64
+            links_plain = "\n".join(links)
+            response_text = base64.b64encode(links_plain.encode("utf-8")).decode("ascii")
             
             # Логируем первую ссылку для проверки tag
             if links:
@@ -3178,7 +3179,8 @@ def create_webhook_app(bot_app):
                         lat=data.get('lat'),
                         lng=data.get('lng'),
                         subscription_port=data.get('subscription_port'),
-                        subscription_url=data.get('subscription_url') or None
+                        subscription_url=data.get('subscription_url') or None,
+                        client_flow=data.get('client_flow') or None
                     ))
                     
                     # Обновляем MultiServerManager
@@ -3212,12 +3214,17 @@ def create_webhook_app(bot_app):
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
             
-            from ...db.subscribers_db import update_server_config
+            from ...db.subscribers_db import update_server_config, get_server_by_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 # Извлекаем все поля кроме initData и id
                 update_data = {k: v for k, v in data.items() if k not in ['initData', 'id']}
+                old_server = loop.run_until_complete(get_server_by_id(int(server_id)))
+                old_flow = (old_server.get('client_flow') or '').strip() or None if old_server else None
+                new_flow = (update_data.get('client_flow') or '').strip() or None
+                client_flow_changed = (old_flow != new_flow)
+                
                 loop.run_until_complete(update_server_config(server_id, **update_data))
                 
                 # Обновляем MultiServerManager
@@ -3230,10 +3237,52 @@ def create_webhook_app(bot_app):
                 except Exception as mgr_e:
                     logger.error(f"Ошибка обновления менеджера серверов: {mgr_e}")
                     
-                return jsonify({'success': True})
+                return jsonify({'success': True, 'client_flow_changed': client_flow_changed, 'server_id': int(server_id)})
             finally:
                 loop.close()
         except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/admin/server-config/sync-flow', methods=['POST', 'OPTIONS'])
+    def api_admin_server_config_sync_flow():
+        """Синхронизация flow у существующих клиентов на сервере после смены настройки client_flow"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({'error': 'Access denied'}), 403
+            data = request.get_json(silent=True) or {}
+            server_id = data.get('server_id') or data.get('id')
+            if not server_id:
+                return jsonify({'error': 'server_id is required'}), 400
+            from ...db.subscribers_db import get_server_by_id
+            from ...services.xui_service import X3
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                server = loop.run_until_complete(get_server_by_id(int(server_id)))
+                if not server:
+                    return jsonify({'error': 'Server not found'}), 404
+                x3 = X3(
+                    login=server['login'],
+                    password=server['password'],
+                    host=server['host'],
+                    vpn_host=server.get('vpn_host'),
+                    subscription_port=server.get('subscription_port', 2096),
+                    subscription_url=server.get('subscription_url')
+                )
+                flow_val = (server.get('client_flow') or '').strip() or ''
+                updated, errs = x3.sync_flow_for_all_clients(flow_val)
+                return jsonify({
+                    'success': True,
+                    'updated': updated,
+                    'errors': errs[:20]
+                })
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.exception("sync-flow error")
             return jsonify({'error': str(e)}), 500
 
     @app.route('/api/admin/server-config/delete', methods=['POST', 'OPTIONS'])

@@ -103,7 +103,7 @@ class X3:
         self._logged_in = True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name="", inbound_id=None, limit_ip=None):
+    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name="", inbound_id=None, limit_ip=None, flow=None):
         """
         Добавляет нового клиента на сервер
         
@@ -116,6 +116,7 @@ class X3:
             key_name: Имя ключа или токен подписки (сохраняется в subId)
             inbound_id: ID inbound'а (если None, используется первый доступный)
             limit_ip: Лимит IP-адресов (если None, используется 1)
+            flow: Flow для VLESS (например xtls-rprx-vision), если нужен; None — не передавать
         """
         """Добавляет нового клиента на сервер"""
         self._ensure_connected()
@@ -197,6 +198,9 @@ class X3:
                 "tgId": str(tg_id),
                 "subId": key_name,  # Сохраняем имя ключа в поле subId
             }
+            if flow and str(flow).strip():
+                client_data["flow"] = str(flow).strip()
+                logger.info(f"Создание {protocol.upper()} клиента {user_email} с flow={client_data['flow']}")
             logger.info(f"Создание {protocol.upper()} клиента {user_email} с id={client_uuid[:8]}...")
         logger.info(f"Создание клиента {user_email} на сервере {self.host} с limitIp={limit_ip_value} (передан limit_ip={limit_ip})")
         data1 = {
@@ -930,6 +934,74 @@ class X3:
         except Exception as e:
             logger.error(f"Ошибка при обновлении limitIp клиента {user_email}: {e}")
             raise
+
+    def sync_flow_for_all_clients(self, flow_value: str, timeout=15) -> tuple:
+        """
+        Обновляет flow у всех VLESS-клиентов на сервере.
+        
+        Args:
+            flow_value: Новое значение flow (например xtls-rprx-vision), или пустая строка/None чтобы снять flow.
+            timeout: Таймаут запросов.
+        
+        Returns:
+            (updated_count, error_messages): количество обновлённых клиентов и список ошибок.
+        """
+        self._ensure_connected()
+        updated = 0
+        errors = []
+        try:
+            inbounds_list = self.list(timeout=timeout)
+            if not inbounds_list.get('success', False) or not inbounds_list.get('obj'):
+                return 0, ["Не удалось получить список inbounds"]
+            flow_val = (flow_value or "").strip() or None
+            header = {"Accept": "application/json"}
+            for inbound in inbounds_list['obj']:
+                protocol = (inbound.get('protocol') or 'vless').lower()
+                if protocol == 'trojan':
+                    continue  # flow только для VLESS
+                inbound_id = inbound.get('id')
+                try:
+                    settings = json.loads(inbound.get('settings', '{}'))
+                except Exception as e:
+                    errors.append(f"inbound {inbound_id}: ошибка парсинга settings — {e}")
+                    continue
+                clients = settings.get('clients', [])
+                for client in clients:
+                    client_data = dict(client)
+                    if flow_val:
+                        client_data['flow'] = flow_val
+                    else:
+                        client_data.pop('flow', None)
+                    client_identifier = client_data.get('id')
+                    if not client_identifier:
+                        continue
+                    try:
+                        data = {
+                            "id": inbound_id,
+                            "settings": json.dumps({"clients": [client_data]})
+                        }
+                        resp = self.ses.post(
+                            f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
+                            headers=header, json=data, timeout=timeout
+                        )
+                        if resp.status_code == 200:
+                            try:
+                                j = resp.json()
+                                if j.get('success', False):
+                                    updated += 1
+                                    logger.info(f"Обновлён flow для клиента {client.get('email', '?')} (inbound {inbound_id})")
+                                else:
+                                    errors.append(f"{client.get('email', '?')}: {j.get('msg', 'unknown')}")
+                            except (json.JSONDecodeError, ValueError):
+                                errors.append(f"{client.get('email', '?')}: ответ не JSON")
+                        else:
+                            errors.append(f"{client.get('email', '?')}: HTTP {resp.status_code}")
+                    except Exception as e:
+                        errors.append(f"{client.get('email', '?')}: {e}")
+            return updated, errors
+        except Exception as e:
+            logger.error(f"Ошибка sync_flow_for_all_clients: {e}")
+            return updated, errors + [str(e)]
 
     def _list_internal(self, timeout=15, skip_health_check=False):
         """Внутренний метод для получения списка inbounds (без retry)"""

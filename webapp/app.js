@@ -6545,6 +6545,7 @@ function showAddServerConfigModal() {
     document.getElementById('server-vpnhost-input').value = '';
     document.getElementById('server-subscription-port-input').value = '2096';
     document.getElementById('server-subscription-url-input').value = '';
+    document.getElementById('server-client-flow-input').value = '';
     document.getElementById('server-lat-input').value = '';
     document.getElementById('server-lng-input').value = '';
     showModal('server-config-modal');
@@ -6565,6 +6566,7 @@ function editServerConfig(serverId) {
     document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
     document.getElementById('server-subscription-port-input').value = server.subscription_port != null ? String(server.subscription_port) : '2096';
     document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
+    document.getElementById('server-client-flow-input').value = server.client_flow || '';
     document.getElementById('server-lat-input').value = server.lat || '';
     document.getElementById('server-lng-input').value = server.lng || '';
     showModal('server-config-modal');
@@ -6585,6 +6587,7 @@ async function saveServerConfig(event) {
         vpn_host: document.getElementById('server-vpnhost-input').value || null,
         subscription_port: portVal ? parseInt(portVal, 10) : null,
         subscription_url: document.getElementById('server-subscription-url-input').value || null,
+        client_flow: document.getElementById('server-client-flow-input').value?.trim() || null,
         lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
         lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
         id: id || undefined,
@@ -6603,6 +6606,26 @@ async function saveServerConfig(event) {
             closeModal('server-config-modal');
             const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
             loadServersInGroup(currentSelectedGroupId, group.name);
+            if (result.client_flow_changed && result.server_id) {
+                if (confirm('Обновить flow у существующих клиентов на этом сервере?')) {
+                    try {
+                        const syncRes = await apiFetch('/api/admin/server-config/sync-flow', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ server_id: result.server_id })
+                        });
+                        const syncData = await syncRes.json();
+                        if (syncData.success) {
+                            alert(`Обновлено клиентов: ${syncData.updated}${syncData.errors?.length ? '. Ошибки: ' + syncData.errors.slice(0, 3).join('; ') : ''}`);
+                        } else {
+                            alert('Ошибка синхронизации flow: ' + (syncData.error || 'unknown'));
+                        }
+                    } catch (e) {
+                        console.error('sync-flow', e);
+                        alert('Ошибка при синхронизации flow');
+                    }
+                }
+            }
         } else {
             alert('Ошибка: ' + result.error);
         }

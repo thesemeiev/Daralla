@@ -289,15 +289,17 @@ class SubscriptionManager:
                 logger.info(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
                 current_time = int(time.time())
                 days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
-                
+                server_config = self.server_manager.get_server_config(server_name)
                 logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
+                client_flow = server_config.get("client_flow") if server_config else None
                 response = xui.addClient(
                     day=days_remaining,
                     tg_id=user_id,
                     user_email=client_email,
                     timeout=15,
                     key_name=token,
-                    limit_ip=device_limit
+                    limit_ip=device_limit,
+                    flow=client_flow
                 )
                 
                 if response and response.status_code == 200:

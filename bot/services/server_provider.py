@@ -50,7 +50,8 @@ class ServerProvider:
                 "lng": s["lng"],
                 "group_id": s["group_id"],
                 "subscription_port": s.get("subscription_port", 2096),
-                "subscription_url": s.get("subscription_url")
+                "subscription_url": s.get("subscription_url"),
+                "client_flow": (s.get("client_flow") or "").strip() or None
             })
             
         return result
