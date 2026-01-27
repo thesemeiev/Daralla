@@ -1232,6 +1232,135 @@ h1 {
     flex: 1;
 }
 
+/* Чекбокс «Запомнить меня» на форме входа — свой вид */
+.checkbox-group-login {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+    padding: 14px 16px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.checkbox-group-login:hover {
+    border-color: #4a4a4a;
+    background: #2f2f2f;
+}
+
+.checkbox-group-login input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    margin: 0;
+    border: 2px solid #4a4a4a;
+    border-radius: 6px;
+    background: #1a1a1a;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    position: relative;
+}
+
+.checkbox-group-login input[type="checkbox"]:hover {
+    border-color: #5a5a5a;
+}
+
+.checkbox-group-login input[type="checkbox"]:checked {
+    border-color: #4a9eff;
+    background: #4a9eff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+    background-size: 14px 14px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.checkbox-group-login label {
+    font-size: 15px;
+    color: #e0e0e0;
+    user-select: none;
+}
+
+/* Анимации форм входа и регистрации */
+@keyframes authFormEnter {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#login-form.auth-form-enter,
+#register-form.auth-form-enter {
+    animation: authFormEnter 0.45s ease-out forwards;
+}
+
+@keyframes formShake {
+    0%, 100% { transform: translateX(0); }
+    15% { transform: translateX(-6px); }
+    35% { transform: translateX(6px); }
+    55% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+#login-form.form-shake,
+#register-form.form-shake {
+    animation: formShake 0.4s ease-in-out;
+}
+
+.auth-success-msg {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+    color: #4a9eff;
+    padding: 40px 20px;
+    animation: authSuccessPop 0.5s ease-out forwards;
+}
+
+@keyframes authSuccessPop {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Поля на формах входа/регистрации — лёгкий подъём и свечение при фокусе */
+#login-form .form-group input:focus,
+#register-form .form-group input:focus {
+    border-color: #4a9eff;
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.2);
+    transform: translateY(-2px);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+#login-form .form-group input,
+#register-form .form-group input {
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+/* Кнопка «Войти» / «Зарегистрироваться» — живая */
+#login-form .form-actions button[type="submit"],
+#register-form .form-actions button[type="submit"] {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+#login-form .form-actions button[type="submit"]:hover,
+#register-form .form-actions button[type="submit"]:hover {
+    transform: scale(1.02);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+#login-form .form-actions button[type="submit"]:active,
+#register-form .form-actions button[type="submit"]:active {
+    transform: scale(0.98);
+}
+
 .form-actions {
     display: flex;
     gap: 12px;
@@ -1831,6 +1960,92 @@ h1 {
 .stat-card-subtitle {
     font-size: 12px;
     color: #6a6a6a;
+}
+
+/* Админ-панель: главный экран — минимализм, ровные строки */
+.admin-panel-content {
+    padding: 24px;
+}
+
+.admin-panel-section {
+    margin-bottom: 32px;
+}
+
+.admin-panel-section:last-child {
+    margin-bottom: 0;
+}
+
+.admin-panel-section-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: #888;
+    margin: 0 0 12px 0;
+    padding-left: 12px;
+    letter-spacing: 0.02em;
+}
+
+.admin-panel-section-analytics .admin-panel-section-title {
+    border-left: 3px solid #5a9fd4;
+}
+
+.admin-panel-section-management .admin-panel-section-title {
+    border-left: 3px solid #6a6a6a;
+}
+
+.admin-panel-rows {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.admin-panel-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 52px;
+    padding: 14px 20px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #333;
+    color: #e0e0e0;
+    font-size: 16px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.admin-panel-row:last-child {
+    border-bottom: none;
+}
+
+.admin-panel-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-panel-row:active {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.admin-panel-row-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-panel-row-chevron {
+    flex-shrink: 0;
+    margin-left: 12px;
+    font-size: 20px;
+    color: #888;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.admin-panel-row:hover .admin-panel-row-chevron {
+    transform: translateX(3px);
+    color: #a0a0a0;
 }
 
 /* Скрываем кнопки полного экрана на мобильных устройствах */

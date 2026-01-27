@@ -15,19 +15,20 @@
             <header>
                 <h1>Вход в систему</h1>
             </header>
-            <div class="buy-subscription-content" style="padding: 20px;">
+            <div class="buy-subscription-content auth-page-content" style="padding: 20px;">
+                <div id="login-success-msg" class="auth-success-msg" style="display: none;" aria-hidden="true">Проходи!</div>
                 <form id="login-form" onsubmit="handleWebLogin(event)">
                     <div class="form-group">
                         <label>Логин</label>
-                        <input type="text" id="login-username" required placeholder="Введите ваш логин">
+                        <input type="text" id="login-username" required placeholder="Логин — тот самый">
                     </div>
                     <div class="form-group">
                         <label>Пароль</label>
-                        <input type="password" id="login-password" required placeholder="Введите пароль">
+                        <input type="password" id="login-password" required placeholder="Пароль — только между нами">
                     </div>
-                    <div class="checkbox-group" onclick="document.getElementById('login-remember').click()">
-                        <input type="checkbox" id="login-remember" onclick="event.stopPropagation()">
-                        <label>Запомнить меня</label>
+                    <div class="checkbox-group checkbox-group-login" onclick="document.getElementById('login-remember').click()">
+                        <input type="checkbox" id="login-remember" checked onclick="event.stopPropagation()">
+                        <label for="login-remember">Запомнить меня</label>
                     </div>
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Войти</button>
@@ -42,19 +43,20 @@
             <header>
                 <h1>Регистрация</h1>
             </header>
-            <div class="buy-subscription-content" style="padding: 20px;">
+            <div class="buy-subscription-content auth-page-content" style="padding: 20px;">
+                <div id="register-success-msg" class="auth-success-msg" style="display: none;" aria-hidden="true">Ты в клубе</div>
                 <form id="register-form" onsubmit="handleWebRegister(event)">
                     <div class="form-group">
                         <label>Придумайте логин</label>
-                        <input type="text" id="register-username" required placeholder="Минимум 3 символа">
+                        <input type="text" id="register-username" required placeholder="Логин — тот самый">
                     </div>
                     <div class="form-group">
                         <label>Придумайте пароль</label>
-                        <input type="password" id="register-password" required placeholder="Минимум 6 символов">
+                        <input type="password" id="register-password" required placeholder="Пароль — только между нами">
                     </div>
                     <div class="form-group">
                         <label>Повторите пароль</label>
-                        <input type="password" id="register-confirm" required placeholder="Еще раз">
+                        <input type="password" id="register-confirm" required placeholder="Повторите пароль — да, мы не доверяем памяти">
                     </div>
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Зарегистрироваться</button>
@@ -340,26 +342,50 @@
                 <h1>Админ панель</h1>
             </header>
             
-            <div id="admin-stats-content" style="padding: 24px;">
-                <div class="stat-card" style="margin-bottom: 24px; padding: 20px;">
-                    <div class="stat-card-title" style="margin-bottom: 16px;">Аналитика</div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-                        <button class="btn-primary" onclick="showPage('admin-users-analytics')" style="min-width: 140px;">Аналитика пользователей</button>
-                        <button class="btn-primary" onclick="showPage('admin-subscriptions')" style="min-width: 120px;">Подписки</button>
-                        <button class="btn-primary" onclick="showPage('admin-notifications')" style="min-width: 120px;">Уведомления</button>
-                        <button class="btn-primary" onclick="showPage('admin-finance')" style="min-width: 120px;">Финансы</button>
-                        <button class="btn-primary" onclick="showPage('admin-servers-analytics')" style="min-width: 140px;">Аналитика серверов</button>
+            <div id="admin-stats-content" class="admin-panel-content">
+                <section class="admin-panel-section admin-panel-section-analytics">
+                    <h2 class="admin-panel-section-title">Аналитика</h2>
+                    <div class="admin-panel-rows">
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-users-analytics')">
+                            <span class="admin-panel-row-label">Аналитика пользователей</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-subscriptions')">
+                            <span class="admin-panel-row-label">Подписки</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-notifications')">
+                            <span class="admin-panel-row-label">Уведомления</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-finance')">
+                            <span class="admin-panel-row-label">Финансы</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-servers-analytics')">
+                            <span class="admin-panel-row-label">Аналитика серверов</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
                     </div>
-                </div>
+                </section>
                 
-                <div class="stat-card" style="padding: 20px;">
-                    <div class="stat-card-title" style="margin-bottom: 16px;">Управление</div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-                        <button class="btn-primary" onclick="showPage('admin-users')" style="min-width: 180px;">Управление пользователями</button>
-                        <button class="btn-primary" onclick="showPage('admin-server-management')" style="min-width: 180px;">Управление серверами</button>
-                        <button class="btn-primary" onclick="showPage('admin-broadcast')" style="min-width: 120px;">Рассылка</button>
+                <section class="admin-panel-section admin-panel-section-management">
+                    <h2 class="admin-panel-section-title">Управление</h2>
+                    <div class="admin-panel-rows">
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-users')">
+                            <span class="admin-panel-row-label">Управление пользователями</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-server-management')">
+                            <span class="admin-panel-row-label">Управление серверами</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-broadcast')">
+                            <span class="admin-panel-row-label">Рассылка</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
                     </div>
-                </div>
+                </section>
             </div>
         </div>
 

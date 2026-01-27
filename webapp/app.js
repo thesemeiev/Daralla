@@ -159,6 +159,25 @@ function showPage(pageName) {
     
     currentPage = pageName;
     
+    // Анимация появления формы при открытии входа/регистрации
+    if (pageName === 'login' || pageName === 'register') {
+        const formId = pageName === 'login' ? 'login-form' : 'register-form';
+        const successId = pageName === 'login' ? 'login-success-msg' : 'register-success-msg';
+        const form = document.getElementById(formId);
+        const successMsg = document.getElementById(successId);
+        if (successMsg) {
+            successMsg.style.display = 'none';
+            successMsg.classList.remove('auth-success-visible');
+        }
+        if (form) {
+            form.style.display = '';
+            form.classList.remove('auth-form-enter', 'form-shake');
+            void form.offsetHeight;
+            form.classList.add('auth-form-enter');
+            setTimeout(function () { form.classList.remove('auth-form-enter'); }, 500);
+        }
+    }
+    
     // Загружаем данные для страницы
     if (pageName === 'subscriptions') {
         loadSubscriptions();
@@ -4463,13 +4482,38 @@ async function handleWebLogin(event) {
                 }
             }
             currentUserId = result.user_id;
-            showPage('subscriptions');
-            // Проверяем права админа после входа
-            checkAdminAccess();
+            var formEl = event.target;
+            var successMsg = document.getElementById('login-success-msg');
+            if (formEl && successMsg) {
+                formEl.style.display = 'none';
+                successMsg.style.display = 'block';
+                successMsg.classList.add('auth-success-visible');
+                setTimeout(function () {
+                    showPage('subscriptions');
+                    checkAdminAccess();
+                }, 650);
+            } else {
+                showPage('subscriptions');
+                checkAdminAccess();
+            }
         } else {
+            var loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.classList.remove('form-shake');
+                void loginForm.offsetHeight;
+                loginForm.classList.add('form-shake');
+                setTimeout(function () { loginForm.classList.remove('form-shake'); }, 400);
+            }
             alert(result.error || 'Ошибка входа');
         }
     } catch (e) {
+        var loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.classList.remove('form-shake');
+            void loginForm.offsetHeight;
+            loginForm.classList.add('form-shake');
+            setTimeout(function () { loginForm.classList.remove('form-shake'); }, 400);
+        }
         alert('Ошибка сети');
     } finally {
         btn.disabled = false;
@@ -4484,6 +4528,13 @@ async function handleWebRegister(event) {
     const confirm = document.getElementById('register-confirm').value;
     
     if (password !== confirm) {
+        var registerForm = document.getElementById('register-form');
+        if (registerForm) {
+            registerForm.classList.remove('form-shake');
+            void registerForm.offsetHeight;
+            registerForm.classList.add('form-shake');
+            setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
+        }
         alert('Пароли не совпадают');
         return;
     }
@@ -4509,14 +4560,38 @@ async function handleWebRegister(event) {
                 console.error('Failed to save token to localStorage:', e);
             }
             currentUserId = result.user_id;
-            alert('Регистрация успешна!');
-            showPage('subscriptions');
-            // Проверяем права админа после регистрации
-            checkAdminAccess();
+            var formEl = event.target;
+            var successMsg = document.getElementById('register-success-msg');
+            if (formEl && successMsg) {
+                formEl.style.display = 'none';
+                successMsg.style.display = 'block';
+                successMsg.classList.add('auth-success-visible');
+                setTimeout(function () {
+                    showPage('subscriptions');
+                    checkAdminAccess();
+                }, 650);
+            } else {
+                showPage('subscriptions');
+                checkAdminAccess();
+            }
         } else {
+            var registerForm = document.getElementById('register-form');
+            if (registerForm) {
+                registerForm.classList.remove('form-shake');
+                void registerForm.offsetHeight;
+                registerForm.classList.add('form-shake');
+                setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
+            }
             alert(result.error || 'Ошибка регистрации');
         }
     } catch (e) {
+        var registerForm = document.getElementById('register-form');
+        if (registerForm) {
+            registerForm.classList.remove('form-shake');
+            void registerForm.offsetHeight;
+            registerForm.classList.add('form-shake');
+            setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
+        }
         alert('Ошибка сети');
     } finally {
         btn.disabled = false;
