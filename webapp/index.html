@@ -10,6 +10,45 @@
 </head>
 <body>
     <div class="container">
+        <!-- Лендинг до входа (Веб) — о сервисе, fullscreen, scroll-snap -->
+        <div id="page-landing" class="page landing-fullscreen" style="display: none;">
+            <div class="landing-scroll" id="landing-scroll">
+                <section class="landing-section" id="landing-hero">
+                    <div class="landing-section-content">
+                        <h1 class="landing-hero-title">Daralla VPN</h1>
+                        <p class="landing-hero-sub">Безопасный доступ в интернет из любой точки мира</p>
+                    </div>
+                </section>
+                <section class="landing-section" id="landing-features">
+                    <div class="landing-section-content">
+                        <h2 class="landing-h2">Почему мы</h2>
+                        <ul class="landing-features-list">
+                            <li>Защищённое соединение — ваши данные под замком</li>
+                            <li>Серверы в разных странах — подключайтесь где удобно</li>
+                            <li>Без логов — мы не храним историю вашей активности</li>
+                            <li>Простая подписка — один аккаунт на все устройства</li>
+                        </ul>
+                    </div>
+                </section>
+                <section class="landing-section" id="landing-vpn">
+                    <div class="landing-section-content">
+                        <h2 class="landing-h2">Что такое VPN</h2>
+                        <p class="landing-text">VPN создаёт зашифрованный туннель между вашим устройством и интернетом. Трафик идёт через сервер в выбранной стране — для сайтов вы «находитесь» там. Так можно обойти гео-ограничения, скрыть свой IP и пользоваться сетью безопаснее в любой точке мира.</p>
+                    </div>
+                </section>
+                <section class="landing-section landing-cta" id="landing-cta">
+                    <div class="landing-section-content">
+                        <h2 class="landing-h2">Начните пользоваться</h2>
+                        <p class="landing-cta-sub">Подключитесь за минуту</p>
+                        <div class="landing-cta-buttons">
+                            <button type="button" class="landing-btn landing-btn-primary" onclick="showPage('login')">Войти</button>
+                            <button type="button" class="landing-btn landing-btn-secondary" onclick="showPage('register')">Создать аккаунт</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
         <!-- Раздел Вход (Веб) -->
         <div id="page-login" class="page" style="display: none;">
             <header>
@@ -33,6 +72,7 @@
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Войти</button>
                         <button type="button" class="btn-secondary" onclick="showPage('register')">Создать аккаунт</button>
+                        <button type="button" class="landing-back-link" onclick="showPage('landing')">О сервисе</button>
                     </div>
                 </form>
             </div>
@@ -61,6 +101,7 @@
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Зарегистрироваться</button>
                         <button type="button" class="btn-secondary" onclick="showPage('login')">Уже есть аккаунт?</button>
+                        <button type="button" class="landing-back-link" onclick="showPage('landing')">О сервисе</button>
                     </div>
                 </form>
                 <p class="hint" style="text-align: center; margin-top: 20px;">

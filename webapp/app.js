@@ -55,7 +55,7 @@ function logout() {
     } catch (e) {}
     webAuthToken = null;
     currentUserId = null;
-    showPage('login');
+    showPage('landing');
 }
 
 // Инициализация Telegram Web App
@@ -91,6 +91,8 @@ function showPage(pageName) {
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+    var landingScroll = document.getElementById('landing-scroll');
+    if (landingScroll) landingScroll.scrollTop = 0;
     
     // Показываем нижний навбар только на главных разделах
     const bottomNav = document.querySelector('.bottom-nav');
@@ -201,7 +203,27 @@ function showPage(pageName) {
         loadBroadcastPage();
     } else if (pageName === 'admin-server-management') {
         loadServerManagement();
+    } else if (pageName === 'landing') {
+        initLandingObserver();
     }
+}
+
+function initLandingObserver() {
+    var scrollEl = document.getElementById('landing-scroll');
+    var sections = document.querySelectorAll('#page-landing .landing-section');
+    if (!scrollEl || !sections.length) return;
+    sections.forEach(function (s) { s.classList.remove('in-view'); });
+    var observer = new IntersectionObserver(
+        function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('in-view');
+                }
+            });
+        },
+        { root: scrollEl, threshold: 0.35, rootMargin: '0px' }
+    );
+    sections.forEach(function (s) { observer.observe(s); });
 }
 
 // Функция показа модального окна
@@ -4368,13 +4390,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Проверяем права админа для веб-сессии
                     checkAdminAccess();
                 } else {
-                    showPage('login');
+                    showPage('landing');
                 }
             } catch (e) {
-                showPage('login');
+                showPage('landing');
             }
         } else {
-            showPage('login');
+            showPage('landing');
         }
     } else {
         // Режим Telegram
@@ -4491,7 +4513,7 @@ async function handleWebLogin(event) {
                 setTimeout(function () {
                     showPage('subscriptions');
                     checkAdminAccess();
-                }, 650);
+                }, 1500);
             } else {
                 showPage('subscriptions');
                 checkAdminAccess();
@@ -4569,7 +4591,7 @@ async function handleWebRegister(event) {
                 setTimeout(function () {
                     showPage('subscriptions');
                     checkAdminAccess();
-                }, 650);
+                }, 1500);
             } else {
                 showPage('subscriptions');
                 checkAdminAccess();
