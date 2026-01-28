@@ -502,17 +502,45 @@ def create_webhook_app(bot_app):
                     get_all_active_subscriptions_by_user, 
                     get_or_create_subscriber, 
                     create_subscription,
-                    is_subscription_active
+                    is_subscription_active,
+                    is_known_telegram_id,
+                    mark_telegram_id_known,
                 )
                 import time
                 
-                # Проверяем, новый ли пользователь
+                # Определяем Telegram ID (если запрос пришёл из Telegram Mini App)
+                init_data = request.args.get('initData')
+                if not init_data and request.is_json:
+                    try:
+                        data = request.get_json(silent=True)
+                        if data:
+                            init_data = data.get('initData')
+                    except Exception:
+                        init_data = None
+
+                tg_user_id = None
+                if init_data:
+                    tg_user_id = verify_telegram_init_data(init_data)
+
+                # Проверяем, новый ли пользователь:
+                # - по users.user_id (историческая логика)
+                # - по known_telegram_ids (новая логика, именно по TG ID)
                 was_known_user = loop.run_until_complete(is_known_user(user_id))
+                was_known_tg = False
+                if tg_user_id:
+                    was_known_tg = loop.run_until_complete(is_known_telegram_id(str(tg_user_id)))
+
+                was_known_user = was_known_user or was_known_tg
                 
                 # Регистрируем пользователя
                 loop.run_until_complete(register_simple_user(user_id))
+
+                # Если это Telegram-запрос — помечаем TG как известный (идемпотентно)
+                if tg_user_id:
+                    loop.run_until_complete(mark_telegram_id_known(str(tg_user_id)))
                 
                 trial_created = False
+                subscription_id = None
                 
                 # Если пользователь новый И не веб-пользователь - создаем пробную подписку
                 if not was_known_user and not is_web:
@@ -3405,7 +3433,7 @@ def create_webhook_app(bot_app):
 
     @app.route('/api/user/web-access/setup', methods=['POST', 'OPTIONS'])
     def api_user_web_access_setup():
-        """Установка пароля для веб-доступа из Mini App"""
+        """Настройка web-доступа из Mini App (логин + пароль)"""
         if request.method == 'OPTIONS': return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
             # Важно: это работает только через Telegram (проверяем initData)
@@ -3416,17 +3444,36 @@ def create_webhook_app(bot_app):
             if not user_id: return jsonify({'error': 'Invalid authentication'}), 401
             
             data = request.get_json(silent=True)
-            password = data.get('password', '')
+            username = (data.get('username') or '').strip().lower()
+            password = (data.get('password') or '').strip()
+            if len(username) < 3: return jsonify({'error': 'Логин слишком короткий (мин. 3 символа)'}), 400
             if len(password) < 6: return jsonify({'error': 'Пароль слишком короткий (мин. 6 символов)'}), 400
             
-            from ...db.subscribers_db import update_user_web_access
+            from ...db.subscribers_db import (
+                get_user_by_id, username_available,
+                update_user_username, update_user_password
+            )
             password_hash = generate_password_hash(password)
             
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                loop.run_until_complete(update_user_web_access(user_id, password_hash))
-                return jsonify({'success': True, 'message': 'Пароль успешно установлен. Теперь вы можете войти на сайт, используя ваш Telegram ID в качестве логина.'})
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user:
+                    return jsonify({'error': 'Пользователь не найден'}), 404
+                
+                # Проверяем, что логин свободен
+                ok = loop.run_until_complete(username_available(username, user_id))
+                if not ok:
+                    return jsonify({'error': 'Этот логин уже занят'}), 409
+                
+                loop.run_until_complete(update_user_username(user_id, username))
+                loop.run_until_complete(update_user_password(user_id, password_hash))
+                return jsonify({
+                    'success': True,
+                    'message': f'Web-доступ настроен. Теперь вы можете войти на сайт с логином {username}.',
+                    'username': username,
+                })
             finally:
                 loop.close()
         except Exception as e:
@@ -3513,12 +3560,14 @@ def create_webhook_app(bot_app):
                 telegram_linked = bool(tid) or is_tg_first
                 display_tid = tid or (uid if is_tg_first else None)
                 username = user.get('username') or uid or ''
+                web_access_enabled = bool(user.get('password_hash'))
                 return jsonify({
                     'success': True,
                     'telegram_linked': telegram_linked,
                     'username': username,
                     'user_id': uid,
                     'telegram_id': display_tid,
+                    'web_access_enabled': web_access_enabled,
                 })
             finally:
                 loop.close()
