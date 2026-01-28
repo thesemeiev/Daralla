@@ -58,7 +58,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         existing_tg_user = await get_user_by_id(tg_user_id)
         if existing_tg_user and not existing_tg_user.get("is_web"):
-            await message.reply_text("Этот Telegram уже зарегистрирован. Войдите в Mini App с этого аккаунта или используйте другой Telegram.")
+            # TG уже занят (TG-first пользователь) - предлагаем отвязать и привязать к веб-аккаунту
+            # Сохраняем web_user_id в контексте для callback handler
+            context.user_data[f"link_web_user_id_{state}"] = web_user_id
+            text = (
+                "Этот Telegram уже привязан к другому аккаунту.\n\n"
+                "Отвязать его и привязать к текущему веб-аккаунту?"
+            )
+            buttons = [
+                [
+                    InlineKeyboardButton("Да", callback_data=f"link_confirm_yes:{state}"),
+                    InlineKeyboardButton("Нет", callback_data=f"link_confirm_no:{state}")
+                ]
+            ]
+            keyboard = InlineKeyboardMarkup(buttons)
+            await message.reply_text(text, reply_markup=keyboard)
             return
         web_user = await get_user_by_id(web_user_id)
         if not web_user or not web_user.get("is_web"):

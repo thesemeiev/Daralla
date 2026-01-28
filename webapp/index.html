@@ -382,6 +382,7 @@
                         </div>
                         <div id="link-telegram-linked" style="display: none;">
                             <p class="hint" style="margin-bottom: 12px;">Telegram привязан. Вход в Mini App и уведомления доступны.</p>
+                            <button type="button" class="btn-danger" onclick="showModal('unlink-telegram-modal')" style="width: 100%; padding: 10px; border-radius: 10px; margin-top: 8px;">Отвязать Telegram</button>
                         </div>
                         <button class="btn-danger" onclick="logout()" style="width: 100%; padding: 12px; border-radius: 10px; margin-top: 16px;">Выйти из аккаунта</button>
                     </div>
@@ -1344,6 +1345,24 @@
                 <div class="form-actions" style="flex-direction: row; gap: 8px;">
                     <button type="button" class="btn-secondary" onclick="closeModal('change-password-modal')" style="flex: 1;">Отмена</button>
                     <button type="submit" class="btn-primary" style="flex: 1;">Сменить пароль</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Отвязка Telegram -->
+    <div id="unlink-telegram-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>Отвязать Telegram</h2>
+            <p class="hint" style="margin-top: 8px; margin-bottom: 16px;">После отвязки вы не сможете заходить в Mini App без пароля. Все подписки и данные останутся в веб-аккаунте.</p>
+            <form id="form-unlink-telegram" onsubmit="handleUnlinkTelegram(event)" style="margin-top: 16px;">
+                <div class="form-group">
+                    <label>Текущий пароль</label>
+                    <input type="password" id="unlink-telegram-password" required placeholder="Текущий пароль" autocomplete="current-password" />
+                </div>
+                <div class="form-actions" style="flex-direction: row; gap: 8px;">
+                    <button type="button" class="btn-secondary" onclick="closeModal('unlink-telegram-modal')" style="flex: 1;">Отмена</button>
+                    <button type="submit" class="btn-danger" style="flex: 1;">Отвязать</button>
                 </div>
             </form>
         </div>

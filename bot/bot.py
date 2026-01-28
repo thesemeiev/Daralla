@@ -32,7 +32,8 @@ from .services.sync_manager import SyncManager
 from .handlers.commands import start, edit_main_menu, instruction, mykey
 from .handlers.callbacks import (
     instruction_callback,
-    select_period_callback, start_callback_handler
+    select_period_callback, start_callback_handler,
+    link_telegram_confirm_callback
 )
 from .handlers.callbacks.extend_subscription_callback import (
     extend_subscription_callback, extend_subscription_period_callback
@@ -419,6 +420,7 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(extend_subscription_callback, pattern="^extend_sub:"))
     app.add_handler(CallbackQueryHandler(extend_subscription_period_callback, pattern="^ext_sub_per:"))
     app.add_handler(CallbackQueryHandler(select_period_callback, pattern="^select_period_"))
+    app.add_handler(CallbackQueryHandler(link_telegram_confirm_callback, pattern="^link_confirm_"))
 
     app.add_handler(CommandHandler('admin_errors', admin_errors))
     app.add_handler(CommandHandler('admin_check_servers', admin_check_servers))

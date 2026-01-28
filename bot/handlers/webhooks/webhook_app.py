@@ -3604,6 +3604,71 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка change-login: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/user/unlink-telegram', methods=['POST', 'OPTIONS'])
+    def api_user_unlink_telegram():
+        """Отвязка Telegram от веб-аккаунта. Требует текущий пароль."""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({'error': 'Требуется авторизация'}), 401
+            
+            # Проверяем, что это веб-пользователь
+            if not user_id.startswith('web_'):
+                return jsonify({'error': 'Отвязка доступна только для веб-аккаунтов'}), 400
+            
+            data = request.get_json(silent=True) or {}
+            current_password = (data.get('current_password') or '').strip()
+            if not current_password:
+                return jsonify({'error': 'Введите текущий пароль'}), 400
+            
+            from ...db.subscribers_db import (
+                get_user_by_id, update_user_telegram_id,
+                orphan_telegram_first_user_and_create_placeholder
+            )
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user:
+                    return jsonify({'error': 'Пользователь не найден'}), 404
+                
+                if not user.get('password_hash'):
+                    return jsonify({'error': 'Пароль для этого аккаунта не настроен'}), 400
+                
+                if not check_password_hash(user['password_hash'], current_password):
+                    return jsonify({'error': 'Неверный текущий пароль'}), 401
+                
+                telegram_id = user.get('telegram_id')
+                if not telegram_id:
+                    return jsonify({'error': 'Telegram не привязан к этому аккаунту'}), 400
+                
+                # Осирочиваем TG-first пользователя (если есть) и создаем placeholder
+                orphan_result = loop.run_until_complete(
+                    orphan_telegram_first_user_and_create_placeholder(telegram_id)
+                )
+                
+                # Отвязываем Telegram от веб-аккаунта
+                loop.run_until_complete(update_user_telegram_id(user_id, None))
+                
+                logger.info(
+                    f"Отвязан Telegram {telegram_id} от веб-аккаунта {user_id}. "
+                    f"Осирочен: {orphan_result.get('orphaned')}, "
+                    f"Placeholder создан: {orphan_result.get('placeholder_created')}"
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Telegram успешно отвязан от аккаунта'
+                })
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка unlink-telegram: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
     return app
 
 def authenticate_request():

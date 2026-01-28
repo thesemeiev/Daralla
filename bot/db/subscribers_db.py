@@ -1966,6 +1966,109 @@ async def update_user_telegram_id(user_id: str, telegram_id: str | None):
         await db.commit()
 
 
+async def orphan_telegram_first_user_and_create_placeholder(telegram_id: str):
+    """
+    Осирочивает TG-first пользователя (если есть) и создает пустого placeholder пользователя.
+    
+    При отвязке TG от веба:
+    1. Если есть TG-first пользователь B с user_id = telegram_id:
+       - Обновляет все связанные таблицы (payments, promo_code_uses, sent_notifications, notification_effectiveness)
+       - Переименовывает B: user_id = orphaned_<tg_id>_<timestamp>
+    2. Создает пустого пользователя C с user_id = telegram_id (если его еще нет)
+    
+    Args:
+        telegram_id: Telegram ID пользователя
+        
+    Returns:
+        dict: {
+            'orphaned': bool,  # Был ли осирочен старый пользователь
+            'orphaned_user_id': str | None,  # Новый user_id осиротевшего пользователя
+            'placeholder_created': bool  # Был ли создан placeholder
+        }
+    """
+    import time
+    async with aiosqlite.connect(DB_PATH) as db:
+        result = {
+            'orphaned': False,
+            'orphaned_user_id': None,
+            'placeholder_created': False
+        }
+        
+        try:
+            # Проверяем, есть ли TG-first пользователь B с user_id = telegram_id
+            async with db.execute("SELECT id FROM users WHERE user_id = ?", (telegram_id,)) as cur:
+                existing_user = await cur.fetchone()
+            
+            if existing_user:
+                # Есть TG-first пользователь B - нужно его осиротить
+                orphaned_user_id = f"orphaned_{telegram_id}_{int(time.time())}"
+                result['orphaned'] = True
+                result['orphaned_user_id'] = orphaned_user_id
+                
+                # Обновляем все таблицы, где хранится user_id
+                # 1. payments
+                async with db.execute(
+                    "UPDATE payments SET user_id = ? WHERE user_id = ?",
+                    (orphaned_user_id, telegram_id)
+                ) as cur:
+                    payments_updated = cur.rowcount
+                
+                # 2. promo_code_uses
+                async with db.execute(
+                    "UPDATE promo_code_uses SET user_id = ? WHERE user_id = ?",
+                    (orphaned_user_id, telegram_id)
+                ) as cur:
+                    promo_uses_updated = cur.rowcount
+                
+                # 3. sent_notifications
+                async with db.execute(
+                    "UPDATE sent_notifications SET user_id = ? WHERE user_id = ?",
+                    (orphaned_user_id, telegram_id)
+                ) as cur:
+                    notifications_updated = cur.rowcount
+                
+                # 4. notification_effectiveness
+                async with db.execute(
+                    "UPDATE notification_effectiveness SET user_id = ? WHERE user_id = ?",
+                    (orphaned_user_id, telegram_id)
+                ) as cur:
+                    effectiveness_updated = cur.rowcount
+                
+                # 5. Переименовываем пользователя B
+                await db.execute(
+                    "UPDATE users SET user_id = ? WHERE user_id = ?",
+                    (orphaned_user_id, telegram_id)
+                )
+                
+                logger.info(
+                    f"Осирочен TG-first пользователь {telegram_id} → {orphaned_user_id}: "
+                    f"payments={payments_updated}, promo={promo_uses_updated}, "
+                    f"notifications={notifications_updated}, effectiveness={effectiveness_updated}"
+                )
+            
+            # Создаем пустого placeholder пользователя C с user_id = telegram_id (если его еще нет)
+            async with db.execute("SELECT id FROM users WHERE user_id = ?", (telegram_id,)) as cur:
+                placeholder_exists = await cur.fetchone()
+            
+            if not placeholder_exists:
+                now = int(time.time())
+                await db.execute(
+                    "INSERT INTO users (user_id, first_seen, last_seen) VALUES (?, ?, ?)",
+                    (telegram_id, now, now)
+                )
+                result['placeholder_created'] = True
+                logger.info(f"Создан placeholder пользователь C с user_id = {telegram_id}")
+            
+            await db.commit()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при осирочивании TG-first пользователя {telegram_id}: {e}", exc_info=True)
+            await db.rollback()
+            raise
+        
+        return result
+
+
 async def get_telegram_chat_id_for_notification(user_id: str) -> int | None:
     """Возвращает chat_id для отправки в Telegram (telegram_id или user_id если числовой). Иначе None."""
     user = await get_user_by_id(user_id)

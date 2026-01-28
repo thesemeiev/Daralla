@@ -41,7 +41,8 @@ from .subscribers_db import (
     remove_subscription_server, get_all_active_subscriptions_by_user,
     get_subscription_by_id, get_subscription_by_id_only, update_subscription_expiry, 
     update_subscription_device_limit, get_subscription_statistics,
-    get_user_by_id, get_all_subscriptions_by_user
+    get_user_by_id, get_all_subscriptions_by_user, update_user_telegram_id,
+    get_user_by_telegram_id_or_user_id, orphan_telegram_first_user_and_create_placeholder
 )
 
 async def init_all_db():
@@ -72,5 +73,7 @@ __all__ = [
     'update_subscription_status', 'update_subscription_name', 'get_subscription_by_token',
     'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
     'get_all_active_subscriptions_by_user', 'get_subscription_by_id', 'get_subscription_by_id_only',
-    'update_subscription_expiry', 'get_subscription_statistics', 'get_user_by_id', 'get_all_subscriptions_by_user'
+    'update_subscription_expiry', 'get_subscription_device_limit', 'get_subscription_statistics',
+    'get_user_by_id', 'get_all_subscriptions_by_user', 'update_user_telegram_id',
+    'get_user_by_telegram_id_or_user_id', 'orphan_telegram_first_user_and_create_placeholder'
 ]

@@ -4892,6 +4892,38 @@ async function handleChangePassword(event) {
     }
 }
 
+async function handleUnlinkTelegram(event) {
+    event.preventDefault();
+    if (isWebMode && !webAuthToken) return;
+    var form = document.getElementById('form-unlink-telegram');
+    var btn = form && form.querySelector('button[type="submit"]');
+    var password = document.getElementById('unlink-telegram-password');
+    if (!password) return;
+    var pwd = (password.value || '').trim();
+    if (!pwd) { alert('Введите текущий пароль'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+        var r = await apiFetch('/api/user/unlink-telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: pwd })
+        });
+        var data = await r.json();
+        if (data.success) {
+            password.value = '';
+            closeModal('unlink-telegram-modal');
+            refreshAboutAccount();
+            alert(data.message || 'Telegram успешно отвязан');
+        } else {
+            alert(data.error || 'Ошибка отвязки Telegram');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Отвязать'; }
+    }
+}
+
 // Загрузка статистики подписок
 async function loadSubscriptionStats(days = 30) {
     try {
