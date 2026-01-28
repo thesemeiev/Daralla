@@ -14,6 +14,7 @@ from ...db import register_simple_user, is_known_user
 from ...db.subscribers_db import (
     get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription,
     link_telegram_consume_state, get_user_by_id, update_user_telegram_id,
+    create_telegram_link, mark_telegram_id_known,
 )
 from ...navigation import NavStates, MenuTypes
 import time
@@ -58,7 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         existing_tg_user = await get_user_by_id(tg_user_id)
         if existing_tg_user and not existing_tg_user.get("is_web"):
-            # TG уже занят (TG-first пользователь) - предлагаем отвязать и привязать к веб-аккаунту
+            # TG уже занят (TG-first пользователь) - предлагаем привязать его к текущему веб-аккаунту
             # Сохраняем web_user_id в контексте для callback handler
             context.user_data[f"link_web_user_id_{state}"] = web_user_id
             text = (
@@ -81,7 +82,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if web_user.get("telegram_id"):
             await message.reply_text("Аккаунт уже привязан к Telegram.")
             return
+
+        # Создаем связь TG ↔ веб-аккаунт
+        await create_telegram_link(tg_user_id, web_user_id)
+        # Обновляем поле telegram_id у веб-пользователя (для совместимости)
         await update_user_telegram_id(web_user_id, tg_user_id)
+        # Явно помечаем TG как известный
+        await mark_telegram_id_known(tg_user_id)
+
         logger.info(f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id}")
         text = (
             "Аккаунт привязан.\n\n"

@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 from ...utils import safe_answer_callback_query, check_private_chat
 from ...db.subscribers_db import (
     link_telegram_consume_state, get_user_by_id, update_user_telegram_id,
-    orphan_telegram_first_user_and_create_placeholder
+    create_telegram_link, mark_telegram_id_known
 )
 
 logger = logging.getLogger(__name__)
@@ -65,15 +65,15 @@ async def link_telegram_confirm_callback(update: Update, context: ContextTypes.D
             await query.message.edit_text("Аккаунт уже привязан к Telegram.")
             return
         
-        # Осирочиваем TG-first пользователя (если есть) и создаем placeholder
-        orphan_result = await orphan_telegram_first_user_and_create_placeholder(tg_user_id)
-        
-        # Привязываем Telegram к веб-аккаунту
+        # Создаем связь TG ↔ веб-аккаунт
+        await create_telegram_link(tg_user_id, web_user_id)
+        # Обновляем поле telegram_id у веб-пользователя (для совместимости)
         await update_user_telegram_id(web_user_id, tg_user_id)
+        # Явно помечаем TG как известный (на случай, если связь создавалась раньше)
+        await mark_telegram_id_known(tg_user_id)
         
         logger.info(
-            f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id} "
-            f"(после подтверждения). Осирочен: {orphan_result.get('orphaned')}"
+            f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id} (после подтверждения через callback)."
         )
         
         # Удаляем временные данные из контекста

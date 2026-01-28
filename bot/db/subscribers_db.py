@@ -96,6 +96,28 @@ async def init_subscribers_db():
         """)
         logger.info("Таблица link_telegram_states создана/проверена")
 
+        # Таблица связей Telegram ID ↔ аккаунт (user_id)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS telegram_links (
+                telegram_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                linked_at INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        await db.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_links_user_id 
+            ON telegram_links(user_id)
+        """)
+
+        # Таблица известных Telegram ID (для контроля выдачи триала)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS known_telegram_ids (
+                telegram_id TEXT PRIMARY KEY,
+                first_seen_at INTEGER NOT NULL
+            )
+        """)
+
         # 3. Создаем таблицы с зависимостями
         # Таблица конфигурации серверов
         await db.execute("""
@@ -1943,7 +1965,7 @@ async def link_telegram_consume_state(state: str):
 
 
 async def get_user_by_telegram_id(telegram_id: str):
-    """Возвращает пользователя по telegram_id."""
+    """Возвращает пользователя по telegram_id (старая логика, напрямую из users)."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
@@ -1951,122 +1973,135 @@ async def get_user_by_telegram_id(telegram_id: str):
             return dict(row) if row else None
 
 
-async def get_user_by_telegram_id_or_user_id(telegram_id: str):
-    """Сначала ищет по telegram_id (привязанный веб), иначе по user_id (TG-only)."""
+async def _get_user_by_telegram_id_or_user_id_legacy(telegram_id: str):
+    """
+    Старая логика: сначала ищет по telegram_id (привязанный веб), иначе по user_id (TG-only).
+    Используется как fallback в новой схеме.
+    """
     user = await get_user_by_telegram_id(telegram_id)
     if user:
         return user
     return await get_user_by_id(telegram_id)
 
 
-async def update_user_telegram_id(user_id: str, telegram_id: str | None):
-    """Устанавливает или сбрасывает telegram_id у пользователя."""
+async def get_user_by_telegram_id_v2(telegram_id: str, use_fallback: bool = True):
+    """
+    Новая логика поиска пользователя по Telegram ID.
+
+    1. Ищет в telegram_links (telegram_id -> users.user_id).
+    2. Если не найдено и use_fallback=True - использует старую логику
+       (_get_user_by_telegram_id_or_user_id_legacy).
+    """
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET telegram_id = ? WHERE user_id = ?", (telegram_id, user_id))
+        db.row_factory = aiosqlite.Row
+
+        # 1. Ищем связь в telegram_links
+        async with db.execute(
+            """
+            SELECT u.*
+            FROM telegram_links tl
+            JOIN users u ON u.user_id = tl.user_id
+            WHERE tl.telegram_id = ?
+            """,
+            (telegram_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return dict(row)
+
+    # 2. Fallback на старую схему, если включен
+    if use_fallback:
+        return await _get_user_by_telegram_id_or_user_id_legacy(telegram_id)
+
+    return None
+
+
+async def get_user_by_telegram_id_or_user_id(telegram_id: str, use_fallback: bool = True):
+    """
+    Обновлённая универсальная функция поиска пользователя по Telegram ID.
+    По умолчанию использует новую схему (telegram_links) с fallback.
+    """
+    return await get_user_by_telegram_id_v2(telegram_id, use_fallback=use_fallback)
+
+
+async def create_telegram_link(telegram_id: str, user_id: str):
+    """Создаёт или обновляет связь TG ↔ аккаунт и помечает TG как известный."""
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO telegram_links (telegram_id, user_id, linked_at)
+            VALUES (?, ?, ?)
+            """,
+            (telegram_id, user_id, now),
+        )
+        # Помечаем TG как известный (если ещё не был)
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO known_telegram_ids (telegram_id, first_seen_at)
+            VALUES (?, ?)
+            """,
+            (telegram_id, now),
+        )
         await db.commit()
 
 
-async def orphan_telegram_first_user_and_create_placeholder(telegram_id: str):
-    """
-    Осирочивает TG-first пользователя (если есть) и создает пустого placeholder пользователя.
-    
-    При отвязке TG от веба:
-    1. Если есть TG-first пользователь B с user_id = telegram_id:
-       - Обновляет все связанные таблицы (payments, promo_code_uses, sent_notifications, notification_effectiveness)
-       - Переименовывает B: user_id = orphaned_<tg_id>_<timestamp>
-    2. Создает пустого пользователя C с user_id = telegram_id (если его еще нет)
-    
-    Args:
-        telegram_id: Telegram ID пользователя
-        
-    Returns:
-        dict: {
-            'orphaned': bool,  # Был ли осирочен старый пользователь
-            'orphaned_user_id': str | None,  # Новый user_id осиротевшего пользователя
-            'placeholder_created': bool  # Был ли создан placeholder
-        }
-    """
-    import time
+async def delete_telegram_link(telegram_id: str):
+    """Удаляет связь TG ↔ аккаунт (используется при отвязке)."""
     async with aiosqlite.connect(DB_PATH) as db:
-        result = {
-            'orphaned': False,
-            'orphaned_user_id': None,
-            'placeholder_created': False
-        }
-        
-        try:
-            # Проверяем, есть ли TG-first пользователь B с user_id = telegram_id
-            async with db.execute("SELECT id FROM users WHERE user_id = ?", (telegram_id,)) as cur:
-                existing_user = await cur.fetchone()
-            
-            if existing_user:
-                # Есть TG-first пользователь B - нужно его осиротить
-                orphaned_user_id = f"orphaned_{telegram_id}_{int(time.time())}"
-                result['orphaned'] = True
-                result['orphaned_user_id'] = orphaned_user_id
-                
-                # Обновляем все таблицы, где хранится user_id
-                # 1. payments
-                async with db.execute(
-                    "UPDATE payments SET user_id = ? WHERE user_id = ?",
-                    (orphaned_user_id, telegram_id)
-                ) as cur:
-                    payments_updated = cur.rowcount
-                
-                # 2. promo_code_uses
-                async with db.execute(
-                    "UPDATE promo_code_uses SET user_id = ? WHERE user_id = ?",
-                    (orphaned_user_id, telegram_id)
-                ) as cur:
-                    promo_uses_updated = cur.rowcount
-                
-                # 3. sent_notifications
-                async with db.execute(
-                    "UPDATE sent_notifications SET user_id = ? WHERE user_id = ?",
-                    (orphaned_user_id, telegram_id)
-                ) as cur:
-                    notifications_updated = cur.rowcount
-                
-                # 4. notification_effectiveness
-                async with db.execute(
-                    "UPDATE notification_effectiveness SET user_id = ? WHERE user_id = ?",
-                    (orphaned_user_id, telegram_id)
-                ) as cur:
-                    effectiveness_updated = cur.rowcount
-                
-                # 5. Переименовываем пользователя B
-                await db.execute(
-                    "UPDATE users SET user_id = ? WHERE user_id = ?",
-                    (orphaned_user_id, telegram_id)
-                )
-                
-                logger.info(
-                    f"Осирочен TG-first пользователь {telegram_id} → {orphaned_user_id}: "
-                    f"payments={payments_updated}, promo={promo_uses_updated}, "
-                    f"notifications={notifications_updated}, effectiveness={effectiveness_updated}"
-                )
-            
-            # Создаем пустого placeholder пользователя C с user_id = telegram_id (если его еще нет)
-            async with db.execute("SELECT id FROM users WHERE user_id = ?", (telegram_id,)) as cur:
-                placeholder_exists = await cur.fetchone()
-            
-            if not placeholder_exists:
-                now = int(time.time())
-                await db.execute(
-                    "INSERT INTO users (user_id, first_seen, last_seen) VALUES (?, ?, ?)",
-                    (telegram_id, now, now)
-                )
-                result['placeholder_created'] = True
-                logger.info(f"Создан placeholder пользователь C с user_id = {telegram_id}")
-            
-            await db.commit()
-            
-        except Exception as e:
-            logger.error(f"Ошибка при осирочивании TG-first пользователя {telegram_id}: {e}", exc_info=True)
-            await db.rollback()
-            raise
-        
-        return result
+        await db.execute("DELETE FROM telegram_links WHERE telegram_id = ?", (telegram_id,))
+        await db.commit()
+
+
+async def get_telegram_link(telegram_id: str):
+    """Возвращает запись из telegram_links по telegram_id."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM telegram_links WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def is_known_telegram_id(telegram_id: str) -> bool:
+    """Проверяет, известен ли Telegram ID (для контроля выдачи триала)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM known_telegram_ids WHERE telegram_id = ? LIMIT 1",
+            (telegram_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return row is not None
+
+
+async def mark_telegram_id_known(telegram_id: str):
+    """Помечает Telegram ID как известный (без изменения существующей даты)."""
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO known_telegram_ids (telegram_id, first_seen_at)
+            VALUES (?, ?)
+            """,
+            (telegram_id, now),
+        )
+        await db.commit()
+
+
+async def update_user_telegram_id(user_id: str, telegram_id: str | None):
+    """
+    Устанавливает или сбрасывает telegram_id у пользователя (поле в users).
+
+    Связь в telegram_links создаётся/удаляется отдельными функциями
+    create_telegram_link/delete_telegram_link, чтобы явно контролировать поведение.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET telegram_id = ? WHERE user_id = ?",
+            (telegram_id, user_id),
+        )
+        await db.commit()
 
 
 async def get_telegram_chat_id_for_notification(user_id: str) -> int | None:

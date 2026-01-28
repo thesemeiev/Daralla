@@ -3625,7 +3625,7 @@ def create_webhook_app(bot_app):
             
             from ...db.subscribers_db import (
                 get_user_by_id, update_user_telegram_id,
-                orphan_telegram_first_user_and_create_placeholder
+                delete_telegram_link, mark_telegram_id_known
             )
             
             loop = asyncio.new_event_loop()
@@ -3645,18 +3645,16 @@ def create_webhook_app(bot_app):
                 if not telegram_id:
                     return jsonify({'error': 'Telegram не привязан к этому аккаунту'}), 400
                 
-                # Осирочиваем TG-first пользователя (если есть) и создаем placeholder
-                orphan_result = loop.run_until_complete(
-                    orphan_telegram_first_user_and_create_placeholder(telegram_id)
-                )
+                # Удаляем связь TG ↔ аккаунт и помечаем TG как известный
+                loop.run_until_complete(delete_telegram_link(telegram_id))
+                loop.run_until_complete(mark_telegram_id_known(telegram_id))
                 
-                # Отвязываем Telegram от веб-аккаунта
+                # Отвязываем Telegram от веб-аккаунта (поле в users)
                 loop.run_until_complete(update_user_telegram_id(user_id, None))
                 
                 logger.info(
                     f"Отвязан Telegram {telegram_id} от веб-аккаунта {user_id}. "
-                    f"Осирочен: {orphan_result.get('orphaned')}, "
-                    f"Placeholder создан: {orphan_result.get('placeholder_created')}"
+                    f"Связь в telegram_links удалена, TG помечен как известный."
                 )
                 
                 return jsonify({
@@ -3706,8 +3704,9 @@ def authenticate_request():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            from ...db.subscribers_db import get_user_by_telegram_id_or_user_id
-            user = loop.run_until_complete(get_user_by_telegram_id_or_user_id(tg_user_id))
+            # Новая логика: используем telegram_links с fallback на старую схему
+            from ...db.subscribers_db import get_user_by_telegram_id_v2
+            user = loop.run_until_complete(get_user_by_telegram_id_v2(tg_user_id, use_fallback=True))
             if user:
                 return user['user_id']
             return None
