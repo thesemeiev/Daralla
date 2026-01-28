@@ -55,7 +55,7 @@ function logout() {
     } catch (e) {}
     webAuthToken = null;
     currentUserId = null;
-    showPage('landing');
+    showPage('login');
 }
 
 // Инициализация Telegram Web App
@@ -251,17 +251,23 @@ function initLandingWheelAndHint() {
 
     if (!landingWheelAndHintInited) {
         landingWheelAndHintInited = true;
-        document.addEventListener('wheel', function (e) {
+        /* Колесо мыши на ПК: слушаем на контейнере скролла, иначе события не доходят */
+        scrollEl.addEventListener('wheel', function (e) {
             if (currentPage !== 'landing') return;
             if (!pageLanding || pageLanding.style.display === 'none') return;
             e.preventDefault();
-            scrollEl.scrollTop += e.deltaY;
-        }, { passive: false, capture: true });
+            var dy = e.deltaY;
+            if (e.deltaMode === 1) dy *= 40;
+            else if (e.deltaMode === 2) dy *= 800;
+            scrollEl.scrollTop += dy;
+        }, { passive: false });
 
         scrollEl.addEventListener('scroll', updateHintVisibility);
     }
 
     updateHintVisibility();
+    /* На ПК часть браузеров шлёт wheel только сфокусированному элементу */
+    if (currentPage === 'landing') scrollEl.focus({ preventScroll: true });
 }
 
 // Функция показа модального окна
@@ -4777,6 +4783,79 @@ async function handleLinkTelegram(event) {
         alert('Ошибка сети');
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    }
+}
+
+async function handleChangeLogin(event) {
+    event.preventDefault();
+    if (!isWebMode || !webAuthToken) return;
+    var form = document.getElementById('form-change-login');
+    var btn = form && form.querySelector('button[type="submit"]');
+    var current = document.getElementById('change-login-current');
+    var newLogin = document.getElementById('change-login-new');
+    if (!current || !newLogin) return;
+    var cur = (current.value || '').trim();
+    var neu = (newLogin.value || '').trim().toLowerCase();
+    if (!cur) { alert('Введите текущий пароль'); return; }
+    if (neu.length < 3) { alert('Логин слишком короткий (минимум 3 символа)'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+        var r = await apiFetch('/api/user/change-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: cur, new_login: neu })
+        });
+        var data = await r.json();
+        if (data.success) {
+            current.value = '';
+            newLogin.value = '';
+            refreshAboutAccount();
+            alert(data.message || 'Логин изменён');
+        } else {
+            alert(data.error || 'Ошибка смены логина');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Сменить логин'; }
+    }
+}
+
+async function handleChangePassword(event) {
+    event.preventDefault();
+    if (!isWebMode || !webAuthToken) return;
+    var form = document.getElementById('form-change-password');
+    var btn = form && form.querySelector('button[type="submit"]');
+    var current = document.getElementById('change-pw-current');
+    var newPw = document.getElementById('change-pw-new');
+    var confirm = document.getElementById('change-pw-confirm');
+    if (!current || !newPw || !confirm) return;
+    var cur = (current.value || '').trim();
+    var neu = (newPw.value || '').trim();
+    var conf = (confirm.value || '').trim();
+    if (!cur) { alert('Введите текущий пароль'); return; }
+    if (neu.length < 6) { alert('Новый пароль слишком короткий (минимум 6 символов)'); return; }
+    if (neu !== conf) { alert('Пароли не совпадают'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+        var r = await apiFetch('/api/user/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: cur, new_password: neu })
+        });
+        var data = await r.json();
+        if (data.success) {
+            current.value = '';
+            newPw.value = '';
+            confirm.value = '';
+            alert(data.message || 'Пароль изменён');
+        } else {
+            alert(data.error || 'Ошибка смены пароля');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Сменить пароль'; }
     }
 }
 

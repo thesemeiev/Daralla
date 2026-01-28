@@ -12,7 +12,7 @@
     <div class="container">
         <!-- Лендинг до входа (Веб) — о сервисе, fullscreen, scroll-snap -->
         <div id="page-landing" class="page landing-fullscreen" style="display: none;">
-            <div class="landing-scroll" id="landing-scroll">
+            <div class="landing-scroll" id="landing-scroll" tabindex="-1">
                 <section class="landing-section" id="landing-hero">
                     <div class="landing-section-content">
                         <h1 class="landing-hero-title">Daralla VPN</h1>
@@ -367,6 +367,35 @@
                         <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
                     </div>
                     <div class="web-only" id="link-telegram-section" style="margin-top: 12px;">
+                        <div class="about-account-forms" style="margin-bottom: 16px;">
+                            <form id="form-change-login" class="about-form" onsubmit="handleChangeLogin(event)">
+                                <p class="about-form-title">Сменить логин</p>
+                                <div class="form-group">
+                                    <input type="password" id="change-login-current" required placeholder="Текущий пароль" autocomplete="current-password" />
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="change-login-new" required placeholder="Новый логин" autocomplete="username" minlength="3" />
+                                </div>
+                                <div class="form-actions" style="flex-direction: row; gap: 8px;">
+                                    <button type="submit" class="btn-secondary" style="flex: 1;">Сменить логин</button>
+                                </div>
+                            </form>
+                            <form id="form-change-password" class="about-form" onsubmit="handleChangePassword(event)" style="margin-top: 12px;">
+                                <p class="about-form-title">Сменить пароль</p>
+                                <div class="form-group">
+                                    <input type="password" id="change-pw-current" required placeholder="Текущий пароль" autocomplete="current-password" />
+                                </div>
+                                <div class="form-group">
+                                    <input type="password" id="change-pw-new" required placeholder="Новый пароль" autocomplete="new-password" minlength="6" />
+                                </div>
+                                <div class="form-group">
+                                    <input type="password" id="change-pw-confirm" required placeholder="Повторите новый пароль" autocomplete="new-password" minlength="6" />
+                                </div>
+                                <div class="form-actions" style="flex-direction: row; gap: 8px;">
+                                    <button type="submit" class="btn-secondary" style="flex: 1;">Сменить пароль</button>
+                                </div>
+                            </form>
+                        </div>
                         <div id="link-telegram-unlinked">
                             <p class="hint" style="margin-bottom: 12px;">Заходите в Mini App без пароля и получайте уведомления в боте.</p>
                             <button type="button" class="btn-secondary" id="link-telegram-btn" onclick="handleLinkTelegram(event)" style="width: 100%; padding: 10px; border-radius: 10px;">Привязать Telegram</button>

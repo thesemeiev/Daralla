@@ -48,6 +48,7 @@
     scroll-snap-type: y mandatory;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
+    outline: none;
 }
 
 .landing-scroll::-webkit-scrollbar {
@@ -992,6 +993,20 @@ h1 {
 
 .about-link-caption:first-of-type {
     margin-top: 0;
+}
+
+.about-form-title {
+    font-size: 14px;
+    color: #ccc;
+    margin: 0 0 8px 0;
+}
+
+.about-form .form-group {
+    margin-bottom: 8px;
+}
+
+.about-form .form-group:last-of-type {
+    margin-bottom: 12px;
 }
 
 .instructions-content {

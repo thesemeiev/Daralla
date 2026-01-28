@@ -3526,6 +3526,84 @@ def create_webhook_app(bot_app):
             logger.error(f"Ошибка link-status: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/user/change-password', methods=['POST', 'OPTIONS'])
+    def api_user_change_password():
+        """Смена пароля (веб-пользователь). Требует текущий пароль."""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({'error': 'Требуется авторизация'}), 401
+            data = request.get_json(silent=True) or {}
+            current = (data.get('current_password') or '').strip()
+            new_pw = (data.get('new_password') or '').strip()
+            if not current:
+                return jsonify({'error': 'Введите текущий пароль'}), 400
+            if len(new_pw) < 6:
+                return jsonify({'error': 'Новый пароль слишком короткий (минимум 6 символов)'}), 400
+            from ...db.subscribers_db import get_user_by_id, update_user_password
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user or not user.get('password_hash'):
+                    return jsonify({'error': 'Пароль для этого аккаунта не настроен'}), 400
+                if not check_password_hash(user['password_hash'], current):
+                    return jsonify({'error': 'Неверный текущий пароль'}), 401
+                if check_password_hash(user['password_hash'], new_pw):
+                    return jsonify({'error': 'Новый пароль должен отличаться от текущего'}), 400
+                new_hash = generate_password_hash(new_pw)
+                loop.run_until_complete(update_user_password(user_id, new_hash))
+                return jsonify({'success': True, 'message': 'Пароль изменён'})
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка change-password: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/user/change-login', methods=['POST', 'OPTIONS'])
+    def api_user_change_login():
+        """Смена логина (веб-пользователь). Требует текущий пароль."""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({'error': 'Требуется авторизация'}), 401
+            data = request.get_json(silent=True) or {}
+            current = (data.get('current_password') or '').strip()
+            new_login = (data.get('new_login') or '').strip().lower()
+            if not current:
+                return jsonify({'error': 'Введите текущий пароль'}), 400
+            if len(new_login) < 3:
+                return jsonify({'error': 'Логин слишком короткий (минимум 3 символа)'}), 400
+            from ...db.subscribers_db import (
+                get_user_by_id, update_user_username,
+                username_available,
+            )
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user or not user.get('password_hash'):
+                    return jsonify({'error': 'Пароль для этого аккаунта не настроен'}), 400
+                if not check_password_hash(user['password_hash'], current):
+                    return jsonify({'error': 'Неверный текущий пароль'}), 401
+                cur_username = (user.get('username') or '').strip().lower()
+                if new_login == cur_username:
+                    return jsonify({'error': 'Укажите новый логин, отличный от текущего'}), 400
+                ok = loop.run_until_complete(username_available(new_login, user_id))
+                if not ok:
+                    return jsonify({'error': 'Этот логин уже занят'}), 409
+                loop.run_until_complete(update_user_username(user_id, new_login))
+                return jsonify({'success': True, 'message': 'Логин изменён', 'username': new_login})
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка change-login: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
     return app
 
 def authenticate_request():

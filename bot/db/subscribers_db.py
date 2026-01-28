@@ -1875,6 +1875,41 @@ async def get_user_by_username_or_id(login: str):
             return dict(row) if row else None
 
 
+async def username_available(new_username: str, exclude_user_id: str) -> bool:
+    """Проверяет, свободен ли логин (никто, кроме exclude_user_id, им не пользуется)."""
+    uname = new_username.strip().lower()
+    if not uname:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM users WHERE username = ? AND user_id != ?",
+            (uname, exclude_user_id),
+        ) as cur:
+            row = await cur.fetchone()
+            return row is None
+
+
+async def update_user_username(user_id: str, new_username: str):
+    """Обновляет логин пользователя. user_id и telegram_id не меняются."""
+    uname = new_username.strip().lower()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET username = ? WHERE user_id = ?",
+            (uname, user_id),
+        )
+        await db.commit()
+
+
+async def update_user_password(user_id: str, new_password_hash: str):
+    """Обновляет пароль пользователя."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET password_hash = ? WHERE user_id = ?",
+            (new_password_hash, user_id),
+        )
+        await db.commit()
+
+
 async def link_telegram_create_state(user_id: str) -> str:
     """Создаёт state для привязки Telegram. Очищает устаревшие записи. Возвращает state."""
     state = secrets.token_hex(16)
