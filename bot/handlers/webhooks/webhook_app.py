@@ -486,6 +486,27 @@ def create_webhook_app(bot_app):
         
         try:
             user_id = authenticate_request()
+            
+            # Определяем Telegram ID (если запрос пришёл из Telegram Mini App)
+            init_data = request.args.get('initData')
+            if not init_data and request.is_json:
+                try:
+                    data = request.get_json(silent=True)
+                    if data:
+                        init_data = data.get('initData')
+                except Exception:
+                    init_data = None
+
+            tg_user_id = None
+            if init_data:
+                tg_user_id = verify_telegram_init_data(init_data)
+
+            # Если аутентификация не удалась, но есть валидные данные Telegram - 
+            # используем Telegram ID как user_id для регистрации
+            if not user_id and tg_user_id:
+                user_id = str(tg_user_id)
+                logger.info(f"Регистрация нового пользователя по Telegram ID: {user_id}")
+
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             
@@ -507,20 +528,6 @@ def create_webhook_app(bot_app):
                     mark_telegram_id_known,
                 )
                 import time
-                
-                # Определяем Telegram ID (если запрос пришёл из Telegram Mini App)
-                init_data = request.args.get('initData')
-                if not init_data and request.is_json:
-                    try:
-                        data = request.get_json(silent=True)
-                        if data:
-                            init_data = data.get('initData')
-                    except Exception:
-                        init_data = None
-
-                tg_user_id = None
-                if init_data:
-                    tg_user_id = verify_telegram_init_data(init_data)
 
                 # Проверяем, новый ли пользователь:
                 # - по users.user_id (историческая логика)
