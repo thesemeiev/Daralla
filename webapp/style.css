@@ -995,20 +995,6 @@ h1 {
     margin-top: 0;
 }
 
-.about-form-title {
-    font-size: 14px;
-    color: #ccc;
-    margin: 0 0 8px 0;
-}
-
-.about-form .form-group {
-    margin-bottom: 8px;
-}
-
-.about-form .form-group:last-of-type {
-    margin-bottom: 12px;
-}
-
 .instructions-content {
     padding: 0;
 }

@@ -367,34 +367,9 @@
                         <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
                     </div>
                     <div class="web-only" id="link-telegram-section" style="margin-top: 12px;">
-                        <div class="about-account-forms" style="margin-bottom: 16px;">
-                            <form id="form-change-login" class="about-form" onsubmit="handleChangeLogin(event)">
-                                <p class="about-form-title">Сменить логин</p>
-                                <div class="form-group">
-                                    <input type="password" id="change-login-current" required placeholder="Текущий пароль" autocomplete="current-password" />
-                                </div>
-                                <div class="form-group">
-                                    <input type="text" id="change-login-new" required placeholder="Новый логин" autocomplete="username" minlength="3" />
-                                </div>
-                                <div class="form-actions" style="flex-direction: row; gap: 8px;">
-                                    <button type="submit" class="btn-secondary" style="flex: 1;">Сменить логин</button>
-                                </div>
-                            </form>
-                            <form id="form-change-password" class="about-form" onsubmit="handleChangePassword(event)" style="margin-top: 12px;">
-                                <p class="about-form-title">Сменить пароль</p>
-                                <div class="form-group">
-                                    <input type="password" id="change-pw-current" required placeholder="Текущий пароль" autocomplete="current-password" />
-                                </div>
-                                <div class="form-group">
-                                    <input type="password" id="change-pw-new" required placeholder="Новый пароль" autocomplete="new-password" minlength="6" />
-                                </div>
-                                <div class="form-group">
-                                    <input type="password" id="change-pw-confirm" required placeholder="Повторите новый пароль" autocomplete="new-password" minlength="6" />
-                                </div>
-                                <div class="form-actions" style="flex-direction: row; gap: 8px;">
-                                    <button type="submit" class="btn-secondary" style="flex: 1;">Сменить пароль</button>
-                                </div>
-                            </form>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <button type="button" class="btn-secondary" onclick="showModal('change-login-modal')" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить логин</button>
+                            <button type="button" class="btn-secondary" onclick="showModal('change-password-modal')" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить пароль</button>
                         </div>
                         <div id="link-telegram-unlinked">
                             <p class="hint" style="margin-bottom: 12px;">Заходите в Mini App без пароля и получайте уведомления в боте.</p>
@@ -1318,6 +1293,52 @@
                 <div class="form-actions" style="flex-direction: column;">
                     <button type="submit" class="btn-primary">Сохранить пароль</button>
                     <button type="button" class="btn-secondary" onclick="closeModal('web-access-modal')">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Смена логина -->
+    <div id="change-login-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>Сменить логин</h2>
+            <form id="form-change-login" onsubmit="handleChangeLogin(event)" style="margin-top: 16px;">
+                <div class="form-group">
+                    <label>Текущий пароль</label>
+                    <input type="password" id="change-login-current" required placeholder="Текущий пароль" autocomplete="current-password" />
+                </div>
+                <div class="form-group">
+                    <label>Новый логин</label>
+                    <input type="text" id="change-login-new" required placeholder="Минимум 3 символа" autocomplete="username" minlength="3" />
+                </div>
+                <div class="form-actions" style="flex-direction: row; gap: 8px;">
+                    <button type="button" class="btn-secondary" onclick="closeModal('change-login-modal')" style="flex: 1;">Отмена</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">Сменить логин</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Смена пароля -->
+    <div id="change-password-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>Сменить пароль</h2>
+            <form id="form-change-password" onsubmit="handleChangePassword(event)" style="margin-top: 16px;">
+                <div class="form-group">
+                    <label>Текущий пароль</label>
+                    <input type="password" id="change-pw-current" required placeholder="Текущий пароль" autocomplete="current-password" />
+                </div>
+                <div class="form-group">
+                    <label>Новый пароль</label>
+                    <input type="password" id="change-pw-new" required placeholder="Минимум 6 символов" autocomplete="new-password" minlength="6" />
+                </div>
+                <div class="form-group">
+                    <label>Повторите новый пароль</label>
+                    <input type="password" id="change-pw-confirm" required placeholder="Повторите новый пароль" autocomplete="new-password" minlength="6" />
+                </div>
+                <div class="form-actions" style="flex-direction: row; gap: 8px;">
+                    <button type="button" class="btn-secondary" onclick="closeModal('change-password-modal')" style="flex: 1;">Отмена</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">Сменить пароль</button>
                 </div>
             </form>
         </div>

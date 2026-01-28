@@ -111,6 +111,16 @@ function showPage(pageName) {
     document.querySelectorAll('.page').forEach(page => {
         page.style.display = 'none';
     });
+
+    /* Блокируем скролл окна на лендинге, чтобы колесо мыши скроллило только #landing-scroll */
+    if (currentPage === 'landing' && pageName !== 'landing') {
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+    }
+    if (pageName === 'landing') {
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+    }
     
     // Показываем нужную страницу
     const pageEl = document.getElementById(`page-${pageName}`);
@@ -251,22 +261,25 @@ function initLandingWheelAndHint() {
 
     if (!landingWheelAndHintInited) {
         landingWheelAndHintInited = true;
-        /* Колесо мыши на ПК: слушаем на контейнере скролла, иначе события не доходят */
-        scrollEl.addEventListener('wheel', function (e) {
+        /* Колесо мыши на ПК: document capture, иначе браузер скроллит окно и события не доходят до div */
+        document.addEventListener('wheel', function (e) {
             if (currentPage !== 'landing') return;
-            if (!pageLanding || pageLanding.style.display === 'none') return;
+            var pel = document.getElementById('page-landing');
+            if (!pel || pel.style.display === 'none') return;
+            var el = document.getElementById('landing-scroll');
+            if (!el) return;
             e.preventDefault();
+            e.stopPropagation();
             var dy = e.deltaY;
             if (e.deltaMode === 1) dy *= 40;
             else if (e.deltaMode === 2) dy *= 800;
-            scrollEl.scrollTop += dy;
-        }, { passive: false });
+            el.scrollTop += dy;
+        }, { passive: false, capture: true });
 
         scrollEl.addEventListener('scroll', updateHintVisibility);
     }
 
     updateHintVisibility();
-    /* На ПК часть браузеров шлёт wheel только сфокусированному элементу */
     if (currentPage === 'landing') scrollEl.focus({ preventScroll: true });
 }
 
@@ -4809,6 +4822,7 @@ async function handleChangeLogin(event) {
         if (data.success) {
             current.value = '';
             newLogin.value = '';
+            closeModal('change-login-modal');
             refreshAboutAccount();
             alert(data.message || 'Логин изменён');
         } else {
@@ -4848,6 +4862,7 @@ async function handleChangePassword(event) {
             current.value = '';
             newPw.value = '';
             confirm.value = '';
+            closeModal('change-password-modal');
             alert(data.message || 'Пароль изменён');
         } else {
             alert(data.error || 'Ошибка смены пароля');
