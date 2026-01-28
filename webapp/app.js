@@ -207,6 +207,7 @@ function showPage(pageName) {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
         initLandingObserver();
+        initLandingWheelAndHint();
     } else if (pageName === 'about') {
         refreshAboutAccount();
     }
@@ -228,6 +229,39 @@ function initLandingObserver() {
         { root: scrollEl, threshold: 0.35, rootMargin: '0px' }
     );
     sections.forEach(function (s) { observer.observe(s); });
+}
+
+var landingWheelAndHintInited = false;
+
+function initLandingWheelAndHint() {
+    var scrollEl = document.getElementById('landing-scroll');
+    var hintEl = document.getElementById('landing-scroll-hint');
+    var pageLanding = document.getElementById('page-landing');
+    if (!scrollEl || !hintEl || !pageLanding) return;
+
+    function updateHintVisibility() {
+        if (currentPage !== 'landing') return;
+        var threshold = 80;
+        if (scrollEl.scrollTop < threshold) {
+            hintEl.classList.add('visible');
+        } else {
+            hintEl.classList.remove('visible');
+        }
+    }
+
+    if (!landingWheelAndHintInited) {
+        landingWheelAndHintInited = true;
+        document.addEventListener('wheel', function (e) {
+            if (currentPage !== 'landing') return;
+            if (!pageLanding || pageLanding.style.display === 'none') return;
+            e.preventDefault();
+            scrollEl.scrollTop += e.deltaY;
+        }, { passive: false, capture: true });
+
+        scrollEl.addEventListener('scroll', updateHintVisibility);
+    }
+
+    updateHintVisibility();
 }
 
 // Функция показа модального окна

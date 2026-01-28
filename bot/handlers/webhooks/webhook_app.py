@@ -3507,14 +3507,18 @@ def create_webhook_app(bot_app):
                 user = loop.run_until_complete(get_user_by_id(user_id))
                 if not user:
                     return jsonify({'error': 'Пользователь не найден'}), 404
-                telegram_linked = bool(user.get('telegram_id'))
-                username = user.get('username') or user.get('user_id') or ''
+                uid = user.get('user_id')
+                tid = user.get('telegram_id')
+                is_tg_first = uid and isinstance(uid, str) and uid.isdigit()
+                telegram_linked = bool(tid) or is_tg_first
+                display_tid = tid or (uid if is_tg_first else None)
+                username = user.get('username') or uid or ''
                 return jsonify({
                     'success': True,
                     'telegram_linked': telegram_linked,
                     'username': username,
-                    'user_id': user.get('user_id'),
-                    'telegram_id': user.get('telegram_id'),
+                    'user_id': uid,
+                    'telegram_id': display_tid,
                 })
             finally:
                 loop.close()
