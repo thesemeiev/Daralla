@@ -833,7 +833,6 @@ class CustomGlobe {
             { name: 'Barcelona', lat: 41.3851, lng: 2.1734 },
             { name: 'Milan', lat: 45.4642, lng: 9.1900 },
             { name: 'Munich', lat: 48.1351, lng: 11.5820 },
-            { name: 'Frankfurt', lat: 50.1109, lng: 8.6821 },
             { name: 'Zurich', lat: 47.3769, lng: 8.5417 },
             // Северная Америка
             { name: 'New York', lat: 40.7128, lng: -74.0060 },
