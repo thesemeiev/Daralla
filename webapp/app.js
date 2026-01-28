@@ -4769,9 +4769,31 @@ async function refreshAboutAccount() {
         return;
     }
 
-    var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
-    loginEl.textContent = tid;
-    tgIdEl.textContent = tid;
+    try {
+        var r = await apiFetch('/api/user/link-status', { method: 'GET' });
+        var data = await r.json();
+        if (data.success) {
+            loginEl.textContent = data.username || data.user_id || '—';
+            tgIdEl.textContent = data.telegram_id || '—';
+            if (unlinked && linked) {
+                if (data.telegram_linked) {
+                    unlinked.style.display = 'none';
+                    linked.style.display = 'block';
+                } else {
+                    unlinked.style.display = 'block';
+                    linked.style.display = 'none';
+                }
+            }
+        } else {
+            var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
+            loginEl.textContent = tid;
+            tgIdEl.textContent = tid;
+        }
+    } catch (e) {
+        var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
+        loginEl.textContent = tid;
+        tgIdEl.textContent = tid;
+    }
 }
 
 async function handleLinkTelegram(event) {
@@ -4797,7 +4819,7 @@ async function handleLinkTelegram(event) {
 
 async function handleChangeLogin(event) {
     event.preventDefault();
-    if (!isWebMode || !webAuthToken) return;
+    if (isWebMode && !webAuthToken) return;
     var form = document.getElementById('form-change-login');
     var btn = form && form.querySelector('button[type="submit"]');
     var current = document.getElementById('change-login-current');
@@ -4833,7 +4855,7 @@ async function handleChangeLogin(event) {
 
 async function handleChangePassword(event) {
     event.preventDefault();
-    if (!isWebMode || !webAuthToken) return;
+    if (isWebMode && !webAuthToken) return;
     var form = document.getElementById('form-change-password');
     var btn = form && form.querySelector('button[type="submit"]');
     var current = document.getElementById('change-pw-current');
