@@ -1183,22 +1183,32 @@ def create_webhook_app(bot_app):
     # ==================== АДМИН API ====================
     
     def check_admin_access(user_id: str) -> bool:
-        """Проверяет, является ли пользователь админом"""
+        """Проверяет, является ли пользователь админом. Учитывает и user_id, и привязанный telegram_id."""
         try:
             from ... import bot as bot_module
+            from ...db.subscribers_db import get_user_by_id
             ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
             
-            # Логируем для отладки
-            logger.info(f"Проверка прав админа для user_id={user_id} (type: {type(user_id)}), ADMIN_IDS={ADMIN_IDS}")
-            
-            # Преобразуем user_id в строку для сравнения
             user_id_str = str(user_id)
+            admin_set = {str(a) for a in ADMIN_IDS}
             
-            # Проверяем, является ли user_id админом
-            for admin_id in ADMIN_IDS:
-                if str(admin_id) == user_id_str:
-                    logger.info(f"Пользователь {user_id} является админом")
-                    return True
+            # 1. user_id совпадает с ADMIN_IDS (TG-first или старый формат)
+            if user_id_str in admin_set:
+                logger.info(f"Пользователь {user_id} является админом (по user_id)")
+                return True
+            
+            # 2. Привязанный telegram_id в ADMIN_IDS (web_* после отвязки/привязки)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if user:
+                    tid = user.get('telegram_id')
+                    if tid and str(tid) in admin_set:
+                        logger.info(f"Пользователь {user_id} является админом (по telegram_id={tid})")
+                        return True
+            finally:
+                loop.close()
             
             logger.info(f"Пользователь {user_id} НЕ является админом")
             return False
