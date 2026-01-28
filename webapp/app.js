@@ -4396,6 +4396,28 @@ function changeNotificationsPeriod() {
     loadNotificationStats(days);
 }
 
+// Убираем мигающую каретку при фокусе на нередактируемых элементах (div, section, p и т.д.)
+document.addEventListener('focusin', function (e) {
+    var el = e.target;
+    if (!el || el === document.body || el === document.documentElement) {
+        setTimeout(function () {
+            if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+                document.body && document.body.blur && document.body.blur();
+            }
+        }, 0);
+        return;
+    }
+    var tag = (el.tagName || '').toUpperCase();
+    var role = (el.getAttribute && el.getAttribute('role')) || '';
+    var editable = el.isContentEditable;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || role === 'button' || editable) return;
+    setTimeout(function () {
+        if (document.activeElement === el && (el.tagName || '').toUpperCase() !== 'INPUT' && (el.tagName || '').toUpperCase() !== 'TEXTAREA' && (el.tagName || '').toUpperCase() !== 'SELECT') {
+            el.blur && el.blur();
+        }
+    }, 0);
+});
+
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
     // Включаем защиту от закрытия при скролле вверх

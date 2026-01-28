@@ -236,6 +236,13 @@ body {
     overscroll-behavior-y: contain;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
+    /* Убираем мигающую каретку, если фокус попал на body */
+    caret-color: transparent;
+}
+
+/* Каретка только в полях ввода */
+input, textarea, select {
+    caret-color: currentColor;
 }
 
 /* Модальное окно */
