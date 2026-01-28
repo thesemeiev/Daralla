@@ -378,6 +378,14 @@ async function loadSubscriptions() {
         // Запрашиваем подписки через защищенный API
         const response = await apiFetch(`/api/subscriptions`);
         
+        if (response.status === 401 && !isWebMode) {
+            // Если в Telegram получили 401 - значит аккаунт не найден (был отвязан)
+            // Пробуем зарегистрироваться заново
+            console.log('Unauthorized in loadSubscriptions (TG mode), retrying registration...');
+            const regOk = await initTelegramFlow();
+            return;
+        }
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -4475,6 +4483,8 @@ async function initTelegramFlow() {
                 if (data.trial_created) {
                     console.log('Пробная подписка создана для нового пользователя');
                 }
+            } else if (response.status === 401) {
+                console.warn('Unauthorized in initTelegramFlow');
             }
         }
     } catch (error) {
@@ -4493,7 +4503,7 @@ async function initTelegramFlow() {
                 setTimeout(() => {
                     showExtendSubscriptionModal(subscriptionId);
                 }, 300);
-                checkAdminAccess();
+                await checkAdminAccess();
                 return;
             }
         } else if (startapp.startsWith('subscription_')) {
@@ -4509,18 +4519,19 @@ async function initTelegramFlow() {
                         showPage('subscriptions');
                     }
                 }, 300);
-                checkAdminAccess();
+                await checkAdminAccess();
                 return;
             }
         } else if (startapp === 'subscriptions') {
             showPage('subscriptions');
             await loadSubscriptions();
-            checkAdminAccess();
+            await checkAdminAccess();
             return;
         }
     }
-    
+
     showPage('subscriptions');
+    await loadSubscriptions();
     await checkAdminAccess();
 }
 
