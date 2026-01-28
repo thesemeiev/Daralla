@@ -76,7 +76,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text(text, reply_markup=keyboard)
             return
         web_user = await get_user_by_id(web_user_id)
-        if not web_user or not web_user.get("is_web"):
+        if not web_user:
             await message.reply_text("Ошибка: веб-аккаунт не найден.")
             return
         if web_user.get("telegram_id"):

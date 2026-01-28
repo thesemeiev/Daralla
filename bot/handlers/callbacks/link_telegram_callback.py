@@ -57,7 +57,7 @@ async def link_telegram_confirm_callback(update: Update, context: ContextTypes.D
         
         # Проверяем веб-пользователя
         web_user = await get_user_by_id(web_user_id)
-        if not web_user or not web_user.get("is_web"):
+        if not web_user:
             await query.message.edit_text("Ошибка: веб-аккаунт не найден.")
             return
         

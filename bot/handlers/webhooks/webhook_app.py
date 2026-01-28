@@ -3530,8 +3530,6 @@ def create_webhook_app(bot_app):
                 user = loop.run_until_complete(get_user_by_id(user_id))
                 if not user:
                     return jsonify({'error': 'Пользователь не найден'}), 404
-                if not user.get('is_web'):
-                    return jsonify({'error': 'Привязка доступна только для веб-аккаунтов'}), 400
                 if user.get('telegram_id'):
                     return jsonify({'error': 'Telegram уже привязан'}), 400
                 state = loop.run_until_complete(link_telegram_create_state(user_id))
