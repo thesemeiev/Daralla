@@ -3508,7 +3508,14 @@ def create_webhook_app(bot_app):
                 if not user:
                     return jsonify({'error': 'Пользователь не найден'}), 404
                 telegram_linked = bool(user.get('telegram_id'))
-                return jsonify({'success': True, 'telegram_linked': telegram_linked})
+                username = user.get('username') or user.get('user_id') or ''
+                return jsonify({
+                    'success': True,
+                    'telegram_linked': telegram_linked,
+                    'username': username,
+                    'user_id': user.get('user_id'),
+                    'telegram_id': user.get('telegram_id'),
+                })
             finally:
                 loop.close()
         except Exception as e:

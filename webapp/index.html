@@ -332,60 +332,45 @@
                     <p>Лучший чеченский мультисерверный VPN-сервис.</p>
                 </div>
                 
-                <!-- Блок настройки веб-доступа (только для ТГ) -->
-                <div class="about-section tg-only">
-                    <h3>Доступ через браузер</h3>
-                    <p class="hint" style="margin-bottom: 12px;">Установите пароль, чтобы заходить в свой аккаунт через сайт без Telegram.</p>
-                    <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
-                </div>
-
-                <!-- Привязать Telegram (только для веб-пользователей) -->
-                <div class="about-section web-only" id="link-telegram-section">
-                    <div id="link-telegram-unlinked">
-                        <h3>Привязать Telegram</h3>
-                        <p class="hint" style="margin-bottom: 12px;">Заходите в Mini App без пароля и получайте уведомления о подписках в боте.</p>
-                        <button type="button" class="btn-secondary" id="link-telegram-btn" onclick="handleLinkTelegram(event)" style="width: 100%; padding: 10px; border-radius: 10px;">Привязать Telegram</button>
-                    </div>
-                    <div id="link-telegram-linked" style="display: none;">
-                        <h3>Telegram привязан</h3>
-                        <p class="hint" style="margin-bottom: 12px;">Вход в Mini App и уведомления в боте доступны.</p>
-                    </div>
-                </div>
-
-                <!-- Блок для веб-админов -->
-                <div class="about-section web-only" id="web-admin-refresh-section" style="display: none;">
-                    <h3>Панель управления</h3>
-                    <p class="hint" style="margin-bottom: 12px;">Если вы админ, нажмите кнопку ниже, чтобы активировать функции управления.</p>
-                    <button class="btn-secondary" onclick="checkAdminAccess()" style="width: 100%; padding: 10px; border-radius: 10px;">Проверить права админа</button>
-                </div>
-                
                 <div class="about-section">
-                    <h3>Разработчик</h3>
+                    <h3>Ссылки</h3>
+                    <p class="about-link-caption">Разработчик</p>
                     <a href="https://t.me/thesemeiev" class="link-button" target="_blank">
                         <span>@thesemeiev</span>
                         <span class="link-arrow">→</span>
                     </a>
-                </div>
-                
-                <div class="about-section">
-                    <h3>Канал новостей</h3>
+                    <p class="about-link-caption">Канал новостей</p>
                     <a href="https://t.me/DarallaNews" class="link-button" target="_blank">
                         <span>@DarallaNews</span>
                         <span class="link-arrow">→</span>
                     </a>
-                </div>
-                
-                <div class="about-section">
-                    <h3>Поддержка</h3>
+                    <p class="about-link-caption">Поддержка</p>
                     <a href="https://t.me/DarallaSupport" class="link-button" target="_blank">
                         <span>@DarallaSupport</span>
                         <span class="link-arrow">→</span>
                     </a>
                 </div>
 
-                <!-- Кнопка Выхода (только для Веб) -->
-                <div class="about-section web-only" style="margin-top: 40px;">
-                    <button class="btn-danger" onclick="logout()" style="width: 100%; padding: 12px; border-radius: 10px;">Выйти из аккаунта</button>
+                <div class="about-section">
+                    <h3>Аккаунт</h3>
+                    <div class="about-account-info">
+                        <p><span class="about-label">Логин:</span> <span id="about-login">—</span></p>
+                        <p><span class="about-label">Telegram ID:</span> <span id="about-telegram-id">—</span></p>
+                    </div>
+                    <div class="tg-only" style="margin-top: 12px;">
+                        <p class="hint" style="margin-bottom: 12px;">Установите пароль, чтобы заходить на сайт без Telegram.</p>
+                        <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
+                    </div>
+                    <div class="web-only" id="link-telegram-section" style="margin-top: 12px;">
+                        <div id="link-telegram-unlinked">
+                            <p class="hint" style="margin-bottom: 12px;">Заходите в Mini App без пароля и получайте уведомления в боте.</p>
+                            <button type="button" class="btn-secondary" id="link-telegram-btn" onclick="handleLinkTelegram(event)" style="width: 100%; padding: 10px; border-radius: 10px;">Привязать Telegram</button>
+                        </div>
+                        <div id="link-telegram-linked" style="display: none;">
+                            <p class="hint" style="margin-bottom: 12px;">Telegram привязан. Вход в Mini App и уведомления доступны.</p>
+                        </div>
+                        <button class="btn-danger" onclick="logout()" style="width: 100%; padding: 12px; border-radius: 10px; margin-top: 16px;">Выйти из аккаунта</button>
+                    </div>
                 </div>
             </div>
         </div>

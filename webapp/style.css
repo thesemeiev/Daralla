@@ -944,6 +944,34 @@ h1 {
     line-height: 1.6;
 }
 
+.about-account-info {
+    margin-bottom: 4px;
+}
+
+.about-account-info p {
+    margin: 0 0 8px 0;
+}
+
+.about-account-info p:last-child {
+    margin-bottom: 0;
+}
+
+.about-label {
+    color: #8a8a8a;
+    font-size: 14px;
+    margin-right: 6px;
+}
+
+.about-link-caption {
+    font-size: 13px;
+    color: #8a8a8a;
+    margin: 12px 0 4px 0;
+}
+
+.about-link-caption:first-of-type {
+    margin-top: 0;
+}
+
 .instructions-content {
     padding: 0;
 }
