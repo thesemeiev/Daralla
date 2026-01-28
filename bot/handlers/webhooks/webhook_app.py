@@ -3556,14 +3556,21 @@ def create_webhook_app(bot_app):
                     return jsonify({'error': 'Пользователь не найден'}), 404
                 uid = user.get('user_id')
                 tid = user.get('telegram_id')
+                is_web = uid and isinstance(uid, str) and uid.startswith('web_')
                 is_tg_first = uid and isinstance(uid, str) and uid.isdigit()
-                telegram_linked = bool(tid) or is_tg_first
+                
+                # Telegram считается привязанным если:
+                # 1. Это TG-first аккаунт (он сам по себе привязан к своему ID)
+                # 2. Это Web-аккаунт и у него заполнено поле telegram_id
+                telegram_linked = is_tg_first or (is_web and bool(tid))
+                
                 display_tid = tid or (uid if is_tg_first else None)
                 username = user.get('username') or uid or ''
                 web_access_enabled = bool(user.get('password_hash'))
                 return jsonify({
                     'success': True,
                     'telegram_linked': telegram_linked,
+                    'is_web': is_web,
                     'username': username,
                     'user_id': uid,
                     'telegram_id': display_tid,
@@ -3663,10 +3670,6 @@ def create_webhook_app(bot_app):
             if not user_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
             
-            # Проверяем, что это веб-пользователь
-            if not user_id.startswith('web_'):
-                return jsonify({'error': 'Отвязка доступна только для веб-аккаунтов'}), 400
-            
             data = request.get_json(silent=True) or {}
             current_password = (data.get('current_password') or '').strip()
             if not current_password:
@@ -3674,7 +3677,8 @@ def create_webhook_app(bot_app):
             
             from ...db.subscribers_db import (
                 get_user_by_id, update_user_telegram_id,
-                delete_telegram_link, mark_telegram_id_known
+                delete_telegram_link, mark_telegram_id_known,
+                rename_user_id
             )
             
             loop = asyncio.new_event_loop()
@@ -3684,15 +3688,34 @@ def create_webhook_app(bot_app):
                 if not user:
                     return jsonify({'error': 'Пользователь не найден'}), 404
                 
+                # Проверка наличия веб-доступа (пароля) - КРИТИЧНО для безопасности
                 if not user.get('password_hash'):
-                    return jsonify({'error': 'Пароль для этого аккаунта не настроен'}), 400
+                    return jsonify({'error': 'Для отвязки Telegram необходимо сначала настроить веб-доступ (логин и пароль)'}), 400
                 
                 if not check_password_hash(user['password_hash'], current_password):
                     return jsonify({'error': 'Неверный текущий пароль'}), 401
                 
+                # Определяем telegram_id для удаления связи
                 telegram_id = user.get('telegram_id')
+                is_tg_first = user_id.isdigit()
+                
+                if not telegram_id and is_tg_first:
+                    telegram_id = user_id
+                
                 if not telegram_id:
                     return jsonify({'error': 'Telegram не привязан к этому аккаунту'}), 400
+
+                # СТРОГИЙ ВАРИАНТ: Если аккаунт TG-first, переименовываем его в web_username
+                # Это делает старый TG "пустым" и переводит аккаунт в категорию web-only.
+                if is_tg_first:
+                    username = user.get('username')
+                    if not username:
+                        return jsonify({'error': 'Ошибка: у аккаунта нет логина для превращения в веб-аккаунт. Сначала смените логин.'}), 400
+                    
+                    new_user_id = f"web_{username}"
+                    loop.run_until_complete(rename_user_id(user_id, new_user_id))
+                    logger.info(f"Аккаунт {user_id} превращен в {new_user_id} при отвязке TG")
+                    user_id = new_user_id # Продолжаем работу с новым ID
                 
                 # Удаляем связь TG ↔ аккаунт и помечаем TG как известный
                 loop.run_until_complete(delete_telegram_link(telegram_id))
@@ -3702,13 +3725,13 @@ def create_webhook_app(bot_app):
                 loop.run_until_complete(update_user_telegram_id(user_id, None))
                 
                 logger.info(
-                    f"Отвязан Telegram {telegram_id} от веб-аккаунта {user_id}. "
+                    f"Отвязан Telegram {telegram_id} от аккаунта {user_id}. "
                     f"Связь в telegram_links удалена, TG помечен как известный."
                 )
                 
                 return jsonify({
                     'success': True,
-                    'message': 'Telegram успешно отвязан от аккаунта'
+                    'message': 'Telegram успешно отвязан. Аккаунт переведен в режим веб-доступа.'
                 })
             finally:
                 loop.close()

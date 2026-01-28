@@ -2046,6 +2046,64 @@ async def create_telegram_link(telegram_id: str, user_id: str):
         await db.commit()
 
 
+async def rename_user_id(old_user_id: str, new_user_id: str):
+    """
+    Меняет user_id пользователя во всех связанных таблицах.
+    Используется при отвязке TG-first аккаунта для превращения его в полноценный веб-аккаунт.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("BEGIN TRANSACTION")
+            
+            # 1. Основная таблица пользователей
+            await db.execute(
+                "UPDATE users SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+            
+            # 2. Платежи
+            await db.execute(
+                "UPDATE payments SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+            
+            # 3. Уведомления
+            await db.execute(
+                "UPDATE sent_notifications SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+            await db.execute(
+                "UPDATE notification_effectiveness SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+            
+            # 4. Состояния привязки
+            await db.execute(
+                "UPDATE link_telegram_states SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+            
+            # 5. Использование промокодов
+            await db.execute(
+                "UPDATE promo_code_uses SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+
+            # 6. Связи Telegram (на всякий случай, если запись еще не удалена)
+            await db.execute(
+                "UPDATE telegram_links SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id)
+            )
+            
+            await db.commit()
+            logger.info(f"User ID успешно изменен с {old_user_id} на {new_user_id}")
+            return True
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Ошибка при переименовании user_id {old_user_id} -> {new_user_id}: {e}")
+            raise e
+
+
 async def delete_telegram_link(telegram_id: str):
     """Удаляет связь TG ↔ аккаунт (используется при отвязке)."""
     async with aiosqlite.connect(DB_PATH) as db:
