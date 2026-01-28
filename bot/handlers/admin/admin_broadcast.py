@@ -16,6 +16,7 @@ from ...utils import (
 from ...utils.ui import UIMessages
 from ...navigation import NavStates, CallbackData, MenuTypes
 from ...db import get_all_user_ids
+from ...db.subscribers_db import get_telegram_chat_id_for_notification
 
 logger = logging.getLogger(__name__)
 
@@ -203,28 +204,25 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     for i in range(0, total, batch):
         chunk = recipients[i:i+batch]
         for user_id in chunk:
+            target_chat_id = await get_telegram_chat_id_for_notification(user_id)
+            if target_chat_id is None:
+                continue
             try:
-                # Создаем кнопку для открытия мини-приложения
                 from ...utils import UIButtons
                 webapp_button = UIButtons.create_webapp_button()
-                
                 reply_markup = None
                 if webapp_button:
                     reply_markup = InlineKeyboardMarkup([[webapp_button]])
-                
-                # Отправляем текстовое сообщение с кнопкой
                 await context.bot.send_message(
-                    chat_id=int(user_id), 
-                    text=text, 
-                    parse_mode="HTML", 
+                    chat_id=target_chat_id,
+                    text=text,
+                    parse_mode="HTML",
                     disable_web_page_preview=True,
                     reply_markup=reply_markup
                 )
-                
                 sent += 1
                 if len(details) < 10000:
                     details.append({'user_id': str(user_id), 'status': 'ok'})
-                    
             except telegram.error.Forbidden:
                 failed += 1
                 if len(details) < 10000:
@@ -236,11 +234,10 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
             except telegram.error.RetryAfter as e:
                 await asyncio.sleep(int(getattr(e, 'retry_after', 1)))
                 try:
-                    # Повторная попытка отправки текста
                     await context.bot.send_message(
-                        chat_id=int(user_id), 
-                        text=text, 
-                        parse_mode="HTML", 
+                        chat_id=target_chat_id,
+                        text=text,
+                        parse_mode="HTML",
                         disable_web_page_preview=True
                     )
                     sent += 1
@@ -254,7 +251,6 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
                 failed += 1
                 if len(details) < 10000:
                     details.append({'user_id': str(user_id), 'status': 'failed'})
-            # лёгкая задержка между сообщениями
             await asyncio.sleep(0.05)
         # пауза между батчами
         await asyncio.sleep(1.0)

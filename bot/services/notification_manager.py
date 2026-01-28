@@ -190,6 +190,12 @@ class NotificationManager:
             if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
                 return False
             
+            from ..db.subscribers_db import get_telegram_chat_id_for_notification
+            chat_id = await get_telegram_chat_id_for_notification(user_id)
+            if chat_id is None:
+                logger.debug(f"Пропуск уведомления для user_id={user_id}: нет Telegram (веб-only без привязки)")
+                return False
+            
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
             
             # Создаем кнопку для открытия мини-приложения
@@ -209,7 +215,7 @@ class NotificationManager:
             
             try:
                 await self.bot.send_message(
-                    chat_id=int(user_id),
+                    chat_id=chat_id,
                     text=message_text,
                     parse_mode="HTML",
                     reply_markup=keyboard

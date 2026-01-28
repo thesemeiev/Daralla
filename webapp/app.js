@@ -207,6 +207,8 @@ function showPage(pageName) {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
         initLandingObserver();
+    } else if (pageName === 'about') {
+        refreshLinkTelegramStatus();
     }
 }
 
@@ -4677,6 +4679,48 @@ async function handleWebAccessSetup(event) {
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;
+    }
+}
+
+async function refreshLinkTelegramStatus() {
+    if (!isWebMode || !webAuthToken) return;
+    var unlinked = document.getElementById('link-telegram-unlinked');
+    var linked = document.getElementById('link-telegram-linked');
+    if (!unlinked || !linked) return;
+    try {
+        var r = await apiFetch('/api/user/link-status', { method: 'GET' });
+        var data = await r.json();
+        if (data.success && data.telegram_linked) {
+            unlinked.style.display = 'none';
+            linked.style.display = 'block';
+        } else {
+            unlinked.style.display = 'block';
+            linked.style.display = 'none';
+        }
+    } catch (e) {
+        unlinked.style.display = 'block';
+        linked.style.display = 'none';
+    }
+}
+
+async function handleLinkTelegram(event) {
+    if (event) event.preventDefault();
+    if (!isWebMode || !webAuthToken) return;
+    var btn = document.getElementById('link-telegram-btn');
+    var originalText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Переход...'; }
+    try {
+        var r = await apiFetch('/api/user/link-telegram/start', { method: 'POST' });
+        var data = await r.json();
+        if (data.success && data.link) {
+            window.location.href = data.link;
+            return;
+        }
+        alert(data.error || 'Ошибка привязки');
+    } catch (e) {
+        alert('Ошибка сети');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
 }
 

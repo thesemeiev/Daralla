@@ -3009,15 +3009,18 @@ def create_webhook_app(bot_app):
                     
                     # Получаем бот из приложения
                     bot = bot_app.bot
+                    from ...db.subscribers_db import get_telegram_chat_id_for_notification
                     
                     # Отправляем сообщения батчами
                     for i in range(0, total, batch):
                         chunk = recipients[i:i+batch]
-                        tasks = []
                         for user_id in chunk:
+                            chat_id = await get_telegram_chat_id_for_notification(user_id)
+                            if chat_id is None:
+                                continue
                             try:
                                 await bot.send_message(
-                                    chat_id=int(user_id),
+                                    chat_id=chat_id,
                                     text=message_text,
                                     parse_mode="HTML",
                                     disable_web_page_preview=True,
@@ -3029,11 +3032,10 @@ def create_webhook_app(bot_app):
                             except telegram.error.BadRequest:
                                 failed += 1
                             except telegram.error.RetryAfter as e:
-                                # Ждем указанное время и повторяем
                                 await asyncio.sleep(int(getattr(e, 'retry_after', 1)))
                                 try:
                                     await bot.send_message(
-                                        chat_id=int(user_id),
+                                        chat_id=chat_id,
                                         text=message_text,
                                         parse_mode="HTML",
                                         disable_web_page_preview=True,
@@ -3455,6 +3457,64 @@ def create_webhook_app(bot_app):
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/user/link-telegram/start', methods=['POST', 'OPTIONS'])
+    def api_user_link_telegram_start():
+        """Начать привязку Telegram (веб-пользователь). Возвращает ссылку t.me/bot?start=link_<state>."""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({'error': 'Требуется авторизация'}), 401
+            from ...db.subscribers_db import (
+                get_user_by_id, link_telegram_create_state,
+                update_user_telegram_id
+            )
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user:
+                    return jsonify({'error': 'Пользователь не найден'}), 404
+                if not user.get('is_web'):
+                    return jsonify({'error': 'Привязка доступна только для веб-аккаунтов'}), 400
+                if user.get('telegram_id'):
+                    return jsonify({'error': 'Telegram уже привязан'}), 400
+                state = loop.run_until_complete(link_telegram_create_state(user_id))
+                import os
+                bot_username = os.getenv('BOT_USERNAME', 'Daralla_bot')
+                link = f"https://t.me/{bot_username}?start=link_{state}"
+                return jsonify({'success': True, 'link': link, 'state': state})
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка link-telegram/start: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/user/link-status', methods=['GET', 'OPTIONS'])
+    def api_user_link_status():
+        """Статус привязки Telegram для текущего веб-пользователя."""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({'error': 'Требуется авторизация'}), 401
+            from ...db.subscribers_db import get_user_by_id
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user:
+                    return jsonify({'error': 'Пользователь не найден'}), 404
+                telegram_linked = bool(user.get('telegram_id'))
+                return jsonify({'success': True, 'telegram_linked': telegram_linked})
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка link-status: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
     return app
 
 def authenticate_request():
@@ -3486,7 +3546,19 @@ def authenticate_request():
             pass
         
     if init_data:
-        return verify_telegram_init_data(init_data)
+        tg_user_id = verify_telegram_init_data(init_data)
+        if not tg_user_id:
+            return None
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            from ...db.subscribers_db import get_user_by_telegram_id_or_user_id
+            user = loop.run_until_complete(get_user_by_telegram_id_or_user_id(tg_user_id))
+            if user:
+                return user['user_id']
+            return None
+        finally:
+            loop.close()
         
     return None
 

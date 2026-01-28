@@ -7,6 +7,7 @@ import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 from ...db import get_payment_by_id, update_payment_status, update_payment_activation
+from ...db.subscribers_db import get_telegram_chat_id_for_notification
 from ...utils import (
     UIEmojis, UIStyles, UIMessages,
     safe_edit_message_with_photo, safe_send_message_with_photo
@@ -107,6 +108,7 @@ async def process_successful_payment(bot_app, payment_id, user_id, meta):
 async def process_extension_payment(bot_app, payment_id, user_id, meta, message_id):
     """Обрабатывает продление подписки"""
     try:
+        chat_id = await get_telegram_chat_id_for_notification(user_id)
         period = meta.get('type', 'month')
         # Убираем префиксы: extend_sub_month -> month, extend_sub_3month -> 3month
         actual_period = period
@@ -225,7 +227,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 await update_payment_status(payment_id, 'failed')
                 cleanup_extension_message_for_payment(payment_id)
                 # Уведомляем пользователя
-                if message_id:
+                if message_id and chat_id:
                     error_message = (
                         f"{UIStyles.header('Ошибка продления подписки')}\n\n"
                         f"{UIEmojis.ERROR} <b>Не удалось продлить подписку!</b>\n\n"
@@ -245,7 +247,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                     await safe_edit_message_with_photo(
                         bot_app.bot,
-                        chat_id=int(user_id),
+                        chat_id=chat_id,
                         message_id=message_id,
                         text=error_message,
                         reply_markup=keyboard,
@@ -307,7 +309,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 
                 extension_message += f"{UIStyles.description('Подписка активна и готова к использованию.')}"
                 
-                if message_id:
+                if chat_id:
                     # Создаем кнопку для открытия мини-приложения
                     from ...utils import UIButtons
                     webapp_button = UIButtons.create_webapp_button(
@@ -321,27 +323,27 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     
                     keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                     
-                    await safe_edit_message_with_photo(
-                        bot_app.bot,
-                        chat_id=int(user_id),
-                        message_id=message_id,
-                        text=extension_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_SUCCESS
-                    )
-                    logger.info(f"Отредактировано сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
-                else:
-                    # Fallback: отправляем новое сообщение
-                    await safe_send_message_with_photo(
-                        bot_app.bot,
-                        chat_id=int(user_id),
-                        text=extension_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_SUCCESS
-                    )
-                    logger.info(f"Отправлено новое сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
+                    if message_id:
+                        await safe_edit_message_with_photo(
+                            bot_app.bot,
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            text=extension_message,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                            menu_type=MenuTypes.PAYMENT_SUCCESS
+                        )
+                        logger.info(f"Отредактировано сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
+                    else:
+                        await safe_send_message_with_photo(
+                            bot_app.bot,
+                            chat_id=chat_id,
+                            text=extension_message,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                            menu_type=MenuTypes.PAYMENT_SUCCESS
+                        )
+                        logger.info(f"Отправлено новое сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
                     
             except Exception as e:
                 logger.error(f"Ошибка отправки уведомления о продлении подписки: {e}")
@@ -360,6 +362,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
 async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, message_id):
     """Обрабатывает новую покупку - создаёт подписку и клиентов на всех доступных серверах"""
     try:
+        chat_id = await get_telegram_chat_id_for_notification(user_id)
         period = meta.get('type', 'month')
         days = 90 if period == '3month' else 30
         device_limit = int(meta.get('device_limit', 1))
@@ -442,15 +445,16 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     buttons.append([webapp_button])
                 
                 keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                await safe_edit_message_with_photo(
-                    bot_app.bot,
-                    chat_id=int(user_id),
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.PAYMENT
-                )
+                if chat_id and message_id:
+                    await safe_edit_message_with_photo(
+                        bot_app.bot,
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        text=error_message,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        menu_type=MenuTypes.PAYMENT
+                    )
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
@@ -544,26 +548,24 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     f"<b>Причина:</b> Не удалось создать клиентов на серверах\n\n"
                     f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
                 )
-                # Создаем кнопку для открытия мини-приложения
-                from ...utils import UIButtons
-                webapp_button = UIButtons.create_webapp_button(
-                    action='subscriptions'
-                )
-                
-                buttons = []
-                if webapp_button:
-                    buttons.append([webapp_button])
-                
-                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                await safe_edit_message_with_photo(
-                    bot_app.bot,
-                    chat_id=int(user_id),
-                    message_id=message_id,
-                    text=error_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.PAYMENT
-                )
+                if message_id and chat_id:
+                    from ...utils import UIButtons
+                    webapp_button = UIButtons.create_webapp_button(
+                        action='subscriptions'
+                    )
+                    buttons = []
+                    if webapp_button:
+                        buttons.append([webapp_button])
+                    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
+                    await safe_edit_message_with_photo(
+                        bot_app.bot,
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        text=error_message,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        menu_type=MenuTypes.PAYMENT
+                    )
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
@@ -687,11 +689,11 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             # Для платежей из мини-приложения message_id может быть None - не отправляем сообщение в бот
             actual_message_id = message_id or stored_message_id
             
-            if actual_message_id:
+            if chat_id and actual_message_id:
                 try:
                     await safe_edit_message_with_photo(
                         bot_app.bot,
-                        chat_id=int(user_id),
+                        chat_id=chat_id,
                         message_id=actual_message_id,
                         text=subscription_message,
                         reply_markup=keyboard,
@@ -700,25 +702,21 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     )
                     logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о подписке")
                 except Exception as edit_error:
-                    # Игнорируем ошибки "no text" - это нормально, если сообщение уже отредактировано как медиа
                     error_str = str(edit_error).lower()
                     if "no text" in error_str or "can't be edited" in error_str:
                         logger.debug(f"Сообщение {actual_message_id} уже отредактировано как медиа, пропускаем: {edit_error}")
                     else:
                         logger.error(f"Ошибка редактирования сообщения {actual_message_id}: {edit_error}")
-                    # Fallback: отправляем новое сообщение
                     await safe_send_message_with_photo(
                         bot_app.bot,
-                        chat_id=int(user_id),
+                        chat_id=chat_id,
                         text=subscription_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
                         menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                     logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
-            else:
-                # Если нет message_id (платеж из мини-приложения), не отправляем сообщение в бот
-                # Пользователь уже видит уведомление в мини-приложении через polling
+            elif not actual_message_id:
                 logger.info(f"Платеж из мини-приложения для user_id={user_id} - сообщение в бот не отправляется (нет message_id)")
                 
         except Exception as e:
@@ -735,9 +733,9 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
         await update_payment_status(payment_id, 'failed')
         await update_payment_activation(payment_id, 0)
         
-        # Отправляем сообщение пользователю об ошибке оплаты
         message_id = meta.get('message_id')
-        if message_id:
+        chat_id = await get_telegram_chat_id_for_notification(user_id)
+        if message_id and chat_id:
             error_message = (
                 f"{UIStyles.header('Ошибка оплаты')}\n\n"
                 f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
@@ -745,15 +743,13 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
                 f"<b>Статус:</b> {status}\n\n"
                 f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
             )
-            
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.BUY_VPN)],
                 [NavigationBuilder.create_main_menu_button()]
             ])
-            
             await safe_edit_message_with_photo(
                 bot_app.bot,
-                chat_id=int(user_id),
+                chat_id=chat_id,
                 message_id=message_id,
                 text=error_message,
                 reply_markup=keyboard,
@@ -772,12 +768,12 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
         await update_payment_status(payment_id, 'failed')
         await update_payment_activation(payment_id, 0)
         
-        # Определяем тип платежа для правильного сообщения
+        chat_id = await get_telegram_chat_id_for_notification(user_id)
         period = meta.get('type', 'month')
         is_extension = period.startswith('extend_')
         
         message_id = meta.get('message_id')
-        if message_id:
+        if message_id and chat_id:
             if is_extension:
                 # Ошибка продления подписки
                 extension_subscription_id = meta.get('extension_subscription_id', 'Неизвестно')
@@ -829,7 +825,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
             
             await safe_edit_message_with_photo(
                 bot_app.bot,
-                chat_id=int(user_id),
+                chat_id=chat_id,
                 message_id=message_id,
                 text=error_message,
                 reply_markup=keyboard,

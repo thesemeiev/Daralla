@@ -2,7 +2,8 @@
 Обработчик команды /start
 """
 import logging
-from telegram import Update, InlineKeyboardMarkup
+import os
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
 
 from ...utils import (
@@ -10,7 +11,10 @@ from ...utils import (
     safe_edit_or_reply_universal, check_private_chat
 )
 from ...db import register_simple_user, is_known_user
-from ...db.subscribers_db import get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription
+from ...db.subscribers_db import (
+    get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription,
+    link_telegram_consume_state, get_user_by_id, update_user_telegram_id,
+)
 from ...navigation import NavStates, MenuTypes
 import time
 
@@ -26,10 +30,11 @@ def get_globals():
             'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
             'new_client_manager': getattr(bot_module, 'new_client_manager', None),
             'subscription_manager': getattr(bot_module, 'subscription_manager', None),
+            'WEBAPP_URL': getattr(bot_module, 'WEBAPP_URL', None),
         }
     except (ImportError, AttributeError):
         # Fallback если модуль еще не загружен
-        return {'ADMIN_IDS': []}
+        return {'ADMIN_IDS': [], 'WEBAPP_URL': None}
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,16 +42,56 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_private_chat(update):
         return
     
+    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
+    if message is None:
+        logger.error("main_menu: message is None")
+        return
+
+    # Обработка привязки Telegram (веб-аккаунт): /start link_<state>
+    args = context.args or []
+    if args and args[0].startswith("link_"):
+        state = args[0][5:]
+        tg_user_id = str(update.effective_user.id)
+        web_user_id = await link_telegram_consume_state(state)
+        if not web_user_id:
+            await message.reply_text("Ссылка недействительна или истекла. Зайдите на сайт и нажмите «Привязать Telegram» снова.")
+            return
+        existing_tg_user = await get_user_by_id(tg_user_id)
+        if existing_tg_user and not existing_tg_user.get("is_web"):
+            await message.reply_text("Этот Telegram уже зарегистрирован. Войдите в Mini App с этого аккаунта или используйте другой Telegram.")
+            return
+        web_user = await get_user_by_id(web_user_id)
+        if not web_user or not web_user.get("is_web"):
+            await message.reply_text("Ошибка: веб-аккаунт не найден.")
+            return
+        if web_user.get("telegram_id"):
+            await message.reply_text("Аккаунт уже привязан к Telegram.")
+            return
+        await update_user_telegram_id(web_user_id, tg_user_id)
+        logger.info(f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id}")
+        text = (
+            "Аккаунт привязан.\n\n"
+            "Теперь вы можете:\n"
+            "• Заходить в Mini App без пароля\n"
+            "• Получать уведомления о подписках в этом чате"
+        )
+        buttons = []
+        globals_dict = get_globals()
+        webapp_url = globals_dict.get("WEBAPP_URL")
+        if webapp_url:
+            buttons.append([InlineKeyboardButton("Открыть Mini App", web_app=WebAppInfo(url=webapp_url))])
+        site_url = os.getenv("WEBSITE_URL", "").strip()
+        if site_url:
+            buttons.append([InlineKeyboardButton("Вернуться на сайт", url=site_url)])
+        keyboard = InlineKeyboardMarkup(buttons) if buttons else None
+        await message.reply_text(text, reply_markup=keyboard)
+        return
+    
     globals_dict = get_globals()
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     new_client_manager = globals_dict['new_client_manager']
     
     user_id = str(update.effective_user.id)
-    
-    message = update.message if update.message else (update.callback_query.message if update.callback_query else None)
-    if message is None:
-        logger.error("main_menu: message is None")
-        return
     
     # Теперь, когда все проверки выполнены, регистрируем пользователя
     trial_created = False

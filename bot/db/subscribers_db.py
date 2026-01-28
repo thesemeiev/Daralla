@@ -4,6 +4,8 @@
 import aiosqlite
 import datetime
 import logging
+import secrets
+import time
 import uuid
 import json
 from . import DB_PATH
@@ -69,6 +71,30 @@ async def init_subscribers_db():
         except Exception as e:
             if "duplicate column name" not in str(e).lower():
                 logger.error(f"Ошибка миграции (auth_token): {e}")
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN telegram_id TEXT")
+            logger.info("Добавлена колонка telegram_id в таблицу users")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (telegram_id): {e}")
+
+        try:
+            await db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id) WHERE telegram_id IS NOT NULL"
+            )
+            logger.info("Создан уникальный индекс idx_users_telegram_id")
+        except Exception as e:
+            logger.error(f"Ошибка создания индекса idx_users_telegram_id: {e}")
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS link_telegram_states (
+                state TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        logger.info("Таблица link_telegram_states создана/проверена")
 
         # 3. Создаем таблицы с зависимостями
         # Таблица конфигурации серверов
@@ -1847,6 +1873,80 @@ async def get_user_by_username_or_id(login: str):
         ) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
+
+
+async def link_telegram_create_state(user_id: str) -> str:
+    """Создаёт state для привязки Telegram. Очищает устаревшие записи. Возвращает state."""
+    state = secrets.token_hex(16)
+    now = int(time.time())
+    cutoff = now - 15 * 60  # 15 минут
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM link_telegram_states WHERE created_at < ?", (cutoff,))
+        await db.execute(
+            "INSERT INTO link_telegram_states (state, user_id, created_at) VALUES (?, ?, ?)",
+            (state, user_id, now)
+        )
+        await db.commit()
+    return state
+
+
+async def link_telegram_consume_state(state: str):
+    """Возвращает user_id по state и удаляет запись. None если не найден или устарел."""
+    cutoff = int(time.time()) - 15 * 60
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id FROM link_telegram_states WHERE state = ? AND created_at >= ?",
+            (state, cutoff)
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        user_id = row[0]
+        await db.execute("DELETE FROM link_telegram_states WHERE state = ?", (state,))
+        await db.commit()
+        return user_id
+
+
+async def get_user_by_telegram_id(telegram_id: str):
+    """Возвращает пользователя по telegram_id."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def get_user_by_telegram_id_or_user_id(telegram_id: str):
+    """Сначала ищет по telegram_id (привязанный веб), иначе по user_id (TG-only)."""
+    user = await get_user_by_telegram_id(telegram_id)
+    if user:
+        return user
+    return await get_user_by_id(telegram_id)
+
+
+async def update_user_telegram_id(user_id: str, telegram_id: str | None):
+    """Устанавливает или сбрасывает telegram_id у пользователя."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET telegram_id = ? WHERE user_id = ?", (telegram_id, user_id))
+        await db.commit()
+
+
+async def get_telegram_chat_id_for_notification(user_id: str) -> int | None:
+    """Возвращает chat_id для отправки в Telegram (telegram_id или user_id если числовой). Иначе None."""
+    user = await get_user_by_id(user_id)
+    if not user:
+        return None
+    tid = user.get("telegram_id")
+    if tid:
+        try:
+            return int(tid)
+        except (TypeError, ValueError):
+            pass
+    uid = user.get("user_id")
+    if uid and isinstance(uid, str) and uid.isdigit():
+        return int(uid)
+    return None
+
 
 async def get_subscription_conversion_data(days: int = 30):
     """

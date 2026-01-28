@@ -339,6 +339,19 @@
                     <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить вход по паролю</button>
                 </div>
 
+                <!-- Привязать Telegram (только для веб-пользователей) -->
+                <div class="about-section web-only" id="link-telegram-section">
+                    <div id="link-telegram-unlinked">
+                        <h3>Привязать Telegram</h3>
+                        <p class="hint" style="margin-bottom: 12px;">Заходите в Mini App без пароля и получайте уведомления о подписках в боте.</p>
+                        <button type="button" class="btn-secondary" id="link-telegram-btn" onclick="handleLinkTelegram(event)" style="width: 100%; padding: 10px; border-radius: 10px;">Привязать Telegram</button>
+                    </div>
+                    <div id="link-telegram-linked" style="display: none;">
+                        <h3>Telegram привязан</h3>
+                        <p class="hint" style="margin-bottom: 12px;">Вход в Mini App и уведомления в боте доступны.</p>
+                    </div>
+                </div>
+
                 <!-- Блок для веб-админов -->
                 <div class="about-section web-only" id="web-admin-refresh-section" style="display: none;">
                     <h3>Панель управления</h3>
