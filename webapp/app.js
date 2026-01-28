@@ -4674,23 +4674,31 @@ async function handleWebRegister(event) {
 // === НАСТРОЙКА ВЕБ-ДОСТУПА (ИЗ ТГ) ===
 
 function showWebAccessModal() {
-    // Получаем ID пользователя из initData (если мы в ТГ)
-    let login = '-';
-    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-        login = tg.initDataUnsafe.user.id;
-    }
-    
-    document.getElementById('web-access-login-display').innerText = login;
-    document.getElementById('web-access-password').value = '';
+    var usernameEl = document.getElementById('web-access-username');
+    var pwEl = document.getElementById('web-access-password');
+    var pw2El = document.getElementById('web-access-password-confirm');
+    if (usernameEl) usernameEl.value = '';
+    if (pwEl) pwEl.value = '';
+    if (pw2El) pw2El.value = '';
     showModal('web-access-modal');
 }
 
 async function handleWebAccessSetup(event) {
     event.preventDefault();
+    const username = (document.getElementById('web-access-username').value || '').trim().toLowerCase();
     const password = document.getElementById('web-access-password').value;
+    const confirm = document.getElementById('web-access-password-confirm').value;
     
+    if (username.length < 3) {
+        alert('Логин должен быть не менее 3 символов');
+        return;
+    }
     if (password.length < 6) {
         alert('Пароль должен быть не менее 6 символов');
+        return;
+    }
+    if (password !== confirm) {
+        alert('Пароли не совпадают');
         return;
     }
 
@@ -4705,6 +4713,7 @@ async function handleWebAccessSetup(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 initData: tg.initData,
+                username: username,
                 password: password 
             })
         });
@@ -4712,6 +4721,7 @@ async function handleWebAccessSetup(event) {
         
         if (result.success) {
             closeModal('web-access-modal');
+            refreshAboutAccount();
             if (tg.showAlert) {
                 tg.showAlert(result.message);
             } else {
@@ -4733,6 +4743,8 @@ async function refreshAboutAccount() {
     var tgIdEl = document.getElementById('about-telegram-id');
     var unlinked = document.getElementById('link-telegram-unlinked');
     var linked = document.getElementById('link-telegram-linked');
+    var tgSetup = document.getElementById('tg-web-access-setup');
+    var tgManage = document.getElementById('tg-web-access-manage');
     if (!loginEl || !tgIdEl) return;
 
     if (isWebMode) {
@@ -4747,6 +4759,15 @@ async function refreshAboutAccount() {
             if (data.success) {
                 loginEl.textContent = data.username || data.user_id || '—';
                 tgIdEl.textContent = data.telegram_id || '—';
+            if (tgSetup && tgManage) {
+                if (data.web_access_enabled) {
+                    tgSetup.style.display = 'none';
+                    tgManage.style.display = 'block';
+                } else {
+                    tgSetup.style.display = 'block';
+                    tgManage.style.display = 'none';
+                }
+            }
                 if (unlinked && linked) {
                     if (data.telegram_linked) {
                         unlinked.style.display = 'none';
