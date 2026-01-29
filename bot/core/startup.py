@@ -147,6 +147,13 @@ async def on_startup(app):
             await migrate_legacy_numeric_user_ids()
         except Exception as e:
             logger.warning("Миграция legacy numeric user_id: %s", e)
+
+        # 1.0.2 Миграция длинных tg_ user_id → короткий формат (tg_ + 12 hex = 15 символов)
+        try:
+            from ..db.subscribers_db import migrate_long_tg_user_ids
+            await migrate_long_tg_user_ids()
+        except Exception as e:
+            logger.warning("Миграция long tg_ user_id: %s", e)
         
         # 1.1 Инициализация менеджеров серверов из БД
         init_server_managers = getattr(bot_module, 'init_server_managers', None)

@@ -292,9 +292,12 @@ async def init_subscribers_db():
         await db.commit()
 
 
+TG_USER_ID_HEX_LEN = 12  # tg_ + 12 hex = 15 символов всего
+
+
 def generate_tg_user_id() -> str:
-    """Генерирует уникальный user_id для TG-first пользователя (никогда не равен telegram_id)."""
-    return f"tg_{uuid.uuid4().hex}"
+    """Генерирует уникальный короткий user_id для TG-first пользователя (tg_ + 12 hex)."""
+    return f"tg_{uuid.uuid4().hex[:TG_USER_ID_HEX_LEN]}"
 
 
 async def migrate_legacy_numeric_user_ids():
@@ -325,6 +328,38 @@ async def migrate_legacy_numeric_user_ids():
             logger.info(f"Миграция legacy user_id: {old_uid} -> {new_uid}")
         except Exception as e:
             logger.error(f"Ошибка миграции user_id {old_uid}: {e}", exc_info=True)
+
+
+async def migrate_long_tg_user_ids():
+    """
+    Миграция: пользователи с длинным tg_ user_id (tg_ + 32 hex) получают короткий формат (tg_ + 12 hex).
+    После деплоя все tg_ id будут длиной 15 символов.
+    """
+    target_len = 3 + TG_USER_ID_HEX_LEN  # "tg_" + 12 hex = 15
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT user_id FROM users WHERE user_id LIKE 'tg_%' AND length(user_id) > ?",
+            (target_len,),
+        ) as cur:
+            rows = await cur.fetchall()
+        long_uids = [row["user_id"] for row in rows]
+    if not long_uids:
+        return
+    for old_uid in long_uids:
+        for _ in range(10):
+            new_uid = generate_tg_user_id()
+            existing = await get_user_by_id(new_uid)
+            if not existing:
+                break
+        else:
+            logger.error(f"Миграция tg_ shorten: не удалось сгенерировать уникальный id для {old_uid}")
+            continue
+        try:
+            await rename_user_id(old_uid, new_uid)
+            logger.info(f"Миграция tg_ shorten: {old_uid} -> {new_uid}")
+        except Exception as e:
+            logger.error(f"Ошибка миграции tg_ shorten {old_uid}: {e}", exc_info=True)
 
 
 async def get_or_create_subscriber(user_id: str) -> int:
