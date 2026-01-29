@@ -227,7 +227,6 @@ function updateProfileCard(userId, username) {
 var profileCardAvatarObjectURL = null;
 
 async function loadProfileAvatar() {
-    if (isWebMode) return;
     var iconEl = document.querySelector('.profile-card-icon');
     var imgEl = document.getElementById('profile-card-avatar');
     if (!iconEl || !imgEl) return;
@@ -495,20 +494,8 @@ function createSubscriptionCard(sub) {
     card.innerHTML = `
         <div class="subscription-header">
             <div class="subscription-name">${escapeHtml(sub.name)}</div>
-            <div class="subscription-status ${statusClass}">${statusText}</div>
+            <div class="subscription-status subscription-status-blink ${statusClass}">${statusText}</div>
         </div>
-        
-        <div class="subscription-info">
-            <div class="info-item">
-                <div class="info-label">Создана</div>
-                <div class="info-value">${sub.created_at_formatted}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">${sub.status === 'active' ? 'Истекает' : 'Истекла'}</div>
-                <div class="info-value">${sub.expires_at_formatted}</div>
-            </div>
-        </div>
-        
         ${sub.status === 'active' && sub.expires_at ? `
             <div class="days-badge">
                 <span class="info-label">Осталось</span>
@@ -1314,15 +1301,11 @@ function renderServers(servers) {
         card.className = `server-card ${server.status === 'online' ? 'online' : 'offline'}`;
         
         const statusText = server.status === 'online' ? 'Онлайн' : 'Офлайн';
-        const statusIcon = server.status === 'online' ? '🟢' : '🔴';
         
         card.innerHTML = `
             <div class="server-header">
                 <div class="server-name">${escapeHtml(server.name)}</div>
-                <div class="server-status ${server.status}">
-                    <span class="status-icon">${statusIcon}</span>
-                    <span>${statusText}</span>
-                </div>
+                <div class="server-status server-status-badge server-status-blink ${server.status}">${statusText}</div>
             </div>
             ${server.last_check ? `
                 <div class="server-info">
@@ -4823,7 +4806,7 @@ async function refreshAboutAccount() {
             loginEl.textContent = data.username || '—';
             tgIdEl.textContent = data.telegram_id || '—';
             updateProfileCard(data.user_id, data.username);
-            if (!isWebMode) loadProfileAvatar();
+            if (data.telegram_linked) loadProfileAvatar();
 
             // 1. Блоки "Настроить / Изменить веб-доступ" (для Mini App)
             if (tgSetup && tgManage) {

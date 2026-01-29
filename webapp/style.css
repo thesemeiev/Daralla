@@ -444,7 +444,7 @@ h1 {
     transform: scale(0.98);
 }
 
-/* Aurora: размытые цветные пятна, медленно двигающиеся по фону — усиленный вариант */
+/* Aurora: только проходящая волна (shimmer) */
 .profile-card-aurora {
     position: absolute;
     inset: 0;
@@ -461,95 +461,24 @@ h1 {
     background: linear-gradient(
         105deg,
         transparent 0%,
-        transparent 35%,
-        rgba(255, 255, 255, 0.06) 48%,
-        rgba(255, 255, 255, 0.12) 50%,
-        rgba(255, 255, 255, 0.06) 52%,
-        transparent 65%,
+        transparent 30%,
+        rgba(255, 255, 255, 0.08) 45%,
+        rgba(255, 255, 255, 0.18) 50%,
+        rgba(255, 255, 255, 0.08) 55%,
+        transparent 70%,
         transparent 100%
     );
-    background-size: 200% 100%;
-    animation: profile-aurora-shimmer 8s ease-in-out infinite;
+    background-size: 220% 100%;
+    animation: profile-aurora-shimmer 6s ease-in-out infinite;
     border-radius: inherit;
 }
 
 @keyframes profile-aurora-shimmer {
-    0%, 100% { background-position: 120% 0; }
-    50% { background-position: -20% 0; }
-}
-
-.profile-card-aurora-blob {
-    position: absolute;
-    border-radius: 50% 45% 55% 50% / 60% 50% 50% 40%;
-    filter: blur(32px);
-    opacity: 0.72;
-    will-change: transform;
-}
-
-.profile-card-aurora-blob-1 {
-    width: 160px;
-    height: 100px;
-    left: -25%;
-    top: -15%;
-    background: radial-gradient(ellipse at center, rgba(74, 158, 255, 0.95) 0%, rgba(74, 158, 255, 0.4) 50%, transparent 75%);
-    animation: profile-aurora-drift-1 12s ease-in-out infinite;
-}
-
-.profile-card-aurora-blob-2 {
-    width: 130px;
-    height: 130px;
-    right: -20%;
-    bottom: -25%;
-    background: radial-gradient(ellipse at center, rgba(107, 127, 255, 0.9) 0%, rgba(107, 127, 255, 0.35) 50%, transparent 75%);
-    animation: profile-aurora-drift-2 16s ease-in-out infinite;
-}
-
-.profile-card-aurora-blob-3 {
-    width: 110px;
-    height: 130px;
-    left: 25%;
-    bottom: -20%;
-    background: radial-gradient(ellipse at center, rgba(78, 205, 196, 0.85) 0%, rgba(78, 205, 196, 0.3) 50%, transparent 75%);
-    animation: profile-aurora-drift-3 14s ease-in-out infinite;
-}
-
-.profile-card-aurora-blob-4 {
-    width: 100px;
-    height: 100px;
-    right: 15%;
-    top: -10%;
-    background: radial-gradient(ellipse at center, rgba(180, 120, 255, 0.75) 0%, rgba(180, 120, 255, 0.25) 50%, transparent 75%);
-    animation: profile-aurora-drift-4 18s ease-in-out infinite;
-}
-
-@keyframes profile-aurora-drift-1 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(22px, 12px) scale(1.12); }
-    66% { transform: translate(-12px, 18px) scale(0.92); }
-}
-
-@keyframes profile-aurora-drift-2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(-28px, -14px) scale(1.15); }
-}
-
-@keyframes profile-aurora-drift-3 {
-    0%, 100% { transform: translate(0, 0) scale(0.98); }
-    25% { transform: translate(-18px, -20px) scale(1.08); }
-    75% { transform: translate(14px, -10px) scale(1.02); }
-}
-
-@keyframes profile-aurora-drift-4 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    40% { transform: translate(10px, 15px) scale(1.1); }
-    80% { transform: translate(-15px, 8px) scale(0.95); }
+    0%, 100% { background-position: 130% 0; }
+    50% { background-position: -30% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .profile-card-aurora-blob {
-        animation: none;
-        opacity: 0.5;
-    }
     .profile-card-aurora::after {
         animation: none;
     }
@@ -700,7 +629,7 @@ h1 {
     background: #222222;
     border: 1px solid #2a2a2a;
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     margin-bottom: 8px;
     transition: all 0.2s ease;
     position: relative;
@@ -730,11 +659,11 @@ h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .subscription-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #f5f5f5;
     letter-spacing: -0.3px;
@@ -766,6 +695,22 @@ h1 {
     background: rgba(255, 152, 0, 0.2);
     color: #ff9800;
     border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.subscription-status-blink {
+    animation: status-blink 2.2s ease-in-out infinite;
+}
+
+@keyframes status-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .subscription-status-blink,
+    .server-status-blink {
+        animation: none;
+    }
 }
 
 .subscription-info {
@@ -908,21 +853,23 @@ h1 {
 }
 
 .days-badge {
-    margin-top: 12px;
-    padding: 12px;
+    margin-top: 8px;
+    padding: 8px 10px;
     background: #1f1f1f;
-    border-radius: 10px;
+    border-radius: 8px;
     text-align: center;
 }
 
 .days-badge .info-label {
-    font-size: 11px;
-    margin-bottom: 6px;
+    font-size: 10px;
+    margin-bottom: 4px;
 }
 
 .days-badge .days-remaining {
-    font-size: 24px;
+    font-size: 15px;
     display: block;
+    font-weight: 600;
+    color: #b0b0b0;
 }
 
 /* Нижняя навигация */
@@ -1164,6 +1111,31 @@ h1 {
     gap: 6px;
     font-size: 13px;
     font-weight: 500;
+}
+
+.server-status.server-status-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.server-status-badge.online {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.server-status-badge.offline {
+    background: rgba(255, 59, 48, 0.2);
+    color: #ff3b30;
+    border: 1px solid rgba(255, 59, 48, 0.3);
+}
+
+.server-status-blink {
+    animation: status-blink 2.2s ease-in-out infinite;
 }
 
 .server-status.online {
