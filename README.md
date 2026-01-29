@@ -351,10 +351,9 @@ docker-compose ps
 
 ### Backup & Recovery
 
-```bash
-# Create data backup
-./backup_data.sh
+Бэкапы: CI (`.github/workflows/backup.yml`) и скрипт `backup.sh`.
 
+```bash
 # Restore from backup
 tar -xzf backup_*.tar.gz -C ./
 ```

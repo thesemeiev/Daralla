@@ -1498,7 +1498,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 const finalData = await finalResponse.json();
                 if (finalData.success && finalData.status === 'pending') {
                     // Платеж все еще pending - возможно, пользователь не оплатил
-                    if (tg && tg.showAlert) {
+                    if (!isWebMode && tg?.showAlert) {
                         tg.showAlert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
                     } else {
                         alert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
@@ -1530,7 +1530,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
                 
                 if (isOnPaymentPage) {
-                    if (tg && tg.showAlert) {
+                    if (!isWebMode && tg?.showAlert) {
                         tg.showAlert('Подписка успешно активирована!');
                     } else {
                         alert('Подписка успешно активирована!');
@@ -1551,7 +1551,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 const statusText = data.status === 'canceled' ? 'отменен' : 
                                  data.status === 'refunded' ? 'возвращен' : 'не прошел';
                 
-                if (tg && tg.showAlert) {
+                if (!isWebMode && tg?.showAlert) {
                     tg.showAlert(`Платеж ${statusText}. Вы можете попробовать оплатить снова.`);
                 } else {
                     alert(`Платеж ${statusText}. Вы можете попробовать оплатить снова.`);
@@ -1599,7 +1599,7 @@ async function renameSubscription(subId, newName) {
         document.getElementById('subscription-name-display').textContent = escapeHtml(newName);
         
         // Показываем уведомление об успехе
-        if (tg && tg.showAlert) {
+        if (!isWebMode && tg?.showAlert) {
             tg.showAlert('Подписка успешно переименована');
         } else {
             alert('Подписка успешно переименована');
@@ -1620,13 +1620,17 @@ function copySubscriptionLink(token) {
     const webhookUrl = window.location.origin;
     const subscriptionUrl = `${webhookUrl}/sub/${token}`;
     
+    const showCopyMessage = (msg) => {
+        if (!isWebMode && tg?.showAlert) tg.showAlert(msg);
+        else alert(msg);
+    };
     // Копируем в буфер обмена
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(subscriptionUrl).then(() => {
-            tg.showAlert('Ссылка скопирована в буфер обмена!');
+            showCopyMessage('Ссылка скопирована в буфер обмена!');
         }).catch(err => {
             console.error('Ошибка копирования:', err);
-            tg.showAlert('Ошибка копирования ссылки');
+            showCopyMessage('Ошибка копирования ссылки');
         });
     } else {
         // Fallback для старых браузеров
@@ -1638,9 +1642,9 @@ function copySubscriptionLink(token) {
         textarea.select();
         try {
             document.execCommand('copy');
-            tg.showAlert('Ссылка скопирована в буфер обмена!');
+            showCopyMessage('Ссылка скопирована в буфер обмена!');
         } catch (err) {
-            tg.showAlert('Ошибка копирования ссылки');
+            showCopyMessage('Ошибка копирования ссылки');
         }
         document.body.removeChild(textarea);
     }
@@ -2521,13 +2525,11 @@ async function confirmDeleteUser(userId) {
         closeDeleteUserModal();
         
         // Показываем уведомление об успехе
-        if (tg && tg.showAlert) {
-            tg.showAlert(
-                `Пользователь удален:\n` +
-                `- Подписок: ${data.stats.subscriptions_deleted}\n` +
-                `- Платежей: ${data.stats.payments_deleted}\n` +
-                `- Серверов очищено: ${data.deleted_servers.length}`
-            );
+        const successMsg = `Пользователь удален:\n- Подписок: ${data.stats.subscriptions_deleted}\n- Платежей: ${data.stats.payments_deleted}\n- Серверов очищено: ${data.deleted_servers.length}`;
+        if (!isWebMode && tg?.showAlert) {
+            tg.showAlert(successMsg);
+        } else {
+            alert(successMsg);
         }
         
         // Возвращаемся к списку пользователей
@@ -2545,8 +2547,10 @@ async function confirmDeleteUser(userId) {
         
     } catch (error) {
         console.error('Ошибка удаления пользователя:', error);
-        if (tg && tg.showAlert) {
+        if (!isWebMode && tg?.showAlert) {
             tg.showAlert(`Ошибка удаления пользователя: ${error.message}`);
+        } else {
+            alert(`Ошибка удаления пользователя: ${error.message}`);
         }
         
         // Всегда сбрасывать состояние кнопки при ошибке
@@ -4733,7 +4737,7 @@ async function handleWebAccessSetup(event) {
         if (result.success) {
             closeModal('web-access-modal');
             refreshAboutAccount();
-            if (tg.showAlert) {
+            if (!isWebMode && tg?.showAlert) {
                 tg.showAlert(result.message);
             } else {
                 alert(result.message);
@@ -7035,9 +7039,11 @@ showPage = function(pageName) {
 async function syncAllServers() {
     if (!confirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.')) return;
     
-    tg.MainButton.setText('СИНХРОНИЗАЦИЯ...');
-    tg.MainButton.show();
-    tg.MainButton.disable();
+    if (!isWebMode && tg?.MainButton) {
+        tg.MainButton.setText('СИНХРОНИЗАЦИЯ...');
+        tg.MainButton.show();
+        tg.MainButton.disable();
+    }
 
     try {
         const response = await apiFetch('/api/admin/sync-all', {
@@ -7057,6 +7063,6 @@ async function syncAllServers() {
         console.error('Ошибка синхронизации:', err);
         alert('Ошибка при выполнении синхронизации');
     } finally {
-        tg.MainButton.hide();
+        if (!isWebMode && tg?.MainButton) tg.MainButton.hide();
     }
 }

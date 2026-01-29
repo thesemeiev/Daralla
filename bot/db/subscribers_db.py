@@ -216,18 +216,6 @@ async def init_subscribers_db():
             )
         """)
 
-        # Таблица связей подписки с серверами
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS subscription_servers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subscription_id INTEGER NOT NULL,
-                server_name TEXT NOT NULL,
-                client_email TEXT NOT NULL,
-                client_id TEXT,
-                FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
-            )
-        """)
-
         # Миграция: удаление дублей (subscription_id, server_name) и уникальный индекс
         try:
             await db.execute("""
@@ -250,7 +238,7 @@ async def init_subscribers_db():
             if "UNIQUE constraint" in str(e) or "unique" in str(e).lower():
                 logger.warning(
                     "Не удалось создать уникальный индекс subscription_servers: в таблице остались дубли. "
-                    "Выполните очистку вручную (см. scripts/fix_subscription_servers_duplicates.sql)"
+                    "Удалите дубли по (subscription_id, server_name) и перезапустите бота."
                 )
             else:
                 raise
