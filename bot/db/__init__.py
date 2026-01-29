@@ -44,7 +44,8 @@ from .subscribers_db import (
     get_user_by_id, get_all_subscriptions_by_user, update_user_telegram_id,
     get_user_by_telegram_id_or_user_id, get_user_by_telegram_id_v2,
     create_telegram_link, delete_telegram_link, get_telegram_link,
-    is_known_telegram_id, mark_telegram_id_known, rename_user_id
+    is_known_telegram_id, mark_telegram_id_known, rename_user_id,
+    merge_user_into_target, link_telegram_to_account
 )
 
 async def init_all_db():
@@ -79,5 +80,6 @@ __all__ = [
     'get_user_by_id', 'get_all_subscriptions_by_user', 'update_user_telegram_id',
     'get_user_by_telegram_id_or_user_id', 'get_user_by_telegram_id_v2',
     'create_telegram_link', 'delete_telegram_link', 'get_telegram_link',
-    'is_known_telegram_id', 'mark_telegram_id_known', 'rename_user_id'
+    'is_known_telegram_id', 'mark_telegram_id_known', 'rename_user_id',
+    'merge_user_into_target', 'link_telegram_to_account'
 ]

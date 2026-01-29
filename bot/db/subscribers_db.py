@@ -2046,7 +2046,111 @@ async def create_telegram_link(telegram_id: str, user_id: str):
         await db.commit()
 
 
-async def rename_user_id(old_user_id: str, new_user_id: str):
+# ---------------------------------------------------------------------------
+# Единая логика привязки TG: один аккаунт на один Telegram, без сирот и дублей
+# ---------------------------------------------------------------------------
+
+async def merge_user_into_target(source_user_id: str, target_user_id: str) -> bool:
+    """
+    Переносит все данные с аккаунта source_user_id на аккаунт target_user_id
+    и удаляет исходный аккаунт. Используется при перепривязке TG к другому аккаунту.
+
+    Таблицы: subscriptions (subscriber_id), payments, promo_code_uses,
+    sent_notifications, notification_effectiveness, link_telegram_states.
+    После переноса удаляется запись source из users.
+
+    Returns:
+        True если перенос выполнен, False если source == target или пользователь не найден.
+    """
+    if source_user_id == target_user_id:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT id, user_id FROM users WHERE user_id IN (?, ?)",
+                (source_user_id, target_user_id),
+            ) as cur:
+                rows = await cur.fetchall()
+            by_uid = {r["user_id"]: r["id"] for r in rows}
+            source_id = by_uid.get(source_user_id)
+            target_id = by_uid.get(target_user_id)
+            if not source_id or not target_id:
+                logger.warning(
+                    f"merge_user_into_target: пользователь не найден "
+                    f"source={source_user_id} (id={source_id}), target={target_user_id} (id={target_id})"
+                )
+                return False
+            await db.execute("BEGIN TRANSACTION")
+            # Подписки: переносим на целевого пользователя по subscriber_id (users.id)
+            await db.execute(
+                "UPDATE subscriptions SET subscriber_id = ? WHERE subscriber_id = ?",
+                (target_id, source_id),
+            )
+            # Платежи и прочее по user_id (текст)
+            await db.execute(
+                "UPDATE payments SET user_id = ? WHERE user_id = ?",
+                (target_user_id, source_user_id),
+            )
+            await db.execute(
+                "UPDATE promo_code_uses SET user_id = ? WHERE user_id = ?",
+                (target_user_id, source_user_id),
+            )
+            await db.execute(
+                "UPDATE sent_notifications SET user_id = ? WHERE user_id = ?",
+                (target_user_id, source_user_id),
+            )
+            await db.execute(
+                "UPDATE notification_effectiveness SET user_id = ? WHERE user_id = ?",
+                (target_user_id, source_user_id),
+            )
+            await db.execute(
+                "UPDATE link_telegram_states SET user_id = ? WHERE user_id = ?",
+                (target_user_id, source_user_id),
+            )
+            # Удаляем связь telegram_links для source (если осталась — при перепривязке уже заменили на target)
+            await db.execute(
+                "DELETE FROM telegram_links WHERE user_id = ?",
+                (source_user_id,),
+            )
+            await db.execute("DELETE FROM users WHERE id = ?", (source_id,))
+            await db.commit()
+            logger.info(
+                f"Аккаунт {source_user_id} объединён с {target_user_id}: данные перенесены, старый аккаунт удалён."
+            )
+            return True
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Ошибка merge_user_into_target {source_user_id} -> {target_user_id}: {e}", exc_info=True)
+            raise
+
+
+async def link_telegram_to_account(telegram_id: str, target_user_id: str) -> dict:
+    """
+    Единая точка привязки Telegram к аккаунту (target_user_id).
+    Если этот TG был привязан к другому аккаунту (например TG-first) — переносит все данные
+    на target и удаляет старый аккаунт (без сирот и дублей).
+
+    Returns:
+        {"merged": bool, "previous_user_id": str | None}
+    """
+    result = {"merged": False, "previous_user_id": None}
+    existing = await get_telegram_link(telegram_id)
+    previous_owner = None
+    if existing and existing.get("user_id") != target_user_id:
+        previous_owner = existing["user_id"]
+    # Сначала переводим связь на целевой аккаунт (чтобы telegram_links не указывал на source)
+    await create_telegram_link(telegram_id, target_user_id)
+    await update_user_telegram_id(target_user_id, telegram_id)
+    if previous_owner:
+        await merge_user_into_target(previous_owner, target_user_id)
+        result["merged"] = True
+        result["previous_user_id"] = previous_owner
+    await mark_telegram_id_known(telegram_id)
+    return result
+
+
+async def rename_user_id(old_user_id: str, new_user_id: str) -> bool:
     """
     Меняет user_id пользователя во всех связанных таблицах.
     Используется при отвязке TG-first аккаунта для превращения его в полноценный веб-аккаунт.
@@ -2163,7 +2267,23 @@ async def update_user_telegram_id(user_id: str, telegram_id: str | None):
 
 
 async def get_telegram_chat_id_for_notification(user_id: str) -> int | None:
-    """Возвращает chat_id для отправки в Telegram (telegram_id или user_id если числовой). Иначе None."""
+    """
+    Возвращает chat_id для отправки в Telegram.
+    Единый источник: сначала telegram_links (user_id -> telegram_id), затем fallback на users.telegram_id и числовой user_id.
+    """
+    # 1. telegram_links — каноническая связь user_id -> telegram_id
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT telegram_id FROM telegram_links WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if row is not None:
+                try:
+                    return int(row[0])
+                except (TypeError, ValueError):
+                    pass
+    # 2. Fallback: users.telegram_id и числовой user_id (legacy TG-first)
     user = await get_user_by_id(user_id)
     if not user:
         return None

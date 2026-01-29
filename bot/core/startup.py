@@ -134,6 +134,13 @@ async def on_startup(app):
         # 1. Инициализация БД
         await init_all_db()
         
+        # 1.0 Миграция telegram_links / known_telegram_ids (идемпотентно заполняет связи TG ↔ аккаунт)
+        try:
+            from ..db.migrations.migrate_telegram_links import migrate_telegram_links
+            await migrate_telegram_links()
+        except Exception as e:
+            logger.warning("Миграция telegram_links: %s (возможно уже выполнена)", e)
+        
         # 1.1 Инициализация менеджеров серверов из БД
         init_server_managers = getattr(bot_module, 'init_server_managers', None)
         if init_server_managers:

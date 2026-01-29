@@ -201,12 +201,17 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception:
         pass
     
+    # Дедупликация по chat_id: один Telegram — одно сообщение (на случай дублей user_id в БД)
+    sent_chat_ids = set()
     for i in range(0, total, batch):
         chunk = recipients[i:i+batch]
         for user_id in chunk:
             target_chat_id = await get_telegram_chat_id_for_notification(user_id)
             if target_chat_id is None:
                 continue
+            if target_chat_id in sent_chat_ids:
+                continue
+            sent_chat_ids.add(target_chat_id)
             try:
                 from ...utils import UIButtons
                 webapp_button = UIButtons.create_webapp_button()

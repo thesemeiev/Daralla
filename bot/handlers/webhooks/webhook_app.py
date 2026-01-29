@@ -3056,13 +3056,17 @@ def create_webhook_app(bot_app):
                     bot = bot_app.bot
                     from ...db.subscribers_db import get_telegram_chat_id_for_notification
                     
-                    # Отправляем сообщения батчами
+                    # Дедупликация по chat_id: один Telegram — одно сообщение
+                    sent_chat_ids = set()
                     for i in range(0, total, batch):
                         chunk = recipients[i:i+batch]
                         for user_id in chunk:
                             chat_id = await get_telegram_chat_id_for_notification(user_id)
                             if chat_id is None:
                                 continue
+                            if chat_id in sent_chat_ids:
+                                continue
+                            sent_chat_ids.add(chat_id)
                             try:
                                 await bot.send_message(
                                     chat_id=chat_id,

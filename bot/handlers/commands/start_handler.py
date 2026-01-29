@@ -13,8 +13,8 @@ from ...utils import (
 from ...db import register_simple_user, is_known_user
 from ...db.subscribers_db import (
     get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription,
-    link_telegram_consume_state, get_user_by_id, update_user_telegram_id,
-    create_telegram_link, mark_telegram_id_known,
+    link_telegram_consume_state, get_user_by_id,
+    link_telegram_to_account,
 )
 from ...navigation import NavStates, MenuTypes
 import time
@@ -83,14 +83,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("Аккаунт уже привязан к Telegram.")
             return
 
-        # Создаем связь TG ↔ веб-аккаунт
-        await create_telegram_link(tg_user_id, web_user_id)
-        # Обновляем поле telegram_id у веб-пользователя (для совместимости)
-        await update_user_telegram_id(web_user_id, tg_user_id)
-        # Явно помечаем TG как известный
-        await mark_telegram_id_known(tg_user_id)
-
-        logger.info(f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id}")
+        # Единая привязка: связь TG ↔ веб-аккаунт; при перепривязке — merge и удаление старого аккаунта
+        result = await link_telegram_to_account(tg_user_id, web_user_id)
+        logger.info(
+            f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id}"
+            + (f" (объединён с бывшим аккаунтом {result['previous_user_id']})" if result.get("merged") else "")
+        )
         text = (
             "Аккаунт привязан.\n\n"
             "Теперь вы можете:\n"
