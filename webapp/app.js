@@ -224,6 +224,30 @@ function updateProfileCard(userId, username) {
     subtitleEl.textContent = (userId && userId !== '—') ? userId : 'Нажмите, чтобы открыть';
 }
 
+var profileCardAvatarObjectURL = null;
+
+async function loadProfileAvatar() {
+    if (isWebMode) return;
+    var iconEl = document.querySelector('.profile-card-icon');
+    var imgEl = document.getElementById('profile-card-avatar');
+    if (!iconEl || !imgEl) return;
+    if (profileCardAvatarObjectURL) {
+        URL.revokeObjectURL(profileCardAvatarObjectURL);
+        profileCardAvatarObjectURL = null;
+    }
+    iconEl.classList.remove('has-avatar');
+    try {
+        var r = await apiFetch('/api/user/avatar', { method: 'GET' });
+        if (!r.ok) return;
+        var blob = await r.blob();
+        profileCardAvatarObjectURL = URL.createObjectURL(blob);
+        imgEl.src = profileCardAvatarObjectURL;
+        iconEl.classList.add('has-avatar');
+    } catch (e) {
+        console.warn('loadProfileAvatar:', e);
+    }
+}
+
 function initLandingObserver() {
     var scrollEl = document.getElementById('landing-scroll');
     var sections = document.querySelectorAll('#page-landing .landing-section');
@@ -4799,6 +4823,7 @@ async function refreshAboutAccount() {
             loginEl.textContent = data.username || '—';
             tgIdEl.textContent = data.telegram_id || '—';
             updateProfileCard(data.user_id, data.username);
+            if (!isWebMode) loadProfileAvatar();
 
             // 1. Блоки "Настроить / Изменить веб-доступ" (для Mini App)
             if (tgSetup && tgManage) {

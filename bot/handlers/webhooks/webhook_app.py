@@ -5,8 +5,9 @@ import logging
 import threading
 import asyncio
 import secrets
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
+import requests as requests_lib
 
 from .payment_processors import process_payment_webhook
 from ...db.subscribers_db import get_subscription_by_token
@@ -3620,6 +3621,60 @@ def create_webhook_app(bot_app):
         except Exception as e:
             logger.error(f"Ошибка link-status: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/user/avatar', methods=['GET', 'OPTIONS'])
+    def api_user_avatar():
+        """Проксирует аватар пользователя из Telegram (getUserProfilePhotos). Только для пользователей с привязанным telegram_id."""
+        if request.method == 'OPTIONS':
+            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
+        try:
+            user_id = authenticate_request()
+            if not user_id:
+                return Response(status=401)
+            from ...db.subscribers_db import get_user_by_id
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                user = loop.run_until_complete(get_user_by_id(user_id))
+                if not user:
+                    return Response(status=404)
+                tid = user.get('telegram_id')
+                if not tid:
+                    return Response(status=404)
+                bot = bot_app.bot
+                # Получить фото профиля (асинхронно)
+                async def fetch_avatar():
+                    try:
+                        photos = await bot.get_user_profile_photos(user_id=int(tid), limit=1)
+                        if not photos or not photos.photos:
+                            return None
+                        largest = photos.photos[-1][-1]
+                        tg_file = await bot.get_file(largest.file_id)
+                        return tg_file.file_path
+                    except Exception as e:
+                        logger.warning(f"get_user_profile_photos/get_file: {e}")
+                        return None
+                file_path = loop.run_until_complete(fetch_avatar())
+                if not file_path:
+                    return Response(status=404)
+                import os
+                token = os.getenv("TELEGRAM_TOKEN")
+                if not token:
+                    return Response(status=500)
+                url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+                r = requests_lib.get(url, timeout=5)
+                if not r.ok:
+                    return Response(status=502)
+                return Response(
+                    r.content,
+                    mimetype='image/jpeg',
+                    headers={'Cache-Control': 'private, max-age=3600'}
+                )
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Ошибка /api/user/avatar: {e}", exc_info=True)
+            return Response(status=500)
 
     @app.route('/api/user/change-password', methods=['POST', 'OPTIONS'])
     def api_user_change_password():
