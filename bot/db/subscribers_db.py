@@ -162,6 +162,22 @@ async def init_subscribers_db():
             if "duplicate column name" not in str(e).lower():
                 logger.error(f"Ошибка миграции (group_id): {e}")
 
+        # Миграция: заполняем group_id у подписок с NULL (группа по умолчанию)
+        try:
+            async with db.execute(
+                "SELECT id FROM server_groups WHERE is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1"
+            ) as cur:
+                row = await cur.fetchone()
+            if row is not None:
+                default_gid = row[0]
+                async with db.execute("UPDATE subscriptions SET group_id = ? WHERE group_id IS NULL", (default_gid,)) as cur:
+                    updated = cur.rowcount
+                if updated and updated > 0:
+                    await db.commit()
+                    logger.info("Миграция: заполнен group_id=%s у %s подписок с NULL", default_gid, updated)
+        except Exception as e:
+            logger.warning("Миграция group_id для существующих подписок: %s", e)
+
         # Миграция: порт и URL подписки X-UI в настройках сервера
         try:
             await db.execute("ALTER TABLE servers_config ADD COLUMN subscription_port INTEGER DEFAULT 2096")
@@ -307,10 +323,18 @@ async def get_or_create_subscriber(user_id: str) -> int:
             return user_internal_id
 
 async def create_subscription(subscriber_id: int, period: str, device_limit: int, price: float, expires_at: int, name: str = None, group_id: int = None):
-    """Создаёт новую подписку"""
+    """Создаёт новую подписку. Если group_id не передан — подставляется группа по умолчанию (активная, приоритет is_default)."""
     token = uuid.uuid4().hex[:24]
     now = int(datetime.datetime.now().timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
+        if group_id is None:
+            async with db.execute(
+                """SELECT id FROM server_groups WHERE is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1"""
+            ) as cur:
+                row = await cur.fetchone()
+                if row is not None:
+                    group_id = row[0]
+                    logger.debug(f"create_subscription: подставлена группа по умолчанию group_id={group_id}")
         async with db.execute(
             """INSERT INTO subscriptions 
                (subscriber_id, status, period, device_limit, created_at, expires_at, subscription_token, price, name, group_id)
