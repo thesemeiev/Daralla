@@ -3,6 +3,7 @@
 Пока используется только слой работы с БД и подготовка к мультисерверности.
 """
 
+import asyncio
 import base64
 import datetime
 import json
@@ -547,11 +548,10 @@ class SubscriptionManager:
                 else:
                     client_email = f"{user_id}_{subscription_id}"
                 
-                # Гарантируем наличие клиента на каждом сервере ГРУППЫ
+                # Шаг 1: Последовательно добавляем связи в БД (без гонок)
                 for server_name in group_servers:
-                    try:
-                        # Шаг 1: Проверяем и создаем связь в БД
-                        if server_name not in current_server_names:
+                    if server_name not in current_server_names:
+                        try:
                             await add_subscription_server(
                                 subscription_id=subscription_id,
                                 server_name=server_name,
@@ -560,10 +560,16 @@ class SubscriptionManager:
                             )
                             stats["servers_added"] += 1
                             logger.info(f"Добавлена связь подписки {subscription_id} с сервером {server_name} в БД")
-                        
-                        # Шаг 2: Гарантируем наличие клиента на сервере
-                        if auto_create_clients:
-                            client_exists, client_created = await self.ensure_client_on_server(
+                        except Exception as e:
+                            stats["errors"].append(f"Подписка {subscription_id}, server {server_name}: {e}")
+
+                # Шаг 2: Параллельно гарантируем наличие клиента на сервере (Semaphore + gather)
+                if auto_create_clients and group_servers:
+                    sem = asyncio.Semaphore(15)
+
+                    async def do_ensure(server_name):
+                        async with sem:
+                            return server_name, await self.ensure_client_on_server(
                                 subscription_id=subscription_id,
                                 server_name=server_name,
                                 client_email=client_email,
@@ -572,13 +578,20 @@ class SubscriptionManager:
                                 token=token,
                                 device_limit=device_limit,
                             )
-                            
+
+                    ensure_results = await asyncio.gather(
+                        *[do_ensure(server_name) for server_name in group_servers],
+                        return_exceptions=True,
+                    )
+                    for res in ensure_results:
+                        if isinstance(res, Exception):
+                            stats["errors"].append(f"Подписка {subscription_id}: {res}")
+                        else:
+                            server_name, (client_exists, client_created) = res
                             if client_created:
                                 stats["clients_created"] += 1
                             elif client_exists:
                                 stats["clients_restored"] += 1
-                    except Exception as e:
-                        stats["errors"].append(f"Подписка {subscription_id}, server {server_name}: {e}")
                 
                 # Удаляем связи с серверами, которых нет в ГРУППЕ или в конфиге
                 servers_to_remove = current_server_names - group_servers
