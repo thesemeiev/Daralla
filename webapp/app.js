@@ -226,6 +226,21 @@ function updateProfileCard(userId, username) {
 
 var profileCardAvatarObjectURL = null;
 
+function setProfileAvatarFromInitData() {
+    var photoUrl = tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.photo_url;
+    if (!photoUrl || typeof photoUrl !== 'string') return false;
+    var iconEl = document.querySelector('.profile-card-icon');
+    var imgEl = document.getElementById('profile-card-avatar');
+    if (!iconEl || !imgEl) return false;
+    if (profileCardAvatarObjectURL) {
+        URL.revokeObjectURL(profileCardAvatarObjectURL);
+        profileCardAvatarObjectURL = null;
+    }
+    imgEl.src = photoUrl;
+    iconEl.classList.add('has-avatar');
+    return true;
+}
+
 async function loadProfileAvatar() {
     var iconEl = document.querySelector('.profile-card-icon');
     var imgEl = document.getElementById('profile-card-avatar');
@@ -4806,7 +4821,9 @@ async function refreshAboutAccount() {
             loginEl.textContent = data.username || '—';
             tgIdEl.textContent = data.telegram_id || '—';
             updateProfileCard(data.user_id, data.username);
-            if (data.telegram_linked) loadProfileAvatar();
+            if (data.telegram_linked) {
+                if (!setProfileAvatarFromInitData()) loadProfileAvatar();
+            }
 
             // 1. Блоки "Настроить / Изменить веб-доступ" (для Mini App)
             if (tgSetup && tgManage) {
