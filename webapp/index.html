@@ -122,6 +122,20 @@
                 <h1>Подписки</h1>
             </header>
             
+            <button type="button" id="profile-card" class="profile-card" onclick="showPage('account')" aria-label="Мой аккаунт">
+                <span class="profile-card-icon" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+                        <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </span>
+                <span class="profile-card-text">
+                    <span class="profile-card-title" id="profile-card-title">Мой аккаунт</span>
+                    <span class="profile-card-subtitle" id="profile-card-subtitle">Нажмите, чтобы открыть</span>
+                </span>
+                <span class="profile-card-chevron" aria-hidden="true">›</span>
+            </button>
+            
             <div id="loading" class="loading">
                 <div class="spinner"></div>
                 <p>Загрузка подписок...</p>
@@ -356,9 +370,18 @@
                         <span class="link-arrow">→</span>
                     </a>
                 </div>
+            </div>
+        </div>
 
+        <!-- Раздел Аккаунт (отдельная страница, открывается по тапу на карточку профиля) -->
+        <div id="page-account" class="page" style="display: none;">
+            <header class="header-with-back">
+                <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
+                <h1>Аккаунт</h1>
+            </header>
+            <div class="about-content" style="padding: 0 24px 24px;">
                 <div class="about-section">
-                    <h3>Аккаунт</h3>
+                    <h3>Данные аккаунта</h3>
                     <div class="about-account-info">
                         <p><span class="about-label">ID аккаунта:</span> <span id="about-user-id">—</span></p>
                         <p><span class="about-label">Логин:</span> <span id="about-login">—</span></p>
@@ -391,6 +414,9 @@
                             <button type="button" class="btn-danger" onclick="showModal('unlink-telegram-modal')" style="width: 100%; padding: 10px; border-radius: 10px; margin-top: 8px;">Отвязать Telegram</button>
                         </div>
                         <button class="btn-danger" onclick="logout()" style="width: 100%; padding: 12px; border-radius: 10px; margin-top: 16px;">Выйти из аккаунта</button>
+                    </div>
+                    <div class="tg-only" style="margin-top: 16px;">
+                        <button class="btn-danger" onclick="logout()" style="width: 100%; padding: 12px; border-radius: 10px;">Выйти из аккаунта</button>
                     </div>
                 </div>
             </div>

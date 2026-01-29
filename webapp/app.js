@@ -183,6 +183,9 @@ function showPage(pageName) {
     // Загружаем данные для страницы
     if (pageName === 'subscriptions') {
         loadSubscriptions();
+        refreshAboutAccount();
+    } else if (pageName === 'account') {
+        refreshAboutAccount();
     } else if (pageName === 'servers') {
         loadServers();
     } else if (pageName === 'admin-users') {
@@ -211,6 +214,14 @@ function showPage(pageName) {
     } else if (pageName === 'about') {
         refreshAboutAccount();
     }
+}
+
+function updateProfileCard(userId, username) {
+    var titleEl = document.getElementById('profile-card-title');
+    var subtitleEl = document.getElementById('profile-card-subtitle');
+    if (!titleEl || !subtitleEl) return;
+    titleEl.textContent = (username && username !== '—') ? username : 'Мой аккаунт';
+    subtitleEl.textContent = (userId && userId !== '—') ? userId : 'Нажмите, чтобы открыть';
 }
 
 function initLandingObserver() {
@@ -4775,6 +4786,7 @@ async function refreshAboutAccount() {
         tgIdEl.textContent = '—';
         if (loginSection) loginSection.style.display = 'none';
         if (unlinked && linked) { unlinked.style.display = 'block'; linked.style.display = 'none'; }
+        updateProfileCard(null, null);
         return;
     }
 
@@ -4786,6 +4798,7 @@ async function refreshAboutAccount() {
             userIdEl.textContent = data.user_id || '—';
             loginEl.textContent = data.username || '—';
             tgIdEl.textContent = data.telegram_id || '—';
+            updateProfileCard(data.user_id, data.username);
 
             // 1. Блоки "Настроить / Изменить веб-доступ" (для Mini App)
             if (tgSetup && tgManage) {
@@ -4820,6 +4833,9 @@ async function refreshAboutAccount() {
                 userIdEl.textContent = '—';
                 loginEl.textContent = tid;
                 tgIdEl.textContent = tid;
+                updateProfileCard(null, tid);
+            } else {
+                updateProfileCard(null, null);
             }
             if (loginSection) loginSection.style.display = 'none';
         }
@@ -4830,6 +4846,9 @@ async function refreshAboutAccount() {
             userIdEl.textContent = '—';
             loginEl.textContent = tid;
             tgIdEl.textContent = tid;
+            updateProfileCard(null, tid);
+        } else {
+            updateProfileCard(null, null);
         }
     }
 }

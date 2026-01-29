@@ -416,6 +416,73 @@ h1 {
     line-height: 1.5;
 }
 
+/* Карточка профиля над списком подписок */
+.profile-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #252525 0%, #1e1e1e 100%);
+    border: 1px solid #333;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+}
+
+.profile-card:hover {
+    background: linear-gradient(135deg, #2a2a2a 0%, #242424 100%);
+    border-color: #444;
+}
+
+.profile-card:active {
+    transform: scale(0.98);
+}
+
+.profile-card-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(74, 158, 255, 0.15);
+    border-radius: 12px;
+    color: #4a9eff;
+}
+
+.profile-card-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.profile-card-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #f0f0f0;
+    letter-spacing: -0.3px;
+}
+
+.profile-card-subtitle {
+    font-size: 13px;
+    color: #8a8a8a;
+    font-weight: 400;
+}
+
+.profile-card-chevron {
+    flex-shrink: 0;
+    font-size: 22px;
+    color: #6a6a6a;
+    font-weight: 300;
+}
+
 .stats {
     display: flex;
     gap: 16px;
