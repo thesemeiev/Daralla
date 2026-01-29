@@ -118,11 +118,16 @@
 
         <!-- Раздел Подписки -->
         <div id="page-subscriptions" class="page" style="display: none;">
-            <header>
-                <h1>Подписки</h1>
+            <header class="page-subscriptions-header">
+                <p class="page-subscriptions-block-label">Аккаунт</p>
             </header>
             
             <button type="button" id="profile-card" class="profile-card" onclick="showPage('account')" aria-label="Мой аккаунт">
+                <span class="profile-card-aurora" aria-hidden="true">
+                    <span class="profile-card-aurora-blob profile-card-aurora-blob-1"></span>
+                    <span class="profile-card-aurora-blob profile-card-aurora-blob-2"></span>
+                    <span class="profile-card-aurora-blob profile-card-aurora-blob-3"></span>
+                </span>
                 <span class="profile-card-icon" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
@@ -155,17 +160,8 @@
             </div>
             
             <div id="subscriptions" class="subscriptions" style="display: none;">
-                <div class="stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Всего:</span>
-                        <span class="stat-value" id="total-count">0</span>
-                    </div>
-                    <div class="stat-item active">
-                        <span class="stat-label">Активных:</span>
-                        <span class="stat-value" id="active-count">0</span>
-                    </div>
-                </div>
-                
+                <h2 class="subscriptions-section-title">Ваши подписки</h2>
+                <p class="subscriptions-stats-inline">Всего: <span id="total-count">0</span> · Активных: <span id="active-count">0</span></p>
                 <div id="subscriptions-list"></div>
             </div>
         </div>

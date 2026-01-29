@@ -418,6 +418,7 @@ h1 {
 
 /* Карточка профиля над списком подписок */
 .profile-card {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 14px;
@@ -428,19 +429,95 @@ h1 {
     border: 1px solid #333;
     border-radius: 14px;
     cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    overflow: hidden;
+    transition: border-color 0.2s ease, transform 0.15s ease;
     text-align: left;
     color: inherit;
     font: inherit;
 }
 
 .profile-card:hover {
-    background: linear-gradient(135deg, #2a2a2a 0%, #242424 100%);
     border-color: #444;
 }
 
 .profile-card:active {
     transform: scale(0.98);
+}
+
+/* Aurora: размытые цветные пятна, медленно двигающиеся по фону */
+.profile-card-aurora {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: inherit;
+    overflow: hidden;
+}
+
+.profile-card-aurora-blob {
+    position: absolute;
+    border-radius: 50% 45% 55% 50% / 60% 50% 50% 40%;
+    filter: blur(42px);
+    opacity: 0.45;
+    will-change: transform;
+}
+
+.profile-card-aurora-blob-1 {
+    width: 120px;
+    height: 80px;
+    left: -20%;
+    top: -10%;
+    background: radial-gradient(ellipse at center, rgba(74, 158, 255, 0.7) 0%, transparent 70%);
+    animation: profile-aurora-drift-1 14s ease-in-out infinite;
+}
+
+.profile-card-aurora-blob-2 {
+    width: 100px;
+    height: 100px;
+    right: -15%;
+    bottom: -20%;
+    background: radial-gradient(ellipse at center, rgba(107, 127, 255, 0.6) 0%, transparent 70%);
+    animation: profile-aurora-drift-2 18s ease-in-out infinite;
+}
+
+.profile-card-aurora-blob-3 {
+    width: 90px;
+    height: 110px;
+    left: 30%;
+    bottom: -15%;
+    background: radial-gradient(ellipse at center, rgba(78, 205, 196, 0.5) 0%, transparent 70%);
+    animation: profile-aurora-drift-3 16s ease-in-out infinite;
+}
+
+@keyframes profile-aurora-drift-1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(15px, 8px) scale(1.05); }
+    66% { transform: translate(-8px, 12px) scale(0.95); }
+}
+
+@keyframes profile-aurora-drift-2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-20px, -10px) scale(1.08); }
+}
+
+@keyframes profile-aurora-drift-3 {
+    0%, 100% { transform: translate(0, 0) scale(0.98); }
+    25% { transform: translate(-12px, -15px) scale(1.02); }
+    75% { transform: translate(10px, -8px) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-card-aurora-blob {
+        animation: none;
+        opacity: 0.35;
+    }
+}
+
+.profile-card-icon,
+.profile-card-text,
+.profile-card-chevron {
+    position: relative;
+    z-index: 1;
 }
 
 .profile-card-icon {
@@ -481,6 +558,41 @@ h1 {
     font-size: 22px;
     color: #6a6a6a;
     font-weight: 300;
+}
+
+/* Страница подписок: два явных блока — Аккаунт и Ваши подписки */
+.page-subscriptions-header {
+    margin-bottom: 8px;
+}
+
+.page-subscriptions-block-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #8a8a8a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.subscriptions-section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f0f0f0;
+    margin: 24px 0 8px 0;
+    letter-spacing: -0.3px;
+}
+
+.subscriptions-stats-inline {
+    font-size: 13px;
+    color: #8a8a8a;
+    margin: 0 0 16px 0;
+    font-weight: 400;
+}
+
+.subscriptions-stats-inline #total-count,
+.subscriptions-stats-inline #active-count {
+    color: #b0b0b0;
+    font-weight: 600;
 }
 
 .stats {
