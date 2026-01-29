@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filt
 from ...utils import UIEmojis, UIStyles, safe_edit_or_reply_universal, check_private_chat
 from ...navigation import NavStates, CallbackData, MenuTypes, NavigationBuilder
 from ...db import get_user_by_id
-from ...db.subscribers_db import get_or_create_subscriber
+from ...db.subscribers_db import get_or_create_subscriber, resolve_user_by_query
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +60,25 @@ async def admin_give_subscription(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop('admin_give_sub_menu_message_id', None)
     context.user_data.pop('admin_give_sub_menu_chat_id', None)
     
-    # Если передан user_id как аргумент команды
+    # Если передан идентификатор как аргумент команды
     if update.message and context.args and len(context.args) > 0:
-        user_id = context.args[0]
-        await select_period(update, context, user_id)
+        query = context.args[0]
+        user = await resolve_user_by_query(query)
+        if user:
+            await select_period(update, context, user["user_id"])
+        else:
+            message_obj = update.message
+            await safe_edit_or_reply_universal(
+                message_obj,
+                f"{UIEmojis.ERROR} Пользователь не найден по запросу <code>{query}</code>.",
+                parse_mode="HTML", menu_type=MenuTypes.ADMIN_MENU
+            )
         return ConversationHandler.END
     
     message = (
         f"{UIStyles.header('Выдача подписки пользователю')}\n\n"
-        f"{UIStyles.description('Введите Telegram ID пользователя:')}\n\n"
-        f"{UIStyles.description('Пример: 123456789')}"
+        f"{UIStyles.description('Введите Telegram ID, ID аккаунта (tg_… / web_…) или логин:')}\n\n"
+        f"{UIStyles.description('Примеры: 123456789, web_ivan, ivan')}"
     )
     
     keyboard = InlineKeyboardMarkup([
@@ -98,7 +107,7 @@ async def admin_give_subscription_input_user(update: Update, context: ContextTyp
     if update.effective_user.id not in ADMIN_IDS:
         return ConversationHandler.END
     
-    user_id = update.message.text.strip()
+    query = update.message.text.strip()
     
     # Удаляем сообщение пользователя с ID
     try:
@@ -110,9 +119,9 @@ async def admin_give_subscription_input_user(update: Update, context: ContextTyp
     menu_message_id = context.user_data.get('admin_give_sub_menu_message_id')
     menu_chat_id = context.user_data.get('admin_give_sub_menu_chat_id')
     
-    # Проверяем, существует ли пользователь
-    from ...db import get_user_by_id
-    user = await get_user_by_id(user_id)
+    # Ищем пользователя по любому идентификатору
+    user = await resolve_user_by_query(query)
+    user_id = user["user_id"] if user else query
     if not user:
         message = (
             f"{UIEmojis.ERROR} <b>Пользователь не найден</b>\n\n"

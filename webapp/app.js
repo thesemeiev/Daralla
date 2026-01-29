@@ -1809,8 +1809,10 @@ async function loadAdminUsers(page = 1, search = '') {
                 const firstSeen = new Date(user.first_seen * 1000).toLocaleDateString('ru-RU');
                 const lastSeen = new Date(user.last_seen * 1000).toLocaleDateString('ru-RU');
                 
+                const extra = [user.telegram_id && `TG: ${escapeHtml(user.telegram_id)}`, user.username && `Логин: ${escapeHtml(user.username)}`].filter(Boolean).join(' · ');
                 card.innerHTML = `
                     <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
+                    ${extra ? `<div class="admin-user-extra" style="font-size: 12px; color: #888; margin-top: 4px;">${extra}</div>` : ''}
                     <div class="admin-user-meta">
                         <span>Создан: ${firstSeen}</span>
                         <span>Активен: ${lastSeen}</span>
@@ -1916,21 +1918,23 @@ async function showAdminUserDetail(userId) {
         const contentEl = document.getElementById('admin-user-detail-content');
         
         // Информация о пользователе
+        const user = data.user;
+        const infoRows = [
+            { label: 'ID аккаунта', value: user.user_id },
+            user.telegram_id ? { label: 'Telegram ID', value: user.telegram_id } : null,
+            user.username ? { label: 'Логин', value: user.username } : null,
+            { label: 'Первый запуск', value: user.first_seen_formatted },
+            { label: 'Последняя активность', value: user.last_seen_formatted }
+        ].filter(Boolean);
         contentEl.innerHTML = `
             <div class="admin-user-detail-section">
                 <h3>Информация</h3>
-                <div class="admin-detail-item">
-                    <span class="admin-detail-label">Telegram ID</span>
-                    <span class="admin-detail-value">${escapeHtml(data.user.user_id)}</span>
-                </div>
-                <div class="admin-detail-item">
-                    <span class="admin-detail-label">Первый запуск</span>
-                    <span class="admin-detail-value">${escapeHtml(data.user.first_seen_formatted)}</span>
-                </div>
-                <div class="admin-detail-item">
-                    <span class="admin-detail-label">Последняя активность</span>
-                    <span class="admin-detail-value">${escapeHtml(data.user.last_seen_formatted)}</span>
-                </div>
+                ${infoRows.map(r => `
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">${escapeHtml(r.label)}</span>
+                        <span class="admin-detail-value">${escapeHtml(r.value)}</span>
+                    </div>
+                `).join('')}
             </div>
             
             <div class="admin-user-detail-section">
@@ -4754,6 +4758,7 @@ async function handleWebAccessSetup(event) {
 }
 
 async function refreshAboutAccount() {
+    var userIdEl = document.getElementById('about-user-id');
     var loginEl = document.getElementById('about-login');
     var tgIdEl = document.getElementById('about-telegram-id');
     var unlinked = document.getElementById('link-telegram-unlinked');
@@ -4761,10 +4766,11 @@ async function refreshAboutAccount() {
     var tgSetup = document.getElementById('tg-web-access-setup');
     var tgManage = document.getElementById('tg-web-access-manage');
     var loginSection = document.getElementById('link-telegram-section');
-    if (!loginEl || !tgIdEl) return;
+    if (!userIdEl || !loginEl || !tgIdEl) return;
 
     // В веб-режиме без токена сразу выходим
     if (isWebMode && !webAuthToken) {
+        userIdEl.textContent = '—';
         loginEl.textContent = '—';
         tgIdEl.textContent = '—';
         if (loginSection) loginSection.style.display = 'none';
@@ -4777,7 +4783,8 @@ async function refreshAboutAccount() {
         var data = await r.json();
 
         if (data.success) {
-            loginEl.textContent = data.username || data.user_id || '—';
+            userIdEl.textContent = data.user_id || '—';
+            loginEl.textContent = data.username || '—';
             tgIdEl.textContent = data.telegram_id || '—';
 
             // 1. Блоки "Настроить / Изменить веб-доступ" (для Mini App)
@@ -4810,6 +4817,7 @@ async function refreshAboutAccount() {
             // Если ошибка (например, 401)
             if (!isWebMode) {
                 var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
+                userIdEl.textContent = '—';
                 loginEl.textContent = tid;
                 tgIdEl.textContent = tid;
             }
@@ -4819,6 +4827,7 @@ async function refreshAboutAccount() {
         console.error('refreshAboutAccount error:', e);
         if (!isWebMode) {
             var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
+            userIdEl.textContent = '—';
             loginEl.textContent = tid;
             tgIdEl.textContent = tid;
         }

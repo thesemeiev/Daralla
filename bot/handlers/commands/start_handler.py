@@ -10,11 +10,13 @@ from ...utils import (
     UIEmojis, UIStyles, UIButtons, UIMessages,
     safe_edit_or_reply_universal, check_private_chat
 )
-from ...db import register_simple_user, is_known_user
+from ...db import register_simple_user
 from ...db.subscribers_db import (
     get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription,
     link_telegram_consume_state, get_user_by_id,
     link_telegram_to_account,
+    get_user_by_telegram_id_v2, create_telegram_link, update_user_telegram_id,
+    generate_tg_user_id,
 )
 from ...navigation import NavStates, MenuTypes
 import time
@@ -57,7 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not web_user_id:
             await message.reply_text("Ссылка недействительна или истекла. Зайдите на сайт и нажмите «Привязать Telegram» снова.")
             return
-        existing_tg_user = await get_user_by_id(tg_user_id)
+        existing_tg_user = await get_user_by_telegram_id_v2(tg_user_id, use_fallback=True)
         if existing_tg_user and not existing_tg_user.get("is_web"):
             # TG уже занят (TG-first пользователь) - предлагаем привязать его к текущему веб-аккаунту
             # Сохраняем web_user_id в контексте для callback handler
@@ -111,16 +113,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMIN_IDS = globals_dict['ADMIN_IDS']
     new_client_manager = globals_dict['new_client_manager']
     
-    user_id = str(update.effective_user.id)
+    telegram_id = str(update.effective_user.id)
+    # TG-first: ищем по telegram_id; если нет — создаём аккаунт с сгенерированным user_id (не telegram_id)
+    existing_user = await get_user_by_telegram_id_v2(telegram_id, use_fallback=True)
+    if existing_user:
+        user_id = existing_user["user_id"]
+        was_known_user = True
+    else:
+        user_id = generate_tg_user_id()
+        was_known_user = False
+        await register_simple_user(user_id)
+        await create_telegram_link(telegram_id, user_id)
+        await update_user_telegram_id(user_id, telegram_id)
     
-    # Теперь, когда все проверки выполнены, регистрируем пользователя
+    # Теперь, когда все проверки выполнены и пользователь зарегистрирован
     trial_created = False
     try:
-        # Проверяем, новый ли пользователь (есть ли он уже в БД)
-        was_known_user = await is_known_user(user_id)
-        
-        # Регистрируем пользователя
-        await register_simple_user(user_id)
         
         # Если пользователь новый (не был в БД) - создаем пробную подписку на 5 дней
         if not was_known_user:

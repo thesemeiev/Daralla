@@ -291,6 +291,42 @@ async def init_subscribers_db():
         
         await db.commit()
 
+
+def generate_tg_user_id() -> str:
+    """Генерирует уникальный user_id для TG-first пользователя (никогда не равен telegram_id)."""
+    return f"tg_{uuid.uuid4().hex}"
+
+
+async def migrate_legacy_numeric_user_ids():
+    """
+    Миграция: пользователи с числовым user_id (legacy TG-first) получают новый user_id tg_<uuid>
+    и явную связь в telegram_links + users.telegram_id.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT user_id FROM users WHERE user_id GLOB '[0-9]*'"
+        ) as cur:
+            rows = await cur.fetchall()
+        old_uids = [row["user_id"] for row in rows]
+    if not old_uids:
+        return
+    for old_uid in old_uids:
+        new_uid = generate_tg_user_id()
+        try:
+            await create_telegram_link(old_uid, new_uid)
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "UPDATE users SET telegram_id = ? WHERE user_id = ?",
+                    (old_uid, old_uid),
+                )
+                await db.commit()
+            await rename_user_id(old_uid, new_uid)
+            logger.info(f"Миграция legacy user_id: {old_uid} -> {new_uid}")
+        except Exception as e:
+            logger.error(f"Ошибка миграции user_id {old_uid}: {e}", exc_info=True)
+
+
 async def get_or_create_subscriber(user_id: str) -> int:
     """Возвращает внутренний ID пользователя (создаёт, если нет)"""
     now = int(datetime.datetime.now().timestamp())
@@ -757,6 +793,46 @@ async def get_user_by_id(user_id: str):
         async with db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
+
+
+async def get_user_by_username(username: str):
+    """Возвращает пользователя по логину (username), без ограничения is_web."""
+    if not username or not username.strip():
+        return None
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM(?))",
+            (username.strip(),),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def resolve_user_by_query(query: str):
+    """
+    Находит пользователя по любому идентификатору: Telegram ID, user_id (tg_/web_) или логин.
+    Возвращает dict пользователя или None.
+    """
+    if not query or not query.strip():
+        return None
+    q = query.strip()
+    # Число → telegram_id, затем legacy user_id
+    if q.isdigit():
+        user = await get_user_by_telegram_id_v2(q, use_fallback=True)
+        if user:
+            return user
+        user = await get_user_by_id(q)
+        return user
+    # tg_... / web_... → user_id
+    if q.startswith("tg_") or q.startswith("web_"):
+        return await get_user_by_id(q)
+    # Иначе → логин (username)
+    user = await get_user_by_username(q)
+    if user:
+        return user
+    # Попробовать как user_id = web_<query>
+    return await get_user_by_id(f"web_{q.lower()}")
 
 async def get_user_growth_data(days: int = 30):
     """

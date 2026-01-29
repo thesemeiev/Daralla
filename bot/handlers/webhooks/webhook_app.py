@@ -501,17 +501,13 @@ def create_webhook_app(bot_app):
             if init_data:
                 tg_user_id = verify_telegram_init_data(init_data)
 
-            # Если аутентификация не удалась, но есть валидные данные Telegram - 
-            # используем Telegram ID как user_id для регистрации
+            # Если аутентификация не удалась, но есть валидные данные Telegram —
+            # ниже в try (после создания loop) разрешаем user_id по telegram_id или создаём с tg_<uuid>
             if not user_id and tg_user_id:
-                user_id = str(tg_user_id)
-                logger.info(f"Регистрация нового пользователя по Telegram ID: {user_id}")
+                user_id = None  # будет установлен в try по get_user_by_telegram_id_v2 / generate_tg_user_id
 
-            if not user_id:
+            if not user_id and not tg_user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            
-            # Проверяем, является ли пользователь веб-пользователем (у них нет триала)
-            is_web = user_id.startswith('web_')
             
             # Создаем новый event loop для асинхронных операций
             loop = asyncio.new_event_loop()
@@ -526,23 +522,43 @@ def create_webhook_app(bot_app):
                     is_subscription_active,
                     is_known_telegram_id,
                     mark_telegram_id_known,
+                    get_user_by_telegram_id_v2, create_telegram_link, update_user_telegram_id,
+                    generate_tg_user_id,
                 )
                 import time
 
-                # Проверяем, новый ли пользователь:
-                # - по users.user_id (историческая логика)
-                # - по known_telegram_ids (новая логика, именно по TG ID)
+                # TG-first без веб-аутентификации: разрешаем user_id по telegram_id или создаём с tg_<uuid>
+                just_created_tg_user = False
+                if not user_id and tg_user_id:
+                    _tg_str = str(tg_user_id)
+                    _existing = loop.run_until_complete(get_user_by_telegram_id_v2(_tg_str, use_fallback=True))
+                    if _existing:
+                        user_id = _existing["user_id"]
+                    else:
+                        user_id = generate_tg_user_id()
+                        loop.run_until_complete(register_simple_user(user_id))
+                        loop.run_until_complete(create_telegram_link(_tg_str, user_id))
+                        loop.run_until_complete(update_user_telegram_id(user_id, _tg_str))
+                        just_created_tg_user = True
+                        logger.info(f"Регистрация нового TG-first пользователя: user_id={user_id}, telegram_id={_tg_str}")
+
+                if not user_id:
+                    return jsonify({'error': 'Invalid authentication'}), 401
+
+                # Проверяем, является ли пользователь веб-пользователем (у них нет триала)
+                is_web = user_id.startswith('web_')
+
+                # Проверяем, новый ли пользователь
                 was_known_user = loop.run_until_complete(is_known_user(user_id))
-                was_known_tg = False
                 if tg_user_id:
-                    was_known_tg = loop.run_until_complete(is_known_telegram_id(str(tg_user_id)))
-
-                was_known_user = was_known_user or was_known_tg
+                    was_known_user = was_known_user or loop.run_until_complete(is_known_telegram_id(str(tg_user_id)))
+                if just_created_tg_user:
+                    was_known_user = False
                 
-                # Регистрируем пользователя
-                loop.run_until_complete(register_simple_user(user_id))
+                # Регистрируем пользователя (если ещё не создали в TG-first ветке выше)
+                if not just_created_tg_user:
+                    loop.run_until_complete(register_simple_user(user_id))
 
-                # Если это Telegram-запрос — помечаем TG как известный (идемпотентно)
                 if tg_user_id:
                     loop.run_until_complete(mark_telegram_id_known(str(tg_user_id)))
                 
@@ -1278,29 +1294,29 @@ def create_webhook_app(bot_app):
                         db.row_factory = aiosqlite.Row
                         
                         # Базовый запрос
-                        query = "SELECT * FROM users WHERE 1=1"
+                        base = "SELECT * FROM users WHERE 1=1"
                         params = []
                         
-                        # Поиск по user_id
+                        # Поиск по user_id, telegram_id, username
                         if search:
-                            query += " AND user_id LIKE ?"
-                            params.append(f"%{search}%")
+                            base += " AND (user_id LIKE ? OR (telegram_id IS NOT NULL AND telegram_id LIKE ?) OR (username IS NOT NULL AND username LIKE ?))"
+                            search_pattern = f"%{search}%"
+                            params.extend([search_pattern, search_pattern, search_pattern])
                         
                         # Подсчет общего количества
-                        count_query = f"SELECT COUNT(*) as count FROM ({query})"
+                        count_query = f"SELECT COUNT(*) as count FROM ({base})"
                         async with db.execute(count_query, params) as cur:
                             row = await cur.fetchone()
                             total = row['count'] if row else 0
                         
                         # Получение данных с пагинацией
-                        query += " ORDER BY last_seen DESC LIMIT ? OFFSET ?"
+                        base += " ORDER BY last_seen DESC LIMIT ? OFFSET ?"
                         params.extend([limit, (page - 1) * limit])
                         
-                        async with db.execute(query, params) as cur:
+                        async with db.execute(base, params) as cur:
                             rows = await cur.fetchall()
                             users = []
                             for row in rows:
-                                # Получаем количество подписок для каждого пользователя
                                 async with db.execute(
                                     "SELECT COUNT(*) as count FROM subscriptions s JOIN users u ON s.subscriber_id = u.id WHERE u.user_id = ?",
                                     (row['user_id'],)
@@ -1311,6 +1327,8 @@ def create_webhook_app(bot_app):
                                 users.append({
                                     'id': row['id'],
                                     'user_id': row['user_id'],
+                                    'telegram_id': row['telegram_id'] if 'telegram_id' in row.keys() else None,
+                                    'username': row['username'] if 'username' in row.keys() else None,
                                     'first_seen': row['first_seen'],
                                     'last_seen': row['last_seen'],
                                     'subscriptions_count': sub_count
@@ -1354,18 +1372,18 @@ def create_webhook_app(bot_app):
             
             data = request.get_json(silent=True) or {}
             
-            from ...db.subscribers_db import get_user_by_id, get_all_subscriptions_by_user
+            from ...db.subscribers_db import get_user_by_id, get_all_subscriptions_by_user, resolve_user_by_query
             from ...db.payments_db import get_payments_by_user
             
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id_param))
+                user = loop.run_until_complete(resolve_user_by_query(user_id_param))
                 if not user:
                     return jsonify({'error': 'User not found'}), 404
-                
-                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id_param))
-                payments = loop.run_until_complete(get_payments_by_user(user_id_param, limit=10))
+                user_id_resolved = user['user_id']
+                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id_resolved))
+                payments = loop.run_until_complete(get_payments_by_user(user_id_resolved, limit=10))
             finally:
                 loop.close()
             
@@ -1436,6 +1454,8 @@ def create_webhook_app(bot_app):
                 'success': True,
                 'user': {
                     'user_id': user['user_id'],
+                    'telegram_id': user.get('telegram_id'),
+                    'username': user.get('username'),
                     'first_seen': user['first_seen'],
                     'first_seen_formatted': datetime.datetime.fromtimestamp(user['first_seen']).strftime('%d.%m.%Y %H:%M'),
                     'last_seen': user['last_seen'],
@@ -3576,14 +3596,14 @@ def create_webhook_app(bot_app):
                 uid = user.get('user_id')
                 tid = user.get('telegram_id')
                 is_web = uid and isinstance(uid, str) and uid.startswith('web_')
-                is_tg_first = uid and isinstance(uid, str) and uid.isdigit()
+                is_tg_first = uid and isinstance(uid, str) and (uid.isdigit() or uid.startswith('tg_'))
                 
                 # Telegram считается привязанным если:
-                # 1. Это TG-first аккаунт (он сам по себе привязан к своему ID)
+                # 1. Это TG-first аккаунт (привязан к своему telegram_id)
                 # 2. Это Web-аккаунт и у него заполнено поле telegram_id
                 telegram_linked = is_tg_first or (is_web and bool(tid))
                 
-                display_tid = tid or (uid if is_tg_first else None)
+                display_tid = tid or (uid if (uid and uid.isdigit()) else None)
                 username = user.get('username') or uid or ''
                 web_access_enabled = bool(user.get('password_hash'))
                 return jsonify({
@@ -3697,7 +3717,7 @@ def create_webhook_app(bot_app):
             from ...db.subscribers_db import (
                 get_user_by_id, update_user_telegram_id,
                 delete_telegram_link, mark_telegram_id_known,
-                rename_user_id
+                rename_user_id, get_telegram_chat_id_for_notification,
             )
             
             loop = asyncio.new_event_loop()
@@ -3714,12 +3734,15 @@ def create_webhook_app(bot_app):
                 if not check_password_hash(user['password_hash'], current_password):
                     return jsonify({'error': 'Неверный текущий пароль'}), 401
                 
-                # Определяем telegram_id для удаления связи
+                # Определяем telegram_id для удаления связи (users.telegram_id или telegram_links)
                 telegram_id = user.get('telegram_id')
-                is_tg_first = user_id.isdigit()
-                
-                if not telegram_id and is_tg_first:
-                    telegram_id = user_id
+                if telegram_id is not None:
+                    telegram_id = str(telegram_id)
+                if not telegram_id:
+                    _chat_id = loop.run_until_complete(get_telegram_chat_id_for_notification(user_id))
+                    if _chat_id is not None:
+                        telegram_id = str(_chat_id)
+                is_tg_first = user_id.startswith('tg_') or user_id.isdigit()
                 
                 if not telegram_id:
                     return jsonify({'error': 'Telegram не привязан к этому аккаунту'}), 400

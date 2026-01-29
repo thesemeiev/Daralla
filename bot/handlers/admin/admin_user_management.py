@@ -13,7 +13,8 @@ from telegram.ext import ConversationHandler, MessageHandler, filters
 from ...db import (
     get_user_by_id, get_all_subscriptions_by_user, get_payments_by_user,
     get_subscription_servers, update_subscription_status,
-    update_subscription_expiry, get_subscription_by_token
+    update_subscription_expiry, get_subscription_by_token,
+    resolve_user_by_query,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,16 +64,25 @@ async def admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('admin_search_menu_chat_id', None)
     context.user_data.pop('admin_search_timestamp', None)
     
-    # Если передан user_id как аргумент команды
+    # Если передан идентификатор как аргумент команды
     if update.message and context.args and len(context.args) > 0:
-        user_id = context.args[0]
-        await show_user_info(update, context, user_id)
+        query = context.args[0]
+        user = await resolve_user_by_query(query)
+        if user:
+            await show_user_info(update, context, user["user_id"])
+        else:
+            message_obj = update.message
+            await safe_edit_or_reply_universal(
+                message_obj,
+                f"{UIEmojis.ERROR} Пользователь не найден по запросу <code>{query}</code>.",
+                parse_mode="HTML", menu_type=MenuTypes.ADMIN_SEARCH_USER
+            )
         return ConversationHandler.END
     
     message = (
         f"{UIStyles.header('Поиск пользователя')}\n\n"
-        f"{UIStyles.description('Введите Telegram ID пользователя:')}\n\n"
-        f"{UIStyles.description('Пример: 123456789')}"
+        f"{UIStyles.description('Введите Telegram ID, ID аккаунта (tg_… / web_…) или логин:')}\n\n"
+        f"{UIStyles.description('Примеры: 123456789, web_ivan, ivan')}"
     )
     
     keyboard = InlineKeyboardMarkup([
@@ -111,16 +121,15 @@ async def admin_search_user_input(update: Update, context: ContextTypes.DEFAULT_
         return ConversationHandler.END
     
     try:
-        user_id = update.message.text.strip()
-        
-        # Валидация: проверяем, что это число
-        if not user_id.isdigit():
+        query = update.message.text.strip()
+        user = await resolve_user_by_query(query)
+        if not user:
             from ...utils import safe_edit_or_reply_universal
             from ...navigation import NavigationBuilder, MenuTypes
             error_message = (
                 f"{UIStyles.header('Поиск пользователя')}\n\n"
-                f"{UIEmojis.ERROR} <b>Ошибка:</b> ID должен быть числом!\n\n"
-                f"{UIStyles.description('Введите корректный Telegram ID (например: 123456789)')}"
+                f"{UIEmojis.ERROR} <b>Пользователь не найден</b>\n\n"
+                f"{UIStyles.description('Введите Telegram ID, ID аккаунта (tg_… / web_…) или логин')}"
             )
             keyboard = InlineKeyboardMarkup([
                 [NavigationBuilder.create_back_button()]
@@ -151,6 +160,7 @@ async def admin_search_user_input(update: Update, context: ContextTypes.DEFAULT_
         menu_message_id = context.user_data.get('admin_search_menu_message_id')
         menu_chat_id = context.user_data.get('admin_search_menu_chat_id')
         
+        user_id = user["user_id"]
         # Передаем информацию о сообщении для редактирования
         await show_user_info(update, context, user_id, menu_chat_id=menu_chat_id, menu_message_id=menu_message_id)
         
@@ -236,18 +246,25 @@ async def show_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         expired_subs = [s for s in subscriptions if s['status'] == 'expired']
         deleted_subs = [s for s in subscriptions if s['status'] == 'deleted']
         
-        message = (
-            f"{UIStyles.header('Информация о пользователе')}\n\n"
-            f"<b>Telegram ID:</b> <code>{user_id}</code>\n"
-            f"<b>Первый запуск:</b> {first_seen}\n"
-            f"<b>Последняя активность:</b> {last_seen}\n\n"
-            f"<b>Подписки:</b>\n"
-            f"   Всего: {len(subscriptions)}\n"
-            f"   {UIEmojis.SUCCESS} Активных: {len(active_subs)}\n"
-            f"   {UIEmojis.ERROR} Истекших: {len(expired_subs)}\n"
-            f"   {UIEmojis.WARNING} Удаленных: {len(deleted_subs)}\n\n"
-            f"<b>Платежи:</b> {len(payments)} (показано последних 10)\n"
-        )
+        lines = [
+            f"{UIStyles.header('Информация о пользователе')}\n\n",
+            f"<b>ID аккаунта:</b> <code>{user.get('user_id', user_id)}</code>\n",
+        ]
+        if user.get("telegram_id"):
+            lines.append(f"<b>Telegram ID:</b> <code>{user['telegram_id']}</code>\n")
+        if user.get("username"):
+            lines.append(f"<b>Логин:</b> <code>{user['username']}</code>\n")
+        lines.extend([
+            f"<b>Первый запуск:</b> {first_seen}\n",
+            f"<b>Последняя активность:</b> {last_seen}\n\n",
+            f"<b>Подписки:</b>\n",
+            f"   Всего: {len(subscriptions)}\n",
+            f"   {UIEmojis.SUCCESS} Активных: {len(active_subs)}\n",
+            f"   {UIEmojis.ERROR} Истекших: {len(expired_subs)}\n",
+            f"   {UIEmojis.WARNING} Удаленных: {len(deleted_subs)}\n\n",
+            f"<b>Платежи:</b> {len(payments)} (показано последних 10)\n",
+        ])
+        message = "".join(lines)
         
         # Кнопки действий
         keyboard_buttons = []
