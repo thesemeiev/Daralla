@@ -421,9 +421,9 @@ h1 {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     width: 100%;
-    padding: 16px 20px;
+    padding: 20px 22px;
     margin-bottom: 20px;
     background: linear-gradient(135deg, #252525 0%, #1e1e1e 100%);
     border: 1px solid #333;
@@ -494,13 +494,13 @@ h1 {
 .profile-card-icon {
     position: relative;
     flex-shrink: 0;
-    width: 44px;
-    height: 44px;
+    width: 52px;
+    height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(74, 158, 255, 0.15);
-    border-radius: 12px;
+    border-radius: 14px;
     color: #4a9eff;
 }
 
@@ -510,7 +510,7 @@ h1 {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px;
+    border-radius: 14px;
     display: none;
 }
 
@@ -526,6 +526,11 @@ h1 {
     display: block;
 }
 
+.profile-card-icon .profile-card-icon-svg {
+    width: 28px;
+    height: 28px;
+}
+
 .profile-card-text {
     flex: 1;
     min-width: 0;
@@ -535,14 +540,14 @@ h1 {
 }
 
 .profile-card-title {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 600;
     color: #f0f0f0;
     letter-spacing: -0.3px;
 }
 
 .profile-card-subtitle {
-    font-size: 13px;
+    font-size: 14px;
     color: #8a8a8a;
     font-weight: 400;
 }
@@ -629,8 +634,8 @@ h1 {
     background: #222222;
     border: 1px solid #2a2a2a;
     border-radius: 12px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
+    padding: 14px 14px;
+    margin-bottom: 10px;
     transition: all 0.2s ease;
     position: relative;
     cursor: pointer;
@@ -659,7 +664,7 @@ h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
 }
 
 .subscription-name {
@@ -670,7 +675,9 @@ h1 {
     flex: 1;
 }
 
-.subscription-status {
+/* Общие цвета статусов: актив/онлайн и истек/офлайн — одинаковые для подписок и серверов */
+.subscription-status,
+.server-status.server-status-badge {
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 10px;
@@ -679,31 +686,34 @@ h1 {
     letter-spacing: 0.4px;
 }
 
-.subscription-status.active {
-    background: rgba(76, 175, 80, 0.35);
-    color: #6ee76e;
-    border: 1px solid rgba(76, 175, 80, 0.45);
+.subscription-status.active,
+.server-status-badge.online {
+    background: rgba(76, 175, 80, 0.4);
+    color: #5ee85e;
+    border: 1px solid rgba(76, 175, 80, 0.5);
 }
 
-.subscription-status.expired {
-    background: rgba(255, 59, 48, 0.35);
-    color: #ff6b6b;
-    border: 1px solid rgba(255, 59, 48, 0.45);
+.subscription-status.expired,
+.server-status-badge.offline {
+    background: rgba(255, 59, 48, 0.4);
+    color: #ff5c5c;
+    border: 1px solid rgba(255, 59, 48, 0.5);
 }
 
 .subscription-status.trial {
-    background: rgba(255, 152, 0, 0.35);
+    background: rgba(255, 152, 0, 0.4);
     color: #ffb74d;
-    border: 1px solid rgba(255, 152, 0, 0.45);
+    border: 1px solid rgba(255, 152, 0, 0.5);
 }
 
-.subscription-status-blink {
-    animation: status-blink 2.2s ease-in-out infinite;
+.subscription-status-blink,
+.server-status-blink {
+    animation: status-blink 2s ease-in-out infinite;
 }
 
 @keyframes status-blink {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    50% { opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -853,8 +863,8 @@ h1 {
 }
 
 .days-badge {
-    margin-top: 10px;
-    padding: 10px 12px;
+    margin-top: 12px;
+    padding: 12px 14px;
     background: #1f1f1f;
     border-radius: 8px;
     text-align: center;
@@ -1111,39 +1121,6 @@ h1 {
     gap: 6px;
     font-size: 13px;
     font-weight: 500;
-}
-
-.server-status.server-status-badge {
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-}
-
-.server-status-badge.online {
-    background: rgba(76, 175, 80, 0.35);
-    color: #6ee76e;
-    border: 1px solid rgba(76, 175, 80, 0.45);
-}
-
-.server-status-badge.offline {
-    background: rgba(255, 59, 48, 0.35);
-    color: #ff6b6b;
-    border: 1px solid rgba(255, 59, 48, 0.45);
-}
-
-.server-status-blink {
-    animation: status-blink 2.2s ease-in-out infinite;
-}
-
-.server-status.online {
-    color: #b0b0b0;
-}
-
-.server-status.offline {
-    color: #a08080;
 }
 
 .status-icon {
