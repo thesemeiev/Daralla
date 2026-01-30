@@ -3830,6 +3830,10 @@ def create_webhook_app(bot_app):
                     content_type = 'application/javascript'
                 elif filename.endswith('.json'):
                     content_type = 'application/json'
+                elif filename.endswith('.png'):
+                    content_type = 'image/png'
+                elif filename.endswith('.ico'):
+                    content_type = 'image/x-icon'
                 with open(file_path, 'rb') as f:
                     return f.read(), 200, {'Content-Type': content_type}
             return "File not found", 404

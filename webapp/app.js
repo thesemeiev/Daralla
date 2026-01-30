@@ -4567,7 +4567,9 @@ document.addEventListener('focusin', function (e) {
 document.addEventListener('DOMContentLoaded', async () => {
     // Включаем защиту от закрытия при скролле вверх
     preventCloseOnScroll();
-    
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function () {}, function (err) { console.warn('SW register failed', err); });
+    }
     // Если это веб-режим, проверяем токен
     if (isWebMode) {
         document.body.classList.add('web-mode');
