@@ -76,6 +76,29 @@ tg.setBackgroundColor('#1a1a1a');
 // Текущая страница
 let currentPage = 'subscriptions';
 
+// URL-роутинг: допустимые имена страниц для hash
+var ROUTE_PAGE_NAMES = new Set([
+    'landing', 'login', 'register',
+    'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'payment',
+    'servers', 'instructions', 'about', 'account',
+    'admin-stats', 'admin-users-analytics', 'admin-servers-analytics', 'admin-finance',
+    'admin-notifications', 'admin-subscriptions', 'admin-users', 'admin-broadcast',
+    'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management'
+]);
+var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
+function isPageAdminOnly(pageName) { return pageName && pageName.startsWith('admin-'); }
+function getPageFromHash() {
+    var h = (location.hash || '').replace(/^#/, '').trim();
+    return ROUTE_PAGE_NAMES.has(h) ? h : null;
+}
+function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
+    if (!pageName) return false;
+    if (ROUTE_PAGES_GUEST.has(pageName)) return true;
+    if (!isAuthenticated) return false;
+    if (isPageAdminOnly(pageName)) return !!isAdminUser;
+    return true;
+}
+
 // Интервалы для автоматического обновления
 let serverLoadChartInterval = null;
 
@@ -213,6 +236,10 @@ function showPage(pageName) {
         initLandingWheelAndHint();
     } else if (pageName === 'about') {
         refreshAboutAccount();
+    }
+
+    if (ROUTE_PAGE_NAMES.has(pageName)) {
+        try { location.hash = pageName; } catch (e) {}
     }
 }
 
@@ -4485,17 +4512,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const result = await response.json();
                 if (result.success) {
                     currentUserId = result.user_id;
-                    showPage('subscriptions');
-                    // Проверяем права админа для веб-сессии
-                    checkAdminAccess();
+                    await checkAdminAccess();
+                    var hashPage = getPageFromHash();
+                    if (hashPage && isPageAllowedForUser(hashPage, true, isAdmin)) {
+                        showPage(hashPage);
+                    } else {
+                        showPage('subscriptions');
+                    }
+                } else {
+                    var hashPageGuest = getPageFromHash();
+                    if (hashPageGuest && isPageAllowedForUser(hashPageGuest, false, false)) {
+                        showPage(hashPageGuest);
+                    } else {
+                        showPage('landing');
+                    }
+                }
+            } catch (e) {
+                var hashPageGuest2 = getPageFromHash();
+                if (hashPageGuest2 && isPageAllowedForUser(hashPageGuest2, false, false)) {
+                    showPage(hashPageGuest2);
                 } else {
                     showPage('landing');
                 }
-            } catch (e) {
-                showPage('landing');
             }
         } else {
-            showPage('landing');
+            var hashPageGuest3 = getPageFromHash();
+            if (hashPageGuest3 && isPageAllowedForUser(hashPageGuest3, false, false)) {
+                showPage(hashPageGuest3);
+            } else {
+                showPage('landing');
+            }
         }
     } else {
         // Режим Telegram
@@ -4504,6 +4550,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Инициализируем навигацию с индикатором
     initNavIndicator();
+
+    // Кнопка «Назад» в браузере: синхронизация экрана с hash
+    window.addEventListener('hashchange', function () {
+        var hashPage = getPageFromHash();
+        if (!hashPage || hashPage === currentPage) return;
+        if (isPageAllowedForUser(hashPage, !!currentUserId, isAdmin)) {
+            showPage(hashPage);
+        }
+    });
 });
 
 async function initTelegramFlow() {
@@ -4571,9 +4626,14 @@ async function initTelegramFlow() {
         }
     }
 
-    showPage('subscriptions');
     await loadSubscriptions();
     await checkAdminAccess();
+    var hashPage = getPageFromHash();
+    if (hashPage && isPageAllowedForUser(hashPage, true, isAdmin)) {
+        showPage(hashPage);
+    } else {
+        showPage('subscriptions');
+    }
 }
 
 // Обработчики веб-авторизации
