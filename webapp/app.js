@@ -88,8 +88,31 @@ var ROUTE_PAGE_NAMES = new Set([
 var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
 function isPageAdminOnly(pageName) { return pageName && pageName.startsWith('admin-'); }
 function getPageFromHash() {
-    var h = (location.hash || '').replace(/^#/, '').trim();
-    return ROUTE_PAGE_NAMES.has(h) ? h : null;
+    var r = parseHashRoute();
+    return r ? r.pageName : null;
+}
+function parseHashRoute() {
+    var raw = (location.hash || '').replace(/^#/, '').trim();
+    var question = raw.indexOf('?');
+    var pageName = question >= 0 ? raw.slice(0, question).trim() : raw;
+    var query = question >= 0 ? raw.slice(question + 1) : '';
+    if (!ROUTE_PAGE_NAMES.has(pageName)) return null;
+    var params = {};
+    if (query) {
+        try {
+            var sp = new URLSearchParams(query);
+            sp.forEach(function (v, k) { params[k] = v; });
+        } catch (e) {}
+    }
+    return { pageName: pageName, params: params };
+}
+function buildHash(pageName, params) {
+    if (!params || Object.keys(params).length === 0) return '#' + pageName;
+    var q = Object.keys(params)
+        .filter(function (k) { return params[k] != null && params[k] !== ''; })
+        .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])); })
+        .join('&');
+    return q ? '#' + pageName + '?' + q : '#' + pageName;
 }
 function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
     if (!pageName) return false;
@@ -98,12 +121,49 @@ function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
     if (isPageAdminOnly(pageName)) return !!isAdminUser;
     return true;
 }
+function applyRoute(route, isAuthenticated, isAdmin) {
+    if (!route || !isPageAllowedForUser(route.pageName, isAuthenticated, isAdmin)) return false;
+    var p = route.params;
+    if (route.pageName === 'admin-user-detail' && p.id) {
+        showAdminUserDetail(p.id);
+        return true;
+    }
+    if (route.pageName === 'subscription-detail' && p.id) {
+        loadSubscriptions().then(function () {
+            var subs = window.allSubscriptions || [];
+            var sub = subs.find(function (s) { return String(s.id) === String(p.id); });
+            if (sub) showSubscriptionDetail(sub);
+            else showPage('subscriptions');
+        });
+        return true;
+    }
+    if (route.pageName === 'admin-subscription-edit' && p.id) {
+        showAdminSubscriptionEdit(Number(p.id));
+        return true;
+    }
+    if (route.pageName === 'extend-subscription' && p.id) {
+        showExtendSubscriptionModal(Number(p.id));
+        return true;
+    }
+    if (route.pageName === 'admin-create-subscription' && p.userId) {
+        showCreateSubscriptionForm(p.userId);
+        return true;
+    }
+    if (route.pageName === 'admin-users') {
+        showPage('admin-users', { page: p.page, search: p.search });
+        var searchEl = document.getElementById('admin-user-search');
+        if (searchEl) searchEl.value = p.search || '';
+        return true;
+    }
+    showPage(route.pageName);
+    return true;
+}
 
 // Интервалы для автоматического обновления
 let serverLoadChartInterval = null;
 
-// Функция переключения страниц
-function showPage(pageName) {
+// Функция переключения страниц (params — необязательный объект для hash)
+function showPage(pageName, params) {
     // Очищаем интервалы при уходе со страницы серверов
     if (currentPage === 'servers' && pageName !== 'servers' && serverLoadChartInterval) {
         clearInterval(serverLoadChartInterval);
@@ -212,7 +272,13 @@ function showPage(pageName) {
     } else if (pageName === 'servers') {
         loadServers();
     } else if (pageName === 'admin-users') {
-        loadAdminUsers(1, currentAdminUserSearch);
+        var page = (params && (params.page != null || params.search !== undefined))
+            ? (Number(params.page) || 1)
+            : currentAdminUserPage;
+        var search = (params && params.search !== undefined)
+            ? String(params.search)
+            : currentAdminUserSearch;
+        loadAdminUsers(page, search);
     } else if (pageName === 'admin-stats') {
         loadAdminStats();
     } else if (pageName === 'admin-users-analytics') {
@@ -239,7 +305,7 @@ function showPage(pageName) {
     }
 
     if (ROUTE_PAGE_NAMES.has(pageName)) {
-        try { location.hash = pageName; } catch (e) {}
+        try { location.hash = buildHash(pageName, params || {}); } catch (e) {}
     }
 }
 
@@ -434,7 +500,7 @@ function showSubscriptionDetail(sub) {
         </div>
     `;
     
-    showPage('subscription-detail');
+    showPage('subscription-detail', { id: String(sub.id) });
 }
 
 // Функция загрузки подписок
@@ -1404,7 +1470,7 @@ function showExtendSubscriptionModal(subscriptionId) {
     }
     
     currentExtendSubscriptionId = subscriptionId;
-    showPage('extend-subscription');
+    showPage('extend-subscription', { id: String(subscriptionId) });
 }
 
 // Функция возврата с страницы продления
@@ -1896,6 +1962,9 @@ async function loadAdminUsers(page = 1, search = '') {
         
         currentAdminUserPage = page;
         currentAdminUserSearch = search;
+        var searchInput = document.getElementById('admin-user-search');
+        if (searchInput) searchInput.value = search;
+        try { location.hash = buildHash('admin-users', { page: String(page), search: search }); } catch (e) {}
     } catch (error) {
         console.error('Ошибка загрузки пользователей:', error);
         document.getElementById('admin-users-loading').style.display = 'none';
@@ -1952,7 +2021,7 @@ function showAdminPagination(currentPage, totalPages) {
 async function showAdminUserDetail(userId) {
     try {
         previousAdminPage = 'admin-users';
-        showPage('admin-user-detail');
+        showPage('admin-user-detail', { id: userId });
         
         document.getElementById('admin-user-detail-loading').style.display = 'block';
         document.getElementById('admin-user-detail-content').innerHTML = '';
@@ -2048,7 +2117,7 @@ async function showAdminSubscriptionEdit(subId) {
     try {
         previousAdminPage = 'admin-user-detail';
         currentEditingSubscriptionId = subId;
-        showPage('admin-subscription-edit');
+        showPage('admin-subscription-edit', { id: String(subId) });
         
         document.getElementById('admin-subscription-edit-loading').style.display = 'block';
         document.getElementById('admin-subscription-edit-content').style.display = 'none';
@@ -2472,7 +2541,7 @@ function goBackFromSubscriptionEdit() {
 function showCreateSubscriptionForm(userId) {
     currentCreatingSubscriptionUserId = userId;
     previousAdminPage = 'admin-user-detail';
-    showPage('admin-create-subscription');
+    showPage('admin-create-subscription', userId ? { userId: userId } : {});
     
     // Очищаем форму
     document.getElementById('create-sub-name').value = '';
@@ -4513,32 +4582,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (result.success) {
                     currentUserId = result.user_id;
                     await checkAdminAccess();
-                    var hashPage = getPageFromHash();
-                    if (hashPage && isPageAllowedForUser(hashPage, true, isAdmin)) {
-                        showPage(hashPage);
+                    var route = parseHashRoute();
+                    if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
+                        applyRoute(route, true, isAdmin);
                     } else {
                         showPage('subscriptions');
                     }
                 } else {
-                    var hashPageGuest = getPageFromHash();
-                    if (hashPageGuest && isPageAllowedForUser(hashPageGuest, false, false)) {
-                        showPage(hashPageGuest);
+                    var routeGuest = parseHashRoute();
+                    if (routeGuest && isPageAllowedForUser(routeGuest.pageName, false, false)) {
+                        applyRoute(routeGuest, false, false);
                     } else {
                         showPage('landing');
                     }
                 }
             } catch (e) {
-                var hashPageGuest2 = getPageFromHash();
-                if (hashPageGuest2 && isPageAllowedForUser(hashPageGuest2, false, false)) {
-                    showPage(hashPageGuest2);
+                var routeGuest2 = parseHashRoute();
+                if (routeGuest2 && isPageAllowedForUser(routeGuest2.pageName, false, false)) {
+                    applyRoute(routeGuest2, false, false);
                 } else {
                     showPage('landing');
                 }
             }
         } else {
-            var hashPageGuest3 = getPageFromHash();
-            if (hashPageGuest3 && isPageAllowedForUser(hashPageGuest3, false, false)) {
-                showPage(hashPageGuest3);
+            var routeGuest3 = parseHashRoute();
+            if (routeGuest3 && isPageAllowedForUser(routeGuest3.pageName, false, false)) {
+                applyRoute(routeGuest3, false, false);
             } else {
                 showPage('landing');
             }
@@ -4553,11 +4622,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Кнопка «Назад» в браузере: синхронизация экрана с hash
     window.addEventListener('hashchange', function () {
-        var hashPage = getPageFromHash();
-        if (!hashPage || hashPage === currentPage) return;
-        if (isPageAllowedForUser(hashPage, !!currentUserId, isAdmin)) {
-            showPage(hashPage);
-        }
+        var route = parseHashRoute();
+        if (!route || route.pageName === currentPage) return;
+        applyRoute(route, !!currentUserId, isAdmin);
     });
 });
 
@@ -4628,9 +4695,9 @@ async function initTelegramFlow() {
 
     await loadSubscriptions();
     await checkAdminAccess();
-    var hashPage = getPageFromHash();
-    if (hashPage && isPageAllowedForUser(hashPage, true, isAdmin)) {
-        showPage(hashPage);
+    var route = parseHashRoute();
+    if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
+        applyRoute(route, true, isAdmin);
     } else {
         showPage('subscriptions');
     }
