@@ -109,16 +109,14 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
 ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
 
-# URL мини-приложения (формируется на основе WEBHOOK_URL)
+# URL мини-приложения (формируется на основе WEBHOOK_URL, сайт в корне домена)
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 if WEBHOOK_URL:
-    # Убираем путь /webhook/yookassa и добавляем /webapp/
-    # Например: https://domain.com/webhook/yookassa -> https://domain.com/webapp/
+    # Убираем путь /webhook/yookassa; Mini App в корне, например https://daralla.ru/
     if "/webhook/" in WEBHOOK_URL:
-        WEBAPP_URL = WEBHOOK_URL.split("/webhook/")[0] + "/webapp/"
+        WEBAPP_URL = WEBHOOK_URL.split("/webhook/")[0] + "/"
     else:
-        # Если WEBHOOK_URL не содержит /webhook/, просто добавляем /webapp/
-        WEBAPP_URL = WEBHOOK_URL.rstrip("/") + "/webapp/"
+        WEBAPP_URL = WEBHOOK_URL.rstrip("/") + "/"
 else:
     WEBAPP_URL = None
 

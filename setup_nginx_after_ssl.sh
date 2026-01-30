@@ -5,7 +5,7 @@
 
 set -e
 
-DOMAIN="ghosttunnel.space"
+DOMAIN="${1:-daralla.ru}"
 WEBHOOK_PORT=5000
 
 echo "🚀 Настройка Nginx с SSL для webhook'ов"

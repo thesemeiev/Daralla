@@ -5,7 +5,7 @@ import logging
 import threading
 import asyncio
 import secrets
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests as requests_lib
 
@@ -1140,62 +1140,6 @@ def create_webhook_app(bot_app):
                 "Access-Control-Allow-Origin": "*",
                 "Content-Type": "application/json"
             }
-    
-    # Endpoint для обслуживания веб-приложения
-    @app.route('/webapp/', methods=['GET'])
-    @app.route('/webapp/index.html', methods=['GET'])
-    def webapp_index():
-        """Отдает HTML страницу веб-приложения"""
-        try:
-            import os
-            # Путь: bot/handlers/webhooks/webhook_app.py -> поднимаемся на 4 уровня до /app/, затем webapp/
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-            webapp_path = os.path.join(base_dir, 'webapp', 'index.html')
-            if os.path.exists(webapp_path):
-                with open(webapp_path, 'r', encoding='utf-8') as f:
-                    return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
-            else:
-                logger.warning(f"Web app not found at: {webapp_path}")
-                return "Web app not found", 404
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке webapp: {e}", exc_info=True)
-            return "Error loading web app", 500
-    
-    # Endpoint для статических файлов (CSS, JS)
-    @app.route('/webapp/<path:filename>', methods=['GET'])
-    def webapp_static(filename):
-        """Отдает статические файлы веб-приложения"""
-        try:
-            import os
-            # Путь: bot/handlers/webhooks/webhook_app.py -> поднимаемся на 4 уровня до /app/, затем webapp/
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-            webapp_dir = os.path.join(base_dir, 'webapp')
-            file_path = os.path.join(webapp_dir, filename)
-            
-            # Проверка безопасности (только файлы из webapp директории)
-            webapp_dir_abs = os.path.abspath(webapp_dir)
-            file_path_abs = os.path.abspath(file_path)
-            if not file_path_abs.startswith(webapp_dir_abs):
-                logger.warning(f"Forbidden file access attempt: {file_path}")
-                return "Forbidden", 403
-            
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                # Определяем Content-Type по расширению
-                content_type = 'text/plain'
-                if filename.endswith('.css'):
-                    content_type = 'text/css'
-                elif filename.endswith('.js'):
-                    content_type = 'application/javascript'
-                elif filename.endswith('.json'):
-                    content_type = 'application/json'
-                
-                with open(file_path, 'rb') as f:
-                    return f.read(), 200, {'Content-Type': content_type}
-            else:
-                return "File not found", 404
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке статического файла: {e}")
-            return "Error loading file", 500
     
     # ==================== АДМИН API ====================
     
@@ -3835,6 +3779,63 @@ def create_webhook_app(bot_app):
         except Exception as e:
             logger.error(f"Ошибка unlink-telegram: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
+
+    # Редирект /webapp/* -> /* для обратной совместимости
+    @app.route('/webapp/', methods=['GET'])
+    @app.route('/webapp/index.html', methods=['GET'])
+    def webapp_redirect_root():
+        return redirect('/', code=301)
+
+    @app.route('/webapp/<path:path>', methods=['GET'])
+    def webapp_redirect_path(path):
+        return redirect(f'/{path}', code=301)
+
+    # Сайт в корне домена (daralla.ru/ = веб-приложение)
+    @app.route('/', methods=['GET'])
+    @app.route('/index.html', methods=['GET'])
+    def root_index():
+        """Отдает HTML страницу веб-приложения с корня"""
+        try:
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            webapp_path = os.path.join(base_dir, 'webapp', 'index.html')
+            if os.path.exists(webapp_path):
+                with open(webapp_path, 'r', encoding='utf-8') as f:
+                    return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
+            else:
+                logger.warning(f"Web app not found at: {webapp_path}")
+                return "Web app not found", 404
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке webapp: {e}", exc_info=True)
+            return "Error loading web app", 500
+
+    @app.route('/<path:filename>', methods=['GET'])
+    def root_static(filename):
+        """Отдает статические файлы веб-приложения с корня (style.css, app.js, images/...)"""
+        try:
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            webapp_dir = os.path.join(base_dir, 'webapp')
+            file_path = os.path.join(webapp_dir, filename)
+            webapp_dir_abs = os.path.abspath(webapp_dir)
+            file_path_abs = os.path.abspath(file_path)
+            if not file_path_abs.startswith(webapp_dir_abs):
+                logger.warning(f"Forbidden file access attempt: {file_path}")
+                return "Forbidden", 403
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                content_type = 'text/plain'
+                if filename.endswith('.css'):
+                    content_type = 'text/css'
+                elif filename.endswith('.js'):
+                    content_type = 'application/javascript'
+                elif filename.endswith('.json'):
+                    content_type = 'application/json'
+                with open(file_path, 'rb') as f:
+                    return f.read(), 200, {'Content-Type': content_type}
+            return "File not found", 404
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке статического файла: {e}")
+            return "Error loading file", 500
 
     return app
 
