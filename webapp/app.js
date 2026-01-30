@@ -4628,6 +4628,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!route || route.pageName === currentPage) return;
         applyRoute(route, !!currentUserId, isAdmin);
     });
+
+    // Плавное скрытие сплеша после отрисовки страницы под ним
+    function hideSplash() {
+        var splash = document.getElementById('app-splash');
+        if (!splash) return;
+        splash.style.transition = 'opacity 0.2s ease';
+        splash.style.opacity = '0';
+        setTimeout(function () {
+            splash.style.display = 'none';
+        }, 200);
+    }
+    requestAnimationFrame(function () {
+        requestAnimationFrame(hideSplash);
+    });
 });
 
 async function initTelegramFlow() {
@@ -6605,25 +6619,19 @@ function moveNavIndicator(index) {
     
     if (!indicator || !navItems[index] || !nav) return;
     
+    // Сбрасываем ширину после перетаскивания, чтобы индикатор не оставался узким
+    indicator.style.width = '';
+    
     const targetItem = navItems[index];
+    const indicatorWidth = 56;
     
     const calculateAndSetPosition = () => {
         const navRect = nav.getBoundingClientRect();
         const itemRect = targetItem.getBoundingClientRect();
-        
-        // Фиксированная ширина индикатора из CSS
-        const indicatorWidth = 56; 
-        
-        // Находим центр кнопки относительно навбара
         const itemCenterX = itemRect.left - navRect.left + (itemRect.width / 2);
-        
-        // Вычисляем позицию X для центрирования индикатора
-        const x = itemCenterX - (indicatorWidth / 2);
-        
-        // Применяем позицию
-        indicator.style.transform = `translateX(${x}px) translateY(-50%)`;
-        
-        // Сохраняем индекс для обновлений при ресайзе
+        let x = itemCenterX - (indicatorWidth / 2);
+        x = Math.max(0, Math.min(navRect.width - indicatorWidth, x));
+        indicator.style.transform = 'translateX(' + x + 'px) translateY(-50%)';
         window.currentNavIndex = index;
     };
     
@@ -6645,17 +6653,19 @@ function initNavIndicator() {
     
     if (!indicator || !nav) return;
     
-    // Устанавливаем начальную позицию для активной кнопки
-    const activeItem = document.querySelector('.nav-item.active');
-    if (activeItem) {
-        const activeIndex = Array.from(navItems).indexOf(activeItem);
-        if (activeIndex >= 0) {
-            moveNavIndicator(activeIndex);
+    function setInitialPosition() {
+        const activeItem = document.querySelector('.nav-item.active');
+        if (activeItem) {
+            const activeIndex = Array.from(document.querySelectorAll('.nav-item')).indexOf(activeItem);
+            if (activeIndex >= 0) moveNavIndicator(activeIndex);
+        } else {
+            moveNavIndicator(0);
         }
-    } else {
-        // Если нет активной кнопки, устанавливаем начальную позицию
-        moveNavIndicator(0);
     }
+    // Откладываем первый расчёт на два кадра, чтобы layout навбара успел стабилизироваться
+    requestAnimationFrame(function () {
+        requestAnimationFrame(setInitialPosition);
+    });
     
     // Добавляем обработчики для перетаскивания
     let isDragging = false;

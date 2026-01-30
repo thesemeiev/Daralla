@@ -3834,6 +3834,8 @@ def create_webhook_app(bot_app):
                     content_type = 'image/png'
                 elif filename.endswith('.ico'):
                     content_type = 'image/x-icon'
+                elif filename.endswith('.html'):
+                    content_type = 'text/html; charset=utf-8'
                 with open(file_path, 'rb') as f:
                     return f.read(), 200, {'Content-Type': content_type}
             return "File not found", 404
