@@ -4628,20 +4628,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!route || route.pageName === currentPage) return;
         applyRoute(route, !!currentUserId, isAdmin);
     });
-
-    // Плавное скрытие сплеша после отрисовки страницы под ним
-    function hideSplash() {
-        var splash = document.getElementById('app-splash');
-        if (!splash) return;
-        splash.style.transition = 'opacity 0.2s ease';
-        splash.style.opacity = '0';
-        setTimeout(function () {
-            splash.style.display = 'none';
-        }, 200);
-    }
-    requestAnimationFrame(function () {
-        requestAnimationFrame(hideSplash);
-    });
 });
 
 async function initTelegramFlow() {
