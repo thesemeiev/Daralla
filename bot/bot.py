@@ -242,6 +242,10 @@ SERVERS_BY_LOCATION = {
     ],
 }
 
+# Оставляем только серверы с заданным host (из .env). Остальные добавляйте через админку.
+_filtered = {loc: [s for s in servers if s.get("host")] for loc, servers in SERVERS_BY_LOCATION.items()}
+SERVERS_BY_LOCATION = {loc: servers for loc, servers in _filtered.items() if servers}
+
 # Создаем плоский список всех серверов для обратной совместимости
 SERVERS = []
 for location_servers in SERVERS_BY_LOCATION.values():
@@ -249,11 +253,6 @@ for location_servers in SERVERS_BY_LOCATION.values():
 
 # Сервера для новых клиентов (теперь по локациям)
 NEW_CLIENT_SERVERS = SERVERS_BY_LOCATION
-
-# Проверяем конфигурацию серверов
-for i, server in enumerate(SERVERS):
-    if not server["host"] or not server["login"] or not server["password"]:
-        print(f"ВНИМАНИЕ: Сервер {server['name']} не настроен! Проверьте переменные XUI_HOST_{server['name'].upper().replace('-', '_')}, XUI_LOGIN_{server['name'].upper().replace('-', '_')}, XUI_PASSWORD_{server['name'].upper().replace('-', '_')}")
 
 # Настраиваем файловый лог с ротацией в папке data/logs
 try:
