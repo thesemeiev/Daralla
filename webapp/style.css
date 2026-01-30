@@ -554,12 +554,7 @@ h1 {
     font-weight: 300;
 }
 
-/* Страница подписок: два явных блока — Аккаунт и Ваши подписки, выравнивание с контентом страниц с кнопкой «Назад» */
-#page-subscriptions {
-    padding-left: 20px;
-    padding-right: 20px;
-}
-
+/* Страница подписок: два явных блока — Аккаунт и Ваши подписки */
 .page-subscriptions-header {
     margin-bottom: 8px;
 }
@@ -1164,6 +1159,11 @@ h1 {
 /* Страница "О нас" */
 .about-content {
     padding: 0;
+}
+
+/* Страница «Аккаунт»: контент вровень с кнопкой «Назад», без лишних боковых отступов */
+.about-content-account {
+    padding-bottom: 24px;
 }
 
 .about-section {
