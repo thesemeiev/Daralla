@@ -27,15 +27,8 @@ class ServerProvider:
         
         result = {}
         for s in servers:
-            # Локация: из настроек сервера (админка), иначе по display_name, иначе Other
-            location = (s.get("location") or "").strip()
-            if not location:
-                display_name = s.get("display_name", "")
-                if "Poland" in display_name: location = "Poland"
-                elif "Netherlands" in display_name: location = "Netherlands"
-                elif "Russia" in display_name: location = "Russia"
-                elif "Latvia" in display_name: location = "Latvia"
-                else: location = "Other"
+            # Локация: из настроек сервера (админка), иначе Other
+            location = (s.get("location") or "").strip() or "Other"
             
             if location not in result:
                 result[location] = []
