@@ -691,20 +691,6 @@
                             <canvas id="notification-delivery-chart"></canvas>
                         </div>
                     </div>
-                    
-                    <div style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">Аналитика уведомлений</h2>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-analytics-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                            <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="notification-analytics-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1285,24 +1271,24 @@
 
     <!-- Модальное окно инструкций -->
     <div id="instruction-modal" class="modal" style="display: none;">
-        <div class="modal-content instruction-modal-content" style="max-width: 600px; height: 65vh; min-height: 400px; max-height: 65vh; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
-                <h2 id="instruction-modal-title" style="margin: 0;">Инструкция</h2>
-                <button onclick="closeInstructionModal()" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">&times;</button>
+        <div class="modal-content instruction-modal-content" style="max-width: 600px; display: flex; flex-direction: column;">
+            <div class="instruction-modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="instruction-modal-title" style="margin: 0; font-size: 18px;">Инструкция</h2>
+                <button onclick="closeInstructionModal()" style="background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">&times;</button>
             </div>
             
-            <div id="instruction-steps-container" style="flex: 1; overflow-y: auto; margin-bottom: 24px; min-height: 0;">
+            <div id="instruction-steps-container">
                 <!-- Шаги будут добавлены динамически -->
             </div>
             
-            <div style="display: flex; gap: 12px; margin-top: 24px; flex-shrink: 0;">
+            <div class="instruction-modal-footer" style="display: flex; gap: 10px;">
                 <button type="button" class="btn-secondary" onclick="prevInstructionStep()" id="instruction-prev-btn" style="flex: 1; display: none;">Назад</button>
                 <button type="button" class="btn-primary" onclick="nextInstructionStep()" id="instruction-next-btn" style="flex: 1;">Далее</button>
                 <button type="button" class="btn-primary" onclick="closeInstructionModal()" id="instruction-close-btn" style="flex: 1; display: none;">Закрыть</button>
             </div>
             
-            <div style="margin-top: 16px; text-align: center; flex-shrink: 0;">
-                <span id="instruction-step-indicator" style="color: #999; font-size: 14px;">Шаг 1 из 5</span>
+            <div class="instruction-step-indicator" style="text-align: center;">
+                <span id="instruction-step-indicator" style="color: #999; font-size: 13px;">Шаг 1 из 5</span>
             </div>
         </div>
     </div>

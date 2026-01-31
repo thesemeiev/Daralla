@@ -283,21 +283,36 @@ input, textarea, select {
     line-height: 1.5;
 }
 
-/* Фиксация размера модального окна инструкций */
+/* Модальное окно инструкций — максимальная видимая область текста */
 .instruction-modal-content {
-    height: 65vh !important;
-    min-height: 400px !important;
-    max-height: 65vh !important;
+    height: min(90vh, 800px) !important;
+    min-height: 360px !important;
+    max-height: min(90vh, 800px) !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+}
+
+.instruction-modal-content .instruction-modal-header {
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.instruction-modal-content .instruction-modal-footer {
+    margin-top: 16px;
+    flex-shrink: 0;
+}
+
+.instruction-modal-content .instruction-step-indicator {
+    margin-top: 10px;
 }
 
 #instruction-steps-container {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
-    margin-bottom: 24px;
+    margin-bottom: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .container {
@@ -1246,19 +1261,27 @@ h1 {
 
 .instruction-detail {
     color: #fff;
-    line-height: 1.8;
+    line-height: 1.6;
 }
 
 .instruction-detail h3 {
     color: #4a9eff;
-    font-size: 18px;
-    margin-bottom: 12px;
-    margin-top: 20px;
+    font-size: 17px;
+    margin-bottom: 8px;
+    margin-top: 14px;
+}
+
+.instruction-detail h3:first-child {
+    margin-top: 0;
 }
 
 .instruction-detail p {
     color: #e0e0e0;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
+}
+
+.instruction-detail p:last-child {
+    margin-bottom: 0;
 }
 
 .instruction-detail a {
@@ -1271,12 +1294,12 @@ h1 {
 }
 
 .instruction-detail ul {
-    margin-left: 20px;
-    margin-bottom: 16px;
+    margin-left: 18px;
+    margin-bottom: 10px;
 }
 
 .instruction-detail li {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     color: #e0e0e0;
 }
 

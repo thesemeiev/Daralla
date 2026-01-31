@@ -2976,7 +2976,6 @@ let serverLoadChart = null;
 let conversionChart = null;
 let revenueTrendChart = null;
 let notificationDeliveryChart = null;
-let notificationAnalyticsChart = null;
 let subscriptionDynamicsChart = null;
 let subscriptionConversionChart = null;
 let churnRateChart = null;
@@ -4057,9 +4056,8 @@ async function loadNotificationStats(days = 7) {
         document.getElementById('admin-notifications-loading').style.display = 'none';
         document.getElementById('admin-notifications-content').style.display = 'block';
         
-        // Загружаем графики
+        // Загружаем график доставки
         await loadNotificationDeliveryChart(data.daily);
-        await loadNotificationAnalyticsChart(data.daily, stats.by_type || []);
         
     } catch (error) {
         console.error('Ошибка загрузки статистики уведомлений:', error);
@@ -4206,100 +4204,6 @@ async function loadNotificationDeliveryChart(dailyData) {
         });
     } catch (error) {
         console.error('Ошибка загрузки графика доставки:', error);
-    }
-}
-
-// Загрузка графика аналитики уведомлений (объединяет заблокированных и по типам)
-async function loadNotificationAnalyticsChart(dailyData, byTypeData) {
-    try {
-        const ctx = document.getElementById('notification-analytics-chart');
-        if (!ctx) {
-            return;
-        }
-        
-        if (notificationAnalyticsChart) {
-            notificationAnalyticsChart.destroy();
-        }
-        
-        const labels = dailyData.map(item => {
-            const date = new Date(item.date + 'T00:00:00');
-            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-        });
-        
-        notificationAnalyticsChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Не доставлено (включая заблокированных)',
-                        data: dailyData.map(item => item.failed || 0),
-                        backgroundColor: 'rgba(255, 99, 132, 0.8)',
-                        borderColor: 'rgb(255, 99, 132)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom',
-                        align: 'start',
-                        labels: {
-                            boxWidth: 12,
-                            boxHeight: 12,
-                            padding: 8,
-                            font: { size: 12 }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            footer: function(tooltipItems) {
-                                if (byTypeData && byTypeData.length > 0) {
-                                    const typeNames = {
-                                        'expiry_3d': 'За 3 дня до истечения',
-                                        'expiry_1d': 'За 1 день до истечения',
-                                        'expired': 'Истекла'
-                                    };
-                                    let footer = '\nПо типам:\n';
-                                    byTypeData.forEach(item => {
-                                        const type = item.notification_type || item.type || '';
-                                        const typeName = typeNames[type] || type;
-                                        footer += `${typeName}: ${item.total || item.count || 0}\n`;
-                                    });
-                                    return footer;
-                                }
-                                return '';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        title: {
-                            display: true,
-                            text: 'Количество не доставленных',
-                            color: 'rgb(255, 99, 132)'
-                        }
-                    },
-                    x: {
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45
-                        }
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Ошибка загрузки графика аналитики:', error);
     }
 }
 
@@ -5208,96 +5112,6 @@ async function loadSubscriptionStats(days = 30) {
         console.error('Ошибка загрузки статистики подписок:', error);
         document.getElementById('admin-subscriptions-loading').style.display = 'none';
         showError('admin-subscriptions-error', 'Ошибка загрузки статистики подписок');
-    }
-}
-
-// Загрузка графика типов подписок (круговая диаграмма)
-async function loadSubscriptionTypesChart(typesData) {
-    try {
-        const ctx = document.getElementById('subscription-types-chart');
-        if (!ctx) {
-            return;
-        }
-        
-        if (subscriptionTypesChart) {
-            subscriptionTypesChart.destroy();
-        }
-        
-        const trial = typesData.trial_active || 0;
-        const purchased = typesData.purchased_active || 0;
-        const total = trial + purchased;
-        
-        if (total === 0) {
-            // Показываем пустой график
-            subscriptionTypesChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Нет данных'],
-                    datasets: [{
-                        data: [1],
-                        backgroundColor: ['rgba(128, 128, 128, 0.5)']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-            return;
-        }
-        
-        subscriptionTypesChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Пробные', 'Купленные'],
-                datasets: [{
-                    data: [trial, purchased],
-                    backgroundColor: [
-                        'rgba(255, 206, 86, 0.8)',
-                        'rgba(75, 192, 192, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgb(255, 206, 86)',
-                        'rgb(75, 192, 192)'
-                    ],
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            color: '#fff',
-                            padding: 15,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = context.parsed || 0;
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((value / total) * 100).toFixed(1);
-                                return `${label}: ${value} (${percentage}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Ошибка загрузки графика типов подписок:', error);
     }
 }
 
