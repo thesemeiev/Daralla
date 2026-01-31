@@ -1616,6 +1616,7 @@ h1 {
     outline: none;
     transition: border-color 0.2s;
     -webkit-appearance: none; /* Убирает стандартные стили в Safari */
+    appearance: none;
 }
 
 .form-group input:focus,
