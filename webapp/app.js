@@ -3627,6 +3627,12 @@ async function loadServerLoadChart(chartCanvasId) {
                             minRotation: 45
                         }
                     }
+                },
+                datasets: {
+                    bar: {
+                        barPercentage: 0.4,
+                        categoryPercentage: 0.6
+                    }
                 }
             }
         });

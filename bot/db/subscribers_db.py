@@ -511,6 +511,14 @@ async def update_subscription_device_limit(subscription_id: int, new_device_limi
         await db.execute("UPDATE subscriptions SET device_limit = ? WHERE id = ?", (new_device_limit, subscription_id))
         await db.commit()
 
+
+async def update_subscription_price(subscription_id: int, price: float):
+    """Обновляет цену подписки (используется при конверсии пробной в платную через продление)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE subscriptions SET price = ? WHERE id = ?", (price, subscription_id))
+        await db.commit()
+
+
 def is_subscription_active(sub: dict) -> bool:
     """Проверяет, активна ли подписка (единая логика для всех мест)
     

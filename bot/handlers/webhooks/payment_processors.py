@@ -152,12 +152,21 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             import time
             current_time = int(time.time())
             if sub:
+                # Если продлевают пробную (price=0) — обновляем price, чтобы конверсия учитывалась
+                sub_price = float(sub.get('price') or 0)
+                if sub_price == 0:
+                    from ...prices_config import PRICES
+                    paid_price = PRICES.get(actual_period, 150)
+                    from ...db.subscribers_db import update_subscription_price
+                    await update_subscription_price(extension_subscription_id, float(paid_price))
+                    logger.info(f"Пробная подписка {extension_subscription_id} конвертирована в платную (price={paid_price})")
+
                 # Вычисляем новое время истечения
                 current_expires_at = sub['expires_at']
                 # Если подписка уже истекла, начинаем с текущего времени, иначе продлеваем от текущего expires_at
                 base_time = max(current_expires_at, current_time)
                 new_expires_at = base_time + days * 24 * 60 * 60
-                
+
                 # Обновляем expires_at в БД ПЕРЕД синхронизацией серверов
                 from ...db.subscribers_db import update_subscription_expiry
                 await update_subscription_expiry(extension_subscription_id, new_expires_at)
