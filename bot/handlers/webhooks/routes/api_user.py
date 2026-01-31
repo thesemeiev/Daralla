@@ -251,7 +251,8 @@ def create_blueprint(bot_app):
             subscription_id = data.get('subscription_id')
             if not period or period not in ['month', '3month']:
                 return jsonify({'error': 'Invalid period. Use "month" or "3month"'}), 400
-            price = "150.00" if period == "month" else "350.00"
+            from ....prices_config import PRICES
+            price = f"{PRICES[period]:.2f}"
             from yookassa import Payment
             from ....db import add_payment, PAYMENTS_DB_PATH
             import aiosqlite

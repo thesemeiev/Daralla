@@ -214,7 +214,7 @@ jobs:
           
           # Method 1: Direct URL with token (URL encoded)
           echo "Trying method 1: Direct URL with token..."
-          if sudo git clone "https://thesemeiev:${GIT_TOKEN}@github.com/thesemeiev/Daralla.git" Daralla 2>&1; then
+          if sudo git clone "https://${{ github.repository_owner }}:${GIT_TOKEN}@github.com/${{ github.repository }}.git" Daralla 2>&1; then
             echo "✅ Repository cloned successfully (method 1)"
             CLONE_SUCCESS=true
           else
@@ -223,10 +223,10 @@ jobs:
             # Method 2: Using credential helper
             echo "Trying method 2: Credential helper..."
             sudo git config --global credential.helper store
-            echo "https://thesemeiev:${GIT_TOKEN}@github.com" | sudo tee /root/.git-credentials > /dev/null
+            echo "https://${{ github.repository_owner }}:${GIT_TOKEN}@github.com" | sudo tee /root/.git-credentials > /dev/null
             sudo chmod 600 /root/.git-credentials
             
-            if sudo git clone https://github.com/thesemeiev/Daralla.git Daralla 2>&1; then
+            if sudo git clone https://github.com/${{ github.repository }}.git Daralla 2>&1; then
               echo "✅ Repository cloned successfully (method 2)"
               CLONE_SUCCESS=true
               sudo rm -f /root/.git-credentials
@@ -234,7 +234,7 @@ jobs:
               echo "Method 2 failed, trying method 3..."
               
               # Method 3: Try without authentication (if repo is public)
-              if sudo git clone https://github.com/thesemeiev/Daralla.git Daralla 2>&1; then
+              if sudo git clone https://github.com/${{ github.repository }}.git Daralla 2>&1; then
                 echo "✅ Repository cloned successfully (method 3 - public repo)"
                 CLONE_SUCCESS=true
               else
@@ -380,6 +380,7 @@ jobs:
           sudo chmod 755 data/
           
           # Configure webhook URL
+          # Set WEBHOOK_DOMAIN in GitHub Secrets for your domain (e.g. daralla.ru)
           # Check if domain is configured (Nginx with SSL)
           echo "Checking webhook configuration..."
           

@@ -4,7 +4,7 @@
 import logging
 import datetime
 import asyncio
-import telegram
+
 from ..db import init_all_db
 from ..services import NotificationManager
 

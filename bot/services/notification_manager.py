@@ -6,7 +6,7 @@
 import asyncio
 import datetime
 import logging
-import traceback
+
 import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import List
@@ -16,7 +16,6 @@ from ..db import (
     record_notification_metrics,
     cleanup_old_notifications,
     get_notification_stats,
-    get_daily_notification_stats,
     get_notification_settings,
     set_notification_setting,
     is_subscription_notification_sent,
@@ -24,7 +23,7 @@ from ..db import (
     clear_subscription_notifications,
     record_subscription_notification_effectiveness
 )
-from ..utils import UIEmojis, UIMessages, calculate_time_remaining
+from ..utils import UIMessages, calculate_time_remaining
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +78,7 @@ class NotificationManager:
         asyncio.create_task(self._metrics_task())
         
         logger.info("Менеджер уведомлений запущен")
-    
-    async def stop(self):
-        """Остановка менеджера уведомлений"""
-        self.is_running = False
-        logger.info("Менеджер уведомлений остановлен")
-    
+
     async def _expiry_notifications_task(self):
         """Задача для проверки истекающих подписок"""
         logger.info("Запуск задачи уведомлений об истечении подписок")
@@ -243,7 +237,7 @@ class NotificationManager:
             if stats.get('total_sent', 0) > 0:
                 success_rate = stats.get('success_rate', 0)
                 if success_rate < 80:
-                    await self._notify_admin(f"⚠️ Внимание! Низкий процент доставки уведомлений: {success_rate:.1f}%")
+                    await self._notify_admin(f"Внимание! Низкий процент доставки уведомлений: {success_rate:.1f}%")
         except Exception as e:
             logger.error(f"Ошибка сбора метрик: {e}")
     
@@ -251,32 +245,9 @@ class NotificationManager:
         """Отправляет уведомление админу"""
         for admin_id in self.admin_ids:
             try:
-                await self.bot.send_message(chat_id=admin_id, text=f"❗️[VPNBot NOTIFICATIONS]\n{message}")
+                await self.bot.send_message(chat_id=admin_id, text=f"[VPNBot NOTIFICATIONS]\n{message}")
             except Exception:
                 pass
-    
-    async def get_notification_dashboard(self) -> str:
-        """Создает дашборд с метриками уведомлений"""
-        try:
-            stats = await get_notification_stats(7)
-            daily_stats = await get_daily_notification_stats()
-            
-            dashboard = f"📊 <b>Дашборд уведомлений (7 дней)</b>\n\n"
-            dashboard += f"• Отправлено: {stats.get('total_sent', 0)}\n"
-            dashboard += f"• Успешно: {stats.get('success_count', 0)}\n"
-            dashboard += f"• Успех: {stats.get('success_rate', 0):.1f}%\n"
-            
-            effectiveness = stats.get('effectiveness_stats', {})
-            if effectiveness:
-                dashboard += f"\n📈 <b>Эффективность:</b>\n"
-                for action, count in effectiveness.items():
-                    if action:
-                        dashboard += f"• {action}: {count}\n"
-            
-            return dashboard
-        except Exception as e:
-            logger.error(f"Ошибка создания дашборда: {e}")
-            return f"❌ Ошибка загрузки дашборда"
 
     async def record_subscription_extension(self, user_id: str, subscription_id: int):
         """Записывает факт продления подписки для анализа эффективности"""

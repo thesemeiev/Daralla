@@ -29,7 +29,7 @@ from .users_db import (
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
-    get_notification_stats, get_daily_notification_stats, clear_user_notifications,
+    get_notification_stats, get_daily_notification_stats,
     get_notification_settings, set_notification_setting,
     is_subscription_notification_sent, mark_subscription_notification_sent,
     clear_subscription_notifications, record_subscription_notification_effectiveness
@@ -71,14 +71,14 @@ __all__ = [
     'get_payments_by_user',
     'get_all_user_ids', 'register_simple_user', 'is_known_user', 'get_config', 'set_config', 'get_all_config',
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
-    'get_daily_notification_stats', 'clear_user_notifications', 'get_notification_settings',
+    'get_daily_notification_stats', 'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
     'clear_subscription_notifications', 'record_subscription_notification_effectiveness',
     'get_or_create_subscriber', 'create_subscription', 'get_all_active_subscriptions',
     'update_subscription_status', 'update_subscription_name', 'get_subscription_by_token',
     'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
     'get_all_active_subscriptions_by_user', 'get_subscription_by_id', 'get_subscription_by_id_only',
-    'update_subscription_expiry', 'get_subscription_device_limit', 'get_subscription_statistics',
+    'update_subscription_expiry', 'update_subscription_device_limit', 'get_subscription_statistics',
     'get_user_by_id', 'get_all_subscriptions_by_user', 'update_user_telegram_id',
     'get_user_by_telegram_id_or_user_id', 'get_user_by_telegram_id_v2',
     'create_telegram_link', 'delete_telegram_link', 'get_telegram_link',

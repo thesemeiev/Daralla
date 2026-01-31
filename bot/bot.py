@@ -3,7 +3,6 @@ import os
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import pathlib
-import telegram
 
 # === ИМПОРТ УТИЛИТ ===
 from .utils import UIButtons, check_private_chat, set_image_paths
@@ -86,84 +85,7 @@ if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
 # Это название будет использоваться для всех серверов в подписке
 VPN_BRAND_NAME = " Daralla VPN"  # Можно изменить на любое красивое название
 
-# Конфигурация серверов по локациям
-# ВАЖНО:
-# - "name" - уникальный идентификатор сервера (используется в БД и коде, должен быть уникальным)
-# - "display_name" - красивое название для отображения в VPN клиенте (опционально, если не указано - используется "name")
-SERVERS_BY_LOCATION = {
-    "Poland": [
-        {
-            "name": "Poland-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇵🇱  Poland - 1",
-            "lat": 52.2297,  # Варшава
-            "lng": 21.0122,
-            "host": os.getenv("XUI_HOST_POLAND_1"),
-            "login": os.getenv("XUI_LOGIN_POLAND_1"),
-            "password": os.getenv("XUI_PASSWORD_POLAND_1"),
-            "vpn_host": os.getenv("XUI_VPN_HOST_POLAND_1")  # IP/домен VPN сервера (если отличается от панели)
-        },
-    ],
-    "Netherlands": [
-        {
-            "name": "Netherlands-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇳🇱  Netherlands - 1",
-            "lat": 52.5167,  # Дротен
-            "lng": 5.7167,
-            "host": os.getenv("XUI_HOST_NETHERLANDS_1"),
-            "login": os.getenv("XUI_LOGIN_NETHERLANDS_1"),
-            "password": os.getenv("XUI_PASSWORD_NETHERLANDS_1"),
-            "vpn_host": os.getenv("XUI_VPN_HOST_NETHERLANDS_1")  # IP/домен VPN сервера (если отличается от панели)
-        },
-    ],
-        "Russia": [
-        {
-            "name": "Russia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇷🇺  Антиглушилка - 1",
-            "lat": 55.7558,  # Москва
-            "lng": 37.6173,
-            "host": os.getenv("XUI_HOST_RUSSIA_1"),
-            "login": os.getenv("XUI_LOGIN_RUSSIA_1"),
-            "password": os.getenv("XUI_PASSWORD_RUSSIA_1"),
-            "vpn_host": os.getenv("XUI_VPN_HOST_RUSSIA_1")  # IP/домен VPN сервера (если отличается от панели)
-        },
-    ],
-            "Latvia": [
-        {
-            "name": "Latvia-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇱🇻  Latvia - 1",
-            "lat": 56.9496,  # Рига
-            "lng": 24.1052,
-            "host": os.getenv("XUI_HOST_LATVIA_1"),
-            "login": os.getenv("XUI_LOGIN_LATVIA_1"),
-            "password": os.getenv("XUI_PASSWORD_LATVIA_1"),
-            "vpn_host": os.getenv("XUI_VPN_HOST_LATVIA_1")  # IP/домен VPN сервера (если отличается от панели)
-        },
-    ],
-            "Germany": [
-        {
-            "name": "Germany-1",  # Уникальный идентификатор (используется в БД, должен быть уникальным!)
-            "display_name": "🇩🇪  Germany - 1",
-            "lat": 51.5074,  # Франкфурт
-            "lng": 6.7760,
-            "host": os.getenv("XUI_HOST_GERMANY_1"),
-            "login": os.getenv("XUI_LOGIN_GERMANY_1"),
-            "password": os.getenv("XUI_PASSWORD_GERMANY_1"),
-            "vpn_host": os.getenv("XUI_VPN_HOST_GERMANY_1")  # IP/домен VPN сервера (если отличается от панели)
-        },
-    ],
-}
-
-# Оставляем только серверы с заданным host (из .env). Остальные добавляйте через админку.
-_filtered = {loc: [s for s in servers if s.get("host")] for loc, servers in SERVERS_BY_LOCATION.items()}
-SERVERS_BY_LOCATION = {loc: servers for loc, servers in _filtered.items() if servers}
-
-# Создаем плоский список всех серверов для обратной совместимости
-SERVERS = []
-for location_servers in SERVERS_BY_LOCATION.values():
-    SERVERS.extend(location_servers)
-
-# Сервера для новых клиентов (теперь по локациям)
-NEW_CLIENT_SERVERS = SERVERS_BY_LOCATION
+# Серверы добавляются через админ-панель, конфиг загружается из БД при старте (init_server_managers)
 
 # Настраиваем файловый лог с ротацией в папке data/logs
 logs_dir = os.path.join(DATA_DIR, 'logs')
@@ -205,7 +127,7 @@ async def init_server_managers():
         from .db.subscribers_db import check_and_run_initial_migration
         
         # Проверяем, есть ли серверы в БД
-        has_servers = await check_and_run_initial_migration(SERVERS_BY_LOCATION)
+        has_servers = await check_and_run_initial_migration()
         
         if not has_servers:
             logger.warning("⚠️ В БД нет серверов. Серверы должны быть добавлены через админ-панель.")
@@ -229,22 +151,13 @@ from .handlers.webhooks import create_webhook_app
 
 from .handlers.utils import error_handler
 
-from .core import on_startup, notify_admin, notify_server_issues, server_health_monitor
+from .core import on_startup
 
 # Глобальный менеджер уведомлений
 notification_manager = None
 
 # Глобальный объект приложения (будет инициализирован в main)
 app = None
-
-
-# Глобальный словарь для хранения сообщений продления
-# Ключ: payment_id, Значение: {'chat_id': int, 'message_id': int, 'timestamp': float}
-# TTL: 7 дней (604800 секунд)
-extension_messages = {}
-
-import traceback
-
 
 
 

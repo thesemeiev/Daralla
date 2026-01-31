@@ -1245,20 +1245,6 @@ async def get_server_by_id(server_id: int):
             row = await cur.fetchone()
             return dict(row) if row else None
 
-
-async def get_default_server_group():
-    """Возвращает группу серверов по умолчанию"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM server_groups WHERE is_default = 1 LIMIT 1") as cur:
-            row = await cur.fetchone()
-            if row:
-                return dict(row)
-            # Если нет дефолтной, берем первую активную
-            async with db.execute("SELECT * FROM server_groups WHERE is_active = 1 LIMIT 1") as cur:
-                row = await cur.fetchone()
-                return dict(row) if row else None
-
 async def add_server_group(name: str, description: str = None, is_default: bool = False):
     """Добавляет новую группу серверов"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1416,10 +1402,10 @@ async def get_group_load_statistics():
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
 
-async def check_and_run_initial_migration(servers_by_location: dict):
+async def check_and_run_initial_migration():
     """
     Проверяет, есть ли серверы в БД.
-    Если групп серверов нет, возвращает False (миграция не выполнена).
+    Если групп серверов нет, возвращает False.
     Серверы должны добавляться через админ-панель.
     """
     async with aiosqlite.connect(DB_PATH) as db:
@@ -2635,144 +2621,3 @@ async def get_revenue_trend_data(days: int = 30):
             current_date += datetime.timedelta(days=1)
         
         return result
-
-async def get_churn_rate_data(days: int = 30):
-    """
-    Возвращает данные об оттоке пользователей (Churn Rate)
-    
-    Churn Rate = процент пользователей, которые не продлили подписку после истечения
-    
-    Args:
-        days: Количество дней для анализа
-    
-    Returns:
-        dict: {
-            'total_churned': int,        # Всего пользователей с истекшими подписками
-            'not_renewed': int,          # Не продлили подписку
-            'renewed': int,              # Продлили подписку
-            'churn_rate': float,         # Процент оттока
-            'daily': [                   # Ежедневная статистика
-                {
-                    'date': str,
-                    'expired_count': int,
-                    'renewed_count': int,
-                    'churn_rate': float
-                },
-                ...
-            ]
-        }
-    """
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        
-        now = int(datetime.datetime.now().timestamp())
-        start_timestamp = now - (days * 24 * 60 * 60)
-        
-        # Находим все подписки, которые истекли в период
-        async with db.execute("""
-            SELECT 
-                id,
-                subscriber_id,
-                expires_at,
-                DATE(datetime(expires_at, 'unixepoch')) as date
-            FROM subscriptions
-            WHERE status = 'expired'
-            AND expires_at >= ?
-            AND expires_at <= ?
-            AND price > 0
-            ORDER BY expires_at
-        """, (start_timestamp, now)) as cur:
-            expired_rows = await cur.fetchall()
-        
-        if not expired_rows:
-            return {
-                'total_churned': 0,
-                'not_renewed': 0,
-                'renewed': 0,
-                'churn_rate': 0.0,
-                'daily': []
-            }
-        
-        # Проверяем, какие подписки были продлены
-        renewed_count = 0
-        not_renewed_count = 0
-        
-        # Группируем по датам для ежедневной статистики
-        daily_churn = {}
-        
-        for expired_row in expired_rows:
-            subscriber_id = expired_row['subscriber_id']
-            expires_at = expired_row['expires_at']
-            date_str = expired_row['date']
-            
-            if date_str not in daily_churn:
-                daily_churn[date_str] = {
-                    'expired_count': 0,
-                    'renewed_count': 0
-                }
-            
-            daily_churn[date_str]['expired_count'] += 1
-            
-            # Проверяем, есть ли новая активная подписка у этого пользователя после истечения
-            # Даем окно в 7 дней после истечения для продления
-            renewal_window = expires_at + (7 * 24 * 60 * 60)
-            
-            async with db.execute("""
-                SELECT COUNT(*) as count
-                FROM subscriptions
-                WHERE subscriber_id = ?
-                AND status = 'active'
-                AND created_at > ?
-                AND created_at <= ?
-                AND price > 0
-            """, (subscriber_id, expires_at, renewal_window)) as cur:
-                renewal_row = await cur.fetchone()
-                has_renewed = (renewal_row['count'] if renewal_row else 0) > 0
-            
-            if has_renewed:
-                renewed_count += 1
-                daily_churn[date_str]['renewed_count'] += 1
-            else:
-                not_renewed_count += 1
-        
-        total_churned = len(expired_rows)
-        churn_rate = (not_renewed_count / total_churned * 100) if total_churned > 0 else 0.0
-        
-        # Формируем ежедневную статистику
-        daily = []
-        start_date = datetime.datetime.fromtimestamp(start_timestamp).date()
-        end_date = datetime.datetime.now().date()
-        
-        current_date = start_date
-        while current_date <= end_date:
-            date_str = current_date.strftime('%Y-%m-%d')
-            if date_str in daily_churn:
-                expired = daily_churn[date_str]['expired_count']
-                renewed = daily_churn[date_str]['renewed_count']
-                not_renewed = expired - renewed
-                daily_churn_rate = (not_renewed / expired * 100) if expired > 0 else 0.0
-                
-                daily.append({
-                    'date': date_str,
-                    'expired_count': expired,
-                    'renewed_count': renewed,
-                    'not_renewed_count': not_renewed,
-                    'churn_rate': round(daily_churn_rate, 2)
-                })
-            else:
-                daily.append({
-                    'date': date_str,
-                    'expired_count': 0,
-                    'renewed_count': 0,
-                    'not_renewed_count': 0,
-                    'churn_rate': 0.0
-                })
-            current_date += datetime.timedelta(days=1)
-        
-        return {
-            'total_churned': total_churned,
-            'not_renewed': not_renewed_count,
-            'renewed': renewed_count,
-            'churn_rate': round(churn_rate, 2),
-            'daily': daily
-        }

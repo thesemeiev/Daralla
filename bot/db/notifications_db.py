@@ -146,11 +146,6 @@ async def get_daily_notification_stats(days: int = 14):
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
 
-async def clear_user_notifications(user_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM sent_notifications WHERE user_id = ?", (user_id,))
-        await db.commit()
-
 async def get_notification_settings():
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT key, value FROM notification_settings") as cur:

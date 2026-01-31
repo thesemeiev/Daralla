@@ -77,10 +77,10 @@ backups/
 
 # Documentation
 *.md
-!README.md
 
 # Server scripts
 deploy-server.sh
 rollback.sh
 backup.sh
 setup-server.sh
+setup_nginx_after_ssl.sh

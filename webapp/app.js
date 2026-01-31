@@ -4563,8 +4563,25 @@ document.addEventListener('focusin', function (e) {
     }, 0);
 });
 
+// Загружаем цены с сервера и обновляем отображение (публичный API, без авторизации)
+async function loadPrices() {
+    try {
+        const res = await fetch('/api/prices');
+        if (res.ok) {
+            const data = await res.json();
+            const prices = data.prices || { month: 150, '3month': 350 };
+            document.querySelectorAll('.plan-price[data-period="month"]').forEach(el => { el.textContent = (prices.month || 150) + '₽'; });
+            document.querySelectorAll('.plan-price[data-period="3month"]').forEach(el => { el.textContent = (prices['3month'] || 350) + '₽'; });
+        }
+    } catch (e) {
+        console.warn('Не удалось загрузить цены, используются значения по умолчанию', e);
+    }
+}
+
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
+    // Загружаем цены
+    loadPrices();
     // Включаем защиту от закрытия при скролле вверх
     preventCloseOnScroll();
     if ('serviceWorker' in navigator) {

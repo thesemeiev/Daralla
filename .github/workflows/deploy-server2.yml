@@ -197,7 +197,7 @@ jobs:
           cd /root
           echo "Current directory: $(pwd)"
           echo "Directory contents: $(ls -la)"
-          sudo git clone https://thesemeiev:${{ secrets.REPO_CLONE_TOKEN }}@github.com/thesemeiev/Daralla.git Daralla
+          sudo git clone https://${{ github.repository_owner }}:${{ secrets.REPO_CLONE_TOKEN }}@github.com/${{ github.repository }}.git Daralla
           echo "After clone, directory contents: $(ls -la)"
           cd /root/Daralla
           echo "In Daralla directory: $(pwd)"
@@ -302,11 +302,7 @@ jobs:
               echo "YOOKASSA_SECRET_KEY=" | sudo tee -a .env > /dev/null
               echo "# Webhook Configuration" | sudo tee -a .env > /dev/null
               echo "WEBHOOK_URL=" | sudo tee -a .env > /dev/null
-              echo "# X-UI Server Configuration" | sudo tee -a .env > /dev/null
-              echo "XUI_HOST_LATVIA_1=" | sudo tee -a .env > /dev/null
-              echo "XUI_LOGIN_LATVIA_1=" | sudo tee -a .env > /dev/null
-              echo "XUI_PASSWORD_LATVIA_1=" | sudo tee -a .env > /dev/null
-              echo "⚠️  Minimal .env file created. Please configure it manually!"
+              echo "⚠️  Minimal .env file created. Add servers via admin panel."
               echo "⚠️  Edit /root/Daralla/.env and add your configuration values"
             fi
           fi
@@ -339,6 +335,7 @@ jobs:
           sudo chmod 755 data/
           
           # Configure webhook URL
+          # Set WEBHOOK_DOMAIN in GitHub Secrets for your domain (e.g. daralla.ru)
           # Check if domain is configured (Nginx with SSL)
           echo "Checking webhook configuration..."
           

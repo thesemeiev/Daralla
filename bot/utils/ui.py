@@ -3,6 +3,11 @@ UI компоненты для бота (эмодзи, стили, кнопки,
 """
 from telegram import InlineKeyboardButton
 
+try:
+    from ..prices_config import PRICE_MONTH, PRICE_3MONTH
+except ImportError:
+    PRICE_MONTH, PRICE_3MONTH = 150, 350
+
 
 class UIEmojis:
     """Эмодзи для интерфейса (используются в payment_processors и validators)"""
@@ -39,8 +44,8 @@ class UIButtons:
     """Шаблоны кнопок для единообразия"""
     
     @staticmethod
-    def main_menu_buttons(is_admin=False):
-        """Кнопки главного меню (Mini App + канал). is_admin не используется — админка только в вебе."""
+    def main_menu_buttons():
+        """Кнопки главного меню (Mini App + канал)."""
         # Получаем WEBAPP_URL из bot.py
         webapp_url = None
         try:
@@ -143,8 +148,8 @@ class UIMessages:
                 f"\n"
                 f"Продлите подписку сейчас, чтобы не потерять доступ к VPN.\n\n"
                 f" <b>Цены:</b>\n"
-                f"• 1 месяц — 150₽\n"
-                f"• 3 месяца — 350₽ (выгоднее)\n"
+                f"• 1 месяц — {PRICE_MONTH}₽\n"
+                f"• 3 месяца — {PRICE_3MONTH}₽ (выгоднее)\n"
             )
             return message
         elif days_until_expiry <= 1:
@@ -159,8 +164,8 @@ class UIMessages:
                 f"\n"
                 f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
                 f" <b>Цены:</b>\n"
-                f"• 1 месяц — 150₽\n"
-                f"• 3 месяца — 350₽ (выгоднее)\n"
+                f"• 1 месяц — {PRICE_MONTH}₽\n"
+                f"• 3 месяца — {PRICE_3MONTH}₽ (выгоднее)\n"
             )
             return message
         else:
@@ -175,8 +180,8 @@ class UIMessages:
                 f"\n"
                 f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
                 f" <b>Цены:</b>\n"
-                f"• 1 месяц — 150₽\n"
-                f"• 3 месяца — 350₽ (выгоднее)\n"
+                f"• 1 месяц — {PRICE_MONTH}₽\n"
+                f"• 3 месяца — {PRICE_3MONTH}₽ (выгоднее)\n"
             )
             return message
 

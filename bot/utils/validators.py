@@ -18,7 +18,7 @@ async def check_private_chat(update: Update) -> bool:
         await safe_edit_or_reply(
             update.message,
             f"{UIEmojis.WARNING} Эта команда работает только в личных сообщениях.\n"
-            f"Напишите мне в личку для работы с VPN-ключами.",
+            f"Откройте приложение для управления подписками.",
             parse_mode="HTML"
         )
         return False

@@ -24,12 +24,17 @@ jobs:
         timeout: 60s
         command_timeout: 10m
         script: |
-          cd /root/Daralla || cd /home/root/Daralla || find / -name "docker-compose.yml" -type f 2>/dev/null | head -1 | xargs dirname
+          DARALLA_DIR="/root/Daralla"
+          if [ ! -d "$DARALLA_DIR" ]; then
+            FOUND=$(find /root /home -maxdepth 4 -name "docker-compose.yml" 2>/dev/null | head -1)
+            [ -n "$FOUND" ] && DARALLA_DIR="$(dirname "$FOUND")"
+          fi
+          cd "$DARALLA_DIR" || { echo "Project dir not found"; exit 1; }
           echo "💾 Создаю ежедневную резервную копию..."
-          ./backup.sh "daily_backup_$(date +'%Y%m%d')"
+          ./backup.sh "daily_$(date +'%Y%m%d_%H%M%S')"
           
           # Очищаем старые бэкапы (старше 7 дней)
-          find ./backups -name "daily_backup_*.tar.gz" -mtime +7 -delete
+          find ./backups -name "*.tar.gz" -mtime +7 -delete
           
           echo "✅ Резервная копия создана"
 

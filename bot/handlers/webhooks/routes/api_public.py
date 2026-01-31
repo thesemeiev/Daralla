@@ -14,6 +14,33 @@ logger = logging.getLogger(__name__)
 def create_blueprint(bot_app):
     bp = Blueprint('api_public', __name__)
 
+    @bp.route('/api/prices', methods=['GET', 'OPTIONS'])
+    def api_prices():
+        """API endpoint для получения цен (публичный, без авторизации)"""
+        if request.method == 'OPTIONS':
+            return ('', 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            })
+        try:
+            from ....prices_config import PRICES
+            return jsonify({
+                'success': True,
+                'prices': PRICES,
+                'month': PRICES.get('month', 150),
+                '3month': PRICES.get('3month', 350),
+            }), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json",
+            }
+        except Exception as e:
+            logger.error(f"Ошибка в API /api/prices: {e}", exc_info=True)
+            return jsonify({'success': True, 'prices': {'month': 150, '3month': 350}, 'month': 150, '3month': 350}), 200, {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json",
+            }
+
     @bp.route('/api/servers', methods=['GET', 'OPTIONS'])
     def api_servers():
         """API endpoint для получения статуса серверов"""

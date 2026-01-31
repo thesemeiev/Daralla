@@ -7,9 +7,10 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 
 from ...utils import (
-    UIEmojis, UIStyles, UIButtons, UIMessages,
+    UIStyles, UIButtons, UIMessages,
     safe_edit_or_reply_universal, check_private_chat
 )
+from ...navigation import MenuTypes
 from ...db import register_simple_user
 from ...db.subscribers_db import (
     get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription,
@@ -29,14 +30,13 @@ def get_globals():
     try:
         from ... import bot as bot_module
         return {
-            'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
             'new_client_manager': getattr(bot_module, 'new_client_manager', None),
             'subscription_manager': getattr(bot_module, 'subscription_manager', None),
             'WEBAPP_URL': getattr(bot_module, 'WEBAPP_URL', None),
         }
     except (ImportError, AttributeError):
         # Fallback если модуль еще не загружен
-        return {'ADMIN_IDS': [], 'WEBAPP_URL': None}
+        return {'new_client_manager': None, 'subscription_manager': None, 'WEBAPP_URL': None}
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -109,7 +109,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     globals_dict = get_globals()
-    ADMIN_IDS = globals_dict['ADMIN_IDS']
     new_client_manager = globals_dict['new_client_manager']
     
     telegram_id = str(update.effective_user.id)
@@ -258,10 +257,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         welcome_text += trial_info
     
     # Создаем кнопки главного меню используя единый стиль
-    is_admin = update.effective_user.id in ADMIN_IDS
-    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
+    buttons = UIButtons.main_menu_buttons()
     keyboard = InlineKeyboardMarkup(buttons)
     
     # Отправляем меню с фото
-    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type="main_menu")
+    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.MAIN_MENU)
 
