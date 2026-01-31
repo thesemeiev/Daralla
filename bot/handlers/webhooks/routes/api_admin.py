@@ -1480,13 +1480,14 @@ def create_blueprint(bot_app):
                     'server_name': server_name,
                     'display_name': info.get('display_name', server_name),
                     'location': info.get('location', 'Unknown'),
-                    'online_clients': item.get('online_clients', 0),  # Текущее значение
+                    'online_clients': item.get('online_clients', 0),
                     'total_active': item.get('total_active', 0),
                     'offline_clients': item.get('offline_clients', 0),
-                    'avg_online_24h': item.get('avg_online_24h', 0),  # Среднее за 24 часа
-                    'max_online_24h': item.get('max_online_24h', 0),  # Максимум за 24 часа
-                    'min_online_24h': item.get('min_online_24h', 0),  # Минимум за 24 часа
-                    'samples_24h': item.get('samples_24h', 0)  # Количество измерений
+                    'avg_online_24h': item.get('avg_online_24h', 0),
+                    'max_online_24h': item.get('max_online_24h', 0),
+                    'min_online_24h': item.get('min_online_24h', 0),
+                    'samples_24h': item.get('samples_24h', 0),
+                    'load_percentage': item.get('load_percentage', 0)
                 })
         
             # Группируем по локациям для дополнительной статистики
@@ -2000,7 +2001,9 @@ def create_blueprint(bot_app):
                         subscription_port=data.get('subscription_port'),
                         subscription_url=data.get('subscription_url') or None,
                         client_flow=data.get('client_flow') or None,
-                        map_label=data.get('map_label') or None
+                        map_label=data.get('map_label') or None,
+                        location=data.get('location') or None,
+                        max_concurrent_clients=data.get('max_concurrent_clients')
                     ))
                 
                     # Обновляем MultiServerManager

@@ -1125,6 +1125,14 @@
                         <input type="text" id="server-display-input" required placeholder="Например: 🇩🇪 Germany - 1">
                     </div>
                     <div class="form-group">
+                        <label for="server-location-input">Локация</label>
+                        <input type="text" id="server-location-input" placeholder="Например: Poland, Netherlands, Germany — для графика нагрузки и группировки">
+                    </div>
+                    <div class="form-group">
+                        <label for="server-max-concurrent-input">Порог для графика нагрузки</label>
+                        <input type="number" id="server-max-concurrent-input" min="1" max="10000" placeholder="50" title="Макс. одновременных клиентов, после чего канал считается загруженным (100%). Для 1 vCPU / 1 GB / 100 Mbps обычно 50–80">
+                    </div>
+                    <div class="form-group">
                         <label for="server-host-input">Хост (с http/https и портом)</label>
                         <input type="text" id="server-host-input" required placeholder="http://1.2.3.4:2053">
                     </div>

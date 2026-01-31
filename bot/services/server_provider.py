@@ -27,18 +27,26 @@ class ServerProvider:
         
         result = {}
         for s in servers:
-            # Пытаемся определить локацию
-            location = "Other"
-            display_name = s.get("display_name", "")
-            if "Poland" in display_name: location = "Poland"
-            elif "Netherlands" in display_name: location = "Netherlands"
-            elif "Russia" in display_name: location = "Russia"
-            elif "Latvia" in display_name: location = "Latvia"
+            # Локация: из настроек сервера (админка), иначе по display_name, иначе Other
+            location = (s.get("location") or "").strip()
+            if not location:
+                display_name = s.get("display_name", "")
+                if "Poland" in display_name: location = "Poland"
+                elif "Netherlands" in display_name: location = "Netherlands"
+                elif "Russia" in display_name: location = "Russia"
+                elif "Latvia" in display_name: location = "Latvia"
+                else: location = "Other"
             
             if location not in result:
                 result[location] = []
             
-            # Приводим к формату, который ожидает MultiServerManager
+            cap = s.get("max_concurrent_clients")
+            if cap is None: cap = 50
+            try: cap = int(cap)
+            except (TypeError, ValueError): cap = 50
+            if cap <= 0: cap = 50
+            
+            # Приводим к формату, который ожидает MultiServerManager (config попадает в server["config"])
             result[location].append({
                 "name": s["name"],
                 "display_name": s["display_name"],
@@ -52,7 +60,9 @@ class ServerProvider:
                 "group_id": s["group_id"],
                 "subscription_port": s.get("subscription_port", 2096),
                 "subscription_url": s.get("subscription_url"),
-                "client_flow": (s.get("client_flow") or "").strip() or None
+                "client_flow": (s.get("client_flow") or "").strip() or None,
+                "location": location,
+                "max_concurrent_clients": cap
             })
             
         return result

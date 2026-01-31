@@ -203,6 +203,18 @@ async def init_subscribers_db():
         except Exception as e:
             if "duplicate column name" not in str(e).lower():
                 logger.error(f"Ошибка миграции (map_label): {e}")
+        try:
+            await db.execute("ALTER TABLE servers_config ADD COLUMN location TEXT")
+            logger.info("Добавлена колонка location в таблицу servers_config")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (location): {e}")
+        try:
+            await db.execute("ALTER TABLE servers_config ADD COLUMN max_concurrent_clients INTEGER DEFAULT 50")
+            logger.info("Добавлена колонка max_concurrent_clients в таблицу servers_config")
+        except Exception as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"Ошибка миграции (max_concurrent_clients): {e}")
 
         # Таблица связей подписки с серверами
         await db.execute("""
@@ -1174,26 +1186,26 @@ async def get_server_load_data():
             
             logger.info(f"Сервер {server_name}: активных={total_active}, онлайн={online_count}, офлайн={offline_count}")
             
-            # Получаем средние значения за последние 24 часа
+            # Порог для графика нагрузки из настроек сервера (по умолчанию 50)
+            capacity = (server.get("config") or {}).get("max_concurrent_clients") or 50
+            if capacity <= 0:
+                capacity = 50
+            load_percentage = min(100, round((online_count / capacity) * 100, 1))
+            
+            # Средние за 24 часа для подсказок
             averages = await get_server_load_averages(period_hours=24)
             server_avg = averages.get(server_name, {})
             
-            # Рассчитываем процент загрузки (если есть лимит активных клиентов)
-            # Для capacity planning можно использовать total_active как максимальную емкость
-            load_percentage = 0
-            if total_active > 0:
-                load_percentage = round((server_avg.get('avg_online', 0) / total_active) * 100, 1)
-            
             server_data.append({
                 'server_name': server_name,
-                'online_clients': online_count,  # Текущее значение
+                'online_clients': online_count,
                 'total_active': total_active,
                 'offline_clients': offline_count,
-                'avg_online_24h': server_avg.get('avg_online', 0),  # Среднее за 24 часа
-                'max_online_24h': server_avg.get('max_online', 0),  # Максимум за 24 часа
-                'min_online_24h': server_avg.get('min_online', 0),  # Минимум за 24 часа
-                'samples_24h': server_avg.get('samples', 0),  # Количество измерений
-                'load_percentage': load_percentage  # Процент загрузки канала
+                'avg_online_24h': server_avg.get('avg_online', 0),
+                'max_online_24h': server_avg.get('max_online', 0),
+                'min_online_24h': server_avg.get('min_online', 0),
+                'samples_24h': server_avg.get('samples', 0),
+                'load_percentage': load_percentage
             })
         except Exception as e:
             logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}", exc_info=True)
@@ -1271,15 +1283,17 @@ async def add_server_group(name: str, description: str = None, is_default: bool 
 async def add_server_config(group_id: int, name: str, host: str, login: str, password: str, 
                            display_name: str = None, vpn_host: str = None, lat: float = None, lng: float = None,
                            subscription_port: int = None, subscription_url: str = None, client_flow: str = None,
-                           map_label: str = None):
+                           map_label: str = None, location: str = None, max_concurrent_clients: int = None):
     """Добавляет конфигурацию сервера"""
     port = 2096 if subscription_port is None else subscription_port
+    cap = 50 if max_concurrent_clients is None else max_concurrent_clients
+    loc = (location or "").strip() or None
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """INSERT INTO servers_config 
-               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (group_id, name, display_name, host, login, password, vpn_host, lat, lng, port, subscription_url, (client_flow or "").strip() or None, (map_label or "").strip() or None)
+               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (group_id, name, display_name, host, login, password, vpn_host, lat, lng, port, subscription_url, (client_flow or "").strip() or None, (map_label or "").strip() or None, loc, cap)
         ) as cur:
             server_id = cur.lastrowid
             await db.commit()
@@ -1359,7 +1373,7 @@ async def update_server_config(server_id: int, **kwargs):
         updates = []
         params = []
         for key, value in kwargs.items():
-            if key in ['group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host', 'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url', 'client_flow', 'map_label']:
+            if key in ['group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host', 'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url', 'client_flow', 'map_label', 'location', 'max_concurrent_clients']:
                 updates.append(f"{key} = ?")
                 params.append(value)
                 

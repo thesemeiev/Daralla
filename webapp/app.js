@@ -6583,6 +6583,8 @@ function showAddServerConfigModal() {
     document.getElementById('server-map-label-input').value = '';
     document.getElementById('server-lat-input').value = '';
     document.getElementById('server-lng-input').value = '';
+    document.getElementById('server-location-input').value = '';
+    document.getElementById('server-max-concurrent-input').value = '50';
     showModal('server-config-modal');
 }
 
@@ -6605,6 +6607,8 @@ function editServerConfig(serverId) {
     document.getElementById('server-map-label-input').value = server.map_label || '';
     document.getElementById('server-lat-input').value = server.lat || '';
     document.getElementById('server-lng-input').value = server.lng || '';
+    document.getElementById('server-location-input').value = server.location || '';
+    document.getElementById('server-max-concurrent-input').value = server.max_concurrent_clients != null ? String(server.max_concurrent_clients) : '50';
     showModal('server-config-modal');
 }
 
@@ -6627,6 +6631,8 @@ async function saveServerConfig(event) {
         map_label: document.getElementById('server-map-label-input').value?.trim() || null,
         lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
         lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
+        location: document.getElementById('server-location-input').value?.trim() || null,
+        max_concurrent_clients: (() => { const v = document.getElementById('server-max-concurrent-input').value; const n = parseInt(v, 10); return (v !== '' && !isNaN(n) && n >= 1) ? n : null; })(),
         id: id || undefined,
         action: id ? undefined : 'add'
     };
