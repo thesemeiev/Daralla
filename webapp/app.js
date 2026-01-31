@@ -3630,8 +3630,9 @@ async function loadServerLoadChart(chartCanvasId) {
                 },
                 datasets: {
                     bar: {
-                        barPercentage: 0.4,
-                        categoryPercentage: 0.6
+                        barThickness: 6,
+                        maxBarThickness: 8,
+                        categoryPercentage: 0.55
                     }
                 }
             }
