@@ -1639,8 +1639,7 @@ def create_blueprint(bot_app):
                         'failed_count': stats.get('failed_count', 0),
                         'blocked_users': stats.get('blocked_users', 0),
                         'success_rate': stats.get('success_rate', 0),
-                        'by_type': stats.get('by_type', []),
-                        'effectiveness': stats.get('effectiveness_stats', {})
+                        'by_type': stats.get('by_type', [])
                     },
                     'daily': []
                 }
@@ -1755,45 +1754,6 @@ def create_blueprint(bot_app):
             }
         except Exception as e:
             logger.error(f"Ошибка в /api/admin/charts/subscriptions: {e}", exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500
-
-    @bp.route('/api/admin/charts/churn-rate', methods=['POST', 'OPTIONS'])
-    def api_admin_charts_churn_rate():
-        """Данные для графика Churn Rate (отток пользователей)"""
-        if request.method == 'OPTIONS':
-            return ('', 200, {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            })
-    
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({'error': 'Access denied'}), 403
-        
-            data = request.get_json(silent=True) or {}
-        
-            days = int(data.get('days', 30))
-        
-            from ....db.subscribers_db import get_churn_rate_data
-        
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                churn_data = loop.run_until_complete(get_churn_rate_data(days))
-            finally:
-                loop.close()
-        
-            return jsonify({
-                'success': True,
-                'data': churn_data
-            }), 200, {
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "application/json"
-            }
-        except Exception as e:
-            logger.error(f"Ошибка в /api/admin/charts/churn-rate: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 
     @bp.route('/api/admin/broadcast', methods=['POST', 'OPTIONS'])

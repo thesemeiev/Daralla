@@ -32,7 +32,7 @@ from .notifications_db import (
     get_notification_stats, get_daily_notification_stats,
     get_notification_settings, set_notification_setting,
     is_subscription_notification_sent, mark_subscription_notification_sent,
-    clear_subscription_notifications, record_subscription_notification_effectiveness
+    clear_subscription_notifications
 )
 from .subscribers_db import (
     init_subscribers_db, get_or_create_subscriber, create_subscription,
@@ -73,7 +73,7 @@ __all__ = [
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
     'get_daily_notification_stats', 'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
-    'clear_subscription_notifications', 'record_subscription_notification_effectiveness',
+    'clear_subscription_notifications',
     'get_or_create_subscriber', 'create_subscription', 'get_all_active_subscriptions',
     'update_subscription_status', 'update_subscription_name', 'get_subscription_by_token',
     'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',

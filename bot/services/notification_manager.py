@@ -20,8 +20,6 @@ from ..db import (
     set_notification_setting,
     is_subscription_notification_sent,
     mark_subscription_notification_sent,
-    clear_subscription_notifications,
-    record_subscription_notification_effectiveness
 )
 from ..utils import UIMessages, calculate_time_remaining
 
@@ -42,8 +40,7 @@ class NotificationManager:
             'check_interval': '300',  # 5 минут
             'cleanup_interval': '86400',  # 24 часа
             'days_to_keep': '30',
-            'enable_metrics': 'true',
-            'enable_effectiveness_tracking': 'true'
+            'enable_metrics': 'true'
         }
     
     async def initialize(self):
@@ -248,14 +245,3 @@ class NotificationManager:
                 await self.bot.send_message(chat_id=admin_id, text=f"[VPNBot NOTIFICATIONS]\n{message}")
             except Exception:
                 pass
-
-    async def record_subscription_extension(self, user_id: str, subscription_id: int):
-        """Записывает факт продления подписки для анализа эффективности"""
-        try:
-            await record_subscription_notification_effectiveness(
-                user_id, subscription_id, "extension", 
-                action="extended"
-            )
-            await clear_subscription_notifications(subscription_id)
-        except Exception as e:
-            logger.error(f"Ошибка записи продления подписки: {e}")

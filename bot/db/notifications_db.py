@@ -36,20 +36,6 @@ async def init_notifications_db():
             )
         ''')
 
-        # Таблица эффективности (нажал ли пользователь на кнопку после уведомления)
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS notification_effectiveness (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                subscription_id INTEGER NOT NULL,
-                notification_type TEXT NOT NULL,
-                sent_at INTEGER NOT NULL,
-                action_taken TEXT, -- 'clicked_extend', 'renewed'
-                action_taken_at INTEGER,
-                days_until_expiry INTEGER
-            )
-        ''')
-
         # Настройки уведомлений (вкл/выкл, время)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS notification_settings (
@@ -80,8 +66,6 @@ async def cleanup_old_notifications(days: int = 30):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("DELETE FROM sent_notifications WHERE sent_at < ?", (cutoff,))
         deleted_count = cursor.rowcount
-        await db.execute("DELETE FROM notification_effectiveness WHERE sent_at < ?", (cutoff,))
-        deleted_count += cursor.rowcount
         await db.commit()
         return deleted_count
 
@@ -119,16 +103,6 @@ async def get_notification_stats(days: int = 7):
         ''', (cutoff,)) as cur:
             rows = await cur.fetchall()
             stats['by_type'] = [dict(r) for r in rows]
-
-        # Статистика эффективности
-        async with db.execute('''
-            SELECT action_taken, COUNT(*) as count
-            FROM notification_effectiveness
-            WHERE sent_at >= ?
-            GROUP BY action_taken
-        ''', (int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()),)) as cur:
-            rows = await cur.fetchall()
-            stats['effectiveness_stats'] = {r['action_taken']: r['count'] for r in rows}
 
         return stats
 
@@ -186,12 +160,3 @@ async def clear_subscription_notifications(subscription_id: int):
         await db.execute("DELETE FROM sent_notifications WHERE subscription_id = ?", (subscription_id,))
         await db.commit()
 
-async def record_subscription_notification_effectiveness(user_id: str, subscription_id: int, notification_type: str, action: str):
-    now = int(datetime.datetime.now().timestamp())
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('''
-            UPDATE notification_effectiveness 
-            SET action_taken = ?, action_taken_at = ?
-            WHERE user_id = ? AND subscription_id = ? AND notification_type = ? AND action_taken IS NULL
-        ''', (action, now, user_id, subscription_id, notification_type))
-        await db.commit()

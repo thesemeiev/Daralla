@@ -2978,7 +2978,6 @@ let revenueTrendChart = null;
 let notificationDeliveryChart = null;
 let subscriptionDynamicsChart = null;
 let subscriptionConversionChart = null;
-let churnRateChart = null;
 
 // Загрузка графика роста пользователей (chartCanvasId — для страницы «Аналитика пользователей»: 'users-analytics-growth-chart')
 async function loadUserGrowthChart(days = 30, chartCanvasId) {
@@ -4048,11 +4047,6 @@ async function loadNotificationStats(days = 7) {
         document.getElementById('notifications-success-rate').textContent = (stats.success_rate || 0).toFixed(1) + '%';
         document.getElementById('notifications-blocked').textContent = stats.blocked_users || 0;
         
-        // Эффективность (продления после уведомлений)
-        const effectiveness = stats.effectiveness || {};
-        const extensions = effectiveness['extended'] || 0;
-        document.getElementById('notifications-effectiveness').textContent = extensions;
-        
         document.getElementById('admin-notifications-loading').style.display = 'none';
         document.getElementById('admin-notifications-content').style.display = 'block';
         
@@ -5086,12 +5080,10 @@ async function loadSubscriptionStats(days = 30) {
         document.getElementById('admin-subscriptions-content').style.display = 'block';
         
         // Карточки из API подписок
+        document.getElementById('subscriptions-total-active').textContent = types.total_active || 0;
         document.getElementById('subscriptions-trial').textContent = types.trial_active || 0;
         document.getElementById('subscriptions-purchased').textContent = types.purchased_active || 0;
         document.getElementById('subscriptions-conversion').textContent = (types.conversion_rate || 0).toFixed(1) + '%';
-        document.getElementById('subscriptions-month').textContent = types.month_active || 0;
-        document.getElementById('subscriptions-3month').textContent = types['3month_active'] || 0;
-        document.getElementById('subscriptions-total-active').textContent = types.total_active || 0;
         
         // Истекшие и удалённые — из общей статистики
         if (statsResponse.ok) {
@@ -5106,7 +5098,6 @@ async function loadSubscriptionStats(days = 30) {
         // Загружаем графики
         await loadSubscriptionDynamicsChart(data.dynamics || []);
         await loadSubscriptionConversionChart(data.conversion || {});
-        await loadChurnRateChart(days);
         
     } catch (error) {
         console.error('Ошибка загрузки статистики подписок:', error);
@@ -5371,179 +5362,6 @@ function changeConversionSubscriptionsPeriod() {
     const select = document.getElementById('conversion-subscriptions-period');
     const days = parseInt(select.value);
     loadSubscriptionStats(days);
-}
-
-// Загрузка графика Churn Rate
-async function loadChurnRateChart(days = 30) {
-    try {
-        const response = await apiFetch('/api/admin/charts/churn-rate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ days: days })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки данных графика');
-        }
-        
-        const result = await response.json();
-        if (!result.success || !result.data) {
-            return;
-        }
-        
-        const ctx = document.getElementById('churn-rate-chart');
-        if (!ctx) {
-            return;
-        }
-        
-        // Уничтожаем предыдущий график, если он существует
-        if (churnRateChart) {
-            churnRateChart.destroy();
-        }
-        
-        const churnData = result.data;
-        const daily = churnData.daily || [];
-        
-        // Подготавливаем данные
-        const labels = daily.map(item => {
-            const date = new Date(item.date + 'T00:00:00');
-            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-        });
-        
-        // Создаем комбинированный график
-        churnRateChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Churn Rate (%)',
-                        data: daily.map(item => item.churn_rate || 0),
-                        borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        tension: 0.4,
-                        fill: true,
-                        yAxisID: 'y',
-                        pointRadius: 3,
-                        pointHoverRadius: 5
-                    },
-                    {
-                        label: 'Истекло подписок',
-                        data: daily.map(item => item.expired_count || 0),
-                        type: 'bar',
-                        backgroundColor: 'rgba(255, 206, 86, 0.5)',
-                        borderColor: 'rgba(255, 206, 86, 1)',
-                        borderWidth: 1,
-                        yAxisID: 'y1'
-                    },
-                    {
-                        label: 'Продлено',
-                        data: daily.map(item => item.renewed_count || 0),
-                        type: 'bar',
-                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)',
-                            drawOnChartArea: true
-                        },
-                        title: {
-                            display: true,
-                            text: 'Churn Rate (%)',
-                            color: 'rgb(255, 99, 132)'
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.05)',
-                            drawOnChartArea: false
-                        },
-                        title: {
-                            display: true,
-                            text: 'Количество подписок',
-                            color: 'rgb(255, 206, 86)'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom',
-                        align: 'start',
-                        labels: {
-                            boxWidth: 12,
-                            boxHeight: 12,
-                            padding: 8,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const index = context.dataIndex;
-                                const item = daily[index];
-                                if (context.datasetIndex === 0) {
-                                    return `Churn Rate: ${item.churn_rate}% (Истекло: ${item.expired_count}, Продлено: ${item.renewed_count}, Не продлено: ${item.not_renewed_count})`;
-                                } else if (context.datasetIndex === 1) {
-                                    return `Истекло: ${item.expired_count}`;
-                                } else {
-                                    return `Продлено: ${item.renewed_count}`;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Ошибка загрузки графика Churn Rate:', error);
-    }
-}
-
-// Изменение периода для графика Churn Rate
-function changeChurnRatePeriod() {
-    const select = document.getElementById('churn-rate-period');
-    const days = parseInt(select.value);
-    loadChurnRateChart(days);
 }
 
 // ==================== РАССЫЛКА ====================

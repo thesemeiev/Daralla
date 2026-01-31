@@ -252,16 +252,6 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             await update_payment_status(payment_id, 'succeeded')
             await update_payment_activation(payment_id, 1)
             
-            # Записываем факт продления подписки для анализа эффективности уведомлений
-            try:
-                globals_dict = get_globals()
-                notification_manager = globals_dict.get('notification_manager')
-                if notification_manager:
-                    # Передаем user_id и subscription_id для записи эффективности
-                    await notification_manager.record_subscription_extension(user_id, extension_subscription_id)
-            except Exception as e:
-                logger.warning(f"Ошибка записи продления подписки для уведомлений: {e}")
-            
             # Отправляем уведомление о продлении подписки
             try:
                 expiry_time = datetime.datetime.fromtimestamp(new_expires_at)
