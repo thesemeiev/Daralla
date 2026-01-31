@@ -164,8 +164,8 @@ let serverLoadChartInterval = null;
 
 // Функция переключения страниц (params — необязательный объект для hash)
 function showPage(pageName, params) {
-    // Очищаем интервалы при уходе со страницы серверов
-    if (currentPage === 'servers' && pageName !== 'servers' && serverLoadChartInterval) {
+    // Очищаем интервалы при уходе со страницы аналитики серверов
+    if (currentPage === 'admin-servers-analytics' && pageName !== 'admin-servers-analytics' && serverLoadChartInterval) {
         clearInterval(serverLoadChartInterval);
         serverLoadChartInterval = null;
     }
@@ -2899,7 +2899,7 @@ async function loadServersAnalyticsPage() {
         if (errorEl) errorEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'none';
         
-        await loadServerLoadChart('servers-analytics-load-chart');
+        await loadServerLoadChart();
         
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
@@ -2907,7 +2907,7 @@ async function loadServersAnalyticsPage() {
         if (serverLoadChartInterval) clearInterval(serverLoadChartInterval);
         serverLoadChartInterval = setInterval(() => {
             if (currentPage === 'admin-servers-analytics') {
-                loadServerLoadChart('servers-analytics-load-chart');
+                loadServerLoadChart();
             }
         }, 2 * 60 * 1000);
     } catch (error) {
@@ -2972,7 +2972,6 @@ async function loadFinancePage() {
 
 // Переменные для хранения экземпляров графиков
 let userGrowthChart = null;
-let serverLoadChart = null;
 let conversionChart = null;
 let revenueTrendChart = null;
 let notificationDeliveryChart = null;
@@ -3419,9 +3418,10 @@ function changeFinanceRevenueTrendPeriod() {
     loadRevenueTrendChart(days, 'finance-revenue-trend-chart');
 }
 
-// Загрузка графика нагрузки на серверы (chartCanvasId — для страницы «Аналитика серверов»: 'servers-analytics-load-chart')
-async function loadServerLoadChart(chartCanvasId) {
-    const canvasId = chartCanvasId || 'server-load-chart';
+// Загрузка списка нагрузки на серверы (карточки с progress bar)
+async function loadServerLoadChart() {
+    const container = document.getElementById('servers-load-list');
+    if (!container) return;
     try {
         const response = await apiFetch('/api/admin/charts/server-load', {
             method: 'POST',
@@ -3429,216 +3429,55 @@ async function loadServerLoadChart(chartCanvasId) {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         if (!response.ok) {
-            throw new Error('Ошибка загрузки данных графика');
+            throw new Error('Ошибка загрузки данных');
         }
-        
+
         const result = await response.json();
-        if (!result.success) {
-            console.error('Ошибка в ответе API:', result);
+        if (!result.success || !result.data) {
+            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Нет данных</p>';
             return;
         }
-        
-        if (!result.data) {
-            console.warn('Нет данных в ответе API');
-            return;
-        }
-        
-        let ctx = document.getElementById(canvasId);
-        if (!ctx) {
-            console.error('Canvas элемент не найден');
-            return;
-        }
-        
-        // Уничтожаем предыдущий график, если он существует
-        if (serverLoadChart) {
-            serverLoadChart.destroy();
-        }
-        
-        // Подготавливаем данные
+
         const serverData = result.data.servers || [];
-        const locationData = result.data.locations || [];
-        
-        console.log('Данные серверов для графика:', serverData);
-        
         if (serverData.length === 0) {
-            console.warn('Нет данных о серверах для отображения');
-            const parent = ctx.parentElement;
-            const message = document.createElement('p');
-            message.style.cssText = 'text-align: center; color: #999; padding: 20px;';
-            message.textContent = 'Нет данных о нагрузке на серверы';
-            parent.innerHTML = '';
-            parent.appendChild(message);
+            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Нет данных о нагрузке на серверы</p>';
             return;
         }
-        
-        // Восстанавливаем canvas, если он был удален
-        if (!ctx.getContext) {
-            const parent = document.getElementById(canvasId).parentElement;
-            parent.innerHTML = '<canvas id="' + canvasId + '"></canvas>';
-            ctx = document.getElementById(canvasId);
-        }
-        
-        // Создаем график по серверам
-        // Используем среднее значение за 24 часа для более стабильной картины нагрузки
-        const serverLabels = serverData.map(item => item.display_name || item.server_name);
-        const serverTotalActive = serverData.map(item => item.total_active || 0);
-        const serverCurrentOnline = serverData.map(item => item.online_clients || 0);
-        const serverAvgOnline = serverData.map(item => item.avg_online_24h || 0);
-        const serverMaxOnline = serverData.map(item => item.max_online_24h || 0);
-        const serverLoadPercentage = serverData.map(item => item.load_percentage || 0);
-        
-        // Определяем цвет столбцов по проценту загрузки
-        const getLoadColor = (percentage) => {
-            if (percentage < 50) {
-                return 'rgba(75, 192, 192, 0.8)';   // Зеленый - норма
-            } else if (percentage < 80) {
-                return 'rgba(255, 206, 86, 0.8)';   // Желтый - внимание
-            } else {
-                return 'rgba(255, 99, 132, 0.8)';   // Красный - нужен новый сервер
+
+        const getLoadClass = (p) => (p >= 80 ? 'high' : p >= 50 ? 'medium' : 'low');
+
+        container.innerHTML = serverData.map((item) => {
+            const pct = item.load_percentage ?? 0;
+            const online = item.online_clients ?? 0;
+            const total = item.total_active ?? 0;
+            const name = escapeHtml(item.display_name || item.server_name);
+            const cls = getLoadClass(pct);
+            const details = [];
+            if (total > 0) details.push(`${online} онлайн / ${total} всего`);
+            if (item.avg_online_24h != null || item.max_online_24h != null) {
+                const parts = [];
+                if (item.avg_online_24h != null) parts.push(`среднее: ${item.avg_online_24h}`);
+                if (item.max_online_24h != null) parts.push(`пик: ${item.max_online_24h}`);
+                if (parts.length) details.push(parts.join(' · '));
             }
-        };
-        
-        const avgColors = serverLoadPercentage.map(p => getLoadColor(p));
-        
-        serverLoadChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: serverLabels,
-                datasets: [
-                    {
-                        label: 'Среднее за 24ч',
-                        data: serverAvgOnline,
-                        backgroundColor: avgColors,
-                        borderColor: avgColors.map(c => c.replace('0.8', '1')),
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Пик за 24ч',
-                        data: serverMaxOnline,
-                        backgroundColor: serverMaxOnline.map((_, i) => avgColors[i].replace('0.8', '0.3')),
-                        borderColor: avgColors.map(c => c.replace('0.8', '1')),
-                        borderWidth: 1,
-                        borderDash: [3, 3]
-                    },
-                    {
-                        label: 'Текущее',
-                        data: serverCurrentOnline,
-                        backgroundColor: serverCurrentOnline.map((_, i) => avgColors[i].replace('0.8', '0.5')),
-                        borderColor: avgColors.map(c => c.replace('0.8', '1')),
-                        borderWidth: 1,
-                        borderDash: [5, 5]
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom',
-                        align: 'start',
-                        labels: {
-                            boxWidth: 12,
-                            boxHeight: 12,
-                            padding: 8,
-                            usePointStyle: false,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Нагрузка на канал серверов (среднее за 24ч, пик и текущее)',
-                        font: {
-                            size: 16
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const index = context.dataIndex;
-                                const item = serverData[index];
-                                const datasetLabel = context.dataset.label;
-                                let label = `${datasetLabel}: ${context.parsed.y}`;
-                                
-                                if (datasetLabel === 'Среднее за 24ч' && item) {
-                                    if (item.load_percentage !== undefined) {
-                                        label += ` (${item.load_percentage}% загрузки)`;
-                                    }
-                                    if (item.max_online_24h !== undefined && item.min_online_24h !== undefined) {
-                                        label += ` | мин: ${item.min_online_24h}, макс: ${item.max_online_24h}`;
-                                    }
-                                    if (item.samples_24h) {
-                                        label += ` [${item.samples_24h} измерений]`;
-                                    }
-                                } else if (datasetLabel === 'Пик за 24ч' && item) {
-                                    label += ` (максимальная нагрузка)`;
-                                } else if (datasetLabel === 'Текущее' && item && item.total_active !== undefined) {
-                                    label += ` из ${item.total_active} активных`;
-                                }
-                                return label;
-                            },
-                            afterLabel: function(context) {
-                                const index = context.dataIndex;
-                                const item = serverData[index];
-                                let info = [];
-                                if (item && item.location) {
-                                    info.push(`Локация: ${item.location}`);
-                                }
-                                if (item && item.load_percentage !== undefined) {
-                                    let recommendation = '';
-                                    if (item.load_percentage >= 80) {
-                                        recommendation = '⚠️ Рекомендуется добавить сервер';
-                                    } else if (item.load_percentage >= 50) {
-                                        recommendation = '⚡ Следить за нагрузкой';
-                                    }
-                                    if (recommendation) {
-                                        info.push(recommendation);
-                                    }
-                                }
-                                return info.join('\n');
-                            }
-                        }
-                    },
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Количество клиентов в онлайне'
-                        },
-                        ticks: {
-                            stepSize: 1
-                        },
-                        stacked: false
-                    },
-                    x: {
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45
-                        }
-                    }
-                },
-                datasets: {
-                    bar: {
-                        barThickness: 6,
-                        maxBarThickness: 8,
-                        categoryPercentage: 0.55
-                    }
-                }
-            }
-        });
+            return `
+                <div class="server-load-card" title="${item.location ? 'Локация: ' + escapeHtml(item.location) : ''}">
+                    <div class="server-load-card-header">
+                        <span class="server-load-card-name">${name}</span>
+                        <span class="server-load-card-percent ${cls}">${Math.round(pct)}%</span>
+                    </div>
+                    <div class="server-load-progress-track">
+                        <div class="server-load-progress-fill ${cls}" style="width: ${Math.min(100, pct)}%;"></div>
+                    </div>
+                    ${details.length ? `<div class="server-load-card-details">${escapeHtml(details.join(' · '))}</div>` : ''}
+                </div>
+            `;
+        }).join('');
     } catch (error) {
-        console.error('Ошибка загрузки графика нагрузки на серверы:', error);
+        console.error('Ошибка загрузки нагрузки серверов:', error);
+        container.innerHTML = '<p style="text-align: center; color: #cf7f7f; padding: 20px;">Ошибка загрузки данных</p>';
     }
 }
 
@@ -3772,8 +3611,6 @@ async function toggleFullscreen(chartId) {
                     userGrowthChart.resize();
                 } else if ((chartId === 'conversion-chart' || chartId === 'users-analytics-conversion-chart') && conversionChart) {
                     conversionChart.resize();
-                } else if ((chartId === 'server-load-chart' || chartId === 'servers-analytics-load-chart') && serverLoadChart) {
-                    serverLoadChart.resize();
                 }
             }, 200);
         }
@@ -3888,8 +3725,6 @@ function showChartModal(chartId) {
         originalChart = userGrowthChart;
     } else if ((chartId === 'conversion-chart' || chartId === 'users-analytics-conversion-chart') && conversionChart) {
         originalChart = conversionChart;
-    } else if ((chartId === 'server-load-chart' || chartId === 'servers-analytics-load-chart') && serverLoadChart) {
-        originalChart = serverLoadChart;
     }
     
     if (!originalChart) {

@@ -560,17 +560,8 @@
             </div>
             
             <div id="admin-servers-analytics-content" class="admin-page-content" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h2 style="margin: 0;">Нагрузка на канал серверов</h2>
-                    <button class="fullscreen-btn" onclick="toggleFullscreen('servers-analytics-load-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                        <span>⛶</span>
-                    </button>
-                </div>
-                <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                    <div style="position: relative; height: 400px; min-width: 700px;">
-                        <canvas id="servers-analytics-load-chart"></canvas>
-                    </div>
-                </div>
+                <h2 style="margin: 0 0 16px 0;">Нагрузка на канал серверов</h2>
+                <div id="servers-load-list" class="servers-load-list"></div>
             </div>
         </div>
 
