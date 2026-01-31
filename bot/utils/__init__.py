@@ -1,7 +1,7 @@
 """
 Утилиты для бота
 """
-from .ui import UIEmojis, UIStyles, UIButtons, UIMessages
+from .ui import UIEmojis, UIStyles, UIButtons, UIMessages, get_site_urls
 from .message_helpers import (
     safe_edit_or_reply,
     safe_edit_or_reply_photo,
@@ -15,6 +15,7 @@ from .validators import check_private_chat
 from .helpers import calculate_time_remaining
 
 __all__ = [
+    'get_site_urls',
     'UIEmojis',
     'UIStyles',
     'UIButtons',

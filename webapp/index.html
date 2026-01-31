@@ -309,7 +309,7 @@
                 <h1>Инструкции</h1>
             </header>
             
-            <div class="instructions-content" style="padding: 24px;">
+            <div class="instructions-content">
                 <div class="instructions-menu" id="instructions-menu">
                     <h2 style="margin-bottom: 16px; color: #fff;">Выберите вашу платформу:</h2>
                     <div class="instructions-grid">
@@ -374,9 +374,8 @@
 
         <!-- Раздел Аккаунт (отдельная страница, открывается по тапу на карточку профиля) -->
         <div id="page-account" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
-                <h1>Аккаунт</h1>
             </header>
             <div class="about-content about-content-account">
                 <div class="about-section">
@@ -475,7 +474,6 @@
         <div id="page-admin-users-analytics" class="page" style="display: none;">
             <header>
                 <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-                <h1 style="margin: 0; font-size: 1.25rem;">Аналитика пользователей</h1>
             </header>
             
             <div id="admin-users-analytics-loading" class="loading">
@@ -488,7 +486,7 @@
                 <button onclick="loadUsersAnalyticsPage()">Повторить</button>
             </div>
             
-            <div id="admin-users-analytics-content" style="display: none;">
+            <div id="admin-users-analytics-content" class="admin-page-content" style="display: none;">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Пользователи</div>
@@ -549,7 +547,6 @@
         <div id="page-admin-servers-analytics" class="page" style="display: none;">
             <header>
                 <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-                <h1 style="margin: 0; font-size: 1.25rem;">Аналитика серверов</h1>
             </header>
             
             <div id="admin-servers-analytics-loading" class="loading">
@@ -562,7 +559,7 @@
                 <button onclick="loadServersAnalyticsPage()">Повторить</button>
             </div>
             
-            <div id="admin-servers-analytics-content" style="display: none;">
+            <div id="admin-servers-analytics-content" class="admin-page-content" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h2 style="margin: 0;">Нагрузка на канал серверов</h2>
                     <button class="fullscreen-btn" onclick="toggleFullscreen('servers-analytics-load-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
@@ -581,7 +578,6 @@
         <div id="page-admin-finance" class="page" style="display: none;">
             <header>
                 <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-                <h1 style="margin: 0; font-size: 1.25rem;">Финансы</h1>
             </header>
             
             <div id="admin-finance-loading" class="loading">
@@ -594,7 +590,7 @@
                 <button onclick="loadFinancePage()">Повторить</button>
             </div>
             
-            <div id="admin-finance-content" style="display: none;">
+            <div id="admin-finance-content" class="admin-page-content" style="display: none;">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Доход</div>
@@ -649,7 +645,7 @@
                 <button onclick="loadNotificationStats()">Повторить</button>
             </div>
             
-            <div id="admin-notifications-content" style="display: none;">
+            <div id="admin-notifications-content" class="admin-page-content" style="display: none;">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Всего отправлено</div>
@@ -729,7 +725,7 @@
                 <button onclick="loadSubscriptionStats()">Повторить</button>
             </div>
             
-            <div id="admin-subscriptions-content" style="display: none;">
+            <div id="admin-subscriptions-content" class="admin-page-content" style="display: none;">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Пробные подписки</div>
@@ -868,7 +864,7 @@
                 <button onclick="loadAdminUsers()">Повторить</button>
             </div>
             
-            <div id="admin-users-content" style="display: none;">
+            <div id="admin-users-content" class="admin-page-content" style="display: none;">
                 <div class="admin-stats">
                     <div class="stat-item">
                         <span class="stat-label">Всего:</span>
@@ -898,7 +894,7 @@
                 <button onclick="loadBroadcastPage()">Повторить</button>
             </div>
             
-            <div id="admin-broadcast-content" style="padding: 24px;">
+            <div id="admin-broadcast-content" class="admin-page-content">
                 <div class="broadcast-top">
                     <div class="broadcast-recipients-box">
                         <p style="color: #a0a0a0; font-size: 14px; margin: 0;">
@@ -999,7 +995,7 @@
                 <p>Загрузка информации...</p>
             </div>
             
-            <div id="admin-user-detail-content"></div>
+            <div id="admin-user-detail-content" class="admin-page-content"></div>
         </div>
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Создание подписки -->
@@ -1008,7 +1004,7 @@
                 <button class="back-button" onclick="goBackFromCreateSubscription()">← Назад</button>
             </header>
             
-            <div id="admin-create-subscription-content">
+            <div id="admin-create-subscription-content" class="admin-page-content">
                 <form id="admin-create-subscription-form" onsubmit="createSubscription(event)">
                     <div class="form-group">
                         <label for="create-sub-period">Период</label>
@@ -1053,7 +1049,7 @@
                 <p>Загрузка подписки...</p>
             </div>
             
-            <div id="admin-subscription-edit-content" style="display: none;">
+            <div id="admin-subscription-edit-content" class="admin-page-content" style="display: none;">
                 <!-- Вкладки -->
                 <div class="tabs">
                     <button class="tab-button active" onclick="switchSubscriptionTab('params')">Параметры</button>
@@ -1122,9 +1118,8 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Управление серверами -->
         <div id="page-admin-server-management" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-                <h1 style="margin: 0; font-size: 18px; color: #fff;">Серверы</h1>
             </header>
             
             <div id="admin-server-management-loading" class="loading" style="display: none;">
@@ -1132,7 +1127,7 @@
                 <p>Загрузка конфигурации...</p>
             </div>
             
-            <div id="admin-server-management-content" style="padding: 16px;">
+            <div id="admin-server-management-content" class="admin-page-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2 style="margin: 0; font-size: 18px; color: #fff;">Группы серверов</h2>
                     <div style="display: flex; gap: 8px;">

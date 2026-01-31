@@ -319,6 +319,11 @@ header {
     background: var(--bg-color, #1a1a1a);
 }
 
+/* Шапка только с кнопкой «Назад» (без заголовка) — выравнивание слева */
+header:has(.back-button):not(:has(h1)) {
+    text-align: left;
+}
+
 /* Управление серверами: такой же верхний отступ у шапки, как на остальных страницах */
 #page-admin-server-management > header {
     padding-top: calc(36px + env(safe-area-inset-top, 0px));
@@ -2392,7 +2397,11 @@ h1 {
 
 /* Админ-панель: главный экран — минимализм, ровные строки */
 .admin-panel-content {
-    padding: 24px;
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 0 16px 0;
+}
+
+.admin-page-content {
+    padding: 16px 0;
 }
 
 .admin-panel-section {

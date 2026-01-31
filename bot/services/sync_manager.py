@@ -432,7 +432,7 @@ class SyncManager:
                 logger.error(error_msg)
                 stats['errors'].append(error_msg)
         
-        logger.info(f"✅ Очистка завершена: удалено {stats['deleted_count']} сиротских клиентов с {stats['servers_checked']} серверов")
+        logger.info(f" Очистка завершена: удалено {stats['deleted_count']} сиротских клиентов с {stats['servers_checked']} серверов")
         if stats['details']:
             logger.debug(f"Детали удаления: {len(stats['details'])} записей")
         return stats

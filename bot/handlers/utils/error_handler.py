@@ -68,7 +68,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # Уведомляем админа только о критических ошибках (не сетевых)
     try:
-        error_message = f"🚨 Критическая ошибка в боте:\n\n{str(context.error)}"
+        error_message = f" Критическая ошибка в боте:\n\n{str(context.error)}"
         if update and hasattr(update, 'effective_user') and update.effective_user:
             error_message += f"\n\nПользователь: {update.effective_user.id}"
         

@@ -2,11 +2,10 @@
 Обработчик callback для подтверждения привязки Telegram к веб-аккаунту
 """
 import logging
-import os
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
 
-from ...utils import safe_answer_callback_query, check_private_chat
+from ...utils import safe_answer_callback_query, check_private_chat, get_site_urls
 from ...db.subscribers_db import (
     link_telegram_consume_state, get_user_by_id,
     link_telegram_to_account,
@@ -82,10 +81,9 @@ async def link_telegram_confirm_callback(update: Update, context: ContextTypes.D
             "• Получать уведомления о подписках в этом чате"
         )
         buttons = []
-        webapp_url = os.getenv("WEBAPP_URL", "").strip()
+        webapp_url, site_url = get_site_urls()
         if webapp_url:
             buttons.append([InlineKeyboardButton("Открыть Mini App", web_app=WebAppInfo(url=webapp_url))])
-        site_url = os.getenv("WEBSITE_URL", "").strip()
         if site_url:
             buttons.append([InlineKeyboardButton("Вернуться на сайт", url=site_url)])
         keyboard = InlineKeyboardMarkup(buttons) if buttons else None

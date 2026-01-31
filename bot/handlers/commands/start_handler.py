@@ -2,12 +2,11 @@
 Обработчик команды /start
 """
 import logging
-import os
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
 
 from ...utils import (
-    UIStyles, UIButtons, UIMessages,
+    UIStyles, UIButtons, UIMessages, get_site_urls,
     safe_edit_or_reply_universal, check_private_chat
 )
 from ...navigation import MenuTypes
@@ -97,11 +96,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Получать уведомления о подписках в этом чате"
         )
         buttons = []
-        globals_dict = get_globals()
-        webapp_url = globals_dict.get("WEBAPP_URL")
+        webapp_url, site_url = get_site_urls()
         if webapp_url:
             buttons.append([InlineKeyboardButton("Открыть Mini App", web_app=WebAppInfo(url=webapp_url))])
-        site_url = os.getenv("WEBSITE_URL", "").strip()
         if site_url:
             buttons.append([InlineKeyboardButton("Вернуться на сайт", url=site_url)])
         keyboard = InlineKeyboardMarkup(buttons) if buttons else None

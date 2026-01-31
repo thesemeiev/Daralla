@@ -1,12 +1,32 @@
 """
 UI компоненты для бота (эмодзи, стили, кнопки, сообщения)
 """
+import os
 from telegram import InlineKeyboardButton
 
 try:
     from ..prices_config import PRICE_MONTH, PRICE_3MONTH
 except ImportError:
     PRICE_MONTH, PRICE_3MONTH = 150, 350
+
+
+def get_site_urls():
+    """
+    Возвращает (webapp_url, site_url) для кнопок «Открыть Mini App» и «Вернуться на сайт».
+    site_url = WEBSITE_URL или webapp_url (fallback).
+    """
+    webapp_url = None
+    try:
+        import sys
+        bot_module = sys.modules.get('bot.bot')
+        if bot_module:
+            webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
+    except (ImportError, AttributeError):
+        pass
+    site_url = os.getenv("WEBSITE_URL", "").strip()
+    if not site_url and webapp_url:
+        site_url = webapp_url
+    return webapp_url, site_url
 
 
 class UIEmojis:
