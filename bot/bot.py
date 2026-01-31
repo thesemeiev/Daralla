@@ -1,66 +1,20 @@
 import logging
-import html
-from logging.handlers import RotatingFileHandler
-import datetime
-import json
-import uuid
 import os
-import requests
-import asyncio
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import pathlib
 import telegram
-from telegram.helpers import escape_markdown
-
-# === НОВАЯ СИСТЕМА НАВИГАЦИИ ===
-from .navigation import NavigationIntegration, NavigationSystem, NavStates, CallbackData, nav_manager, NavigationBuilder
 
 # === ИМПОРТ УТИЛИТ ===
-from .utils import (
-    UIEmojis, UIStyles, UIButtons, UIMessages,
-    safe_edit_or_reply, safe_edit_or_reply_photo, safe_edit_or_reply_universal,
-    safe_send_message_with_photo, safe_edit_message_with_photo,
-    check_private_chat, calculate_time_remaining,
-    set_image_paths
-)
+from .utils import UIButtons, check_private_chat, set_image_paths
 
 # === ИМПОРТ СЕРВИСОВ ===
 from .services import X3, MultiServerManager, NotificationManager, SubscriptionManager
 from .services.sync_manager import SyncManager
 
 # === ИМПОРТ ОБРАБОТЧИКОВ ===
-from .handlers.commands import start, edit_main_menu, instruction, mykey
-from .handlers.callbacks import (
-    instruction_callback,
-    select_period_callback, start_callback_handler,
-    link_telegram_confirm_callback
-)
-from .handlers.callbacks.extend_subscription_callback import (
-    extend_subscription_callback, extend_subscription_period_callback
-)
-from .handlers.payments import handle_payment
-
-# Экспортируем handle_payment для доступа через get_globals()
-handle_payment = handle_payment
-from .handlers.admin import (
-    admin_errors, admin_notifications, admin_check_servers, admin_config,
-    admin_config_change_promo_start, admin_config_change_promo_input,
-    admin_config_change_promo_cancel, ADMIN_CONFIG_PROMO_WAITING,
-    admin_broadcast_start, admin_broadcast_input, admin_broadcast_send,
-    admin_broadcast_cancel, admin_broadcast_export,
-    admin_test_payment, test_confirm_payment_callback,
-    admin_sync, admin_check_subscription,
-    admin_search_user, admin_user_subscriptions, admin_user_payments,
-    admin_subscription_info, admin_extend_subscription,
-    admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
-    ADMIN_SUB_CHANGE_LIMIT_WAITING,
-    admin_give_subscription, admin_give_subscription_input_user, admin_give_subscription_continue,
-    admin_give_subscription_period, admin_give_subscription_cancel, GIVE_SUB_WAITING_USER_ID
-)
-from .handlers.admin.admin_broadcast import BROADCAST_WAITING_TEXT, BROADCAST_CONFIRM
-
-# Глобальная навигационная система (будет инициализирована в main())
-nav_system = None
+from .handlers.commands import start
+from .handlers.callbacks import link_telegram_confirm_callback
 
 
 # Определяем путь к файлу .env
@@ -76,30 +30,17 @@ if env_path.exists():
 else:
     # В Docker это нормально, так как переменные передаются через environment:
     pass
-from urllib.parse import quote
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, InlineQueryHandler
+import threading
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 from telegram.request import HTTPXRequest
-from yookassa import Payment, Configuration
+from yookassa import Configuration
+
 Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
 Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
 
-# Импорт для webhook
-from flask import Flask, request, jsonify
-import threading
-import hmac
-import hashlib
-
-from .db import (
-    init_all_db, init_payments_db, add_payment, get_payment_by_id, update_payment_status, 
-    get_all_pending_payments, get_pending_payment, cleanup_old_payments, cleanup_expired_pending_payments,
-    is_known_user, register_simple_user, get_all_user_ids, update_payment_activation,
-    get_config, set_config, get_all_config, PAYMENTS_DB_PATH, DATA_DIR
-)
-
-
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
+from .db import DATA_DIR
 
 
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
@@ -120,41 +61,11 @@ if WEBHOOK_URL:
 else:
     WEBAPP_URL = None
 
-# Пути к изображениям для меню
+# Пути к изображениям для меню: главное меню (/start), успех и ошибка (уведомления о платежах)
 IMAGE_PATHS = {
     'main_menu': 'images/main_menu.jpg',
-    'instruction_menu': 'images/instruction_menu.jpg',
-    'instruction_platform': 'images/instruction_platform.jpg',
-    'buy_menu': 'images/buy_menu.jpg',
-    'subs_menu': 'images/my_subscriptions.jpg',
-    'server_selection': 'images/server_selection.jpg',
-    'extend_sub': 'images/extend_subscription.jpg',
-    'admin_menu': 'images/admin_menu.jpg',
-    'admin_errors': 'images/admin_errors.jpg',
-    'admin_notifications': 'images/admin_notifications.jpg',
-    'admin_check_servers': 'images/admin_check_servers.jpg',
-    'admin_search_user': 'images/admin_menu.jpg',  # Используем admin_menu для всех админских меню
-    'admin_user_info': 'images/admin_menu.jpg',
-    'admin_user_subscriptions': 'images/admin_menu.jpg',
-    'admin_user_payments': 'images/admin_menu.jpg',
-    'admin_subscription_info': 'images/admin_menu.jpg',
-    'admin_config': 'images/admin_menu.jpg',
-    'admin_sync': 'images/admin_menu.jpg',
-    'admin_check_subscription': 'images/admin_menu.jpg',
-    'broadcast': 'images/broadcast.jpg',
-    'payment': 'images/payment.jpg',
     'payment_success': 'images/payment_success.jpg',
     'payment_failed': 'images/payment_failed.jpg',
-    'instruction_android': 'images/instruction_android.jpg',
-    'instruction_ios': 'images/instruction_ios.jpg',
-    'instruction_windows': 'images/instruction_windows.jpg',
-    'instruction_macos': 'images/instruction_macos.jpg',
-    'instruction_linux': 'images/instruction_linux.jpg',
-    'instruction_tv': 'images/instruction_tv.jpg',
-    'instruction_faq': 'images/instruction_faq.jpg',
-    'sub_success': 'images/subscription_success.jpg',
-    'payment_success': 'images/payment_success.jpg',
-    'promo_hack': 'images/hack.jpg'  # Используем payment_success как временное изображение для взлома
 }
 
 # Устанавливаем пути к изображениям в утилитах
@@ -255,11 +166,6 @@ for location_servers in SERVERS_BY_LOCATION.values():
 NEW_CLIENT_SERVERS = SERVERS_BY_LOCATION
 
 # Настраиваем файловый лог с ротацией в папке data/logs
-try:
-    from .db import DATA_DIR
-except Exception:
-    DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
-
 logs_dir = os.path.join(DATA_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 app_log_path = os.path.join(logs_dir, 'bot.log')
@@ -340,8 +246,31 @@ extension_messages = {}
 import traceback
 
 
-from .handlers.messages import handle_text_message
 
+
+async def open_mini_app_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fallback для старых callback-кнопок: предлагаем открыть приложение."""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        btn = UIButtons.create_webapp_button(text="Открыть в приложении")
+        kb = InlineKeyboardMarkup([[btn]]) if btn else None
+        await query.message.reply_text(
+            "Пожалуйста, откройте приложение для управления подписками и оплатой.",
+            reply_markup=kb,
+        )
+
+
+async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ответ на текстовое сообщение в ЛС: предлагаем открыть приложение."""
+    if not await check_private_chat(update):
+        return
+    btn = UIButtons.create_webapp_button(text="Открыть в приложении")
+    kb = InlineKeyboardMarkup([[btn]]) if btn else None
+    await update.message.reply_text(
+        "Пожалуйста, откройте приложение для управления подписками и оплатой.",
+        reply_markup=kb,
+    )
 
 
 # Регистрируем команды
@@ -372,303 +301,19 @@ if __name__ == '__main__':
     webhook_thread.start()
     logger.info("Webhook сервер запущен на порту 5000")
     
-    # Настройка системы навигации (без дублирования)
-    bot_handlers = {
-        'edit_main_menu': edit_main_menu,
-        'instruction': instruction,
-        'instruction_callback': instruction_callback,
-        'handle_payment': handle_payment,
-        'mysubs': mykey,
-        'admin_errors': admin_errors,
-        'admin_notifications': admin_notifications,
-        'admin_check_servers': admin_check_servers,
-        'admin_broadcast_start': admin_broadcast_start,
-    }
-    
-    # Создаем интеграцию навигации
-    nav_integration = NavigationIntegration(bot_handlers)
-    
-    # Создаем глобальную навигационную систему (используем те же обработчики)
-    nav_system = NavigationSystem(bot_handlers)
-    # Сохраняем nav_system в глобальную переменную для доступа из других модулей
-    # Когда модуль запускается через "python -m bot.bot", __name__ = '__main__'
-    # Сохраняем в текущий модуль (будет '__main__' при запуске через -m)
-    sys.modules[__name__].nav_system = nav_system
-    # Также сохраняем в bot.bot для доступа через importlib.import_module('bot.bot')
-    # Когда модуль запускается через "python -m bot.bot", текущий модуль доступен как '__main__'
-    # но мы также можем сохранить ссылку на него под именем 'bot.bot'
+    # Сохраняем модуль как bot.bot для доступа из других модулей (get_globals, WEBAPP_URL и т.д.)
     if 'bot.bot' not in sys.modules or sys.modules['bot.bot'] is not sys.modules[__name__]:
-        # Сохраняем ссылку на текущий модуль под именем 'bot.bot'
-        # Это также делает доступными все атрибуты модуля (app, nav_system и т.д.)
         sys.modules['bot.bot'] = sys.modules[__name__]
-        logger.debug(f"Модуль сохранен: __name__={__name__}, также доступен как 'bot.bot' (app и nav_system доступны)")
-    else:
-        logger.debug(f"nav_system сохранен в {__name__} (уже доступен как 'bot.bot')")
     
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler('start', start))
-    app.add_handler(CommandHandler(['mysubs', 'mykey'], mykey))
-    app.add_handler(CommandHandler('instruction', instruction))
-   
-    # Эти обработчики остаются, так как они не покрываются навигационной системой
-    app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^instr_"))
-    app.add_handler(CallbackQueryHandler(instruction_callback, pattern="^back_instr$"))
-    app.add_handler(CallbackQueryHandler(extend_subscription_callback, pattern="^extend_sub:"))
-    app.add_handler(CallbackQueryHandler(extend_subscription_period_callback, pattern="^ext_sub_per:"))
-    app.add_handler(CallbackQueryHandler(select_period_callback, pattern="^select_period_"))
     app.add_handler(CallbackQueryHandler(link_telegram_confirm_callback, pattern="^link_confirm_"))
-
-    app.add_handler(CommandHandler('admin_errors', admin_errors))
-    app.add_handler(CommandHandler('admin_check_servers', admin_check_servers))
-    app.add_handler(CommandHandler('admin_notifications', admin_notifications))
-    app.add_handler(CommandHandler('admin_config', admin_config))
-    app.add_handler(CommandHandler('admin_test_payment', admin_test_payment))
-    app.add_handler(CommandHandler('admin_sync', admin_sync))
-    app.add_handler(CommandHandler('admin_check_subscription', admin_check_subscription))
-    app.add_handler(CommandHandler('admin_user', admin_search_user))
-    app.add_handler(CallbackQueryHandler(test_confirm_payment_callback, pattern="^test_confirm_payment:"))
-
-    # Обработчики callback-ов для главного меню
-    # ВАЖНО: Все callback'и обрабатываются через NavigationIntegration, кроме select_period_
-    # Оставляем только select_period_ callback'и, которые обрабатываются здесь
-    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^select_period_"))
-    # Обработчик для просмотра, переименования подписок и пагинации
-    app.add_handler(CallbackQueryHandler(mykey, pattern=f"^({CallbackData.VIEW_SUB}|{CallbackData.RENAME_SUB}|{CallbackData.SUBS_PAGE})"))
- 
     
-    # Рассылка
-    admin_broadcast_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast_start$")],
-        states={
-            BROADCAST_WAITING_TEXT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_input),
-                MessageHandler(filters.PHOTO, admin_broadcast_input),
-                MessageHandler(filters.VIDEO, admin_broadcast_input),
-                MessageHandler(filters.Document.ALL, admin_broadcast_input),
-                MessageHandler(filters.AUDIO, admin_broadcast_input),
-                MessageHandler(filters.VOICE, admin_broadcast_input),
-                MessageHandler(filters.Sticker.ALL, admin_broadcast_input),
-            ],
-            BROADCAST_CONFIRM: [
-                CallbackQueryHandler(admin_broadcast_send, pattern="^admin_broadcast_send$"),
-                CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$")
-            ]
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"),
-            # Обработка навигации назад через универсальную кнопку "back"
-            CallbackQueryHandler(
-                lambda u, c: (
-                    c.user_data.pop('broadcast_text', None),
-                    c.user_data.pop('broadcast_media', None),
-                    c.user_data.pop('broadcast_msg_chat_id', None),
-                    c.user_data.pop('broadcast_msg_id', None),
-                    c.user_data.pop('broadcast_details', None),
-                    admin_broadcast_cancel(u, c)
-                )[5],
-                pattern="^back$"
-            ),
-        ],
-        per_user=True,
-        per_chat=True,
-        per_message=False
-    )
-    app.add_handler(admin_broadcast_conv)
-    # Глобальный обработчик экспорта, чтобы работал и после завершения диалога
-    app.add_handler(CallbackQueryHandler(admin_broadcast_export, pattern="^admin_broadcast_export$"))
-    # Глобальный обработчик для кнопки рассылки (на случай если ConversationHandler заблокирован)
-    app.add_handler(CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast_start$"))
-    # Глобальный обработчик для кнопки назад в рассылке
-    app.add_handler(CallbackQueryHandler(admin_broadcast_cancel, pattern="^admin_broadcast_back$"))
-
+    # Текстовые сообщения в ЛС — предлагаем открыть приложение
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, open_mini_app_fallback_text))
     
-    # Обработчики админ-панели управления пользователями и подписками
-    from .handlers.admin.admin_user_management import (
-        admin_user_subscriptions, admin_user_payments
-    )
-    from .handlers.admin.admin_subscription_manage import (
-        admin_subscription_info, admin_extend_subscription,
-        admin_change_device_limit, admin_change_device_limit_input, admin_change_device_limit_cancel,
-        ADMIN_SUB_CHANGE_LIMIT_WAITING
-    )
-    
-    app.add_handler(CallbackQueryHandler(admin_user_subscriptions, pattern="^admin_user_subs:"))
-    app.add_handler(CallbackQueryHandler(admin_user_payments, pattern="^admin_user_payments:"))
-    app.add_handler(CallbackQueryHandler(admin_subscription_info, pattern="^admin_sub_info:"))
-    
-    # ConversationHandler для изменения лимита IP (должен быть перед другими CallbackQueryHandler)
-    change_limit_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_change_device_limit, pattern="^admin_sub_change_limit:")],
-        states={
-            ADMIN_SUB_CHANGE_LIMIT_WAITING: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_change_device_limit_input)],
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_change_device_limit_cancel, pattern="^admin_sub_info:"),
-            MessageHandler(filters.COMMAND, admin_change_device_limit_cancel),
-            # Обработка навигации назад через универсальную кнопку "back"
-            CallbackQueryHandler(
-                lambda u, c: (
-                    c.user_data.pop('admin_change_limit_sub_id', None),
-                    c.user_data.pop('admin_change_limit_chat_id', None),
-                    c.user_data.pop('admin_change_limit_message_id', None),
-                    nav_manager.handle_back_navigation(u, c)
-                )[3],
-                pattern="^back$"
-            ),
-        ],
-    )
-    app.add_handler(change_limit_conv)
-    app.add_handler(CallbackQueryHandler(admin_extend_subscription, pattern="^admin_sub_extend:"))
-    
-    # ConversationHandler для поиска пользователя
-    from .handlers.admin.admin_user_management import (
-        admin_search_user, admin_search_user_input, SEARCH_USER_WAITING_ID
-    )
-    # Функция для очистки состояния поиска
-    def clear_search_state(context):
-        """Очищает состояние поиска пользователя"""
-        context.user_data.pop('admin_search_menu_message_id', None)
-        context.user_data.pop('admin_search_menu_chat_id', None)
-        context.user_data.pop('admin_search_timestamp', None)
-    
-    async def admin_search_user_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Fallback для сброса состояния поиска при команде или другом событии"""
-        clear_search_state(context)
-        return ConversationHandler.END
-    
-    admin_search_user_conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_search_user, pattern="^admin_search_user$"),
-            CommandHandler('admin_user', admin_search_user)
-        ],
-        states={
-            SEARCH_USER_WAITING_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search_user_input),
-            ],
-        },
-        fallbacks=[
-            # Очищаем данные поиска при выходе через fallback и обрабатываем навигацию назад
-            CallbackQueryHandler(
-                lambda u, c: (
-                    clear_search_state(c),
-                    nav_manager.handle_back_navigation(u, c)
-                )[1],
-                pattern="^back$"
-            ),
-            # Сбрасываем состояние при любой команде
-            MessageHandler(filters.COMMAND, admin_search_user_fallback),
-            # Сбрасываем состояние при callback query (кроме back)
-            CallbackQueryHandler(admin_search_user_fallback),
-        ],
-        per_user=True,
-        per_chat=True,
-        per_message=False
-    )
-    app.add_handler(admin_search_user_conv)
-    
-    # ConversationHandler для выдачи подписки
-    admin_give_sub_conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_give_subscription, pattern="^admin_give_subscription$"),
-            CommandHandler("admin_give_subscription", admin_give_subscription)
-        ],
-        states={
-            GIVE_SUB_WAITING_USER_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_give_subscription_input_user)
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_give_subscription_cancel, pattern="^back$"),
-            MessageHandler(filters.COMMAND, admin_give_subscription_cancel),
-        ],
-        per_user=True,
-        per_chat=True,
-        per_message=False
-    )
-    app.add_handler(admin_give_sub_conv)
-    
-    # ConversationHandler для изменения промокода в конфигурации
-    admin_config_promo_conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_config_change_promo_start, pattern="^admin_config_change_promo$")
-        ],
-        states={
-            ADMIN_CONFIG_PROMO_WAITING: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_config_change_promo_input)
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_config_change_promo_cancel, pattern="^admin_config_change_promo_cancel$"),
-            MessageHandler(filters.COMMAND, admin_config_change_promo_cancel),
-            # Обработка навигации назад через универсальную кнопку "back"
-            CallbackQueryHandler(
-                lambda u, c: (
-                    c.user_data.pop('admin_config_message_id', None),
-                    c.user_data.pop('admin_config_chat_id', None),
-                    admin_config_change_promo_cancel(u, c)
-                )[2],
-                pattern="^back$"
-            ),
-        ],
-        per_user=True,
-        per_chat=True,
-        per_message=False
-    )
-    app.add_handler(admin_config_promo_conv)
-    
-    # Глобальный обработчик для кнопки изменения промокода
-    app.add_handler(CallbackQueryHandler(admin_config_change_promo_start, pattern="^admin_config_change_promo$"))
-    
-    # ConversationHandler для промокодов
-    from .handlers.promocodes.promo_handler import (
-        promo_start, promo_input, promo_cancel, PROMO_WAITING_CODE
-    )
-    
-    promo_conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(promo_start, pattern="^promo_purchase$"),
-            CallbackQueryHandler(promo_start, pattern="^promo_extend:")
-        ],
-        states={
-            PROMO_WAITING_CODE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, promo_input)
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(promo_cancel, pattern="^promo_cancel$"),
-            MessageHandler(filters.COMMAND, promo_cancel),
-            # Обработка навигации назад через универсальную кнопку "back"
-            CallbackQueryHandler(
-                lambda u, c: (
-                    c.user_data.pop('promo_type', None),
-                    c.user_data.pop('promo_subscription_id', None),
-                    c.user_data.pop('promo_message_id', None),
-                    c.user_data.pop('promo_chat_id', None),
-                    promo_cancel(u, c)
-                )[4],
-                pattern="^back$"
-            ),
-        ],
-        per_user=True,
-        per_chat=True,
-        per_message=False
-    )
-    app.add_handler(promo_conv)
-    
-    # Глобальный обработчик для кнопок промокодов (на случай если ConversationHandler заблокирован)
-    app.add_handler(CallbackQueryHandler(promo_start, pattern="^promo_purchase$"))
-    app.add_handler(CallbackQueryHandler(promo_start, pattern="^promo_extend:"))
-    
-    # Обработчик текстовых сообщений
-    # (должен быть после ConversationHandler)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    
-    # Обработчик inline query для быстрого поиска пользователей
-    from .handlers.admin.admin_inline_search import inline_query_handler
-    app.add_handler(InlineQueryHandler(inline_query_handler))
-    
-    # === НОВЫЕ ОБРАБОТЧИКИ НАВИГАЦИИ ===
-    app.add_handlers(nav_integration.get_handlers())
+    # Fallback для старых callback-кнопок (не перехватываем link_confirm_ — привязка Telegram)
+    app.add_handler(CallbackQueryHandler(open_mini_app_fallback, pattern=r"^(?!link_confirm_).*$"))
     
     app.run_polling()

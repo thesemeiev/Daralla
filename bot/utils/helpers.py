@@ -2,9 +2,7 @@
 Вспомогательные функции
 """
 import datetime
-import json
 import logging
-from .ui import UIEmojis, UIStyles
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +67,3 @@ def calculate_time_remaining(expiry_timestamp, show_expired_as_negative=False):
     except Exception as e:
         logger.error(f"Ошибка вычисления оставшегося времени: {e}")
         return "—"
-
-
-# Старые функции для ключей удалены - теперь работаем только с подписками
-

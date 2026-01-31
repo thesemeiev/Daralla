@@ -12,7 +12,7 @@ from ...utils import (
     UIEmojis, UIStyles, UIMessages,
     safe_edit_message_with_photo, safe_send_message_with_photo
 )
-from ...navigation import NavigationBuilder, CallbackData, MenuTypes
+from ...navigation import MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -252,10 +252,10 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         text=error_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_SUCCESS
+                        menu_type=MenuTypes.PAYMENT_FAILED
                     )
                 return
-            
+
             # Проверяем, что синхронизация прошла на всех серверах
             if failed_extensions:
                 logger.warning(
@@ -453,12 +453,12 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         text=error_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT
+                        menu_type=MenuTypes.PAYMENT_FAILED
                     )
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
-        
+
         # Преобразуем список серверов из БД в список имен серверов
         all_configured_servers = [s["name"] for s in servers_in_db]
         
@@ -564,12 +564,12 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         text=error_message,
                         reply_markup=keyboard,
                         parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT
+                        menu_type=MenuTypes.PAYMENT_FAILED
                     )
             except Exception as e:
                 logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
-        
+
         # Шаг 4: Обновляем статус платежа
         # Подписка создана успешно, если хотя бы на одном сервере клиент создан
         # Нездоровые серверы уже привязаны к подписке, клиенты будут созданы при синхронизации
@@ -651,7 +651,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                 f"<b>Окончание:</b> {expiry_str}\n"
                 f"<b>Серверов:</b> {len(successful_servers)}\n"
                 f"<b>Устройств:</b> {device_limit}\n\n"
-                f"{UIStyles.subheader('Ссылка на подписку:')}\n"
+                f"{UIStyles.header('Ссылка на подписку:')}\n"
                 f"<code>{subscription_url}</code>\n\n"
                 f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент. Подписка включает все доступные серверы.')}"
             )
@@ -743,10 +743,10 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
                 f"<b>Статус:</b> {status}\n\n"
                 f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
             )
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Попробовать снова", callback_data=CallbackData.BUY_VPN)],
-                [NavigationBuilder.create_main_menu_button()]
-            ])
+            from ...utils import UIButtons
+            webapp_button = UIButtons.create_webapp_button(action='subscriptions', text="Открыть в приложении")
+            buttons = [[webapp_button]] if webapp_button else []
+            keyboard = InlineKeyboardMarkup(buttons) if buttons else None
             await safe_edit_message_with_photo(
                 bot_app.bot,
                 chat_id=chat_id,
@@ -798,7 +798,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 
                 keyboard = InlineKeyboardMarkup(buttons) if buttons else None
                 
-                menu_type = MenuTypes.SUBSCRIPTIONS_MENU
+                menu_type = MenuTypes.PAYMENT_FAILED
             else:
                 # Ошибка обычной покупки
                 error_message = (

@@ -43,29 +43,3 @@ def cleanup_extension_messages(extension_messages_dict, payment_id=None):
         if to_remove:
             logger.info(f"Очищено {len(to_remove)} старых записей из extension_messages")
 
-
-def get_extension_message_info(extension_messages_dict, payment_id):
-    """
-    Получает информацию о сообщении из extension_messages
-    
-    Args:
-        extension_messages_dict: Словарь extension_messages
-        payment_id: ID платежа
-        
-    Returns:
-        tuple: (chat_id, message_id) или (None, None) если не найдено
-    """
-    if payment_id not in extension_messages_dict:
-        return None, None
-    
-    data = extension_messages_dict[payment_id]
-    
-    # Новый формат (dict)
-    if isinstance(data, dict):
-        return data.get('chat_id'), data.get('message_id')
-    # Старый формат (tuple) - для обратной совместимости
-    elif isinstance(data, tuple) and len(data) == 2:
-        return data[0], data[1]
-    
-    return None, None
-

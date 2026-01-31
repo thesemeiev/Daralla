@@ -7204,15 +7204,6 @@ async function deleteServerConfig(serverId) {
     }
 }
 
-// Обновляем showPage для поддержки новой страницы
-const originalShowPage = showPage;
-showPage = function(pageName) {
-    originalShowPage(pageName);
-    if (pageName === 'admin-server-management') {
-        loadServerManagement();
-    }
-};
-
 // Синхронизация всех серверов
 async function syncAllServers() {
     if (!confirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.')) return;

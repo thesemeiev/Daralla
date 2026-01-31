@@ -25,7 +25,6 @@ from ..db import (
     record_subscription_notification_effectiveness
 )
 from ..utils import UIEmojis, UIMessages, calculate_time_remaining
-from ..navigation import NavigationBuilder, CallbackData
 
 logger = logging.getLogger(__name__)
 

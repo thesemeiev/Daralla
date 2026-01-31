@@ -18,7 +18,6 @@ from ...db.subscribers_db import (
     get_user_by_telegram_id_v2, create_telegram_link, update_user_telegram_id,
     generate_tg_user_id,
 )
-from ...navigation import NavStates, MenuTypes
 import time
 
 logger = logging.getLogger(__name__)
@@ -263,82 +262,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
     keyboard = InlineKeyboardMarkup(buttons)
     
-    # Добавляем главное меню в навигационный стек при старте
-    globals_dict = get_globals()
-    nav_system = globals_dict.get('nav_system')
-    if nav_system:
-        from ...navigation import nav_manager
-        nav_manager.clear_stack(context)
-        nav_manager.push_state(context, NavStates.MAIN_MENU)
-    
     # Отправляем меню с фото
-    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.MAIN_MENU)
-
-
-async def edit_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Редактирует существующее сообщение на главное меню"""
-    globals_dict = get_globals()
-    ADMIN_IDS = globals_dict['ADMIN_IDS']
-    
-    # Создаем кнопки главного меню используя единый стиль
-    is_admin = update.effective_user.id in ADMIN_IDS
-    buttons = UIButtons.main_menu_buttons(is_admin=is_admin)
-    keyboard = InlineKeyboardMarkup(buttons)
-    
-    # Используем единый стиль для приветственного сообщения (для существующего пользователя)
-    welcome_text = UIMessages.welcome_message(is_new_user=False)
-    
-    # Если это callback_query, используем safe_edit_message_with_photo для редактирования
-    if update.callback_query:
-        from ...utils.message_helpers import safe_edit_message_with_photo
-        from ...utils import safe_answer_callback_query
-        
-        # Отвечаем на callback query
-        await safe_answer_callback_query(update.callback_query)
-        
-        message = update.callback_query.message
-        if message:
-            logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id} через callback_query")
-            try:
-                # Используем safe_edit_message_with_photo для редактирования медиа-сообщения
-                await safe_edit_message_with_photo(
-                    context.bot,
-                    chat_id=message.chat_id,
-                    message_id=message.message_id,
-                    text=welcome_text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    menu_type=MenuTypes.MAIN_MENU
-                )
-                logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано через callback_query")
-                return
-            except Exception as e:
-                logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования через callback_query: {e}")
-                # Fallback: используем обычный метод
-                try:
-                    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.MAIN_MENU)
-                    logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано через fallback")
-                    return
-                except Exception as e2:
-                    logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования через fallback: {e2}")
-                    # Последний fallback: отправляем новое сообщение
-                    await start(update, context)
-                    return
-    
-    # Если это обычное сообщение (не callback_query)
-    message = update.message if update.message else None
-    if message is None:
-        logger.error("edit_main_menu: message is None")
-        return
-    
-    logger.info(f"EDIT_MAIN_MENU: Редактируем сообщение {message.message_id}")
-    try:
-        # Отправляем меню с фото
-        await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type=MenuTypes.MAIN_MENU)
-        logger.info("EDIT_MAIN_MENU: Сообщение успешно отредактировано")
-    except Exception as e:
-        logger.error(f"EDIT_MAIN_MENU: Ошибка редактирования сообщения: {e}")
-        # Если не удалось отредактировать, отправляем новое
-        logger.info("EDIT_MAIN_MENU: Вызываем start() как fallback")
-        await start(update, context)
+    await safe_edit_or_reply_universal(message, welcome_text, reply_markup=keyboard, parse_mode="HTML", menu_type="main_menu")
 
