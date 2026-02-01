@@ -25,17 +25,14 @@ logger = logging.getLogger(__name__)
 # Импортируем глобальные переменные из bot.py
 # Это временное решение до полного рефакторинга
 def get_globals():
-    """Получает глобальные переменные из bot.py"""
-    try:
-        from ... import bot as bot_module
-        return {
-            'new_client_manager': getattr(bot_module, 'new_client_manager', None),
-            'subscription_manager': getattr(bot_module, 'subscription_manager', None),
-            'WEBAPP_URL': getattr(bot_module, 'WEBAPP_URL', None),
-        }
-    except (ImportError, AttributeError):
-        # Fallback если модуль еще не загружен
-        return {'new_client_manager': None, 'subscription_manager': None, 'WEBAPP_URL': None}
+    """Получает глобальные переменные из bot.py через общий хелпер."""
+    from ..webhooks.webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
+    bot_module = get_bot_module()
+    return {
+        'server_manager': get_server_manager(),
+        'subscription_manager': get_subscription_manager(),
+        'WEBAPP_URL': getattr(bot_module, 'WEBAPP_URL', None) if bot_module else None,
+    }
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -106,7 +103,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     globals_dict = get_globals()
-    new_client_manager = globals_dict['new_client_manager']
+    server_manager = globals_dict.get('server_manager')
     
     telegram_id = str(update.effective_user.id)
     # TG-first: ищем по telegram_id; если нет — создаём аккаунт с сгенерированным user_id (не telegram_id)
@@ -120,7 +117,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await register_simple_user(user_id)
         await create_telegram_link(telegram_id, user_id)
         await update_user_telegram_id(user_id, telegram_id)
-    
+
+    # Реферальная ссылка: считаем только новых пользователей
+    if not was_known_user and args and args[0].startswith("ref_"):
+        referrer_user_id = args[0][4:].strip()
+        if referrer_user_id and referrer_user_id != user_id:
+            try:
+                from bot.events import EVENTS_MODULE_ENABLED
+                if EVENTS_MODULE_ENABLED:
+                    from bot.events.services.referral_service import record_visit
+                    await record_visit(referrer_user_id, user_id, event_id=None)
+            except Exception as e:
+                logger.debug("events.record_visit: %s", e)
+
     # Теперь, когда все проверки выполнены и пользователь зарегистрирован
     trial_created = False
     try:
@@ -143,7 +152,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Получаем менеджеры для создания подписки и клиентов
                     globals_dict = get_globals()
                     subscription_manager = globals_dict.get('subscription_manager')
-                    new_client_manager = globals_dict.get('new_client_manager')
+                    server_manager = globals_dict.get('server_manager')
                     
                     if not subscription_manager:
                         logger.error("SubscriptionManager не доступен, пробная подписка не создана")
@@ -167,7 +176,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     trial_created = True
                     
                     # Создаем клиентов на всех серверах для пробной подписки
-                    if subscription_manager and new_client_manager:
+                    if subscription_manager and server_manager:
                         try:
                             # Генерируем уникальный email для клиента
                             import uuid
@@ -175,7 +184,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             
                             # Получаем все серверы из конфигурации
                             all_configured_servers = []
-                            for server in new_client_manager.servers:
+                            for server in server_manager.servers:
                                 server_name = server["name"]
                                 if server.get("x3") is not None:
                                     all_configured_servers.append(server_name)

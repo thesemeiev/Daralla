@@ -133,7 +133,16 @@ async def on_startup(app):
         
         # 1. Инициализация БД
         await init_all_db()
-        
+
+        # 1.0.0 Модуль событий: таблицы (если включён)
+        try:
+            from bot.events import EVENTS_MODULE_ENABLED
+            if EVENTS_MODULE_ENABLED:
+                from bot.events.db.migrations import init_events_tables
+                await init_events_tables()
+        except ImportError:
+            pass
+
         # 1.0 Миграция telegram_links / known_telegram_ids (идемпотентно заполняет связи TG ↔ аккаунт)
         try:
             from ..db.migrations.migrate_telegram_links import migrate_telegram_links

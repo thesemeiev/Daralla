@@ -32,15 +32,9 @@ def create_blueprint(bot_app):
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
+            data = request.get_json(silent=True) or {}
             user_id = authenticate_request()
-            init_data = request.args.get('initData')
-            if not init_data and request.is_json:
-                try:
-                    data = request.get_json(silent=True)
-                    if data:
-                        init_data = data.get('initData')
-                except Exception:
-                    init_data = None
+            init_data = request.args.get('initData') or data.get('initData')
             tg_user_id = None
             if init_data:
                 tg_user_id = verify_telegram_init_data(init_data)
@@ -90,6 +84,22 @@ def create_blueprint(bot_app):
                     loop.run_until_complete(register_simple_user(user_id))
                 if tg_user_id:
                     loop.run_until_complete(mark_telegram_id_known(str(tg_user_id)))
+                # Реферал только для новых: при первом открытии Mini App с ref
+                if just_created_tg_user:
+                    ref = (data.get('ref') or '').strip()
+                    event_id = data.get('event_id')
+                    try:
+                        event_id = int(event_id) if event_id is not None else None
+                    except (TypeError, ValueError):
+                        event_id = None
+                    if ref and ref != user_id:
+                        try:
+                            from bot.events import EVENTS_MODULE_ENABLED
+                            if EVENTS_MODULE_ENABLED:
+                                from bot.events.services.referral_service import record_visit
+                                loop.run_until_complete(record_visit(ref, user_id, event_id))
+                        except Exception:
+                            pass
                 trial_created = False
                 subscription_id = None
                 if not was_known_user and not is_web:
@@ -111,18 +121,9 @@ def create_blueprint(bot_app):
                             ))
                             trial_created = True
                             logger.info(f"✅ Пробная подписка создана: subscription_id={subscription_id}")
-                            def get_managers():
-                                try:
-                                    from .... import bot as bot_module
-                                    return {
-                                        'subscription_manager': getattr(bot_module, 'subscription_manager', None),
-                                        'server_manager': getattr(bot_module, 'new_client_manager', None)
-                                    }
-                                except (ImportError, AttributeError):
-                                    return {'subscription_manager': None, 'server_manager': None}
-                            managers = get_managers()
-                            subscription_manager = managers.get('subscription_manager')
-                            server_manager = managers.get('server_manager')
+                            from ..webhook_auth import get_server_manager, get_subscription_manager
+                            subscription_manager = get_subscription_manager()
+                            server_manager = get_server_manager()
                             if subscription_manager and server_manager:
                                 unique_email = f"{user_id}_{subscription_id}"
                                 all_configured_servers = []
@@ -403,8 +404,8 @@ def create_blueprint(bot_app):
 
             def get_servers_info():
                 try:
-                    from .... import bot as bot_module
-                    server_manager = getattr(bot_module, 'server_manager', None)
+                    from ..webhook_auth import get_server_manager
+                    server_manager = get_server_manager()
                     if not server_manager:
                         return []
                     health_status = server_manager.get_server_health_status()

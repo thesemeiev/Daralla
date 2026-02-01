@@ -283,26 +283,16 @@ def create_blueprint(bot_app):
             if period not in ('month', '3month'):
                 return jsonify({'error': 'Invalid period. Must be "month" or "3month"'}), 400
         
-            # Получаем subscription_manager и new_client_manager
-            def get_managers():
-                try:
-                    from .... import bot as bot_module
-                    return {
-                        'subscription_manager': getattr(bot_module, 'subscription_manager', None),
-                        'new_client_manager': getattr(bot_module, 'new_client_manager', None)
-                    }
-                except (ImportError, AttributeError):
-                    return {'subscription_manager': None, 'new_client_manager': None}
-        
-            managers = get_managers()
-            subscription_manager = managers['subscription_manager']
-            new_client_manager = managers['new_client_manager']
+            # Получаем subscription_manager и server_manager
+            from ..webhook_auth import get_server_manager, get_subscription_manager
+            subscription_manager = get_subscription_manager()
+            server_manager = get_server_manager()
         
             if not subscription_manager:
                 return jsonify({'error': 'Subscription manager not available'}), 503
         
-            if not new_client_manager:
-                return jsonify({'error': 'New client manager not available'}), 503
+            if not server_manager:
+                return jsonify({'error': 'Server manager not available'}), 503
         
             # Создаем подписку
             loop = asyncio.new_event_loop()
@@ -344,7 +334,7 @@ def create_blueprint(bot_app):
             
                 # Получаем все серверы из конфигурации
                 all_configured_servers = []
-                for server in new_client_manager.servers:
+                for server in server_manager.servers:
                     server_name = server["name"]
                     if server.get("x3") is not None:
                         all_configured_servers.append(server_name)
@@ -870,13 +860,7 @@ def create_blueprint(bot_app):
                 servers = loop.run_until_complete(get_subscription_servers(sub_id))
             
                 # Получаем subscription_manager
-                def get_subscription_manager():
-                    try:
-                        from .... import bot as bot_module
-                        return getattr(bot_module, 'subscription_manager', None)
-                    except (ImportError, AttributeError):
-                        return None
-            
+                from ..webhook_auth import get_subscription_manager
                 subscription_manager = get_subscription_manager()
                 if not subscription_manager:
                     return jsonify({'error': 'Subscription manager not available'}), 503
@@ -1004,18 +988,8 @@ def create_blueprint(bot_app):
                 servers = loop.run_until_complete(get_subscription_servers(sub_id))
             
                 # Получаем менеджеры
-                def get_managers():
-                    try:
-                        from .... import bot as bot_module
-                        return {
-                            'subscription_manager': getattr(bot_module, 'subscription_manager', None),
-                            'server_manager': getattr(bot_module, 'server_manager', None)
-                        }
-                    except (ImportError, AttributeError):
-                        return {'subscription_manager': None, 'server_manager': None}
-            
-                managers = get_managers()
-                server_manager = managers.get('server_manager')
+                from ..webhook_auth import get_server_manager
+                server_manager = get_server_manager()
             
                 # 1. Удаляем клиентов со всех серверов
                 async def delete_clients_from_servers():
@@ -1135,17 +1109,8 @@ def create_blueprint(bot_app):
                 all_subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id))
             
                 # Получаем менеджеры
-                def get_managers():
-                    try:
-                        from .... import bot as bot_module
-                        return {
-                            'server_manager': getattr(bot_module, 'server_manager', None)
-                        }
-                    except (ImportError, AttributeError):
-                        return {'server_manager': None}
-            
-                managers = get_managers()
-                server_manager = managers.get('server_manager')
+                from ..webhook_auth import get_server_manager
+                server_manager = get_server_manager()
             
                 # Удаляем клиентов со всех серверов для всех подписок
                 deleted_servers = []
@@ -1450,24 +1415,20 @@ def create_blueprint(bot_app):
         
             # Получаем информацию о серверах (display_name, location) из конфигурации
             def get_server_info():
-                try:
-                    from .... import bot as bot_module
-                    server_manager = getattr(bot_module, 'server_manager', None)
-                    if not server_manager:
-                        return {}
-                
-                    server_info_map = {}
-                    for location, servers in server_manager.servers_by_location.items():
-                        for server in servers:
-                            server_name = server['name']
-                            display_name = server['config'].get('display_name', server_name)
-                            server_info_map[server_name] = {
-                                'display_name': display_name,
-                                'location': location
-                            }
-                    return server_info_map
-                except (ImportError, AttributeError):
+                from ..webhook_auth import get_server_manager
+                server_manager = get_server_manager()
+                if not server_manager:
                     return {}
+                server_info_map = {}
+                for location, servers in server_manager.servers_by_location.items():
+                    for server in servers:
+                        server_name = server['name']
+                        display_name = server['config'].get('display_name', server_name)
+                        server_info_map[server_name] = {
+                            'display_name': display_name,
+                            'location': location
+                        }
+                return server_info_map
         
             server_info_map = get_server_info()
         
@@ -1786,8 +1747,9 @@ def create_blueprint(bot_app):
             import telegram
         
             # Получаем список админов для исключения
-            from .... import bot as bot_module
-            ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
+            from ..webhook_auth import get_bot_module
+            bot_module = get_bot_module()
+            ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', []) if bot_module else []
             admin_set = set(str(a) for a in ADMIN_IDS)
         
             # Асинхронная функция для отправки рассылки
@@ -2008,11 +1970,11 @@ def create_blueprint(bot_app):
                 
                     # Обновляем MultiServerManager
                     try:
-                        from ....bot import server_manager, new_client_manager
+                        from ....bot import server_manager
                         from ....services.server_provider import ServerProvider
                         new_config = loop.run_until_complete(ServerProvider.get_all_servers_by_location())
-                        if server_manager: server_manager.init_from_config(new_config)
-                        if new_client_manager: new_client_manager.init_from_config(new_config)
+                        if server_manager:
+                            server_manager.init_from_config(new_config)
                     except Exception as mgr_e:
                         logger.error(f"Ошибка обновления менеджера серверов: {mgr_e}")
                     
@@ -2052,11 +2014,11 @@ def create_blueprint(bot_app):
             
                 # Обновляем MultiServerManager
                 try:
-                    from ....bot import server_manager, new_client_manager
+                    from ....bot import server_manager
                     from ....services.server_provider import ServerProvider
                     new_config = loop.run_until_complete(ServerProvider.get_all_servers_by_location())
-                    if server_manager: server_manager.init_from_config(new_config)
-                    if new_client_manager: new_client_manager.init_from_config(new_config)
+                    if server_manager:
+                        server_manager.init_from_config(new_config)
                 except Exception as mgr_e:
                     logger.error(f"Ошибка обновления менеджера серверов: {mgr_e}")
                 

@@ -111,14 +111,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Создаем глобальный экземпляр менеджера серверов
+# Глобальный экземпляр менеджера серверов (подписки и выбор серверов используют его)
 server_manager = MultiServerManager()
-# Менеджер только для новых клиентов
-new_client_manager = MultiServerManager()
 # Менеджер подписок
-subscription_manager = SubscriptionManager(new_client_manager)
+subscription_manager = SubscriptionManager(server_manager)
 # Менеджер синхронизации
-sync_manager = SyncManager(new_client_manager, subscription_manager)
+sync_manager = SyncManager(server_manager, subscription_manager)
 
 # Инициализация менеджеров серверов из БД
 async def init_server_managers():
@@ -132,16 +130,14 @@ async def init_server_managers():
         if not has_servers:
             logger.warning("⚠️ В БД нет серверов. Серверы должны быть добавлены через админ-панель.")
             logger.warning("⚠️ Покупка VPN будет недоступна до добавления серверов.")
-            # Инициализируем менеджеры с пустым конфигом
+            # Инициализируем менеджер с пустым конфигом
             server_manager.init_from_config({})
-            new_client_manager.init_from_config({})
             return
         
         # Загружаем конфиг из БД
         config = await ServerProvider.get_all_servers_by_location()
         server_manager.init_from_config(config)
-        new_client_manager.init_from_config(config)
-        logger.info("Менеджеры серверов успешно инициализированы из БД")
+        logger.info("Менеджер серверов успешно инициализирован из БД")
     except Exception as e:
         logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
 

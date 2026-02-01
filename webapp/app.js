@@ -80,10 +80,11 @@ let currentPage = 'subscriptions';
 var ROUTE_PAGE_NAMES = new Set([
     'landing', 'login', 'register',
     'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'payment',
-    'servers', 'instructions', 'about', 'account',
+    'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
     'admin-stats', 'admin-users-analytics', 'admin-servers-analytics', 'admin-finance',
     'admin-notifications', 'admin-subscriptions', 'admin-users', 'admin-broadcast',
-    'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management'
+    'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
+    'admin-events'
 ]);
 var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
 function isPageAdminOnly(pageName) { return pageName && pageName.startsWith('admin-'); }
@@ -137,6 +138,10 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         });
         return true;
     }
+    if (route.pageName === 'event-detail' && p.id) {
+        showEventDetail(Number(p.id));
+        return true;
+    }
     if (route.pageName === 'admin-subscription-edit' && p.id) {
         showAdminSubscriptionEdit(Number(p.id));
         return true;
@@ -157,6 +162,37 @@ function applyRoute(route, isAuthenticated, isAdmin) {
     }
     showPage(route.pageName);
     return true;
+}
+
+// Реферальная ссылка: ref и event_id из URL (при открытии/логине)
+function getRefFromUrl() {
+    var ref = null;
+    var eventId = null;
+    try {
+        var search = new URLSearchParams(window.location.search);
+        ref = search.get('ref') || ref;
+        eventId = search.get('event_id') || eventId;
+    } catch (e) {}
+    if (window.location.hash) {
+        var route = parseHashRoute();
+        if (route && route.params) {
+            if (route.params.ref) ref = route.params.ref;
+            if (route.params.event_id) eventId = route.params.event_id;
+        }
+    }
+    return { ref: ref ? String(ref).trim() : null, event_id: eventId ? String(eventId).trim() : null };
+}
+function recordReferralIfPending() {
+    var params = getRefFromUrl();
+    var ref = params.ref;
+    if (!ref) return Promise.resolve();
+    var body = { ref: ref };
+    if (params.event_id) body.event_id = parseInt(params.event_id, 10) || params.event_id;
+    return apiFetch('/api/events/record-ref', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    }).then(function () { /* ignore */ }).catch(function () {});
 }
 
 // Интервалы для автоматического обновления
@@ -181,9 +217,10 @@ function showPage(pageName, params) {
     const bottomNav = document.querySelector('.bottom-nav');
     const isMainSectionPage = (
         pageName === 'subscriptions' ||
+        pageName === 'servers' ||
+        pageName === 'events' ||
         pageName === 'instructions' ||
         pageName === 'about' ||
-        pageName === 'servers' ||
         pageName === 'admin-stats'
     );
     if (bottomNav) {
@@ -223,12 +260,15 @@ function showPage(pageName, params) {
         } else if (pageName === 'servers') {
             navItems[1]?.classList.add('active');
             activeIndex = 1;
-        } else if (pageName === 'instructions') {
+        } else if (pageName === 'events') {
             navItems[2]?.classList.add('active');
             activeIndex = 2;
-        } else if (pageName === 'about') {
+        } else if (pageName === 'instructions') {
             navItems[3]?.classList.add('active');
             activeIndex = 3;
+        } else if (pageName === 'about') {
+            navItems[4]?.classList.add('active');
+            activeIndex = 4;
         } else if ((pageName === 'admin-stats' || pageName.startsWith('admin-')) && document.getElementById('admin-nav-button')) {
             const adminButton = document.getElementById('admin-nav-button');
             adminButton.classList.add('active');
@@ -271,6 +311,8 @@ function showPage(pageName, params) {
         refreshAboutAccount();
     } else if (pageName === 'servers') {
         loadServers();
+    } else if (pageName === 'events') {
+        loadEvents();
     } else if (pageName === 'admin-users') {
         var page = (params && (params.page != null || params.search !== undefined))
             ? (Number(params.page) || 1)
@@ -295,6 +337,8 @@ function showPage(pageName, params) {
         loadBroadcastPage();
     } else if (pageName === 'admin-server-management') {
         loadServerManagement();
+    } else if (pageName === 'admin-events') {
+        loadAdminEventsPage();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
@@ -658,6 +702,206 @@ async function loadServers() {
     }
 }
 
+// Загрузка списка событий (модуль событий)
+async function loadEvents() {
+    var loadingEl = document.getElementById('events-loading');
+    var emptyEl = document.getElementById('events-empty');
+    var listWrap = document.getElementById('events-list-wrap');
+    var listEl = document.getElementById('events-list');
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (listWrap) listWrap.style.display = 'none';
+    try {
+        var response = await apiFetch('/api/events/');
+        var data = { events: [] };
+        if (response.ok) {
+            try { data = await response.json(); } catch (e) {}
+        }
+        var events = data.events || [];
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (events.length === 0) {
+            if (emptyEl) emptyEl.style.display = 'block';
+        } else {
+            if (listWrap) listWrap.style.display = 'block';
+            if (listEl) {
+                listEl.innerHTML = events.map(function (ev) {
+                    var start = (ev.start_at || '').slice(0, 10);
+                    var end = (ev.end_at || '').slice(0, 10);
+                    return '<div class="event-card" style="background:#1a1a1a;border-radius:8px;padding:16px;margin-bottom:12px;">' +
+                        '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
+                        (ev.description ? '<p style="margin:0 0 8px 0;color:#999;font-size:14px;">' + ev.description + '</p>' : '') +
+                        '<p style="margin:0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
+                        '<button type="button" class="btn-primary" style="margin-top:12px;width:100%;" onclick="showEventDetail(' + ev.id + ')">Подробнее</button>' +
+                        '</div>';
+                }).join('');
+            }
+        }
+    } catch (e) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (emptyEl) { emptyEl.style.display = 'block'; }
+    }
+}
+
+function showEventDetail(eventId) {
+    var contentEl = document.getElementById('event-detail-content');
+    if (contentEl) contentEl.innerHTML = '<div class="loading"><p>Загрузка...</p></div>';
+    showPage('event-detail', { id: eventId });
+    loadEventDetail(eventId);
+}
+function loadEventDetail(eventId) {
+    var contentEl = document.getElementById('event-detail-content');
+    if (!contentEl) return;
+    contentEl.innerHTML = '<div class="loading"><p>Загрузка...</p></div>';
+    Promise.all([
+        apiFetch('/api/events/' + eventId).then(function (r) { return r.ok ? r.json() : null; }),
+        apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
+        apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; }),
+        apiFetch('/api/events/my-ref-link?event_id=' + eventId).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.ref_link || ''; })
+    ]).then(function (results) {
+        var ev = results[0];
+        var leaderboard = results[1];
+        var myPlace = results[2];
+        var refLink = results[3];
+        if (!contentEl) return;
+        if (!ev) { contentEl.innerHTML = '<p class="hint">Событие не найдено</p>'; return; }
+        var html = '<div style="padding:16px;">' +
+            '<h2 style="margin:0 0 12px 0;">' + (ev.name || 'Событие') + '</h2>' +
+            (ev.description ? '<p style="color:#999;margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
+            '<p style="color:#666;font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
+        if (myPlace) {
+            html += '<p style="margin:16px 0 8px 0;font-weight:600;">Моё место: ' + myPlace.place + ' (засчитано оплат: ' + myPlace.count + ')</p>';
+        }
+        var rewards = ev.rewards || [];
+        if (rewards.length > 0) {
+            html += '<p style="margin:12px 0 8px 0;color:#999;font-size:14px;">Награды: ';
+            html += rewards.map(function (r) { return r.place + ' место — ' + (r.days ? (r.days + ' дн.') : 'приз'); }).join('; ') + '.</p>';
+        }
+        html += '<p style="margin:12px 0 16px 0;color:#4a9eff;font-size:14px;">Если вы в топе — напишите в поддержку для получения награды.</p>';
+        html += '<h3 style="margin:16px 0 8px 0;font-size:1em;">Рейтинг</h3><ul style="list-style:none;padding:0;margin:0;">';
+        leaderboard.forEach(function (row) {
+            html += '<li style="padding:8px 0;border-bottom:1px solid #333;">' + row.place + '. ' + (row.referrer_user_id || '').slice(0, 12) + '… — ' + row.count + '</li>';
+        });
+        html += '</ul>';
+        if (refLink) {
+            html += '<button type="button" class="btn-primary" style="margin-top:16px;width:100%;" onclick="copyEventRefLink(\'' + refLink.replace(/'/g, "\\'") + '\')">Копировать мою реферальную ссылку</button>';
+        }
+        html += '</div>';
+        contentEl.innerHTML = html;
+    }).catch(function () {
+        if (contentEl) contentEl.innerHTML = '<p class="hint">Не удалось загрузить событие</p>';
+    });
+}
+function copyEventRefLink(link) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(function () { alert('Ссылка скопирована'); }).catch(function () { prompt('Скопируйте ссылку:', link); });
+    } else {
+        prompt('Скопируйте ссылку:', link);
+    }
+}
+
+var adminEventEditingId = null;
+async function loadAdminEventsPage() {
+    var loadingEl = document.getElementById('admin-events-loading');
+    var listWrap = document.getElementById('admin-events-list-wrap');
+    var listEl = document.getElementById('admin-events-list');
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (listWrap) listWrap.style.display = 'none';
+    try {
+        var r = await apiFetch('/api/events/admin/list');
+        var data = r.ok ? await r.json() : { events: [] };
+        var events = data.events || [];
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (listWrap) listWrap.style.display = 'block';
+        if (listEl) {
+            if (events.length === 0) {
+                listEl.innerHTML = '<p class="hint">Нет событий. Нажмите «Создать».</p>';
+            } else {
+                listEl.innerHTML = events.map(function (ev) {
+                    var start = (ev.start_at || '').slice(0, 16);
+                    var end = (ev.end_at || '').slice(0, 16);
+                    return '<div class="event-card" style="background:#1a1a1a;border-radius:8px;padding:16px;margin-bottom:12px;">' +
+                        '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
+                        '<p style="margin:0 0 8px 0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
+                        '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
+                        '<button type="button" class="btn-secondary" onclick="editAdminEvent(' + ev.id + ')">Редактировать</button>' +
+                        '<button type="button" class="btn-secondary" style="color:#ff6b6b;" onclick="deleteAdminEvent(' + ev.id + ')">Удалить</button>' +
+                        '</div></div>';
+                }).join('');
+            }
+        }
+    } catch (e) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (listEl) listEl.innerHTML = '<p class="hint">Ошибка загрузки</p>';
+    }
+}
+function showAdminEventForm(editId) {
+    adminEventEditingId = editId || null;
+    document.getElementById('admin-event-form-title').textContent = editId ? 'Редактировать событие' : 'Создать событие';
+    document.getElementById('admin-event-name').value = '';
+    document.getElementById('admin-event-description').value = '';
+    document.getElementById('admin-event-start').value = '';
+    document.getElementById('admin-event-end').value = '';
+    document.getElementById('admin-event-reward1').value = '';
+    document.getElementById('admin-event-reward2').value = '';
+    document.getElementById('admin-event-reward3').value = '';
+    if (editId) {
+        apiFetch('/api/events/' + editId).then(function (r) { return r.ok ? r.json() : null; }).then(function (ev) {
+            if (!ev) return;
+            document.getElementById('admin-event-name').value = ev.name || '';
+            document.getElementById('admin-event-description').value = ev.description || '';
+            document.getElementById('admin-event-start').value = (ev.start_at || '').slice(0, 16);
+            document.getElementById('admin-event-end').value = (ev.end_at || '').slice(0, 16);
+            var rewards = ev.rewards || [];
+            if (rewards[0]) document.getElementById('admin-event-reward1').value = rewards[0].days || '';
+            if (rewards[1]) document.getElementById('admin-event-reward2').value = rewards[1].days || '';
+            if (rewards[2]) document.getElementById('admin-event-reward3').value = rewards[2].days || '';
+        });
+    }
+    document.getElementById('admin-event-form-modal').style.display = 'flex';
+}
+function editAdminEvent(id) {
+    showAdminEventForm(id);
+}
+function closeAdminEventForm() {
+    document.getElementById('admin-event-form-modal').style.display = 'none';
+    adminEventEditingId = null;
+}
+function submitAdminEventForm(event) {
+    event.preventDefault();
+    var name = document.getElementById('admin-event-name').value.trim();
+    var description = document.getElementById('admin-event-description').value.trim();
+    var startAt = document.getElementById('admin-event-start').value;
+    var endAt = document.getElementById('admin-event-end').value;
+    if (!startAt || !endAt) { alert('Укажите начало и окончание'); return; }
+    if (startAt.length === 16) startAt += ':00';
+    if (endAt.length === 16) endAt += ':00';
+    var r1 = parseInt(document.getElementById('admin-event-reward1').value, 10) || 0;
+    var r2 = parseInt(document.getElementById('admin-event-reward2').value, 10) || 0;
+    var r3 = parseInt(document.getElementById('admin-event-reward3').value, 10) || 0;
+    var rewards = [];
+    if (r1 > 0) rewards.push({ place: 1, days: r1 });
+    if (r2 > 0) rewards.push({ place: 2, days: r2 });
+    if (r3 > 0) rewards.push({ place: 3, days: r3 });
+    var payload = { name: name, description: description, start_at: startAt, end_at: endAt, rewards: rewards };
+    if (adminEventEditingId) {
+        alert('Редактирование событий пока не реализовано (только создание и удаление).');
+        closeAdminEventForm();
+        return;
+    }
+    apiFetch('/api/events/admin/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(function (r) {
+        if (r.ok) { closeAdminEventForm(); loadAdminEventsPage(); } else { return r.json().then(function (d) { alert(d.error || 'Ошибка'); }); }
+    }).catch(function () { alert('Ошибка сети'); });
+}
+function deleteAdminEvent(eventId) {
+    if (!confirm('Удалить событие?')) return;
+    apiFetch('/api/events/admin/' + eventId, { method: 'DELETE' }).then(function (r) {
+        if (r.ok) loadAdminEventsPage(); else alert('Ошибка удаления');
+    }).catch(function () { alert('Ошибка сети'); });
+}
 // Функция отображения серверов
 // Переменная для хранения экземпляра глобуса
 let serverGlobe = null;
@@ -4392,12 +4636,17 @@ async function initTelegramFlow() {
     try {
         const initData = tg.initData;
         if (initData) {
+            var refParams = getRefFromUrl();
             const response = await fetch('/api/user/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ initData })
+                body: JSON.stringify({
+                    initData: initData,
+                    ref: refParams.ref || undefined,
+                    event_id: refParams.event_id || undefined
+                })
             });
             
             if (response.ok) {
@@ -4555,10 +4804,16 @@ async function handleWebRegister(event) {
     btn.textContent = 'Регистрация...';
 
     try {
+        var refParams = getRefFromUrl();
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({
+                username: username,
+                password: password,
+                ref: refParams.ref || undefined,
+                event_id: refParams.event_id || undefined
+            })
         });
         const result = await response.json();
         

@@ -168,3 +168,28 @@ def check_admin_access(user_id: str) -> bool:
     except Exception as e:
         logger.error(f"Ошибка при проверке прав админа: {e}", exc_info=True)
         return False
+
+
+def get_bot_module():
+    """Возвращает модуль bot.bot для доступа к глобальным объектам (server_manager, subscription_manager и т.д.)."""
+    try:
+        import sys
+        bot_module = sys.modules.get('bot.bot')
+        if bot_module is not None:
+            return bot_module
+        from ... import bot as bot_module
+        return bot_module
+    except (ImportError, AttributeError):
+        return None
+
+
+def get_server_manager():
+    """Возвращает server_manager из bot.bot или None."""
+    bot_module = get_bot_module()
+    return getattr(bot_module, 'server_manager', None) if bot_module else None
+
+
+def get_subscription_manager():
+    """Возвращает subscription_manager из bot.bot или None."""
+    bot_module = get_bot_module()
+    return getattr(bot_module, 'subscription_manager', None) if bot_module else None

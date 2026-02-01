@@ -303,6 +303,32 @@
             </div>
         </div>
 
+        <!-- Раздел События (реферальные конкурсы) -->
+        <div id="page-events" class="page" style="display: none;">
+            <header>
+                <h1>События</h1>
+            </header>
+            <div id="events-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка событий...</p>
+            </div>
+            <div id="events-empty" class="empty" style="display: none;">
+                <p>Пока событий нет</p>
+                <p class="hint">Следи за новостями в канале</p>
+            </div>
+            <div id="events-list-wrap" style="display: none;">
+                <div id="events-list"></div>
+            </div>
+        </div>
+
+        <!-- Детали события (заполняется в Stage 7) -->
+        <div id="page-event-detail" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('events')">← Назад</button>
+            </header>
+            <div id="event-detail-content"></div>
+        </div>
+
         <!-- Раздел Инструкции -->
         <div id="page-instructions" class="page" style="display: none;">
             <header>
@@ -465,8 +491,64 @@
                             <span class="admin-panel-row-label">Рассылка</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-events')">
+                            <span class="admin-panel-row-label">События</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: События -->
+        <div id="page-admin-events" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+            </header>
+            <div id="admin-events-content" class="admin-page-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 style="margin: 0;">События</h2>
+                    <button type="button" class="btn-primary" onclick="showAdminEventForm()">Создать</button>
+                </div>
+                <div id="admin-events-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
+                <div id="admin-events-list-wrap" style="display: none;">
+                    <div id="admin-events-list"></div>
+                </div>
+            </div>
+        </div>
+        <div id="admin-event-form-modal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 480px;">
+                <h2 id="admin-event-form-title">Создать событие</h2>
+                <form id="admin-event-form" onsubmit="submitAdminEventForm(event)">
+                    <div class="form-group">
+                        <label>Название</label>
+                        <input type="text" id="admin-event-name" required placeholder="Название события">
+                    </div>
+                    <div class="form-group">
+                        <label>Описание</label>
+                        <textarea id="admin-event-description" rows="3" placeholder="Описание"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Начало (YYYY-MM-DDTHH:MM)</label>
+                        <input type="datetime-local" id="admin-event-start" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Окончание (YYYY-MM-DDTHH:MM)</label>
+                        <input type="datetime-local" id="admin-event-end" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Награды (место — дни)</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <input type="number" id="admin-event-reward1" placeholder="1 место: дни" min="0" style="width: 100px;">
+                            <input type="number" id="admin-event-reward2" placeholder="2 место: дни" min="0" style="width: 100px;">
+                            <input type="number" id="admin-event-reward3" placeholder="3 место: дни" min="0" style="width: 100px;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 16px;">
+                        <button type="button" class="btn-secondary" onclick="closeAdminEventForm()">Отмена</button>
+                        <button type="submit" class="btn-primary">Сохранить</button>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -1196,6 +1278,11 @@
                 <rect x="2" y="3" width="20" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
                 <rect x="2" y="10" width="20" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
                 <rect x="2" y="17" width="20" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+            </svg>
+        </button>
+        <button class="nav-item" data-page="events" onclick="showPage('events')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L15 8L22 9L17 14L18 21L12 18L6 21L7 14L2 9L9 8L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
         </button>
         <button class="nav-item" data-page="instructions" onclick="showPage('instructions')">

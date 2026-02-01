@@ -12,6 +12,13 @@ from . import DB_PATH
 
 logger = logging.getLogger(__name__)
 
+# Разрешённые поля для обновления конфигурации сервера (update_server_config)
+SERVER_CONFIG_UPDATE_KEYS = [
+    'group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host',
+    'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url', 'client_flow',
+    'map_label', 'location', 'max_concurrent_clients',
+]
+
 async def init_subscribers_db():
     """Инициализирует таблицы пользователей и подписок в единой БД"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1300,14 +1307,15 @@ async def add_server_config(group_id: int, name: str, host: str, login: str, pas
             return server_id
 
 async def get_least_loaded_group_id():
-    """Возвращает ID наименее загруженной группы (по количеству активных подписок)"""
+    """Возвращает ID наименее загруженной группы (по количеству активных подписок).
+    Учитываются только группы, в которых есть хотя бы один активный сервер."""
     async with aiosqlite.connect(DB_PATH) as db:
-        # Считаем количество активных подписок в каждой группе
         query = """
             SELECT g.id, COUNT(s.id) as sub_count
             FROM server_groups g
             LEFT JOIN subscriptions s ON g.id = s.group_id AND s.status = 'active'
             WHERE g.is_active = 1
+              AND EXISTS (SELECT 1 FROM servers_config sc WHERE sc.group_id = g.id AND sc.is_active = 1)
             GROUP BY g.id
             ORDER BY sub_count ASC
             LIMIT 1
@@ -1373,7 +1381,7 @@ async def update_server_config(server_id: int, **kwargs):
         updates = []
         params = []
         for key, value in kwargs.items():
-            if key in ['group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host', 'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url', 'client_flow', 'map_label', 'location', 'max_concurrent_clients']:
+            if key in SERVER_CONFIG_UPDATE_KEYS:
                 updates.append(f"{key} = ?")
                 params.append(value)
                 

@@ -18,22 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_globals():
-    """Получает глобальные переменные из bot.py"""
-    try:
-        from ... import bot as bot_module
-        return {
-            'server_manager': getattr(bot_module, 'server_manager', None),
-            'new_client_manager': getattr(bot_module, 'new_client_manager', None),
-            'notification_manager': getattr(bot_module, 'notification_manager', None),
-            'subscription_manager': getattr(bot_module, 'subscription_manager', None),
-        }
-    except (ImportError, AttributeError):
-        return {
-            'server_manager': None,
-            'new_client_manager': None,
-            'notification_manager': None,
-            'subscription_manager': None,
-        }
+    """Получает глобальные переменные из bot.py через общий хелпер."""
+    from .webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
+    bot_module = get_bot_module()
+    return {
+        'server_manager': get_server_manager(),
+        'notification_manager': getattr(bot_module, 'notification_manager', None) if bot_module else None,
+        'subscription_manager': get_subscription_manager(),
+    }
 
 
 async def process_payment_webhook(bot_app, payment_id, status):
@@ -123,10 +115,10 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             # Получаем глобальные переменные
             globals_dict = get_globals()
             subscription_manager = globals_dict.get('subscription_manager')
-            new_client_manager = globals_dict.get('new_client_manager')
+            server_manager = globals_dict.get('server_manager')
             
-            if not subscription_manager or not new_client_manager:
-                logger.error("subscription_manager или new_client_manager не доступен")
+            if not subscription_manager or not server_manager:
+                logger.error("subscription_manager или server_manager не доступен")
                 await update_payment_status(payment_id, 'failed')
                 return
             
@@ -260,6 +252,13 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             
             await update_payment_status(payment_id, 'succeeded')
             await update_payment_activation(payment_id, 1)
+
+            try:
+                from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
+                if EVENTS_MODULE_ENABLED:
+                    await events_on_payment_success(user_id)
+            except Exception as events_e:
+                logger.debug("events.on_payment_success (extension): %s", events_e)
             
             # Отправляем уведомление о продлении подписки
             try:
@@ -351,11 +350,11 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         
         # Получаем глобальные переменные
         globals_dict = get_globals()
-        new_client_manager = globals_dict['new_client_manager']
+        server_manager = globals_dict.get('server_manager')
         subscription_manager = globals_dict.get('subscription_manager')
         
-        if not new_client_manager:
-            logger.error("new_client_manager не доступен")
+        if not server_manager:
+            logger.error("server_manager не доступен")
             await update_payment_status(payment_id, 'failed')
             return
         
@@ -549,6 +548,13 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         # Нездоровые серверы уже привязаны к подписке, клиенты будут созданы при синхронизации
         await update_payment_status(payment_id, 'succeeded')
         await update_payment_activation(payment_id, 1)
+
+        try:
+            from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
+            if EVENTS_MODULE_ENABLED:
+                await events_on_payment_success(user_id)
+        except Exception as events_e:
+            logger.debug("events.on_payment_success (new purchase): %s", events_e)
         
         # Логируем результаты
         if failed_servers:

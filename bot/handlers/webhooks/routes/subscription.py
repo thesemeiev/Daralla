@@ -47,13 +47,7 @@ def create_blueprint(bot_app):
         logger.info(f"Входящий запрос subscription: token={token}, method={request.method}")
 
         try:
-            def get_subscription_manager():
-                try:
-                    from .... import bot as bot_module
-                    return getattr(bot_module, 'subscription_manager', None)
-                except (ImportError, AttributeError):
-                    return None
-
+            from ..webhook_auth import get_subscription_manager
             subscription_manager = get_subscription_manager()
             if not subscription_manager:
                 logger.error("subscription_manager не доступен")
@@ -110,11 +104,9 @@ def create_blueprint(bot_app):
                     logger.error(f"Ошибка при получении информации о серверах: {e}")
                 return ("No servers available", 503)
 
-            try:
-                from .... import bot as bot_module
-                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
-            except (ImportError, AttributeError):
-                vpn_brand_name = 'Daralla VPN'
+            from ..webhook_auth import get_bot_module
+            bot_module = get_bot_module()
+            vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN') if bot_module else 'Daralla VPN'
 
             clean_name = re.sub(r'[^\w\s-]', '', vpn_brand_name)
             domain_name = re.sub(r'\s+', '-', clean_name.strip()).lower()
@@ -134,13 +126,7 @@ def create_blueprint(bot_app):
             logger.info(f"Начало получения статистики трафика для подписки {sub['id']} с {len(servers)} серверами")
 
             try:
-                def get_server_manager():
-                    try:
-                        from .... import bot as bot_module
-                        return getattr(bot_module, 'server_manager', None)
-                    except (ImportError, AttributeError):
-                        return None
-
+                from ..webhook_auth import get_server_manager
                 server_manager = get_server_manager()
                 if server_manager and servers:
                     for s in servers:

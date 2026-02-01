@@ -1,6 +1,6 @@
 """
 Register all webhook route blueprints with the Flask app.
-Order: payment, subscription, api_public, api_user, api_auth, api_admin, static.
+Order: payment, subscription, api_public, api_user, api_auth, api_admin, [events], static.
 """
 from .payment import create_blueprint as create_payment_blueprint
 from .static import bp as static_bp
@@ -19,4 +19,11 @@ def register_all_blueprints(app, bot_app):
     app.register_blueprint(create_api_user_blueprint(bot_app))
     app.register_blueprint(create_api_auth_blueprint(bot_app))
     app.register_blueprint(create_api_admin_blueprint(bot_app))
+    try:
+        from bot.events import EVENTS_MODULE_ENABLED
+        if EVENTS_MODULE_ENABLED:
+            from bot.events.api import create_events_blueprint
+            app.register_blueprint(create_events_blueprint())
+    except ImportError:
+        pass
     app.register_blueprint(static_bp)
