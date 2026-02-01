@@ -517,34 +517,42 @@
             </div>
         </div>
         <div id="admin-event-form-modal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-content" style="max-width: 520px;">
                 <h2 id="admin-event-form-title">Создать событие</h2>
                 <form id="admin-event-form" onsubmit="submitAdminEventForm(event)">
                     <div class="form-group">
-                        <label>Название</label>
+                        <label for="admin-event-name">Название</label>
                         <input type="text" id="admin-event-name" required placeholder="Название события">
                     </div>
                     <div class="form-group">
-                        <label>Описание</label>
-                        <textarea id="admin-event-description" rows="3" placeholder="Описание"></textarea>
+                        <label for="admin-event-description">Описание</label>
+                        <textarea id="admin-event-description" rows="3" placeholder="Описание события"></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Начало (YYYY-MM-DDTHH:MM)</label>
+                        <label for="admin-event-start">Начало</label>
                         <input type="datetime-local" id="admin-event-start" required>
                     </div>
                     <div class="form-group">
-                        <label>Окончание (YYYY-MM-DDTHH:MM)</label>
+                        <label for="admin-event-end">Окончание</label>
                         <input type="datetime-local" id="admin-event-end" required>
                     </div>
                     <div class="form-group">
-                        <label>Награды (место — дни)</label>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <input type="number" id="admin-event-reward1" placeholder="1 место: дни" min="0" style="width: 100px;">
-                            <input type="number" id="admin-event-reward2" placeholder="2 место: дни" min="0" style="width: 100px;">
-                            <input type="number" id="admin-event-reward3" placeholder="3 место: дни" min="0" style="width: 100px;">
+                        <label>Награды</label>
+                        <p class="hint" style="margin: 0 0 8px 0; font-size: 12px; color: #999;">Текст приза для каждого места (например: 100 дней, Футболка, Скидка 50%)</p>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <label for="admin-event-reward1" style="font-size: 13px;">1 место</label>
+                            <input type="text" id="admin-event-reward1" placeholder="Например: 100 дней подписки">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <label for="admin-event-reward2" style="font-size: 13px;">2 место</label>
+                            <input type="text" id="admin-event-reward2" placeholder="Например: Футболка">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="admin-event-reward3" style="font-size: 13px;">3 место</label>
+                            <input type="text" id="admin-event-reward3" placeholder="Например: 30 дней подписки">
                         </div>
                     </div>
-                    <div style="display: flex; gap: 12px; margin-top: 16px;">
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
                         <button type="button" class="btn-secondary" onclick="closeAdminEventForm()">Отмена</button>
                         <button type="submit" class="btn-primary">Сохранить</button>
                     </div>

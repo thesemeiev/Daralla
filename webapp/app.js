@@ -774,7 +774,10 @@ function loadEventDetail(eventId) {
         var rewards = ev.rewards || [];
         if (rewards.length > 0) {
             html += '<p style="margin:12px 0 8px 0;color:#999;font-size:14px;">Награды: ';
-            html += rewards.map(function (r) { return r.place + ' место — ' + (r.days ? (r.days + ' дн.') : 'приз'); }).join('; ') + '.</p>';
+            html += rewards.map(function (r) {
+                var text = r.description || (r.days ? (r.days + ' дн.') : 'приз');
+                return r.place + ' место — ' + text;
+            }).join('; ') + '.</p>';
         }
         html += '<p style="margin:12px 0 16px 0;color:#4a9eff;font-size:14px;">Если вы в топе — напишите в поддержку для получения награды.</p>';
         html += '<h3 style="margin:16px 0 8px 0;font-size:1em;">Рейтинг</h3><ul style="list-style:none;padding:0;margin:0;">';
@@ -852,9 +855,9 @@ function showAdminEventForm(editId) {
             document.getElementById('admin-event-start').value = (ev.start_at || '').slice(0, 16);
             document.getElementById('admin-event-end').value = (ev.end_at || '').slice(0, 16);
             var rewards = ev.rewards || [];
-            if (rewards[0]) document.getElementById('admin-event-reward1').value = rewards[0].days || '';
-            if (rewards[1]) document.getElementById('admin-event-reward2').value = rewards[1].days || '';
-            if (rewards[2]) document.getElementById('admin-event-reward3').value = rewards[2].days || '';
+            if (rewards[0]) document.getElementById('admin-event-reward1').value = rewards[0].description || (rewards[0].days ? (rewards[0].days + ' дн.') : '');
+            if (rewards[1]) document.getElementById('admin-event-reward2').value = rewards[1].description || (rewards[1].days ? (rewards[1].days + ' дн.') : '');
+            if (rewards[2]) document.getElementById('admin-event-reward3').value = rewards[2].description || (rewards[2].days ? (rewards[2].days + ' дн.') : '');
         });
     }
     document.getElementById('admin-event-form-modal').style.display = 'flex';
@@ -875,13 +878,13 @@ function submitAdminEventForm(event) {
     if (!startAt || !endAt) { alert('Укажите начало и окончание'); return; }
     if (startAt.length === 16) startAt += ':00';
     if (endAt.length === 16) endAt += ':00';
-    var r1 = parseInt(document.getElementById('admin-event-reward1').value, 10) || 0;
-    var r2 = parseInt(document.getElementById('admin-event-reward2').value, 10) || 0;
-    var r3 = parseInt(document.getElementById('admin-event-reward3').value, 10) || 0;
+    var r1 = (document.getElementById('admin-event-reward1').value || '').trim();
+    var r2 = (document.getElementById('admin-event-reward2').value || '').trim();
+    var r3 = (document.getElementById('admin-event-reward3').value || '').trim();
     var rewards = [];
-    if (r1 > 0) rewards.push({ place: 1, days: r1 });
-    if (r2 > 0) rewards.push({ place: 2, days: r2 });
-    if (r3 > 0) rewards.push({ place: 3, days: r3 });
+    if (r1) rewards.push({ place: 1, description: r1 });
+    if (r2) rewards.push({ place: 2, description: r2 });
+    if (r3) rewards.push({ place: 3, description: r3 });
     var payload = { name: name, description: description, start_at: startAt, end_at: endAt, rewards: rewards };
     if (adminEventEditingId) {
         alert('Редактирование событий пока не реализовано (только создание и удаление).');
