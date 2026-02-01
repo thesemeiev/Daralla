@@ -49,7 +49,7 @@ async def get_referrer_for_user(referred_user_id: str, event_id: int | None = No
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         if event_id is None:
-            await db.execute(
+            cursor = await db.execute(
                 """
                 SELECT referrer_user_id, created_at FROM event_referrals
                 WHERE referred_user_id = ? AND event_id IS NULL
@@ -58,7 +58,7 @@ async def get_referrer_for_user(referred_user_id: str, event_id: int | None = No
                 (referred_user_id,),
             )
         else:
-            await db.execute(
+            cursor = await db.execute(
                 """
                 SELECT referrer_user_id, created_at FROM event_referrals
                 WHERE referred_user_id = ? AND event_id = ?
@@ -66,7 +66,7 @@ async def get_referrer_for_user(referred_user_id: str, event_id: int | None = No
                 """,
                 (referred_user_id, event_id),
             )
-        row = await db.fetchone()
+        row = await cursor.fetchone()
         return dict(row) if row else None
 
 
@@ -75,7 +75,7 @@ async def list_referrals_by_referrer(referrer_user_id: str, event_id: int | None
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         if event_id is None:
-            await db.execute(
+            cursor = await db.execute(
                 """
                 SELECT referred_user_id, created_at FROM event_referrals
                 WHERE referrer_user_id = ? AND event_id IS NULL
@@ -84,7 +84,7 @@ async def list_referrals_by_referrer(referrer_user_id: str, event_id: int | None
                 (referrer_user_id,),
             )
         else:
-            await db.execute(
+            cursor = await db.execute(
                 """
                 SELECT referred_user_id, created_at FROM event_referrals
                 WHERE referrer_user_id = ? AND event_id = ?
@@ -92,7 +92,7 @@ async def list_referrals_by_referrer(referrer_user_id: str, event_id: int | None
                 """,
                 (referrer_user_id, event_id),
             )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
@@ -117,8 +117,8 @@ async def get_event_by_id(event_id: int) -> dict | None:
     """Возвращает событие по id или None."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute("SELECT * FROM events WHERE id = ?", (event_id,))
-        row = await db.fetchone()
+        cursor = await db.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+        row = await cursor.fetchone()
         if not row:
             return None
         d = dict(row)
@@ -137,11 +137,11 @@ async def list_events_active(now_iso: str | None = None) -> list:
     now = now_iso or _now_iso()
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute(
+        cursor = await db.execute(
             "SELECT * FROM events WHERE start_at <= ? AND end_at >= ? AND status != 'draft' ORDER BY start_at ASC",
             (now, now),
         )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         return [_event_row_to_dict(r) for r in rows]
 
 
@@ -150,11 +150,11 @@ async def list_events_upcoming(now_iso: str | None = None) -> list:
     now = now_iso or _now_iso()
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute(
+        cursor = await db.execute(
             "SELECT * FROM events WHERE start_at > ? AND status != 'draft' ORDER BY start_at ASC",
             (now,),
         )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         return [_event_row_to_dict(r) for r in rows]
 
 
@@ -163,11 +163,11 @@ async def list_events_ended(now_iso: str | None = None) -> list:
     now = now_iso or _now_iso()
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute(
+        cursor = await db.execute(
             "SELECT * FROM events WHERE end_at < ? ORDER BY end_at DESC",
             (now,),
         )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         return [_event_row_to_dict(r) for r in rows]
 
 
@@ -175,8 +175,8 @@ async def list_events_all() -> list:
     """Все события (для админки)."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute("SELECT * FROM events ORDER BY start_at DESC")
-        rows = await db.fetchall()
+        cursor = await db.execute("SELECT * FROM events ORDER BY start_at DESC")
+        rows = await cursor.fetchall()
         return [_event_row_to_dict(r) for r in rows]
 
 
@@ -210,7 +210,7 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute(
+        cursor = await db.execute(
             """
             SELECT er.referrer_user_id, COUNT(ecp.id) AS cnt
             FROM event_counted_payments ecp
@@ -222,7 +222,7 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
             """,
             (event_id, limit),
         )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         result = []
         for i, r in enumerate(rows, 1):
             result.append({"referrer_user_id": r["referrer_user_id"], "count": r["cnt"], "place": i})
@@ -236,7 +236,7 @@ async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        await db.execute(
+        cursor = await db.execute(
             """
             SELECT er.referrer_user_id, COUNT(ecp.id) AS cnt
             FROM event_counted_payments ecp
@@ -248,7 +248,7 @@ async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
             """,
             (event_id, limit),
         )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         result = []
         place = 1
         prev_count = None
@@ -264,8 +264,8 @@ async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
 async def is_rewards_granted(event_id: int) -> bool:
     """Проверяет, выданы ли уже награды по событию."""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("SELECT 1 FROM event_rewards_granted WHERE event_id = ?", (event_id,))
-        row = await db.fetchone()
+        cursor = await db.execute("SELECT 1 FROM event_rewards_granted WHERE event_id = ?", (event_id,))
+        row = await cursor.fetchone()
         return row is not None
 
 
@@ -298,7 +298,7 @@ async def get_active_event_ids_for_referred_user(referred_user_id: str) -> list:
     """Список id активных событий, в которых referred_user_id участвует как приглашённый."""
     now = _now_iso()
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
+        cursor = await db.execute(
             """
             SELECT DISTINCT er.event_id FROM event_referrals er
             JOIN events e ON e.id = er.event_id
@@ -307,7 +307,7 @@ async def get_active_event_ids_for_referred_user(referred_user_id: str) -> list:
             """,
             (referred_user_id, now, now),
         )
-        rows = await db.fetchall()
+        rows = await cursor.fetchall()
         return [r[0] for r in rows] if rows else []
 
 
