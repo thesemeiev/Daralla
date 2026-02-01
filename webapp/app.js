@@ -709,7 +709,7 @@ async function loadServers() {
 // Иконки для событий (inline SVG, без смайликов)
 var EVENT_ICON_LIVE = '<svg class="event-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>';
 var EVENT_ICON_CLOCK = '<svg class="event-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-var EVENT_ICON_BROADCAST = '<svg class="event-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a10 10 0 0 1 0 20M12 6a6 6 0 0 1 0 12M12 10a2 2 0 0 1 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+var EVENT_ICON_TROPHY = '<svg class="event-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 4h8v4c0 4.4-1.8 8-4 8s-4-3.6-4-8V4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 8h2c0 3.3 1.3 6 3 6s3-2.7 3-6h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 14v4M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 18v2h4v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="20" width="8" height="2" rx="0.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
 
 function renderEventCard(ev, isLive) {
     var start = (ev.start_at || '').slice(0, 10);
@@ -718,13 +718,21 @@ function renderEventCard(ev, isLive) {
     var badgeClass = isLive ? 'event-badge event-badge--live event-badge--blink' : 'event-badge event-badge--upcoming';
     var badgeIcon = isLive ? EVENT_ICON_LIVE : EVENT_ICON_CLOCK;
     var badgeText = isLive ? 'Идёт' : 'Скоро';
-    return '<div class="' + cardClass + '">' +
+    var daysText = getEventDaysText(ev, isLive);
+    var html = '<div class="' + cardClass + '">' +
         '<div class="' + badgeClass + '" style="margin-bottom:10px;">' + badgeIcon + '<span>' + badgeText + '</span></div>' +
         '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
         (ev.description ? '<p style="margin:0 0 8px 0;color:#999;font-size:14px;">' + ev.description + '</p>' : '') +
-        '<p style="margin:0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
-        '<button type="button" class="btn-primary" style="margin-top:12px;width:100%;" onclick="showEventDetail(' + ev.id + ')">Подробнее</button>' +
+        '<p style="margin:0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>';
+    if (daysText) html += '<p class="event-days">' + daysText + '</p>';
+    var rewards = ev.rewards || [];
+    if (rewards.length > 0) {
+        var places = rewards.map(function (r) { return r.place + ' место'; }).join(', ');
+        html += '<p class="event-card-rewards">Награды: ' + places + '</p>';
+    }
+    html += '<button type="button" class="btn-primary" style="margin-top:12px;width:100%;" onclick="showEventDetail(' + ev.id + ')">Подробнее</button>' +
         '</div>';
+    return html;
 }
 
 // Загрузка списка событий (модуль событий)
@@ -788,8 +796,30 @@ function isEventLive(ev) {
     return ev.start_at <= now && ev.end_at >= now;
 }
 
+function daysWord(n) {
+    if (n === 1) return 'день';
+    if (n >= 2 && n <= 4) return 'дня';
+    return 'дней';
+}
+
+function getEventDaysText(ev, isLive) {
+    if (!ev || !ev.start_at || !ev.end_at) return '';
+    var now = Date.now();
+    var start = new Date(ev.start_at).getTime();
+    var end = new Date(ev.end_at).getTime();
+    if (isLive) {
+        var daysLeft = Math.ceil((end - now) / 86400000);
+        if (daysLeft <= 0) return 'Заканчивается сегодня';
+        return 'До конца: ' + daysLeft + ' ' + daysWord(daysLeft);
+    } else {
+        var daysUntil = Math.ceil((start - now) / 86400000);
+        if (daysUntil <= 0) return 'Начинается сегодня';
+        return 'До начала: ' + daysUntil + ' ' + daysWord(daysUntil);
+    }
+}
+
 function buildLeaderboardHtml(leaderboard) {
-    var html = '<div class="live-ranking"><div class="live-ranking-title">' + EVENT_ICON_BROADCAST + '<span>Live-рейтинг</span></div><ul class="leaderboard-list">';
+    var html = '<div class="live-ranking"><div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div><ul class="leaderboard-list">';
     leaderboard.forEach(function (row) {
         var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
         html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + (row.referrer_user_id || '').slice(0, 12) + '… — ' + row.count + '</li>';
@@ -818,23 +848,26 @@ function loadEventDetail(eventId) {
         var statusClass = live ? 'event-detail-status event-detail-status--live' : 'event-detail-status event-detail-status--upcoming';
         var statusIcon = live ? EVENT_ICON_LIVE : EVENT_ICON_CLOCK;
         var statusText = live ? 'Идёт' : 'Скоро';
+        var daysText = getEventDaysText(ev, live);
         var html = '<div style="padding:16px;">' +
             '<div class="' + statusClass + '">' + statusIcon + '<span>' + statusText + '</span></div>' +
             '<h2 style="margin:0 0 12px 0;">' + (ev.name || 'Событие') + '</h2>' +
             (ev.description ? '<p style="color:#999;margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
             '<p style="color:#666;font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
+        if (daysText) html += '<p class="event-days">' + daysText + '</p>';
         if (myPlace) {
             html += '<p style="margin:16px 0 8px 0;font-weight:600;">Моё место: ' + myPlace.place + ' (засчитано оплат: ' + myPlace.count + ')</p>';
         }
         var rewards = ev.rewards || [];
         if (rewards.length > 0) {
-            html += '<p style="margin:12px 0 8px 0;color:#999;font-size:14px;">Награды: ';
-            html += rewards.map(function (r) {
+            html += '<div class="event-rewards-block"><p class="event-rewards-title">Награды</p><ul class="event-rewards-list">';
+            rewards.forEach(function (r) {
                 var text = r.description || (r.days ? (r.days + ' дн.') : 'приз');
-                return r.place + ' место — ' + text;
-            }).join('; ') + '.</p>';
+                var placeClass = r.place === 1 ? 'event-reward-place--1' : r.place === 2 ? 'event-reward-place--2' : r.place === 3 ? 'event-reward-place--3' : '';
+                html += '<li class="event-reward-item"><span class="event-reward-place ' + placeClass + '">' + r.place + ' место</span> — ' + text + '</li>';
+            });
+            html += '</ul></div>';
         }
-        html += '<p style="margin:12px 0 16px 0;color:#4a9eff;font-size:14px;">Если вы в топе — напишите в поддержку для получения награды.</p>';
         html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
         html += buildLeaderboardHtml(leaderboard);
         if (refLink) {

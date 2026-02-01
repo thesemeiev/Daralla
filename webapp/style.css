@@ -873,6 +873,73 @@ h1 {
     font-weight: 600;
 }
 
+.event-days {
+    margin: 8px 0 0 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: #8ba3e8;
+}
+
+.event-card--live .event-days {
+    color: #5ee85e;
+}
+
+.event-card-rewards {
+    margin: 8px 0 0 0;
+    font-size: 13px;
+    color: #c9a86c;
+    font-weight: 500;
+}
+
+.event-rewards-block {
+    margin: 16px 0 12px 0;
+    padding: 12px 14px;
+    background: rgba(201, 168, 108, 0.12);
+    border: 1px solid rgba(201, 168, 108, 0.35);
+    border-radius: 10px;
+}
+
+.event-rewards-title {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.event-rewards-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.event-reward-item {
+    padding: 6px 0;
+    font-size: 14px;
+    color: #c0c0c0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.event-reward-item:last-child {
+    border-bottom: none;
+}
+
+.event-reward-place {
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.event-reward-place--1 {
+    color: #e8c547;
+}
+
+.event-reward-place--2 {
+    color: #b8b8b8;
+}
+
+.event-reward-place--3 {
+    color: #c9a86c;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .event-badge--live.event-badge--blink {
         animation: none;
