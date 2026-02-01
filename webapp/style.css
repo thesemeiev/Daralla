@@ -743,6 +743,142 @@ h1 {
     }
 }
 
+/* --- События: карточки и бейджи --- */
+.event-card {
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid #2a2a2a;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.event-card--live {
+    border-color: rgba(76, 175, 80, 0.5);
+    background: rgba(76, 175, 80, 0.08);
+}
+
+.event-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.event-badge--live {
+    background: rgba(76, 175, 80, 0.4);
+    color: #5ee85e;
+    border: 1px solid rgba(76, 175, 80, 0.5);
+}
+
+.event-badge--live.event-badge--blink {
+    animation: status-blink 2s ease-in-out infinite;
+}
+
+.event-badge--upcoming {
+    background: rgba(100, 120, 180, 0.35);
+    color: #8ba3e8;
+    border: 1px solid rgba(100, 120, 180, 0.5);
+}
+
+.event-icon-svg {
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.event-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #b0b0b0;
+    margin: 16px 0 10px 0;
+    letter-spacing: -0.2px;
+}
+
+.event-section-title:first-child {
+    margin-top: 0;
+}
+
+/* Деталь события: статус и Live-рейтинг */
+.event-detail-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.event-detail-status--live {
+    background: rgba(76, 175, 80, 0.4);
+    color: #5ee85e;
+    border: 1px solid rgba(76, 175, 80, 0.5);
+}
+
+.event-detail-status--upcoming {
+    background: rgba(100, 120, 180, 0.35);
+    color: #8ba3e8;
+    border: 1px solid rgba(100, 120, 180, 0.5);
+}
+
+.live-ranking {
+    margin-top: 16px;
+}
+
+.live-ranking-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    margin: 16px 0 8px 0;
+    color: #e0e0e0;
+}
+
+.live-ranking-title .event-icon-svg {
+    flex-shrink: 0;
+}
+
+.leaderboard-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.leaderboard-row {
+    padding: 8px 0;
+    border-bottom: 1px solid #333;
+    font-size: 14px;
+    color: #c0c0c0;
+}
+
+.leaderboard-row--top1 {
+    color: #e8c547;
+    font-weight: 600;
+}
+
+.leaderboard-row--top2 {
+    color: #b8b8b8;
+    font-weight: 600;
+}
+
+.leaderboard-row--top3 {
+    color: #c9a86c;
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .event-badge--live.event-badge--blink {
+        animation: none;
+    }
+}
+
 .subscription-info {
     display: grid;
     grid-template-columns: 1fr 1fr;

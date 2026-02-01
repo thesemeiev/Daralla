@@ -205,6 +205,10 @@ function showPage(pageName, params) {
         clearInterval(serverLoadChartInterval);
         serverLoadChartInterval = null;
     }
+    if (currentPage === 'event-detail' && pageName !== 'event-detail' && typeof eventDetailLeaderboardTimer !== 'undefined' && eventDetailLeaderboardTimer) {
+        clearInterval(eventDetailLeaderboardTimer);
+        eventDetailLeaderboardTimer = null;
+    }
 
     // Сбрасываем скролл наверх при переключении страниц
     window.scrollTo(0, 0);
@@ -702,6 +706,27 @@ async function loadServers() {
     }
 }
 
+// Иконки для событий (inline SVG, без смайликов)
+var EVENT_ICON_LIVE = '<svg class="event-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>';
+var EVENT_ICON_CLOCK = '<svg class="event-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+var EVENT_ICON_BROADCAST = '<svg class="event-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a10 10 0 0 1 0 20M12 6a6 6 0 0 1 0 12M12 10a2 2 0 0 1 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+function renderEventCard(ev, isLive) {
+    var start = (ev.start_at || '').slice(0, 10);
+    var end = (ev.end_at || '').slice(0, 10);
+    var cardClass = 'event-card' + (isLive ? ' event-card--live' : '');
+    var badgeClass = isLive ? 'event-badge event-badge--live event-badge--blink' : 'event-badge event-badge--upcoming';
+    var badgeIcon = isLive ? EVENT_ICON_LIVE : EVENT_ICON_CLOCK;
+    var badgeText = isLive ? 'Идёт' : 'Скоро';
+    return '<div class="' + cardClass + '">' +
+        '<div class="' + badgeClass + '" style="margin-bottom:10px;">' + badgeIcon + '<span>' + badgeText + '</span></div>' +
+        '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
+        (ev.description ? '<p style="margin:0 0 8px 0;color:#999;font-size:14px;">' + ev.description + '</p>' : '') +
+        '<p style="margin:0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
+        '<button type="button" class="btn-primary" style="margin-top:12px;width:100%;" onclick="showEventDetail(' + ev.id + ')">Подробнее</button>' +
+        '</div>';
+}
+
 // Загрузка списка событий (модуль событий)
 async function loadEvents() {
     var loadingEl = document.getElementById('events-loading');
@@ -713,27 +738,29 @@ async function loadEvents() {
     if (listWrap) listWrap.style.display = 'none';
     try {
         var response = await apiFetch('/api/events/');
-        var data = { events: [] };
+        var data = { events: [], active: [], upcoming: [] };
         if (response.ok) {
             try { data = await response.json(); } catch (e) {}
         }
-        var events = data.events || [];
+        var active = data.active || [];
+        var upcoming = data.upcoming || [];
+        var hasAny = active.length > 0 || upcoming.length > 0;
         if (loadingEl) loadingEl.style.display = 'none';
-        if (events.length === 0) {
+        if (!hasAny) {
             if (emptyEl) emptyEl.style.display = 'block';
         } else {
             if (listWrap) listWrap.style.display = 'block';
             if (listEl) {
-                listEl.innerHTML = events.map(function (ev) {
-                    var start = (ev.start_at || '').slice(0, 10);
-                    var end = (ev.end_at || '').slice(0, 10);
-                    return '<div class="event-card" style="background:#1a1a1a;border-radius:8px;padding:16px;margin-bottom:12px;">' +
-                        '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
-                        (ev.description ? '<p style="margin:0 0 8px 0;color:#999;font-size:14px;">' + ev.description + '</p>' : '') +
-                        '<p style="margin:0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
-                        '<button type="button" class="btn-primary" style="margin-top:12px;width:100%;" onclick="showEventDetail(' + ev.id + ')">Подробнее</button>' +
-                        '</div>';
-                }).join('');
+                var html = '';
+                if (active.length > 0) {
+                    html += '<p class="event-section-title">Событие идёт</p>';
+                    html += active.map(function (ev) { return renderEventCard(ev, true); }).join('');
+                }
+                if (upcoming.length > 0) {
+                    html += '<p class="event-section-title">Скоро</p>';
+                    html += upcoming.map(function (ev) { return renderEventCard(ev, false); }).join('');
+                }
+                listEl.innerHTML = html;
             }
         }
     } catch (e) {
@@ -742,12 +769,35 @@ async function loadEvents() {
     }
 }
 
+var eventDetailLeaderboardTimer = null;
+
 function showEventDetail(eventId) {
+    if (eventDetailLeaderboardTimer) {
+        clearInterval(eventDetailLeaderboardTimer);
+        eventDetailLeaderboardTimer = null;
+    }
     var contentEl = document.getElementById('event-detail-content');
     if (contentEl) contentEl.innerHTML = '<div class="loading"><p>Загрузка...</p></div>';
     showPage('event-detail', { id: eventId });
     loadEventDetail(eventId);
 }
+
+function isEventLive(ev) {
+    if (!ev || !ev.start_at || !ev.end_at) return false;
+    var now = new Date().toISOString();
+    return ev.start_at <= now && ev.end_at >= now;
+}
+
+function buildLeaderboardHtml(leaderboard) {
+    var html = '<div class="live-ranking"><div class="live-ranking-title">' + EVENT_ICON_BROADCAST + '<span>Live-рейтинг</span></div><ul class="leaderboard-list">';
+    leaderboard.forEach(function (row) {
+        var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
+        html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + (row.referrer_user_id || '').slice(0, 12) + '… — ' + row.count + '</li>';
+    });
+    html += '</ul></div>';
+    return html;
+}
+
 function loadEventDetail(eventId) {
     var contentEl = document.getElementById('event-detail-content');
     if (!contentEl) return;
@@ -764,7 +814,12 @@ function loadEventDetail(eventId) {
         var refLink = results[3];
         if (!contentEl) return;
         if (!ev) { contentEl.innerHTML = '<p class="hint">Событие не найдено</p>'; return; }
+        var live = isEventLive(ev);
+        var statusClass = live ? 'event-detail-status event-detail-status--live' : 'event-detail-status event-detail-status--upcoming';
+        var statusIcon = live ? EVENT_ICON_LIVE : EVENT_ICON_CLOCK;
+        var statusText = live ? 'Идёт' : 'Скоро';
         var html = '<div style="padding:16px;">' +
+            '<div class="' + statusClass + '">' + statusIcon + '<span>' + statusText + '</span></div>' +
             '<h2 style="margin:0 0 12px 0;">' + (ev.name || 'Событие') + '</h2>' +
             (ev.description ? '<p style="color:#999;margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
             '<p style="color:#666;font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
@@ -780,16 +835,34 @@ function loadEventDetail(eventId) {
             }).join('; ') + '.</p>';
         }
         html += '<p style="margin:12px 0 16px 0;color:#4a9eff;font-size:14px;">Если вы в топе — напишите в поддержку для получения награды.</p>';
-        html += '<h3 style="margin:16px 0 8px 0;font-size:1em;">Рейтинг</h3><ul style="list-style:none;padding:0;margin:0;">';
-        leaderboard.forEach(function (row) {
-            html += '<li style="padding:8px 0;border-bottom:1px solid #333;">' + row.place + '. ' + (row.referrer_user_id || '').slice(0, 12) + '… — ' + row.count + '</li>';
-        });
-        html += '</ul>';
+        html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
+        html += buildLeaderboardHtml(leaderboard);
         if (refLink) {
             html += '<button type="button" class="btn-primary" style="margin-top:16px;width:100%;" onclick="copyEventRefLink(\'' + refLink.replace(/'/g, "\\'") + '\')">Копировать мою реферальную ссылку</button>';
         }
         html += '</div>';
         contentEl.innerHTML = html;
+        contentEl.setAttribute('data-event-detail-id', String(eventId));
+        if (live) {
+            eventDetailLeaderboardTimer = setInterval(function () {
+                var el = document.getElementById('event-detail-content');
+                if (!el || el.getAttribute('data-event-detail-id') !== String(eventId)) {
+                    if (eventDetailLeaderboardTimer) clearInterval(eventDetailLeaderboardTimer);
+                    eventDetailLeaderboardTimer = null;
+                    return;
+                }
+                apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) {
+                    var list = d.leaderboard || [];
+                    var wrap = el && el.querySelector('.live-ranking');
+                    if (wrap && wrap.parentNode) {
+                        var temp = document.createElement('div');
+                        temp.innerHTML = buildLeaderboardHtml(list);
+                        var newWrap = temp.firstElementChild;
+                        if (newWrap) wrap.parentNode.replaceChild(newWrap, wrap);
+                    }
+                });
+            }, 30000);
+        }
     }).catch(function () {
         if (contentEl) contentEl.innerHTML = '<p class="hint">Не удалось загрузить событие</p>';
     });
