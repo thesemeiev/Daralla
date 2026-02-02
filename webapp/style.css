@@ -240,6 +240,13 @@ body {
     caret-color: transparent;
 }
 
+/* На широком экране (>480px) — без большого отступа сверху, иначе интерфейс «падает» */
+@media (min-width: 481px) {
+    body {
+        padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    }
+}
+
 /* Каретка только в полях ввода */
 input, textarea, select {
     caret-color: currentColor;
@@ -1872,6 +1879,10 @@ h1 {
     resize: none;
 }
 
+.form-group input[type="datetime-local"] {
+    min-height: 48px;
+}
+
 /* Стили для чекбоксов */
 .checkbox-group {
     display: flex !important;
@@ -2175,6 +2186,8 @@ h1 {
 
 .form-group input[type="datetime-local"] {
     width: 100%;
+    min-width: 0;
+    min-height: 48px;
     padding: 12px 16px;
     background: #2a2a2a;
     border: 1px solid #3a3a3a;

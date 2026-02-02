@@ -892,11 +892,13 @@ function loadEventDetail(eventId) {
             });
             html += '</ul></div>';
         }
-        if (!ended) html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
-        html += buildLeaderboardHtml(leaderboard);
-        if (refLink && !ended) {
-            html += '<button type="button" class="btn-primary" style="margin-top:16px;width:100%;" onclick="copyEventRefLink(\'' + refLink.replace(/'/g, "\\'") + '\')">Копировать мою реферальную ссылку</button>';
+        if (!ended) {
+            html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
+            if (refLink) {
+                html += '<button type="button" class="btn-primary" style="margin-bottom:16px;width:100%;" onclick="copyEventRefLink(\'' + refLink.replace(/'/g, "\\'") + '\')">Копировать мою реферальную ссылку</button>';
+            }
         }
+        html += buildLeaderboardHtml(leaderboard);
         html += '</div>';
         contentEl.innerHTML = html;
         contentEl.setAttribute('data-event-detail-id', String(eventId));
