@@ -185,9 +185,9 @@ function getRefFromUrl() {
 function recordReferralIfPending() {
     var params = getRefFromUrl();
     var ref = params.ref;
-    if (!ref) return Promise.resolve();
-    var body = { ref: ref };
-    if (params.event_id) body.event_id = parseInt(params.event_id, 10) || params.event_id;
+    var eventId = params.event_id ? (parseInt(params.event_id, 10) || params.event_id) : null;
+    if (!ref || !eventId) return Promise.resolve();
+    var body = { ref: ref, event_id: eventId };
     return apiFetch('/api/events/record-ref', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -711,13 +711,14 @@ var EVENT_ICON_LIVE = '<svg class="event-icon-svg" width="14" height="14" viewBo
 var EVENT_ICON_CLOCK = '<svg class="event-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 var EVENT_ICON_TROPHY = '<svg class="event-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 4h8v4c0 4.4-1.8 8-4 8s-4-3.6-4-8V4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 8h2c0 3.3 1.3 6 3 6s3-2.7 3-6h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 14v4M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 18v2h4v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="20" width="8" height="2" rx="0.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
 
-function renderEventCard(ev, isLive) {
+function renderEventCard(ev, isLive, isEnded) {
+    isEnded = !!isEnded;
     var start = (ev.start_at || '').slice(0, 10);
     var end = (ev.end_at || '').slice(0, 10);
     var cardClass = 'event-card' + (isLive ? ' event-card--live' : '');
-    var badgeClass = isLive ? 'event-badge event-badge--live event-badge--blink' : 'event-badge event-badge--upcoming';
-    var badgeIcon = isLive ? EVENT_ICON_LIVE : EVENT_ICON_CLOCK;
-    var badgeText = isLive ? 'Идёт' : 'Скоро';
+    var badgeClass = isLive ? 'event-badge event-badge--live event-badge--blink' : (isEnded ? 'event-badge event-badge--ended' : 'event-badge event-badge--upcoming');
+    var badgeIcon = isLive ? EVENT_ICON_LIVE : (isEnded ? '🏁' : EVENT_ICON_CLOCK);
+    var badgeText = isLive ? 'Идёт' : (isEnded ? 'Завершено' : 'Скоро');
     var daysText = getEventDaysText(ev, isLive);
     var html = '<div class="' + cardClass + '">' +
         '<div class="' + badgeClass + '" style="margin-bottom:10px;">' + badgeIcon + '<span>' + badgeText + '</span></div>' +
@@ -752,7 +753,8 @@ async function loadEvents() {
         }
         var active = data.active || [];
         var upcoming = data.upcoming || [];
-        var hasAny = active.length > 0 || upcoming.length > 0;
+        var ended = data.ended || [];
+        var hasAny = active.length > 0 || upcoming.length > 0 || ended.length > 0;
         if (loadingEl) loadingEl.style.display = 'none';
         if (!hasAny) {
             if (emptyEl) emptyEl.style.display = 'block';
@@ -767,6 +769,10 @@ async function loadEvents() {
                 if (upcoming.length > 0) {
                     html += '<p class="event-section-title">Скоро</p>';
                     html += upcoming.map(function (ev) { return renderEventCard(ev, false); }).join('');
+                }
+                if (ended.length > 0) {
+                    html += '<p class="event-section-title">Завершённые</p>';
+                    html += ended.map(function (ev) { return renderEventCard(ev, false, true); }).join('');
                 }
                 listEl.innerHTML = html;
             }
@@ -822,7 +828,8 @@ function buildLeaderboardHtml(leaderboard) {
     var html = '<div class="live-ranking"><div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div><ul class="leaderboard-list">';
     leaderboard.forEach(function (row) {
         var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
-        html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + (row.referrer_user_id || '').slice(0, 12) + '… — ' + row.count + '</li>';
+        var accountId = row.account_id || row.referrer_user_id || '';
+        html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + escapeHtml(accountId) + ' — ' + row.count + '</li>';
     });
     html += '</ul></div>';
     return html;
@@ -845,9 +852,10 @@ function loadEventDetail(eventId) {
         if (!contentEl) return;
         if (!ev) { contentEl.innerHTML = '<p class="hint">Событие не найдено</p>'; return; }
         var live = isEventLive(ev);
-        var statusClass = live ? 'event-detail-status event-detail-status--live' : 'event-detail-status event-detail-status--upcoming';
-        var statusIcon = live ? EVENT_ICON_LIVE : EVENT_ICON_CLOCK;
-        var statusText = live ? 'Идёт' : 'Скоро';
+        var ended = (ev.computed_status === 'ended') || (ev.end_at && new Date(ev.end_at) < new Date());
+        var statusClass = live ? 'event-detail-status event-detail-status--live' : (ended ? 'event-detail-status event-detail-status--ended' : 'event-detail-status event-detail-status--upcoming');
+        var statusIcon = live ? EVENT_ICON_LIVE : (ended ? '🏁' : EVENT_ICON_CLOCK);
+        var statusText = live ? 'Идёт' : (ended ? 'Завершено' : 'Скоро');
         var daysText = getEventDaysText(ev, live);
         var html = '<div style="padding:16px;">' +
             '<div class="' + statusClass + '">' + statusIcon + '<span>' + statusText + '</span></div>' +
@@ -859,6 +867,18 @@ function loadEventDetail(eventId) {
             html += '<p style="margin:16px 0 8px 0;font-weight:600;">Моё место: ' + myPlace.place + ' (засчитано оплат: ' + myPlace.count + ')</p>';
         }
         var rewards = ev.rewards || [];
+        var winningPlaces = rewards.map(function (r) { return r.place; });
+        var isWinner = myPlace && winningPlaces.indexOf(myPlace.place) >= 0;
+        if (ended) {
+            html += '<p style="margin:12px 0;color:#aaa;">Спасибо за участие!</p>';
+            if (isWinner && ev.support_url) {
+                html += '<div class="event-winner-block" style="margin:16px 0;padding:16px;background:linear-gradient(135deg,#2a4a2a 0%,#1a3a1a 100%);border-radius:12px;border:1px solid #3a6a3a;">';
+                html += '<p style="margin:0 0 12px 0;font-weight:600;color:#8f8;">Поздравляем! Вы в числе победителей.</p>';
+                html += '<p style="margin:0 0 16px 0;color:#ccc;">За вашей наградой обратитесь в службу поддержки.</p>';
+                html += '<a href="' + escapeHtml(ev.support_url) + '" target="_blank" rel="noopener" class="btn-primary" style="display:inline-block;padding:10px 20px;text-decoration:none;color:inherit;">Служба поддержки</a>';
+                html += '</div>';
+            }
+        }
         if (rewards.length > 0) {
             html += '<div class="event-rewards-block"><p class="event-rewards-title">Награды</p><ul class="event-rewards-list">';
             rewards.forEach(function (r) {
@@ -868,9 +888,9 @@ function loadEventDetail(eventId) {
             });
             html += '</ul></div>';
         }
-        html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
+        if (!ended) html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
         html += buildLeaderboardHtml(leaderboard);
-        if (refLink) {
+        if (refLink && !ended) {
             html += '<button type="button" class="btn-primary" style="margin-top:16px;width:100%;" onclick="copyEventRefLink(\'' + refLink.replace(/'/g, "\\'") + '\')">Копировать мою реферальную ссылку</button>';
         }
         html += '</div>';
@@ -992,13 +1012,10 @@ function submitAdminEventForm(event) {
     if (r2) rewards.push({ place: 2, description: r2 });
     if (r3) rewards.push({ place: 3, description: r3 });
     var payload = { name: name, description: description, start_at: startAt, end_at: endAt, rewards: rewards };
-    if (adminEventEditingId) {
-        alert('Редактирование событий пока не реализовано (только создание и удаление).');
-        closeAdminEventForm();
-        return;
-    }
-    apiFetch('/api/events/admin/create', {
-        method: 'POST',
+    var url = adminEventEditingId ? '/api/events/admin/' + adminEventEditingId : '/api/events/admin/create';
+    var method = adminEventEditingId ? 'PUT' : 'POST';
+    apiFetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     }).then(function (r) {

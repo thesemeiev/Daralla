@@ -3,11 +3,23 @@ API модуля событий: public и admin blueprints.
 """
 import asyncio
 import logging
+import time
 from flask import Blueprint, jsonify, request
 
 logger = logging.getLogger(__name__)
 
-_CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS", "Access-Control-Allow-Headers": "*"}
+_CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS", "Access-Control-Allow-Headers": "*"}
+
+# Rate limit для record-ref: макс 10 запросов на user_id в минуту
+_record_ref_counts = {}
+_record_ref_cleanup = 0
+_RECORD_REF_LIMIT = 10
+_RECORD_REF_WINDOW = 60
+
+# Кеш для GET /api/events/ (TTL 60 сек)
+_events_cache = None
+_events_cache_ts = 0
+_EVENTS_CACHE_TTL = 60
 
 
 def create_events_blueprint():
@@ -28,6 +40,19 @@ def create_events_blueprint():
             user_id = authenticate_request()
             if not user_id:
                 return jsonify({"error": "Unauthorized"}), 401
+            # Rate limit
+            global _record_ref_counts, _record_ref_cleanup
+            now = time.time()
+            if now - _record_ref_cleanup > 120:
+                _record_ref_counts = {k: v for k, v in _record_ref_counts.items() if v["t"] > now - _RECORD_REF_WINDOW}
+                _record_ref_cleanup = now
+            entry = _record_ref_counts.get(user_id, {"c": 0, "t": now})
+            if entry["t"] < now - _RECORD_REF_WINDOW:
+                entry = {"c": 0, "t": now}
+            entry["c"] += 1
+            _record_ref_counts[user_id] = entry
+            if entry["c"] > _RECORD_REF_LIMIT:
+                return jsonify({"error": "Too many requests"}), 429
             data = request.get_json(silent=True) or {}
             ref = (data.get("ref") or request.args.get("ref") or "").strip()
             if not ref:
@@ -39,6 +64,8 @@ def create_events_blueprint():
                 event_id = int(event_id) if event_id is not None else None
             except (TypeError, ValueError):
                 event_id = None
+            if event_id is None:
+                return jsonify({"error": "event_id required"}), 400
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -55,20 +82,28 @@ def create_events_blueprint():
     @bp.route("/", methods=["GET"])
     @bp.route("", methods=["GET"])
     def public_list():
-        """GET /api/events — активные и предстоящие события для пользователя."""
+        """GET /api/events — активные и предстоящие события для пользователя (кеш 60 сек)."""
+        global _events_cache, _events_cache_ts
         try:
+            cache = _events_cache
+            if cache is not None and (time.time() - _events_cache_ts) < _EVENTS_CACHE_TTL:
+                return jsonify(cache), 200, {"Content-Type": "application/json", **_CORS}
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                from bot.events.services.event_service import list_active, list_upcoming
+                from bot.events.services.event_service import list_active, list_upcoming, list_ended
                 active = loop.run_until_complete(list_active())
                 upcoming = loop.run_until_complete(list_upcoming())
-                return jsonify({"events": active + upcoming, "active": active, "upcoming": upcoming}), 200, {"Content-Type": "application/json", **_CORS}
+                ended = loop.run_until_complete(list_ended())
+                data = {"events": active + upcoming + ended, "active": active, "upcoming": upcoming, "ended": ended}
+                _events_cache = data
+                _events_cache_ts = time.time()
+                return jsonify(data), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()
         except Exception as e:
             logger.warning("events public list: %s", e)
-            return jsonify({"events": [], "active": [], "upcoming": []}), 200, {"Content-Type": "application/json", **_CORS}
+            return jsonify({"events": [], "active": [], "upcoming": [], "ended": []}), 200, {"Content-Type": "application/json", **_CORS}
 
     # --- Admin: создание, список всех, удаление ---
     def _admin_check():
@@ -125,11 +160,49 @@ def create_events_blueprint():
             try:
                 from bot.events.services.event_service import create_event
                 event_id = loop.run_until_complete(create_event(name, description, start_at, end_at, rewards=rewards, status="active"))
+                globals()["_events_cache"] = None  # инвалидация кеша
                 return jsonify({"success": True, "id": event_id}), 200, {"Content-Type": "application/json", **_CORS}
+            except ValueError as ve:
+                return jsonify({"error": str(ve)}), 400
             finally:
                 loop.close()
         except Exception as e:
             logger.warning("events admin create: %s", e)
+            return jsonify({"error": str(e)}), 500
+
+    @bp.route("/admin/<int:event_id>", methods=["PUT", "PATCH", "OPTIONS"])
+    def admin_update(event_id):
+        """PUT/PATCH /api/events/admin/<id> — редактировать событие (админ). Рефералы и рейтинги не затрагиваются."""
+        if request.method == "OPTIONS":
+            return ("", 200, _CORS)
+        user_id, err = _admin_check()
+        if err:
+            return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
+        try:
+            data = request.get_json(silent=True) or {}
+            name = (data.get("name") or "").strip() or None
+            description = (data.get("description") or "").strip() if "description" in data else None
+            start_at = (data.get("start_at") or "").strip() or None
+            end_at = (data.get("end_at") or "").strip() or None
+            rewards = data.get("rewards") if "rewards" in data else None
+            if isinstance(rewards, list):
+                pass
+            else:
+                rewards = None
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from bot.events.services.event_service import update_event
+                loop.run_until_complete(update_event(event_id, name=name, description=description,
+                    start_at=start_at, end_at=end_at, rewards=rewards))
+                globals()["_events_cache"] = None
+                return jsonify({"success": True}), 200, {"Content-Type": "application/json", **_CORS}
+            except ValueError as ve:
+                return jsonify({"error": str(ve)}), 400
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning("events admin update: %s", e)
             return jsonify({"error": str(e)}), 500
 
     @bp.route("/admin/<int:event_id>", methods=["DELETE", "OPTIONS"])
@@ -146,6 +219,8 @@ def create_events_blueprint():
             try:
                 from bot.events.services.event_service import delete_event
                 ok = loop.run_until_complete(delete_event(event_id))
+                if ok:
+                    globals()["_events_cache"] = None
                 return jsonify({"success": True, "deleted": ok}), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()
@@ -153,33 +228,10 @@ def create_events_blueprint():
             logger.warning("events admin delete: %s", e)
             return jsonify({"error": str(e)}), 500
 
-    @bp.route("/admin/<int:event_id>/grant-rewards", methods=["POST", "OPTIONS"])
-    def admin_grant_rewards(event_id):
-        """POST /api/events/admin/<id>/grant-rewards — начислить награды по событию (один раз, админ)."""
-        if request.method == "OPTIONS":
-            return ("", 200, _CORS)
-        user_id, err = _admin_check()
-        if err:
-            return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                from bot.events.services.rewards_service import grant_rewards
-                result = loop.run_until_complete(grant_rewards(event_id))
-                if not result.get("granted"):
-                    return jsonify({"success": False, "error": result.get("error", "Unknown")}), 400
-                return jsonify({"success": True, "extended": result.get("extended", [])}), 200, {"Content-Type": "application/json", **_CORS}
-            finally:
-                loop.close()
-        except Exception as e:
-            logger.warning("events admin grant-rewards: %s", e)
-            return jsonify({"error": str(e)}), 500
-
     # --- Public: моя реферальная ссылка (до <int:event_id>, иначе my-ref-link матчится как id) ---
     @bp.route("/my-ref-link", methods=["GET"])
     def public_my_ref_link():
-        """GET /api/events/my-ref-link — реферальная ссылка текущего пользователя (опционально event_id)."""
+        """GET /api/events/my-ref-link — реферальная ссылка текущего пользователя (event_id обязателен)."""
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
             user_id = authenticate_request()
@@ -190,6 +242,8 @@ def create_events_blueprint():
                 event_id = int(event_id) if event_id else None
             except ValueError:
                 event_id = None
+            if event_id is None:
+                return jsonify({"error": "event_id required"}), 400
             import os
             base = (os.environ.get("WEBSITE_URL") or request.url_root or "").rstrip("/")
             if not base:
@@ -211,9 +265,11 @@ def create_events_blueprint():
             asyncio.set_event_loop(loop)
             try:
                 from bot.events.services.event_service import get_event
+                from bot.events.config import EVENTS_SUPPORT_URL
                 ev = loop.run_until_complete(get_event(event_id))
                 if not ev:
                     return jsonify({"error": "Not found"}), 404
+                ev["support_url"] = EVENTS_SUPPORT_URL
                 return jsonify(ev), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()

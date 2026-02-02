@@ -780,6 +780,11 @@ h1 {
     animation: status-blink 2s ease-in-out infinite;
 }
 
+.event-badge--ended {
+    background: rgba(120, 120, 120, 0.4);
+    color: #aaa;
+}
+
 .event-badge--upcoming {
     background: rgba(100, 120, 180, 0.35);
     color: #8ba3e8;
@@ -825,6 +830,12 @@ h1 {
     background: rgba(100, 120, 180, 0.35);
     color: #8ba3e8;
     border: 1px solid rgba(100, 120, 180, 0.5);
+}
+
+.event-detail-status--ended {
+    background: rgba(120, 120, 120, 0.35);
+    color: #aaa;
+    border: 1px solid rgba(120, 120, 120, 0.5);
 }
 
 .live-ranking {

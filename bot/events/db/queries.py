@@ -15,13 +15,14 @@ def _now_iso():
     return datetime.utcnow().isoformat() + "Z"
 
 
-async def record_referral(referrer_user_id: str, referred_user_id: str, event_id: int | None = None) -> bool:
+async def record_referral(referrer_user_id: str, referred_user_id: str, event_id: int) -> bool:
     """
-    Записывает реферальную связь. Первый реферер выигрывает: если для (referred_user_id, event_id)
-    уже есть запись, вставка не выполняется (UNIQUE).
+    Записывает реферальную связь в рамках события. Первый реферер выигрывает: если для
+    (referred_user_id, event_id) уже есть запись, вставка не выполняется (UNIQUE).
+    event_id обязателен — глобальные рефералы не поддерживаются.
     Возвращает True если запись добавлена, False если уже существовала.
     """
-    if not referrer_user_id or not referred_user_id or referrer_user_id == referred_user_id:
+    if not referrer_user_id or not referred_user_id or event_id is None or referrer_user_id == referred_user_id:
         return False
     now = _now_iso()
     async with aiosqlite.connect(DB_PATH) as db:
@@ -180,6 +181,42 @@ async def list_events_all() -> list:
         return [_event_row_to_dict(r) for r in rows]
 
 
+async def update_event(event_id: int, name: str | None = None, description: str | None = None,
+                      start_at: str | None = None, end_at: str | None = None,
+                      rewards_json: str | None = None, status: str | None = None) -> bool:
+    """Обновляет событие. Переданные поля обновляются, остальные не меняются."""
+    updates = []
+    params = []
+    if name is not None:
+        updates.append("name = ?")
+        params.append(name)
+    if description is not None:
+        updates.append("description = ?")
+        params.append(description)
+    if start_at is not None:
+        updates.append("start_at = ?")
+        params.append(start_at)
+    if end_at is not None:
+        updates.append("end_at = ?")
+        params.append(end_at)
+    if rewards_json is not None:
+        updates.append("rewards_json = ?")
+        params.append(rewards_json)
+    if status is not None:
+        updates.append("status = ?")
+        params.append(status)
+    if not updates:
+        return True
+    params.append(event_id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            f"UPDATE events SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        await db.commit()
+        return True
+
+
 async def delete_event(event_id: int) -> bool:
     """Удаляет событие по id. Возвращает True если удалено."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -188,7 +225,7 @@ async def delete_event(event_id: int) -> bool:
         return cursor.rowcount > 0 if cursor.rowcount is not None else True
 
 
-def _event_row_to_dict(row) -> dict:
+def _event_row_to_dict(row, now_iso: str | None = None) -> dict:
     d = dict(row)
     if d.get("rewards_json"):
         try:
@@ -197,6 +234,19 @@ def _event_row_to_dict(row) -> dict:
             d["rewards"] = []
     else:
         d["rewards"] = []
+    # Вычисляемый статус по датам: active | upcoming | ended
+    now = now_iso or _now_iso()
+    start = d.get("start_at") or ""
+    end = d.get("end_at") or ""
+    if start and end:
+        if start <= now <= end:
+            d["computed_status"] = "active"
+        elif now < start:
+            d["computed_status"] = "upcoming"
+        else:
+            d["computed_status"] = "ended"
+    else:
+        d["computed_status"] = "ended"
     return d
 
 
@@ -225,7 +275,13 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
         rows = await cursor.fetchall()
         result = []
         for i, r in enumerate(rows, 1):
-            result.append({"referrer_user_id": r["referrer_user_id"], "count": r["cnt"], "place": i})
+            uid = r["referrer_user_id"] or ""
+            result.append({
+                "referrer_user_id": uid,
+                "account_id": uid,  # id аккаунта для отображения
+                "count": r["cnt"],
+                "place": i
+            })
         return result
 
 
@@ -254,10 +310,11 @@ async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
         prev_count = None
         for r in rows:
             cnt = r["cnt"]
+            uid = r["referrer_user_id"] or ""
             if prev_count is not None and cnt < prev_count:
                 place = len(result) + 1
             prev_count = cnt
-            result.append({"referrer_user_id": r["referrer_user_id"], "count": cnt, "place": place})
+            result.append({"referrer_user_id": uid, "account_id": uid, "count": cnt, "place": place})
         return result
 
 
