@@ -719,7 +719,7 @@ function renderEventCard(ev, isLive, isEnded) {
     var badgeClass = isLive ? 'event-badge event-badge--live event-badge--blink' : (isEnded ? 'event-badge event-badge--ended' : 'event-badge event-badge--upcoming');
     var badgeIcon = isLive ? EVENT_ICON_LIVE : (isEnded ? '🏁' : EVENT_ICON_CLOCK);
     var badgeText = isLive ? 'Идёт' : (isEnded ? 'Завершено' : 'Скоро');
-    var daysText = getEventDaysText(ev, isLive);
+    var daysText = getEventDaysText(ev, isLive, isEnded);
     var html = '<div class="' + cardClass + '">' +
         '<div class="' + badgeClass + '" style="margin-bottom:10px;">' + badgeIcon + '<span>' + badgeText + '</span></div>' +
         '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
@@ -808,7 +808,7 @@ function daysWord(n) {
     return 'дней';
 }
 
-function getEventDaysText(ev, isLive) {
+function getEventDaysText(ev, isLive, isEnded) {
     if (!ev || !ev.start_at || !ev.end_at) return '';
     var now = Date.now();
     var start = new Date(ev.start_at).getTime();
@@ -817,11 +817,15 @@ function getEventDaysText(ev, isLive) {
         var daysLeft = Math.ceil((end - now) / 86400000);
         if (daysLeft <= 0) return 'Заканчивается сегодня';
         return 'До конца: ' + daysLeft + ' ' + daysWord(daysLeft);
-    } else {
-        var daysUntil = Math.ceil((start - now) / 86400000);
-        if (daysUntil <= 0) return 'Начинается сегодня';
-        return 'До начала: ' + daysUntil + ' ' + daysWord(daysUntil);
     }
+    if (isEnded || end < now) {
+        var daysAgo = Math.ceil((now - end) / 86400000);
+        if (daysAgo <= 0) return 'Закончилось сегодня';
+        return 'Закончилось ' + daysAgo + ' ' + daysWord(daysAgo) + ' назад';
+    }
+    var daysUntil = Math.ceil((start - now) / 86400000);
+    if (daysUntil <= 0) return 'Начинается сегодня';
+    return 'До начала: ' + daysUntil + ' ' + daysWord(daysUntil);
 }
 
 function buildLeaderboardHtml(leaderboard) {
@@ -856,7 +860,7 @@ function loadEventDetail(eventId) {
         var statusClass = live ? 'event-detail-status event-detail-status--live' : (ended ? 'event-detail-status event-detail-status--ended' : 'event-detail-status event-detail-status--upcoming');
         var statusIcon = live ? EVENT_ICON_LIVE : (ended ? '🏁' : EVENT_ICON_CLOCK);
         var statusText = live ? 'Идёт' : (ended ? 'Завершено' : 'Скоро');
-        var daysText = getEventDaysText(ev, live);
+        var daysText = getEventDaysText(ev, live, ended);
         var html = '<div style="padding:16px;">' +
             '<div class="' + statusClass + '">' + statusIcon + '<span>' + statusText + '</span></div>' +
             '<h2 style="margin:0 0 12px 0;">' + (ev.name || 'Событие') + '</h2>' +
