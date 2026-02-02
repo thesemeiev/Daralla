@@ -1399,7 +1399,6 @@ class CustomGlobe {
             { name: 'Yangon', lat: 16.8661, lng: 96.1951 },
             { name: 'Phnom Penh', lat: 11.5564, lng: 104.9282 },
             // Россия
-            { name: 'Saint Petersburg', lat: 59.9343, lng: 30.3351 },
             { name: 'Novosibirsk', lat: 55.0084, lng: 82.9357 },
             { name: 'Yekaterinburg', lat: 56.8431, lng: 60.6454 },
             { name: 'Kazan', lat: 55.8304, lng: 49.0661 },

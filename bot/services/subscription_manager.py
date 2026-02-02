@@ -213,6 +213,10 @@ class SubscriptionManager:
                 logger.error(f"Сервер {server_name} недоступен")
                 return False, False
             
+            # Flow из конфига сервера — передаём при любом обновлении клиента, чтобы не слетал в X-UI
+            server_config = self.server_manager.get_server_config(server_name)
+            client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
+            
             # Проверяем существование клиента
             if xui.client_exists(client_email):
                 logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
@@ -241,7 +245,7 @@ class SubscriptionManager:
                                         f"Синхронизация времени истечения на сервере {server_name}: "
                                         f"добавляем {days_to_add} дней (сервер: {server_expiry}, БД: {expires_at})"
                                     )
-                                    response = xui.extendClient(client_email, days_to_add)
+                                    response = xui.extendClient(client_email, days_to_add, flow=client_flow)
                                     if response and response.status_code == 200:
                                         try:
                                             response_json = response.json()
@@ -260,7 +264,7 @@ class SubscriptionManager:
                                     f"устанавливаем точное время из БД (сервер: {server_expiry}, БД: {expires_at})"
                                 )
                                 try:
-                                    response = xui.setClientExpiry(client_email, expires_at)
+                                    response = xui.setClientExpiry(client_email, expires_at, flow=client_flow)
                                     if response and response.status_code == 200:
                                         try:
                                             response_json = response.json()
@@ -296,7 +300,7 @@ class SubscriptionManager:
                                 f"{current_limit_display} -> {device_limit}"
                             )
                             try:
-                                xui.updateClientLimitIp(client_email, device_limit)
+                                xui.updateClientLimitIp(client_email, device_limit, flow=client_flow)
                                 logger.info(f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}")
                             except Exception as update_e:
                                 logger.error(f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}")
@@ -337,7 +341,7 @@ class SubscriptionManager:
                             # Поэтому после создания устанавливаем точное время из expires_at
                             try:
                                 logger.info(f"Установка точного времени истечения для клиента {client_email} на сервере {server_name}: {expires_at}")
-                                expiry_response = xui.setClientExpiry(client_email, expires_at)
+                                expiry_response = xui.setClientExpiry(client_email, expires_at, flow=client_flow)
                                 if expiry_response and expiry_response.status_code == 200:
                                     try:
                                         expiry_json = expiry_response.json()
@@ -369,7 +373,7 @@ class SubscriptionManager:
                         # Все равно пытаемся установить точное время истечения
                         try:
                             logger.info(f"Установка точного времени истечения для клиента {client_email} на сервере {server_name}: {expires_at}")
-                            expiry_response = xui.setClientExpiry(client_email, expires_at)
+                            expiry_response = xui.setClientExpiry(client_email, expires_at, flow=client_flow)
                             if expiry_response and expiry_response.status_code == 200:
                                 logger.info(f"Точное время истечения установлено для клиента {client_email} на сервере {server_name}")
                         except Exception as set_expiry_e:

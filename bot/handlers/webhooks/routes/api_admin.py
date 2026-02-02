@@ -734,15 +734,17 @@ def create_blueprint(bot_app):
                                 try:
                                     xui, _ = server_manager.get_server_by_name(server_name)
                                     if xui:
+                                        server_config = server_manager.get_server_config(server_name)
+                                        client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
                                         # Обновляем время истечения
                                         if 'expires_at' in updates:
                                             import time
-                                            xui.setClientExpiry(client_email, new_expires_at)
+                                            xui.setClientExpiry(client_email, new_expires_at, flow=client_flow)
                                             logger.debug(f"Обновлено время истечения для {client_email} на {server_name}: {new_expires_at}")
                                     
                                         # Обновляем лимит устройств
                                         if 'device_limit' in updates:
-                                            xui.updateClientLimitIp(client_email, new_device_limit)
+                                            xui.updateClientLimitIp(client_email, new_device_limit, flow=client_flow)
                                             logger.debug(f"Обновлен лимит устройств для {client_email} на {server_name}: {new_device_limit}")
                                 except Exception as e:
                                     logger.error(f"Ошибка обновления клиента {client_email} на сервере {server_name}: {e}")

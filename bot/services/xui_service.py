@@ -257,12 +257,13 @@ class X3:
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def extendClient(self, user_email, extend_days, timeout=15):
+    def extendClient(self, user_email, extend_days, timeout=15, flow=None):
         """
         Продлевает срок действия ключа клиента
         :param user_email: Email клиента
         :param extend_days: Количество дней для продления
         :param timeout: Таймаут запроса
+        :param flow: Flow для VLESS (сохраняется при обновлении), None — не менять
         :return: Response объект
         """
         self._ensure_connected()
@@ -316,6 +317,10 @@ class X3:
             
             if not client_identifier:
                 raise KeyError(f"Не найден идентификатор клиента (id/password) для протокола {protocol}")
+            
+            # Сохраняем flow для VLESS при обновлении (API может не возвращать flow, иначе слетает)
+            if protocol == 'vless' and flow is not None:
+                client_data['flow'] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ''
             
             # Обновляем клиента
             header = {"Accept": "application/json"}
@@ -760,7 +765,7 @@ class X3:
             return []
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def setClientExpiry(self, user_email, expiry_timestamp, timeout=15):
+    def setClientExpiry(self, user_email, expiry_timestamp, timeout=15, flow=None):
         """
         Устанавливает точное время истечения клиента.
         
@@ -768,6 +773,7 @@ class X3:
             user_email: Email клиента
             expiry_timestamp: Unix timestamp в секундах (будет конвертирован в миллисекунды)
             timeout: Таймаут запроса
+            flow: Flow для VLESS (сохраняется при обновлении), None — не менять
         
         Returns:
             Response объект или None если клиент не найден
@@ -803,6 +809,10 @@ class X3:
             
             client_data['expiryTime'] = expiry_time_ms
             logger.info(f"Установка времени истечения для клиента {user_email}: {old_expiry // 1000} -> {expiry_timestamp}")
+            
+            # Сохраняем flow для VLESS при обновлении (API может не возвращать flow, иначе слетает)
+            if protocol == 'vless' and flow is not None:
+                client_data['flow'] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ''
             
             # Обновляем клиента
             header = {"Accept": "application/json"}
@@ -858,7 +868,7 @@ class X3:
             logger.error(f"Ошибка при установке времени истечения клиента {user_email}: {e}")
             raise
 
-    def updateClientLimitIp(self, user_email, limit_ip, timeout=15):
+    def updateClientLimitIp(self, user_email, limit_ip, timeout=15, flow=None):
         """
         Обновляет limitIp клиента.
         
@@ -866,6 +876,7 @@ class X3:
             user_email: Email клиента
             limit_ip: Новое значение limitIp
             timeout: Таймаут запроса
+            flow: Flow для VLESS (сохраняется при обновлении), None — не менять
         
         Returns:
             Response объект или None если клиент не найден
@@ -903,6 +914,10 @@ class X3:
             else:
                 logger.debug(f"limitIp для клиента {user_email} уже равен {limit_ip}, обновление не требуется")
                 return None
+            
+            # Сохраняем flow для VLESS при обновлении (API может не возвращать flow, иначе слетает)
+            if protocol == 'vless' and flow is not None:
+                client_data['flow'] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ''
             
             # Обновляем клиента
             header = {"Accept": "application/json"}
