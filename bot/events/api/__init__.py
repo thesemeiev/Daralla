@@ -196,7 +196,7 @@ def create_events_blueprint():
 
     @bp.route("/am-i-referred", methods=["GET"])
     def public_am_i_referred():
-        """GET /api/events/am-i-referred — проверка, является ли пользователь уже приглашённым."""
+        """GET /api/events/am-i-referred — проверка, является ли пользователь приглашённым и нужно ли показывать модалку."""
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
             user_id = authenticate_request()
@@ -205,9 +205,14 @@ def create_events_blueprint():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                from bot.events.db.queries import is_user_already_referred
+                import time
+                from bot.events.db.queries import is_user_already_referred, get_user_first_seen
                 referred = loop.run_until_complete(is_user_already_referred(user_id))
-                return jsonify({"referred": referred}), 200, {"Content-Type": "application/json", **_CORS}
+                first_seen = loop.run_until_complete(get_user_first_seen(user_id))
+                now = int(time.time())
+                age_seconds = (now - first_seen) if first_seen else 0
+                show_modal = not referred and (first_seen is None or age_seconds < 30 * 86400)
+                return jsonify({"referred": referred, "show_modal": show_modal}), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()
         except Exception as e:

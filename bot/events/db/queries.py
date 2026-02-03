@@ -92,6 +92,22 @@ async def get_user_id_by_code(code: str) -> str | None:
         return row[0] if row else None
 
 
+async def get_user_first_seen(user_id: str) -> int | None:
+    """Возвращает first_seen (unix timestamp) пользователя из users или None."""
+    if not user_id:
+        return None
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                "SELECT first_seen FROM users WHERE user_id = ?",
+                (user_id,),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else None
+    except Exception:
+        return None
+
+
 async def is_user_already_referred(user_id: str) -> bool:
     """Проверяет, есть ли user_id в event_referrals как referred_user_id (в любом событии)."""
     if not user_id:

@@ -758,7 +758,7 @@ async function loadEvents() {
                 var amData = await amResp.json();
                 if (amData.referred) {
                     localStorage.setItem('event_ref_modal_shown', '1');
-                } else {
+                } else if (amData.show_modal) {
                     showEventReferralCodeModal();
                 }
             }
