@@ -13,7 +13,7 @@ events:
 
 event_referrals:
   id INTEGER PRIMARY KEY AUTOINCREMENT
-  event_id INTEGER (NULL = глобальный реферал без события)
+  event_id INTEGER NOT NULL
   referrer_user_id TEXT NOT NULL
   referred_user_id TEXT NOT NULL
   created_at TEXT NOT NULL (ISO datetime)

@@ -118,18 +118,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await create_telegram_link(telegram_id, user_id)
         await update_user_telegram_id(user_id, telegram_id)
 
-    # Реферальная ссылка: считаем только новых пользователей
-    if not was_known_user and args and args[0].startswith("ref_"):
-        referrer_user_id = args[0][4:].strip()
-        if referrer_user_id and referrer_user_id != user_id:
-            try:
-                from bot.events import EVENTS_MODULE_ENABLED
-                if EVENTS_MODULE_ENABLED:
-                    from bot.events.services.referral_service import record_visit
-                    await record_visit(referrer_user_id, user_id, event_id=None)
-            except Exception as e:
-                logger.debug("events.record_visit: %s", e)
-
     # Теперь, когда все проверки выполнены и пользователь зарегистрирован
     trial_created = False
     try:

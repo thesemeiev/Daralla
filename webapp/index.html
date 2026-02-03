@@ -1418,6 +1418,21 @@
         </div>
     </div>
 
+    <!-- Модальное окно: Ввод реферального кода (первый заход на вкладку События) -->
+    <div id="event-referral-code-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Тебя пригласили?</h2>
+            <p class="hint">Введи код пригласившего. Оформи подписку — и твой пригласивший получит +1 в рейтинге события.</p>
+            <div class="form-group">
+                <input type="text" id="event-referral-code-input" placeholder="Например X7K2M" maxlength="8" />
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="skipReferralCodeModal()">Пропустить</button>
+                <button type="button" class="btn-primary" onclick="submitReferralCode()">ОК</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно: Отвязка Telegram -->
     <div id="unlink-telegram-modal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 400px;">

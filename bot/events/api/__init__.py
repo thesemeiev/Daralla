@@ -10,12 +10,6 @@ logger = logging.getLogger(__name__)
 
 _CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS", "Access-Control-Allow-Headers": "*"}
 
-# Rate limit для record-ref: макс 10 запросов на user_id в минуту
-_record_ref_counts = {}
-_record_ref_cleanup = 0
-_RECORD_REF_LIMIT = 10
-_RECORD_REF_WINDOW = 60
-
 # Кеш для GET /api/events/ (TTL 60 сек)
 _events_cache = None
 _events_cache_ts = 0
@@ -23,60 +17,12 @@ _EVENTS_CACHE_TTL = 60
 
 
 def create_events_blueprint():
-    """Создаёт blueprint событий (health, record-ref, public list, admin CRUD)."""
+    """Создаёт blueprint событий (health, my-code, record-ref-by-code, public list, admin CRUD)."""
     bp = Blueprint("events", __name__, url_prefix="/api/events")
 
     @bp.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok", "module": "events"}), 200
-
-    @bp.route("/record-ref", methods=["POST", "OPTIONS"])
-    def record_ref():
-        """Записать реферальный визит: текущий пользователь пришёл по ссылке ref (referrer_user_id)."""
-        if request.method == "OPTIONS":
-            return ("", 200, _CORS)
-        try:
-            from bot.handlers.webhooks.webhook_auth import authenticate_request
-            user_id = authenticate_request()
-            if not user_id:
-                return jsonify({"error": "Unauthorized"}), 401
-            # Rate limit
-            global _record_ref_counts, _record_ref_cleanup
-            now = time.time()
-            if now - _record_ref_cleanup > 120:
-                _record_ref_counts = {k: v for k, v in _record_ref_counts.items() if v["t"] > now - _RECORD_REF_WINDOW}
-                _record_ref_cleanup = now
-            entry = _record_ref_counts.get(user_id, {"c": 0, "t": now})
-            if entry["t"] < now - _RECORD_REF_WINDOW:
-                entry = {"c": 0, "t": now}
-            entry["c"] += 1
-            _record_ref_counts[user_id] = entry
-            if entry["c"] > _RECORD_REF_LIMIT:
-                return jsonify({"error": "Too many requests"}), 429
-            data = request.get_json(silent=True) or {}
-            ref = (data.get("ref") or request.args.get("ref") or "").strip()
-            if not ref:
-                return jsonify({"error": "ref required"}), 400
-            if ref == user_id:
-                return jsonify({"success": True, "skipped": "self"}), 200
-            event_id = data.get("event_id") or request.args.get("event_id")
-            try:
-                event_id = int(event_id) if event_id is not None else None
-            except (TypeError, ValueError):
-                event_id = None
-            if event_id is None:
-                return jsonify({"error": "event_id required"}), 400
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                from bot.events.services.referral_service import record_visit
-                ok = loop.run_until_complete(record_visit(ref, user_id, event_id=event_id))
-                return jsonify({"success": True, "recorded": ok}), 200
-            finally:
-                loop.close()
-        except Exception as e:
-            logger.warning("record-ref: %s", e)
-            return jsonify({"error": str(e)}), 500
 
     # --- Public: список активных + предстоящих событий ---
     @bp.route("/", methods=["GET"])
@@ -228,32 +174,92 @@ def create_events_blueprint():
             logger.warning("events admin delete: %s", e)
             return jsonify({"error": str(e)}), 500
 
-    # --- Public: моя реферальная ссылка (до <int:event_id>, иначе my-ref-link матчится как id) ---
-    @bp.route("/my-ref-link", methods=["GET"])
-    def public_my_ref_link():
-        """GET /api/events/my-ref-link — реферальная ссылка текущего пользователя (event_id обязателен)."""
+    @bp.route("/my-code", methods=["GET"])
+    def public_my_code():
+        """GET /api/events/my-code — реферальный код текущего пользователя."""
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
             user_id = authenticate_request()
             if not user_id:
                 return jsonify({"error": "Unauthorized"}), 401
-            event_id = request.args.get("event_id", "").strip()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
-                event_id = int(event_id) if event_id else None
-            except ValueError:
-                event_id = None
-            if event_id is None:
-                return jsonify({"error": "event_id required"}), 400
-            import os
-            base = (os.environ.get("WEBSITE_URL") or request.url_root or "").rstrip("/")
-            if not base:
-                base = (request.host_url or "").rstrip("/")
-            ref_link = base + "/?ref=" + user_id if base else "?ref=" + user_id
-            if event_id:
-                ref_link += "&event_id=" + str(event_id)
-            return jsonify({"ref_link": ref_link, "user_id": user_id, "event_id": event_id}), 200, {"Content-Type": "application/json", **_CORS}
+                from bot.events.db.queries import get_or_create_referral_code
+                code = loop.run_until_complete(get_or_create_referral_code(user_id))
+                return jsonify({"code": code}), 200, {"Content-Type": "application/json", **_CORS}
+            finally:
+                loop.close()
         except Exception as e:
-            logger.warning("events my-ref-link: %s", e)
+            logger.warning("events my-code: %s", e)
+            return jsonify({"error": str(e)}), 500
+
+    @bp.route("/am-i-referred", methods=["GET"])
+    def public_am_i_referred():
+        """GET /api/events/am-i-referred — проверка, является ли пользователь уже приглашённым."""
+        try:
+            from bot.handlers.webhooks.webhook_auth import authenticate_request
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({"error": "Unauthorized"}), 401
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from bot.events.db.queries import is_user_already_referred
+                referred = loop.run_until_complete(is_user_already_referred(user_id))
+                return jsonify({"referred": referred}), 200, {"Content-Type": "application/json", **_CORS}
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning("events am-i-referred: %s", e)
+            return jsonify({"error": str(e)}), 500
+
+    @bp.route("/record-ref-by-code", methods=["POST", "OPTIONS"])
+    def public_record_ref_by_code():
+        """POST /api/events/record-ref-by-code — записать реферал по коду. Body: { event_id?, code }."""
+        if request.method == "OPTIONS":
+            return ("", 200, _CORS)
+        try:
+            from bot.handlers.webhooks.webhook_auth import authenticate_request
+            user_id = authenticate_request()
+            if not user_id:
+                return jsonify({"error": "Unauthorized"}), 401
+            data = request.get_json(silent=True) or {}
+            code = (data.get("code") or "").strip()
+            if not code:
+                return jsonify({"error": "code required"}), 400
+            event_id = data.get("event_id")
+            try:
+                event_id = int(event_id) if event_id is not None else None
+            except (TypeError, ValueError):
+                event_id = None
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from bot.events.db.queries import (
+                    get_user_id_by_code,
+                    is_user_already_referred,
+                    list_events_active,
+                )
+                from bot.events.services.referral_service import record_visit
+                referrer_user_id = loop.run_until_complete(get_user_id_by_code(code))
+                if not referrer_user_id:
+                    return jsonify({"error": "Код не найден"}), 400
+                if referrer_user_id == user_id:
+                    return jsonify({"error": "Нельзя использовать свой код"}), 400
+                if loop.run_until_complete(is_user_already_referred(user_id)):
+                    return jsonify({"error": "Вы уже записаны по приглашению"}), 400
+                if event_id is None:
+                    active = loop.run_until_complete(list_events_active())
+                    if not active:
+                        return jsonify({"error": "Сейчас нет активных событий"}), 400
+                    event_id = active[0]["id"]
+                ok = loop.run_until_complete(record_visit(referrer_user_id, user_id, event_id))
+                return jsonify({"success": True, "recorded": ok}), 200, {"Content-Type": "application/json", **_CORS}
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning("events record-ref-by-code: %s", e)
             return jsonify({"error": str(e)}), 500
 
     # --- Public: детали события, рейтинг, моё место ---

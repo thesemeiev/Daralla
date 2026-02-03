@@ -38,20 +38,6 @@ def create_blueprint(bot_app):
             asyncio.set_event_loop(loop)
             try:
                 user_id = loop.run_until_complete(register_web_user(username, password_hash))
-                ref = (data.get('ref') or '').strip()
-                event_id = data.get('event_id')
-                try:
-                    event_id = int(event_id) if event_id is not None else None
-                except (TypeError, ValueError):
-                    event_id = None
-                if ref and ref != user_id:
-                    try:
-                        from bot.events import EVENTS_MODULE_ENABLED
-                        if EVENTS_MODULE_ENABLED:
-                            from bot.events.services.referral_service import record_visit
-                            loop.run_until_complete(record_visit(ref, user_id, event_id))
-                    except Exception:
-                        pass
                 token = secrets.token_hex(32)
                 from ....db.subscribers_db import update_user_auth_token
                 loop.run_until_complete(update_user_auth_token(user_id, token))

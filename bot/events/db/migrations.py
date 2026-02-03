@@ -53,5 +53,12 @@ async def init_events_tables():
                 FOREIGN KEY (event_id) REFERENCES events(id)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_referral_codes (
+                user_id TEXT PRIMARY KEY,
+                code TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            )
+        """)
         await db.commit()
-    logger.info("Таблицы модуля событий инициализированы: events, event_referrals, event_counted_payments, event_rewards_granted")
+    logger.info("Таблицы модуля событий инициализированы: events, event_referrals, event_counted_payments, event_rewards_granted, user_referral_codes")

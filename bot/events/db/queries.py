@@ -3,6 +3,8 @@
 """
 import json
 import logging
+import random
+import string
 from datetime import datetime
 import aiosqlite
 
@@ -42,57 +44,98 @@ async def record_referral(referrer_user_id: str, referred_user_id: str, event_id
             return False
 
 
-async def get_referrer_for_user(referred_user_id: str, event_id: int | None = None):
+def _generate_referral_code(length: int = 6) -> str:
+    """Генерирует случайный код из A-Z, 0-9."""
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=length))
+
+
+async def get_or_create_referral_code(user_id: str) -> str:
+    """Возвращает реферальный код пользователя, создаёт при отсутствии (6 символов A-Z, 0-9)."""
+    if not user_id:
+        raise ValueError("user_id required")
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT code FROM user_referral_codes WHERE user_id = ?",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+        now = _now_iso()
+        for _ in range(10):
+            code = _generate_referral_code()
+            try:
+                await db.execute(
+                    "INSERT INTO user_referral_codes (user_id, code, created_at) VALUES (?, ?, ?)",
+                    (user_id, code, now),
+                )
+                await db.commit()
+                return code
+            except aiosqlite.IntegrityError:
+                await db.rollback()
+                continue
+        raise RuntimeError("Failed to generate unique referral code")
+
+
+async def get_user_id_by_code(code: str) -> str | None:
+    """По коду возвращает user_id реферера или None."""
+    if not code:
+        return None
+    code = code.strip().upper()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT user_id FROM user_referral_codes WHERE code = ?",
+            (code,),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def is_user_already_referred(user_id: str) -> bool:
+    """Проверяет, есть ли user_id в event_referrals как referred_user_id (в любом событии)."""
+    if not user_id:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT 1 FROM event_referrals WHERE referred_user_id = ? LIMIT 1",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        return row is not None
+
+
+async def get_referrer_for_user(referred_user_id: str, event_id: int):
     """
-    Возвращает реферера для приглашённого. event_id=None — глобальная связь (любая запись с event_id IS NULL).
+    Возвращает реферера для приглашённого в рамках события. event_id обязателен.
     Возвращает dict с referrer_user_id, created_at или None.
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        if event_id is None:
-            cursor = await db.execute(
-                """
-                SELECT referrer_user_id, created_at FROM event_referrals
-                WHERE referred_user_id = ? AND event_id IS NULL
-                ORDER BY created_at ASC LIMIT 1
-                """,
-                (referred_user_id,),
-            )
-        else:
-            cursor = await db.execute(
-                """
-                SELECT referrer_user_id, created_at FROM event_referrals
-                WHERE referred_user_id = ? AND event_id = ?
-                LIMIT 1
-                """,
-                (referred_user_id, event_id),
-            )
+        cursor = await db.execute(
+            """
+            SELECT referrer_user_id, created_at FROM event_referrals
+            WHERE referred_user_id = ? AND event_id = ?
+            LIMIT 1
+            """,
+            (referred_user_id, event_id),
+        )
         row = await cursor.fetchone()
         return dict(row) if row else None
 
 
-async def list_referrals_by_referrer(referrer_user_id: str, event_id: int | None = None):
-    """Список приглашённых по рефереру. event_id=None — все записи этого реферера с event_id IS NULL."""
+async def list_referrals_by_referrer(referrer_user_id: str, event_id: int):
+    """Список приглашённых по рефереру в рамках события. event_id обязателен."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        if event_id is None:
-            cursor = await db.execute(
-                """
-                SELECT referred_user_id, created_at FROM event_referrals
-                WHERE referrer_user_id = ? AND event_id IS NULL
-                ORDER BY created_at DESC
-                """,
-                (referrer_user_id,),
-            )
-        else:
-            cursor = await db.execute(
-                """
-                SELECT referred_user_id, created_at FROM event_referrals
-                WHERE referrer_user_id = ? AND event_id = ?
-                ORDER BY created_at DESC
-                """,
-                (referrer_user_id, event_id),
-            )
+        cursor = await db.execute(
+            """
+            SELECT referred_user_id, created_at FROM event_referrals
+            WHERE referrer_user_id = ? AND event_id = ?
+            ORDER BY created_at DESC
+            """,
+            (referrer_user_id, event_id),
+        )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
@@ -218,8 +261,11 @@ async def update_event(event_id: int, name: str | None = None, description: str 
 
 
 async def delete_event(event_id: int) -> bool:
-    """Удаляет событие по id. Возвращает True если удалено."""
+    """Удаляет событие по id и все связанные записи (рефералы, оплаты, награды). Возвращает True если удалено."""
     async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM event_counted_payments WHERE event_id = ?", (event_id,))
+        await db.execute("DELETE FROM event_referrals WHERE event_id = ?", (event_id,))
+        await db.execute("DELETE FROM event_rewards_granted WHERE event_id = ?", (event_id,))
         cursor = await db.execute("DELETE FROM events WHERE id = ?", (event_id,))
         await db.commit()
         return cursor.rowcount > 0 if cursor.rowcount is not None else True

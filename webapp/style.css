@@ -290,11 +290,11 @@ input, textarea, select {
     line-height: 1.5;
 }
 
-/* Модальное окно инструкций — максимальная видимая область текста */
+/* Модальное окно инструкций — компактный размер */
 .instruction-modal-content {
-    height: min(90vh, 800px) !important;
-    min-height: 360px !important;
-    max-height: min(90vh, 800px) !important;
+    height: min(85vh, 520px) !important;
+    min-height: 280px !important;
+    max-height: min(85vh, 520px) !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;

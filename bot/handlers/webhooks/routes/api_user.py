@@ -84,22 +84,6 @@ def create_blueprint(bot_app):
                     loop.run_until_complete(register_simple_user(user_id))
                 if tg_user_id:
                     loop.run_until_complete(mark_telegram_id_known(str(tg_user_id)))
-                # Реферал только для новых: при первом открытии Mini App с ref
-                if just_created_tg_user:
-                    ref = (data.get('ref') or '').strip()
-                    event_id = data.get('event_id')
-                    try:
-                        event_id = int(event_id) if event_id is not None else None
-                    except (TypeError, ValueError):
-                        event_id = None
-                    if ref and ref != user_id:
-                        try:
-                            from bot.events import EVENTS_MODULE_ENABLED
-                            if EVENTS_MODULE_ENABLED:
-                                from bot.events.services.referral_service import record_visit
-                                loop.run_until_complete(record_visit(ref, user_id, event_id))
-                        except Exception:
-                            pass
                 trial_created = False
                 subscription_id = None
                 if not was_known_user and not is_web:

@@ -164,37 +164,6 @@ function applyRoute(route, isAuthenticated, isAdmin) {
     return true;
 }
 
-// Реферальная ссылка: ref и event_id из URL (при открытии/логине)
-function getRefFromUrl() {
-    var ref = null;
-    var eventId = null;
-    try {
-        var search = new URLSearchParams(window.location.search);
-        ref = search.get('ref') || ref;
-        eventId = search.get('event_id') || eventId;
-    } catch (e) {}
-    if (window.location.hash) {
-        var route = parseHashRoute();
-        if (route && route.params) {
-            if (route.params.ref) ref = route.params.ref;
-            if (route.params.event_id) eventId = route.params.event_id;
-        }
-    }
-    return { ref: ref ? String(ref).trim() : null, event_id: eventId ? String(eventId).trim() : null };
-}
-function recordReferralIfPending() {
-    var params = getRefFromUrl();
-    var ref = params.ref;
-    var eventId = params.event_id ? (parseInt(params.event_id, 10) || params.event_id) : null;
-    if (!ref || !eventId) return Promise.resolve();
-    var body = { ref: ref, event_id: eventId };
-    return apiFetch('/api/events/record-ref', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    }).then(function () { /* ignore */ }).catch(function () {});
-}
-
 // Интервалы для автоматического обновления
 let serverLoadChartInterval = null;
 
@@ -781,6 +750,65 @@ async function loadEvents() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (emptyEl) { emptyEl.style.display = 'block'; }
     }
+    try {
+        var hasActiveEvents = (active || []).length > 0;
+        if (hasActiveEvents && !localStorage.getItem('event_ref_modal_shown') && (tg.initData || webAuthToken)) {
+            var amResp = await apiFetch('/api/events/am-i-referred');
+            if (amResp.ok) {
+                var amData = await amResp.json();
+                if (amData.referred) {
+                    localStorage.setItem('event_ref_modal_shown', '1');
+                } else {
+                    showEventReferralCodeModal();
+                }
+            }
+        }
+    } catch (e) {}
+}
+
+function showEventReferralCodeModal() {
+    var modal = document.getElementById('event-referral-code-modal');
+    var input = document.getElementById('event-referral-code-input');
+    if (modal && input) {
+        input.value = '';
+        modal.style.display = 'flex';
+    }
+}
+
+function skipReferralCodeModal() {
+    var modal = document.getElementById('event-referral-code-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        localStorage.setItem('event_ref_modal_shown', '1');
+    }
+}
+
+async function submitReferralCode() {
+    var input = document.getElementById('event-referral-code-input');
+    var modal = document.getElementById('event-referral-code-modal');
+    if (!input || !modal) return;
+    var code = (input.value || '').trim();
+    if (!code) {
+        alert('Введите код');
+        return;
+    }
+    try {
+        var r = await apiFetch('/api/events/record-ref-by-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code })
+        });
+        var data = await r.json().catch(function () { return {}; });
+        if (r.ok && data.success) {
+            modal.style.display = 'none';
+            localStorage.setItem('event_ref_modal_shown', '1');
+            alert('Записали');
+        } else {
+            alert(data.error || 'Ошибка');
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    }
 }
 
 var eventDetailLeaderboardTimer = null;
@@ -847,12 +875,12 @@ function loadEventDetail(eventId) {
         apiFetch('/api/events/' + eventId).then(function (r) { return r.ok ? r.json() : null; }),
         apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
         apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; }),
-        apiFetch('/api/events/my-ref-link?event_id=' + eventId).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.ref_link || ''; })
+        apiFetch('/api/events/my-code').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.code || ''; })
     ]).then(function (results) {
         var ev = results[0];
         var leaderboard = results[1];
         var myPlace = results[2];
-        var refLink = results[3];
+        var myCode = results[3];
         if (!contentEl) return;
         if (!ev) { contentEl.innerHTML = '<p class="hint">Событие не найдено</p>'; return; }
         var live = isEventLive(ev);
@@ -892,10 +920,15 @@ function loadEventDetail(eventId) {
             });
             html += '</ul></div>';
         }
-        if (!ended) {
+        if (live) {
             html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
-            if (refLink) {
-                html += '<button type="button" class="btn-primary" style="margin-bottom:16px;width:100%;" onclick="copyEventRefLink(\'' + refLink.replace(/'/g, "\\'") + '\')">Копировать мою реферальную ссылку</button>';
+            html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дай другу свой код. Когда он оформит или продлит подписку, твой рейтинг вырастет.</p>';
+            if (myCode) {
+                html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;background:#2a2a2a;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
+                html += '<span style="color:#999;font-size:14px;">Твой код:</span>';
+                html += '<code style="font-size:18px;font-weight:600;color:#4a9eff;letter-spacing:1px;">' + escapeHtml(myCode) + '</code>';
+                html += '<button type="button" class="btn-primary" style="padding:8px 16px;flex-shrink:0;" onclick="copyEventReferralCode(\'' + myCode.replace(/'/g, "\\'") + '\')">Копировать</button>';
+                html += '</div>';
             }
         }
         html += buildLeaderboardHtml(leaderboard);
@@ -926,11 +959,11 @@ function loadEventDetail(eventId) {
         if (contentEl) contentEl.innerHTML = '<p class="hint">Не удалось загрузить событие</p>';
     });
 }
-function copyEventRefLink(link) {
+function copyEventReferralCode(code) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(link).then(function () { alert('Ссылка скопирована'); }).catch(function () { prompt('Скопируйте ссылку:', link); });
+        navigator.clipboard.writeText(code).then(function () { alert('Код скопирован'); }).catch(function () { prompt('Скопируйте код:', code); });
     } else {
-        prompt('Скопируйте ссылку:', link);
+        prompt('Скопируйте код:', code);
     }
 }
 
@@ -4767,16 +4800,13 @@ async function initTelegramFlow() {
     try {
         const initData = tg.initData;
         if (initData) {
-            var refParams = getRefFromUrl();
             const response = await fetch('/api/user/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    initData: initData,
-                    ref: refParams.ref || undefined,
-                    event_id: refParams.event_id || undefined
+                    initData: initData
                 })
             });
             
@@ -4935,15 +4965,12 @@ async function handleWebRegister(event) {
     btn.textContent = 'Регистрация...';
 
     try {
-        var refParams = getRefFromUrl();
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 username: username,
-                password: password,
-                ref: refParams.ref || undefined,
-                event_id: refParams.event_id || undefined
+                password: password
             })
         });
         const result = await response.json();
