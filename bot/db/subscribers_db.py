@@ -2108,6 +2108,46 @@ async def merge_user_into_target(source_user_id: str, target_user_id: str) -> bo
                 "DELETE FROM telegram_links WHERE user_id = ?",
                 (source_user_id,),
             )
+            # Модуль событий: переносим рефералы и засчитанные оплаты с source на target
+            async with db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_referrals'"
+            ) as cur:
+                if await cur.fetchone():
+                    await db.execute(
+                        "UPDATE event_referrals SET referrer_user_id = ? WHERE referrer_user_id = ?",
+                        (target_user_id, source_user_id),
+                    )
+                    # Удаляем рефералы source, где target уже приглашён в том же событии (UNIQUE)
+                    await db.execute(
+                        """DELETE FROM event_referrals WHERE referred_user_id = ? AND event_id IN
+                           (SELECT event_id FROM event_referrals WHERE referred_user_id = ?)""",
+                        (source_user_id, target_user_id),
+                    )
+                    await db.execute(
+                        "UPDATE event_referrals SET referred_user_id = ? WHERE referred_user_id = ?",
+                        (target_user_id, source_user_id),
+                    )
+            async with db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_counted_payments'"
+            ) as cur:
+                if await cur.fetchone():
+                    await db.execute(
+                        """DELETE FROM event_counted_payments WHERE referred_user_id = ? AND event_id IN
+                           (SELECT event_id FROM event_counted_payments WHERE referred_user_id = ?)""",
+                        (source_user_id, target_user_id),
+                    )
+                    await db.execute(
+                        "UPDATE event_counted_payments SET referred_user_id = ? WHERE referred_user_id = ?",
+                        (target_user_id, source_user_id),
+                    )
+            async with db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_referral_codes'"
+            ) as cur:
+                if await cur.fetchone():
+                    await db.execute(
+                        "DELETE FROM user_referral_codes WHERE user_id = ?",
+                        (source_user_id,),
+                    )
             await db.execute("DELETE FROM users WHERE id = ?", (source_id,))
             await db.commit()
             logger.info(
@@ -2189,7 +2229,37 @@ async def rename_user_id(old_user_id: str, new_user_id: str) -> bool:
                 "UPDATE telegram_links SET user_id = ? WHERE user_id = ?",
                 (new_user_id, old_user_id)
             )
-            
+
+            # 7. Модуль событий (event_referrals, event_counted_payments, user_referral_codes)
+            async with db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_referrals'"
+            ) as cur:
+                if await cur.fetchone():
+                    await db.execute(
+                        "UPDATE event_referrals SET referrer_user_id = ? WHERE referrer_user_id = ?",
+                        (new_user_id, old_user_id)
+                    )
+                    await db.execute(
+                        "UPDATE event_referrals SET referred_user_id = ? WHERE referred_user_id = ?",
+                        (new_user_id, old_user_id)
+                    )
+            async with db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_counted_payments'"
+            ) as cur:
+                if await cur.fetchone():
+                    await db.execute(
+                        "UPDATE event_counted_payments SET referred_user_id = ? WHERE referred_user_id = ?",
+                        (new_user_id, old_user_id)
+                    )
+            async with db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_referral_codes'"
+            ) as cur:
+                if await cur.fetchone():
+                    await db.execute(
+                        "UPDATE user_referral_codes SET user_id = ? WHERE user_id = ?",
+                        (new_user_id, old_user_id)
+                    )
+
             await db.commit()
             logger.info(f"User ID успешно изменен с {old_user_id} на {new_user_id}")
             return True

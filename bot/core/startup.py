@@ -142,6 +142,8 @@ async def on_startup(app):
                 await init_events_tables()
         except ImportError:
             pass
+        except Exception as e:
+            logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
 
         # 1.0 Миграция telegram_links / known_telegram_ids (идемпотентно заполняет связи TG ↔ аккаунт)
         try:
