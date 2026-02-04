@@ -8,7 +8,7 @@ import telegram
 from flask import request, jsonify
 
 from ...webhook_auth import authenticate_request, check_admin_access
-from ...context import get_app_context
+from .....context import get_app_context
 from ._common import CORS_HEADERS, options_response
 
 logger = logging.getLogger(__name__)
