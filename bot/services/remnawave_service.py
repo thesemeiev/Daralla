@@ -157,8 +157,13 @@ class RemnawaveClient:
         """
         Create user in Remnawave.
         Payload shape is Remnawave-specific; we pass it through.
+        Returns unwrapped user object (supports response/obj/data wrappers).
         """
-        return self.request("POST", "/api/users", json=payload)
+        data = self.request("POST", "/api/users", json=payload)
+        unwrapped = _unwrap_optional_object(data)
+        if unwrapped is not None:
+            return unwrapped
+        return data
 
     def patch_user(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request("PATCH", "/api/users", json=payload)
@@ -240,10 +245,10 @@ def _safe_json(r: requests.Response) -> dict[str, Any]:
 
 def _unwrap_optional_object(data: dict[str, Any]) -> dict[str, Any] | None:
     # Heuristics for APIs that wrap response:
-    # { success: true, obj: {...} } / { data: {...} } / { obj: null }
+    # { success: true, obj: {...} } / { data: {...} } / { response: {...} } / { user: {...} }
     if data.get("success") is False:
         return None
-    for k in ("obj", "data", "user"):
+    for k in ("response", "obj", "data", "user"):
         v = data.get(k)
         if isinstance(v, dict):
             return v

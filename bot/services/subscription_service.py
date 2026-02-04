@@ -142,11 +142,16 @@ async def activate_subscription_after_payment(
                 if telegram_id:
                     create_payload["telegramId"] = int(telegram_id)
                 created = client.create_user(create_payload)
-                ruuid = created.get("uuid") or created.get("id") or (created.get("obj") or {}).get("uuid")
-                short_uuid = created.get("shortUuid") or created.get("short_uuid") or (created.get("obj") or {}).get("shortUuid")
+                ruuid = created.get("uuid") or created.get("id")
+                short_uuid = created.get("shortUuid") or created.get("short_uuid") or created.get("shortId")
                 if ruuid:
-                    await set_remnawave_mapping(account_id, str(ruuid), short_uuid)
+                    await set_remnawave_mapping(account_id, str(ruuid), short_uuid or None)
                     mapping = await get_remnawave_mapping(account_id)
+                else:
+                    logger.warning(
+                        "Remnawave create_user response missing uuid; keys=%s",
+                        list(created.keys()) if isinstance(created, dict) else type(created).__name__,
+                    )
             else:
                 ruuid = remna_user.get("uuid") or remna_user.get("id")
                 short_uuid = remna_user.get("shortUuid") or remna_user.get("short_uuid")
