@@ -55,30 +55,12 @@ from .utils import UIButtons, check_private_chat, set_image_paths
 
 set_image_paths(config.IMAGE_PATHS)
 
-# 4. Сервисы. При Remnawave subscription_manager и sync_manager не создаём (остаются None).
-from .services import (
-    MultiServerManager,
-    NotificationManager,
-    SubscriptionManager,
-)
-from .services.sync_manager import SyncManager
-
-def _is_remnawave_mode():
-    try:
-        from .services.remnawave_service import is_remnawave_configured
-        return is_remnawave_configured()
-    except Exception:
-        return False
+# 4. Сервисы (Remnawave-only: подписки через Remnawave, sync/subscription managers не используются).
+from .services import MultiServerManager, NotificationManager
 
 server_manager = MultiServerManager()
-_remnawave = _is_remnawave_mode()
-if _remnawave:
-    subscription_manager = None
-    sync_manager = None
-    logger.info("Режим Remnawave: SubscriptionManager и SyncManager не создаются")
-else:
-    subscription_manager = SubscriptionManager(server_manager)
-    sync_manager = SyncManager(server_manager, subscription_manager)
+subscription_manager = None
+sync_manager = None
 
 # 4.1 Единый контекст приложения (Фаза 2)
 from .context import AppContext
@@ -108,29 +90,6 @@ from .handlers.callbacks import link_telegram_confirm_callback
 from .handlers.webhooks import create_webhook_app
 from .handlers.utils import error_handler
 from .core import on_startup
-
-# Инициализация менеджеров серверов из БД
-async def init_server_managers():
-    try:
-        from .services.server_provider import ServerProvider
-        from .db import check_and_run_initial_migration
-        
-        # Проверяем, есть ли серверы в БД
-        has_servers = await check_and_run_initial_migration()
-        
-        if not has_servers:
-            logger.warning("⚠️ В БД нет серверов. Серверы должны быть добавлены через админ-панель.")
-            logger.warning("⚠️ Покупка VPN будет недоступна до добавления серверов.")
-            # Инициализируем менеджер с пустым конфигом
-            server_manager.init_from_config({})
-            return
-        
-        # Загружаем конфиг серверов из БД
-        servers_config = await ServerProvider.get_all_servers_by_location()
-        server_manager.init_from_config(servers_config)
-        logger.info("Менеджер серверов успешно инициализирован из БД")
-    except Exception as e:
-        logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
 
 # Глобальный менеджер уведомлений (инициализируется в on_startup)
 notification_manager = None

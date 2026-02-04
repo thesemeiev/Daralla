@@ -171,27 +171,9 @@ def register_servers_routes(bp):
             admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({"error": "Access denied"}), 403
-            data = request.get_json(silent=True) or {}
-            server_id = data.get("server_id") or data.get("id")
-            if not server_id:
-                return jsonify({"error": "server_id is required"}), 400
-            from .....db import get_server_by_id
-            from .....services.xui_service import X3
-
-            server = _run_async(get_server_by_id(int(server_id)))
-            if not server:
-                return jsonify({"error": "Server not found"}), 404
-            x3 = X3(
-                login=server["login"],
-                password=server["password"],
-                host=server["host"],
-                vpn_host=server.get("vpn_host"),
-                subscription_port=server.get("subscription_port", 2096),
-                subscription_url=server.get("subscription_url"),
-            )
-            flow_val = (server.get("client_flow") or "").strip() or ""
-            updated, errs = x3.sync_flow_for_all_clients(flow_val)
-            return jsonify({"success": True, "updated": updated, "errors": errs[:20]})
+            return jsonify({
+                "error": "X-UI sync is not available. Subscriptions are managed by Remnawave."
+            }), 410
         except Exception as e:
             logger.exception("sync-flow error")
             return jsonify({"error": str(e)}), 500
@@ -223,13 +205,6 @@ def register_servers_routes(bp):
             admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({"error": "Access denied"}), 403
-            from ...context import get_app_context
-
-            ctx = get_app_context()
-            sync_manager = ctx.sync_manager if ctx else None
-            if not sync_manager:
-                return jsonify({"success": True, "stats": {"message": "Remnawave mode: sync skipped"}})
-            stats = _run_async(sync_manager.sync_all_subscriptions(auto_fix=True))
-            return jsonify({"success": True, "stats": stats})
+            return jsonify({"success": True, "stats": {"message": "Remnawave: синхронизация не выполняется"}})
         except Exception as e:
             return jsonify({"error": str(e)}), 500

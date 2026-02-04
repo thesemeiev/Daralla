@@ -56,8 +56,9 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
 
-            from ..webhook_auth import get_server_manager
-            server_manager = get_server_manager()
+            from ...context import get_app_context
+            ctx = get_app_context()
+            server_manager = ctx.server_manager if ctx else None
             if not server_manager:
                 return jsonify({'error': 'Server manager not available'}), 503
 

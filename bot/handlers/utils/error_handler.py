@@ -9,25 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 def get_globals():
-    """Получает глобальные переменные из bot.py"""
+    """ADMIN_IDS только из get_app_context()."""
     try:
-        import sys
-        import importlib
-        # Пытаемся получить модуль bot.bot
-        if 'bot.bot' in sys.modules:
-            bot_module = sys.modules['bot.bot']
-        else:
-            # Если модуль еще не загружен, импортируем его
-            bot_module = importlib.import_module('bot.bot')
-        
-        return {
-            'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
-        }
-    except (ImportError, AttributeError) as e:
-        logger.warning(f"Не удалось получить глобальные переменные: {e}")
-        return {
-            'ADMIN_IDS': [],
-        }
+        from ...context import get_app_context
+        ctx = get_app_context()
+        admin_ids = list(ctx.admin_ids) if ctx else []
+        return {"ADMIN_IDS": admin_ids}
+    except Exception as e:
+        logger.warning("get_globals (error_handler): %s", e)
+        return {"ADMIN_IDS": []}
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

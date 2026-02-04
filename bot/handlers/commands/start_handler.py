@@ -22,17 +22,11 @@ import time
 logger = logging.getLogger(__name__)
 
 def get_globals():
-    """Получает сервисы и настройки из контекста приложения."""
+    """Сервисы и настройки только из get_app_context()."""
     from ...context import get_app_context
     ctx = get_app_context()
-    if ctx is None:
-        from ..webhooks.webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
-        bot_module = get_bot_module()
-        return {
-            "server_manager": get_server_manager(),
-            "subscription_manager": get_subscription_manager(),
-            "WEBAPP_URL": getattr(bot_module, "WEBAPP_URL", None) if bot_module else None,
-        }
+    if not ctx:
+        return {"server_manager": None, "subscription_manager": None, "WEBAPP_URL": None}
     return {
         "server_manager": ctx.server_manager,
         "subscription_manager": ctx.subscription_manager,

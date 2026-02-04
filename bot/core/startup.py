@@ -2,7 +2,6 @@
 Функции инициализации и мониторинга бота
 """
 import logging
-import datetime
 import asyncio
 
 from ..db import init_all_db
@@ -28,90 +27,6 @@ async def notify_admin(bot, admin_ids, text):
                 logger.info(f"Успешно отправлено уведомление админу {admin_id}")
         except Exception as e:
             logger.error(f'Ошибка при отправке уведомления админу {admin_id}: {e}')
-
-
-async def notify_server_issues(bot, admin_ids, server_name, issue_type, details=""):
-    """Уведомляет админа о проблемах с серверами"""
-    try:
-        message = f" Проблема с сервером {server_name}\n\n"
-        message += f"Тип проблемы: {issue_type}\n"
-        message += f"Время: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
-        message += f"Статус: Требует внимания\n\n"
-        
-        if details:
-            message += f"Детали: {details}\n\n"
-        
-        message += "Рекомендуемые действия:\n"
-        message += "• Проверить доступность сервера\n"
-        message += "• Проверить логи сервера"
-        
-        await notify_admin(bot, admin_ids, message)
-        
-    except Exception as e:
-        logger.error(f"Ошибка отправки уведомления о проблеме с сервером: {e}")
-
-
-async def server_health_monitor(app, server_manager, admin_ids):
-    """Периодический мониторинг состояния серверов"""
-    logger.info("Запуск мониторинга серверов")
-    
-    if not server_manager:
-        logger.warning("server_manager не доступен, мониторинг пропущен")
-        return
-    
-    previous_server_status = {}
-    await asyncio.sleep(10)
-    
-    while True:
-        try:
-            health_results = server_manager.check_all_servers_health(force_check=False)
-            
-            if not health_results:
-                await asyncio.sleep(300)
-                continue
-            
-            current_time = datetime.datetime.now()
-            
-            for server_name, is_healthy in health_results.items():
-                previous_status = previous_server_status.get(server_name, "unknown")
-                current_status = "online" if is_healthy else "offline"
-                
-                if previous_status != current_status:
-                    if current_status == "offline":
-                        health_status = server_manager.get_server_health_status()[server_name]
-                        last_error = health_status.get("last_error", "Неизвестная ошибка")
-                        await notify_server_issues(
-                            app.bot, admin_ids,
-                            server_name, 
-                            "Сервер недоступен",
-                            f"Ошибка: {last_error}"
-                        )
-                    elif current_status == "online":
-                        await notify_server_issues(
-                            app.bot, admin_ids,
-                            server_name, 
-                            "Сервер восстановлен",
-                            "Сервер снова доступен"
-                        )
-                
-                previous_server_status[server_name] = current_status
-            
-            # Длительные проблемы
-            for server_name, is_healthy in health_results.items():
-                if not is_healthy:
-                    health_status = server_manager.get_server_health_status()[server_name]
-                    if health_status.get("consecutive_failures", 0) >= 3:
-                        await notify_server_issues(
-                            app.bot, admin_ids,
-                            server_name, 
-                            "Длительная недоступность",
-                            "Сервер недоступен более 15 минут"
-                        )
-            
-        except Exception as e:
-            logger.error(f"Ошибка в мониторинге серверов: {e}")
-        
-        await asyncio.sleep(300)
 
 
 async def on_startup(app):
@@ -158,12 +73,6 @@ async def on_startup(app):
         except Exception as e:
             logger.warning("Миграция telegram_links: %s (возможно уже выполнена)", e)
 
-        # 1.1 Инициализация менеджеров серверов из БД
-        init_server_managers = getattr(bot_module, 'init_server_managers', None)
-        if init_server_managers:
-            await init_server_managers()
-            logger.info("Менеджеры серверов инициализированы из БД")
-        
         # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
         await notification_manager.initialize()
@@ -175,32 +84,10 @@ async def on_startup(app):
         logger.info("Менеджер уведомлений запущен")
         logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
         
-        # 3. Запуск фоновых задач (единый цикл)
+        # 3. Запуск фоновых задач
         from .tasks import start_background_tasks
         await start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager)
-        
-        # 4. Запуск мониторинга здоровья серверов (только при использовании X-UI)
-        def _use_xui_sync():
-            try:
-                from ..services.remnawave_service import is_remnawave_configured
-                return not is_remnawave_configured()
-            except Exception:
-                return True
-        if _use_xui_sync():
-            asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))
-        else:
-            logger.info("Remnawave включён — мониторинг X-UI серверов отключён")
-        
-        # 5. Первоначальная синхронизация X-UI (пропуск при Remnawave)
-        async def initial_sync():
-            await asyncio.sleep(30)
-            if not _use_xui_sync() or not subscription_manager:
-                return
-            logger.info("Выполнение первоначальной синхронизации серверов...")
-            await subscription_manager.sync_servers_with_config(auto_create_clients=True)
-        
-        asyncio.create_task(initial_sync())
-        
+
     except Exception as e:
         logger.error(f"Ошибка инициализации бота: {e}")
         raise

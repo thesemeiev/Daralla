@@ -1,8 +1,6 @@
 """
-Модуль работы с конфигурацией серверов (группы, серверы, история нагрузки).
-Единая БД daralla.db.
+Модуль работы с конфигурацией серверов (группы и серверы для админки).
 """
-import datetime
 import logging
 from . import DB_PATH
 
@@ -18,7 +16,7 @@ SERVER_CONFIG_UPDATE_KEYS = [
 
 
 async def init_server_config_db():
-    """Инициализирует таблицы групп серверов, конфигурации и истории нагрузки в единой БД."""
+    """Инициализирует таблицы групп серверов и конфигурации серверов."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS server_groups (
@@ -51,141 +49,39 @@ async def init_server_config_db():
                 FOREIGN KEY (group_id) REFERENCES server_groups(id)
             )
         """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS server_load_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                server_name TEXT NOT NULL,
-                online_clients INTEGER NOT NULL,
-                total_active INTEGER NOT NULL,
-                offline_clients INTEGER NOT NULL,
-                recorded_at INTEGER NOT NULL,
-                UNIQUE(server_name, recorded_at)
-            )
-        """)
-        await db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_server_load_server_time
-            ON server_load_history(server_name, recorded_at DESC)
-        """)
         await db.commit()
 
 
-async def save_server_load_snapshot(server_name: str, online_clients: int, total_active: int, offline_clients: int):
-    """Сохраняет снимок нагрузки на сервер в историю."""
-    now = int(datetime.datetime.now().timestamp())
-    async with aiosqlite.connect(DB_PATH) as db:
-        try:
-            await db.execute("""
-                INSERT OR REPLACE INTO server_load_history
-                (server_name, online_clients, total_active, offline_clients, recorded_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (server_name, online_clients, total_active, offline_clients, now))
-            await db.commit()
-        except Exception as e:
-            logger.error("Ошибка сохранения снимка нагрузки для %s: %s", server_name, e)
-
-
-async def get_server_load_averages(period_hours: int = 24):
-    """Средние значения нагрузки по серверам за период (часы)."""
-    now = int(datetime.datetime.now().timestamp())
-    start_timestamp = now - period_hours * 3600
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("""
-            SELECT
-                server_name,
-                AVG(online_clients) as avg_online,
-                AVG(total_active) as avg_total,
-                MAX(online_clients) as max_online,
-                MIN(online_clients) as min_online,
-                COUNT(*) as samples
-            FROM server_load_history
-            WHERE recorded_at >= ?
-            GROUP BY server_name
-        """, (start_timestamp,)) as cur:
-            rows = await cur.fetchall()
-            return {
-                row['server_name']: {
-                    'avg_online': round(row['avg_online'] or 0, 1),
-                    'avg_total': round(row['avg_total'] or 0, 1),
-                    'max_online': row['max_online'] or 0,
-                    'min_online': row['min_online'] or 0,
-                    'samples': row['samples'] or 0,
-                }
-                for row in rows
-            }
-
-
-async def cleanup_old_server_load_history(days: int = 7):
-    """Удаляет записи истории нагрузки старше указанного числа дней."""
-    now = int(datetime.datetime.now().timestamp())
-    cutoff = now - days * 24 * 3600
-    async with aiosqlite.connect(DB_PATH) as db:
-        try:
-            async with db.execute("DELETE FROM server_load_history WHERE recorded_at < ?", (cutoff,)) as cur:
-                deleted = cur.rowcount
-            await db.commit()
-            if deleted > 0:
-                logger.info("Удалено %s старых записей истории нагрузки (старше %s дней)", deleted, days)
-        except Exception as e:
-            logger.error("Ошибка очистки истории нагрузки: %s", e)
-
-
 def _get_server_manager():
-    """Получает server_manager из bot (ленивый импорт)."""
+    """Получает server_manager только из контекста приложения (get_app_context())."""
     try:
-        import sys
-        if 'bot.bot' in sys.modules:
-            return getattr(sys.modules['bot.bot'], 'server_manager', None)
-        if 'bot' in sys.modules:
-            bot = sys.modules['bot']
-            return getattr(getattr(bot, 'bot', bot), 'server_manager', None)
-        import importlib
-        bot_module = importlib.import_module('bot.bot')
-        return getattr(bot_module, 'server_manager', None)
+        from ..context import get_app_context
+        ctx = get_app_context()
+        return ctx.server_manager if ctx else None
     except Exception as e:
         logger.debug("Не удалось получить server_manager: %s", e)
         return None
 
 
 async def get_server_load_data():
-    """
-    Данные о нагрузке на серверы (онлайн клиенты) через X-UI API.
-    Возвращает список словарей: server_name, online_clients, total_active, offline_clients, ...
-    """
+    """Данные по серверам для админки (список серверов с нулевой нагрузкой — Remnawave)."""
     server_manager = _get_server_manager()
     if not server_manager or not getattr(server_manager, 'servers', None):
         return []
-    server_data = []
-    averages = await get_server_load_averages(period_hours=24)
-    for server in server_manager.servers:
-        server_name = server.get("name", "Unknown")
-        xui = server.get("x3")
-        if not xui:
-            server_data.append({'server_name': server_name, 'online_clients': 0, 'total_active': 0, 'offline_clients': 0})
-            continue
-        try:
-            total_active, online_count, offline_count = xui.get_online_clients_count()
-            capacity = (server.get("config") or {}).get("max_concurrent_clients") or 50
-            if capacity <= 0:
-                capacity = 50
-            load_pct = min(100, round((online_count / capacity) * 100, 1))
-            server_avg = averages.get(server_name, {})
-            server_data.append({
-                'server_name': server_name,
-                'online_clients': online_count,
-                'total_active': total_active,
-                'offline_clients': offline_count,
-                'avg_online_24h': server_avg.get('avg_online', 0),
-                'max_online_24h': server_avg.get('max_online', 0),
-                'min_online_24h': server_avg.get('min_online', 0),
-                'samples_24h': server_avg.get('samples', 0),
-                'load_percentage': load_pct,
-            })
-        except Exception as e:
-            logger.exception("Ошибка нагрузки с сервера %s: %s", server_name, e)
-            server_data.append({'server_name': server_name, 'online_clients': 0, 'total_active': 0, 'offline_clients': 0})
-    server_data.sort(key=lambda x: x['online_clients'], reverse=True)
-    return server_data
+    return [
+        {
+            'server_name': server.get("name", "Unknown"),
+            'online_clients': 0,
+            'total_active': 0,
+            'offline_clients': 0,
+            'avg_online_24h': 0,
+            'max_online_24h': 0,
+            'min_online_24h': 0,
+            'samples_24h': 0,
+            'load_percentage': 0,
+        }
+        for server in server_manager.servers
+    ]
 
 
 async def get_server_groups(only_active: bool = True):
@@ -348,11 +244,3 @@ async def get_group_load_statistics():
             FROM server_groups g
         """) as cur:
             return [dict(row) for row in await cur.fetchall()]
-
-
-async def check_and_run_initial_migration():
-    """Проверяет, есть ли группы серверов в БД. Если нет — возвращает False."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT COUNT(*) FROM server_groups") as cur:
-            row = await cur.fetchone()
-            return row is not None and row[0] > 0

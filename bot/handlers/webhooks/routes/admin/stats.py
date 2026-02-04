@@ -8,7 +8,8 @@ import time
 
 from flask import request, jsonify
 
-from ...webhook_auth import authenticate_request, check_admin_access, get_server_manager
+from ...context import get_app_context
+from ...webhook_auth import authenticate_request, check_admin_access
 from ._common import CORS_HEADERS, options_response
 
 logger = logging.getLogger(__name__)
@@ -151,7 +152,8 @@ def register_stats_routes(bp):
                     {**CORS_HEADERS, "Content-Type": "application/json"},
                 )
 
-            server_manager = get_server_manager()
+            ctx = get_app_context()
+            server_manager = ctx.server_manager if ctx else None
             server_info_map = {}
             if server_manager:
                 for location, servers in server_manager.servers_by_location.items():

@@ -70,14 +70,13 @@ def verify_telegram_init_data(init_data: str):
         user_id: ID пользователя Telegram, или None если данные невалидны
     """
     try:
-        import os
         import hmac
         import hashlib
         import urllib.parse
         import json
         import time
 
-        TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+        from ...config import TELEGRAM_TOKEN
         if not TELEGRAM_TOKEN:
             logger.error("TELEGRAM_TOKEN не найден")
             return None
@@ -102,7 +101,7 @@ def verify_telegram_init_data(init_data: str):
 
         secret_key = hmac.new(
             b"WebAppData",
-            TELEGRAM_TOKEN.encode('utf-8'),
+            TELEGRAM_TOKEN.encode("utf-8"),
             hashlib.sha256
         ).digest()
 
@@ -142,14 +141,11 @@ def verify_telegram_init_data(init_data: str):
 
 
 def check_admin_access(account_id_or_telegram_id) -> bool:
-    """Проверяет, является ли пользователь админом. Принимает account_id (int) или telegram_id (str)."""
+    """Проверяет, является ли пользователь админом. Данные только из get_app_context()."""
     try:
         from ...db.accounts_db import get_telegram_id_for_account
         ctx = get_app_context()
         admin_ids = list(ctx.admin_ids) if ctx else []
-        if not admin_ids:
-            from ... import bot as bot_module
-            admin_ids = getattr(bot_module, "ADMIN_IDS", [])
         admin_set = {str(a) for a in admin_ids}
 
         if str(account_id_or_telegram_id) in admin_set:
@@ -174,32 +170,13 @@ def check_admin_access(account_id_or_telegram_id) -> bool:
         return False
 
 
-def get_bot_module():
-    """Возвращает модуль bot.bot (обратная совместимость). Предпочтительно использовать get_app_context()."""
-    try:
-        import sys
-        bot_module = sys.modules.get("bot.bot")
-        if bot_module is not None:
-            return bot_module
-        from ... import bot as bot_module
-        return bot_module
-    except (ImportError, AttributeError):
-        return None
-
-
 def get_server_manager():
-    """Возвращает server_manager из контекста приложения или из bot.bot."""
+    """Возвращает server_manager только из контекста приложения (get_app_context())."""
     ctx = get_app_context()
-    if ctx is not None:
-        return ctx.server_manager
-    bot_module = get_bot_module()
-    return getattr(bot_module, "server_manager", None) if bot_module else None
+    return ctx.server_manager if ctx else None
 
 
 def get_subscription_manager():
-    """Возвращает subscription_manager из контекста приложения или из bot.bot."""
+    """Возвращает subscription_manager только из контекста приложения (get_app_context())."""
     ctx = get_app_context()
-    if ctx is not None:
-        return ctx.subscription_manager
-    bot_module = get_bot_module()
-    return getattr(bot_module, "subscription_manager", None) if bot_module else None
+    return ctx.subscription_manager if ctx else None

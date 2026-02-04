@@ -43,6 +43,7 @@ YOOKASSA_SECRET_KEY = _str("YOOKASSA_SECRET_KEY")
 
 # Webhook / Mini App
 WEBHOOK_URL = _str("WEBHOOK_URL")
+SUBSCRIPTION_URL = _str("SUBSCRIPTION_URL")  # опционально, иначе используется WEBHOOK_URL
 if WEBHOOK_URL and "/webhook/" in WEBHOOK_URL:
     WEBAPP_URL = WEBHOOK_URL.split("/webhook/")[0].rstrip("/") + "/"
 elif WEBHOOK_URL:

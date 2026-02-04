@@ -18,17 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def get_globals():
-    """Получает сервисы из контекста приложения."""
+    """Сервисы только из get_app_context()."""
     from ...context import get_app_context
     ctx = get_app_context()
-    if ctx is None:
-        from .webhook_auth import get_server_manager, get_subscription_manager
-        from ... import bot as bot_module
-        return {
-            "server_manager": get_server_manager(),
-            "notification_manager": getattr(bot_module, "notification_manager", None),
-            "subscription_manager": get_subscription_manager(),
-        }
+    if not ctx:
+        return {"server_manager": None, "notification_manager": None, "subscription_manager": None}
     return {
         "server_manager": ctx.server_manager,
         "notification_manager": ctx.notification_manager,
@@ -81,19 +75,12 @@ async def _get_chat_id_for_payment_user(user_id: str):
     return None
 
 
-def _is_remnawave_configured():
-    try:
-        from ...services.remnawave_service import is_remnawave_configured
-        return is_remnawave_configured()
-    except Exception:
-        return False
-
-
 async def process_successful_payment(bot_app, payment_id, user_id, meta):
     """Обрабатывает успешный платеж. Только Remnawave: user_id = str(account_id)."""
     try:
+        from ...services.remnawave_service import is_remnawave_configured
         message_id = meta.get('message_id')
-        if not isinstance(user_id, str) or not user_id.isdigit() or not _is_remnawave_configured():
+        if not isinstance(user_id, str) or not user_id.isdigit() or not is_remnawave_configured():
             logger.warning("Платеж %s: ожидается user_id=account_id (число) и Remnawave", payment_id)
             await update_payment_status(payment_id, 'failed')
             return
@@ -137,8 +124,8 @@ async def process_successful_payment_remnawave(bot_app, payment_id, account_id, 
     expiry_str = datetime.datetime.fromtimestamp(new_expires_at).strftime("%d.%m.%Y %H:%M")
     period_text = "3 месяца" if actual_period == "3month" else "1 месяц"
 
-    import os
-    base_url = (os.getenv("SUBSCRIPTION_URL") or os.getenv("WEBHOOK_URL") or "").rstrip("/")
+    from ...config import SUBSCRIPTION_URL, WEBHOOK_URL
+    base_url = (SUBSCRIPTION_URL or WEBHOOK_URL or "").rstrip("/")
     subscription_url = f"{base_url}/sub/{short_uuid}" if (base_url and "://" in base_url and short_uuid) else ""
 
     if is_extension:

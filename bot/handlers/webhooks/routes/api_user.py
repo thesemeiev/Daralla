@@ -227,26 +227,6 @@ def create_blueprint(bot_app):
             logger.error(f"Ошибка в API /api/user/payment/status/{payment_id}: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500, _cors_headers()
 
-    @bp.route('/api/user/subscription/<int:sub_id>/rename', methods=['POST', 'OPTIONS'])
-    def api_user_subscription_rename(sub_id):
-        """Remnawave-only: переименование не поддерживается, no-op."""
-        if request.method == 'OPTIONS':
-            return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
-        try:
-            account_id = authenticate_request()
-            if not account_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-            data = request.get_json(silent=True) or {}
-            new_name = (data.get('name') or '').strip()
-            return jsonify({
-                'success': True,
-                'message': 'OK',
-                'name': new_name or 'Подписка'
-            }), 200, _cors_headers()
-        except Exception as e:
-            logger.error("Ошибка в API /api/user/subscription/rename: %s", e, exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500, _cors_headers()
-
     @bp.route('/api/user/server-usage', methods=['GET', 'OPTIONS'])
     def api_user_server_usage():
         """Remnawave-only: данные о серверах из server_manager (usage по подписке не хранится локально)."""
@@ -260,8 +240,9 @@ def create_blueprint(bot_app):
 
             def get_servers_info():
                 try:
-                    from ..webhook_auth import get_server_manager
-                    server_manager = get_server_manager()
+                    from ...context import get_app_context
+                    ctx = get_app_context()
+                    server_manager = ctx.server_manager if ctx else None
                     if not server_manager:
                         return []
                     health_status = server_manager.get_server_health_status()
@@ -446,10 +427,10 @@ def create_blueprint(bot_app):
                 file_path = loop.run_until_complete(fetch_avatar())
                 if not file_path:
                     return Response(status=404)
-                token = os.getenv("TELEGRAM_TOKEN")
-                if not token:
+                from ....config import TELEGRAM_TOKEN
+                if not TELEGRAM_TOKEN:
                     return Response(status=500)
-                url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+                url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
                 r = requests_lib.get(url, timeout=5)
                 if not r.ok:
                     return Response(status=502)

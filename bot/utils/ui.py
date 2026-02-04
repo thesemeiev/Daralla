@@ -10,19 +10,22 @@ except ImportError:
     PRICE_MONTH, PRICE_3MONTH = 150, 350
 
 
+def _webapp_url_from_context():
+    """WEBAPP_URL только из get_app_context()."""
+    try:
+        from ..context import get_app_context
+        ctx = get_app_context()
+        return ctx.config.WEBAPP_URL if (ctx and ctx.config) else None
+    except Exception:
+        return None
+
+
 def get_site_urls():
     """
     Возвращает (webapp_url, site_url) для кнопок «Открыть Mini App» и «Вернуться на сайт».
     site_url = WEBSITE_URL или webapp_url (fallback).
     """
-    webapp_url = None
-    try:
-        import sys
-        bot_module = sys.modules.get('bot.bot')
-        if bot_module:
-            webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-    except (ImportError, AttributeError):
-        pass
+    webapp_url = _webapp_url_from_context()
     site_url = os.getenv("WEBSITE_URL", "").strip()
     if not site_url and webapp_url:
         site_url = webapp_url
@@ -65,17 +68,8 @@ class UIButtons:
     
     @staticmethod
     def main_menu_buttons():
-        """Кнопки главного меню (Mini App + канал)."""
-        # Получаем WEBAPP_URL из bot.py
-        webapp_url = None
-        try:
-            import sys
-            bot_module = sys.modules.get('bot.bot')
-            if bot_module:
-                webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-        except (ImportError, AttributeError):
-            pass
-        
+        """Кнопки главного меню (Mini App + канал). WEBAPP_URL из контекста."""
+        webapp_url = _webapp_url_from_context()
         buttons = []
         
         # Добавляем кнопку мини-приложения, если доступна
@@ -101,16 +95,7 @@ class UIButtons:
         Returns:
             InlineKeyboardButton или None, если WEBAPP_URL недоступен
         """
-        # Получаем WEBAPP_URL из bot.py
-        webapp_url = None
-        try:
-            import sys
-            bot_module = sys.modules.get('bot.bot')
-            if bot_module:
-                webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-        except (ImportError, AttributeError):
-            pass
-        
+        webapp_url = _webapp_url_from_context()
         if not webapp_url:
             return None
         

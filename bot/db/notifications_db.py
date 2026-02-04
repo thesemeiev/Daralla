@@ -155,8 +155,3 @@ async def mark_subscription_notification_sent(user_id: str, subscription_id: int
         ''', (user_id, subscription_id, notification_type, now, server_name))
         await db.commit()
 
-async def clear_subscription_notifications(subscription_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM sent_notifications WHERE subscription_id = ?", (subscription_id,))
-        await db.commit()
-

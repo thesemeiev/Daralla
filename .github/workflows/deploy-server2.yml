@@ -223,7 +223,7 @@ jobs:
               latest_db_backup=$(ls -t /root/backups/data/backup_*.tar.gz 2>/dev/null | head -n2 | tail -n1)
               if [ -z "$latest_db_backup" ] || ! sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
                 echo "❌ ERROR: All backup files are corrupted or missing!"
-                echo "⚠️  daralla.db will be created on startup (data loss possible)"
+                echo "⚠️  app.db will be created on startup (data loss possible)"
                 sudo mkdir -p data
               else
                 echo "✅ Using previous backup: $latest_db_backup"
@@ -239,9 +239,9 @@ jobs:
                 # Try safety copy as last resort
                 if [ -d "/root/backups/safety" ] && [ -n "$(ls -A /root/backups/safety/*.db 2>/dev/null)" ]; then
                   echo "⚠️  Attempting to restore from safety copy..."
-                  sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy also failed, daralla.db will be created on startup"
+                  sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy also failed, app.db will be created on startup"
                 else
-                  echo "⚠️  daralla.db will be created on startup (data loss possible)"
+                  echo "⚠️  app.db will be created on startup (data loss possible)"
                 fi
               fi
             else
@@ -249,7 +249,7 @@ jobs:
               # Try safety copy as last resort
               if [ -d "/root/backups/safety" ] && [ -n "$(ls -A /root/backups/safety/*.db 2>/dev/null)" ]; then
                 echo "⚠️  Attempting to restore from safety copy..."
-                sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy failed, daralla.db will be created on startup"
+                sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy failed, app.db will be created on startup"
               fi
             fi
             
@@ -264,22 +264,22 @@ jobs:
             done
             cd ..
             
-            # Verify daralla.db exists and is valid
-            echo "Verifying daralla.db..."
-            if [ -f "data/daralla.db" ]; then
-              echo "Checking daralla.db content..."
-              if sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
-                echo "✅ daralla.db is valid"
-                sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+            # Verify app.db exists and is valid
+            echo "Verifying app.db..."
+            if [ -f "data/app.db" ]; then
+              echo "Checking app.db content..."
+              if sudo sqlite3 data/app.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
+                echo "✅ app.db is valid"
+                sudo sqlite3 data/app.db "SELECT COUNT(*) as accounts FROM accounts;" || echo "Cannot read accounts table"
               else
-                echo "⚠️  daralla.db exists but is invalid or empty, will be recreated on startup"
-                sudo rm -f data/daralla.db
+                echo "⚠️  app.db exists but is invalid or empty, will be recreated on startup"
+                sudo rm -f data/app.db
               fi
             else
-              echo "⚠️  daralla.db not found in backup, will be created on startup"
+              echo "⚠️  app.db not found in backup, will be created on startup"
             fi
           else
-            echo "Database backups not found - daralla.db will be created on startup"
+            echo "Database backups not found - app.db will be created on startup"
             sudo mkdir -p data
           fi
 
@@ -312,12 +312,12 @@ jobs:
           echo "Databases in data directory:"
           ls -lh data/*.db 2>/dev/null || echo "No database files found (will be created on startup)"
           
-          # Verify daralla.db structure
-          if [ -f "data/daralla.db" ]; then
-            echo "Checking daralla.db structure..."
-            sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;" || echo "Cannot read daralla.db"
+          # Verify app.db structure
+          if [ -f "data/app.db" ]; then
+            echo "Checking app.db structure..."
+            sudo sqlite3 data/app.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;" || echo "Cannot read app.db"
           else
-            echo "ℹ️  daralla.db will be created automatically on first bot startup"
+            echo "ℹ️  app.db will be created automatically on first bot startup"
           fi
           
           # Fix permissions after restoration
@@ -428,16 +428,16 @@ jobs:
           # Final verification of data
           echo "Final data verification..."
           sleep 3  # Wait for bot to initialize database
-          if [ -f "data/daralla.db" ]; then
-            echo "Final daralla.db check:"
-            if sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
-              echo "✅ daralla.db is valid and initialized"
-              sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
+          if [ -f "data/app.db" ]; then
+            echo "Final app.db check:"
+            if sudo sqlite3 data/app.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
+              echo "✅ app.db is valid and initialized"
+              sudo sqlite3 data/app.db "SELECT COUNT(*) as accounts FROM accounts;" || echo "Cannot read accounts table"
             else
-              echo "⚠️  daralla.db exists but may not be initialized yet (check bot logs)"
+              echo "⚠️  app.db exists but may not be initialized yet (check bot logs)"
             fi
           else
-            echo "⚠️  daralla.db not found - check bot logs for initialization errors"
+            echo "⚠️  app.db not found - check bot logs for initialization errors"
           fi
           
           echo "✅ Deployment to TEST server completed!"

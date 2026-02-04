@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 async def init_events_tables():
-    """Создаёт таблицы модуля событий в единой БД (daralla.db)."""
+    """Создаёт таблицы модуля событий в БД app.db."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS events (

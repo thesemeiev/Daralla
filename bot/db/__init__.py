@@ -1,5 +1,5 @@
 """
-Централизованный модуль работы с БД (Единая база daralla.db)
+Централизованный модуль работы с БД (единый файл app.db).
 """
 import logging
 import os
@@ -8,16 +8,15 @@ from ..config import DATA_DIR as _DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-# Пути к единой базе данных (источник путей — bot.config)
+# Путь к базе данных
 DATA_DIR = str(_DATA_DIR)
-DB_PATH = os.path.join(DATA_DIR, "daralla.db")
+DB_PATH = os.path.join(DATA_DIR, "app.db")
 BASE_DIR = os.path.dirname(DATA_DIR)
 
 # Экспорт путей для совместимости (если где-то остались старые импорты)
 PAYMENTS_DB_PATH = DB_PATH
 USERS_DB_PATH = DB_PATH
 NOTIFICATIONS_DB_PATH = DB_PATH
-SUBSCRIBERS_DB_PATH = DB_PATH
 
 # Импортируем все функции из подмодулей
 from .payments_db import (
@@ -34,7 +33,6 @@ from .notifications_db import (
     get_notification_stats, get_daily_notification_stats,
     get_notification_settings, set_notification_setting,
     is_subscription_notification_sent, mark_subscription_notification_sent,
-    clear_subscription_notifications
 )
 from .accounts_db import (
     init_accounts_db,
@@ -74,11 +72,7 @@ from .server_config_db import (
     delete_server_config,
     get_least_loaded_group_id,
     get_group_load_statistics,
-    save_server_load_snapshot,
-    get_server_load_averages,
-    cleanup_old_server_load_history,
     get_server_load_data,
-    check_and_run_initial_migration,
     SERVER_CONFIG_UPDATE_KEYS,
 )
 
@@ -95,7 +89,7 @@ async def init_all_db():
     await init_payments_db()
     await init_notifications_db()
     
-    logger.info("Единая база данных daralla.db успешно инициализирована")
+    logger.info("База данных app.db инициализирована")
 
 __all__ = [
     'init_all_db', 'DB_PATH', 'DATA_DIR',
@@ -117,13 +111,10 @@ __all__ = [
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
     'get_daily_notification_stats', 'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
-    'clear_subscription_notifications',
     'init_server_config_db',
     'get_server_groups', 'get_servers_config', 'get_server_by_id',
     'add_server_group', 'update_server_group', 'delete_server_group',
     'add_server_config', 'update_server_config', 'delete_server_config',
     'get_least_loaded_group_id', 'get_group_load_statistics',
-    'save_server_load_snapshot', 'get_server_load_averages', 'cleanup_old_server_load_history',
-    'get_server_load_data', 'check_and_run_initial_migration',
-    'SERVER_CONFIG_UPDATE_KEYS',
+    'get_server_load_data', 'SERVER_CONFIG_UPDATE_KEYS',
 ]
