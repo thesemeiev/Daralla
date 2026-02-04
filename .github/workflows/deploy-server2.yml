@@ -361,6 +361,7 @@ jobs:
           fi
           
           # Set webhook URL if domain is available
+          sudo sed -i '/^WEBHOOK_URL=/d' .env
           if [ -n "$WEBHOOK_DOMAIN" ]; then
             WEBHOOK_URL="https://${WEBHOOK_DOMAIN}/webhook/yookassa"
             echo "✅ Webhook URL: $WEBHOOK_URL"
