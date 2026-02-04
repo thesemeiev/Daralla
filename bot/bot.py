@@ -1,128 +1,119 @@
+"""
+Точка входа бота. Порядок: конфиг → утилиты → сервисы → обработчики → запуск.
+"""
 import logging
 import os
-from logging.handlers import RotatingFileHandler
-from dotenv import load_dotenv
-import pathlib
-
-# === ИМПОРТ УТИЛИТ ===
-from .utils import UIButtons, check_private_chat, set_image_paths
-
-# === ИМПОРТ СЕРВИСОВ ===
-from .services import X3, MultiServerManager, NotificationManager, SubscriptionManager
-from .services.sync_manager import SyncManager
-
-# === ИМПОРТ ОБРАБОТЧИКОВ ===
-from .handlers.commands import start
-from .handlers.callbacks import link_telegram_confirm_callback
-
-
-# Определяем путь к файлу .env
-current_dir = pathlib.Path(__file__).parent
-project_root = current_dir.parent
-env_path = project_root / '.env'
-
-# Загружаем .env из корня проекта (если файл существует)
-# В Docker переменные уже передаются через environment:, но загрузка из файла
-# может быть полезна для локальной разработки
-if env_path.exists():
-    load_dotenv(env_path, override=False)  # override=False - не перезаписывать существующие переменные
-else:
-    # В Docker это нормально, так как переменные передаются через environment:
-    pass
-
+import sys
 import threading
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from logging.handlers import RotatingFileHandler
+
+from telegram import Update, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
+)
 from telegram.request import HTTPXRequest
 from yookassa import Configuration
 
-Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
-Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
+# 1. Foundation: конфиг и пути
+from . import config
 
-from .db import DATA_DIR
+config.validate_required()
+config.ensure_dirs()
+Configuration.account_id = config.YOOKASSA_SHOP_ID
+Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
-
-YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
-YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Поддержка нескольких админов через переменную окружения
-ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
-ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
-
-# URL мини-приложения (формируется на основе WEBHOOK_URL, сайт в корне домена)
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
-if WEBHOOK_URL:
-    # Убираем путь /webhook/yookassa; Mini App в корне, например https://daralla.ru/
-    if "/webhook/" in WEBHOOK_URL:
-        WEBAPP_URL = WEBHOOK_URL.split("/webhook/")[0] + "/"
-    else:
-        WEBAPP_URL = WEBHOOK_URL.rstrip("/") + "/"
-else:
-    WEBAPP_URL = None
-
-# Пути к изображениям для меню: главное меню (/start), успех и ошибка (уведомления о платежах)
-IMAGE_PATHS = {
-    'main_menu': 'images/main_menu.jpg',
-    'payment_success': 'images/payment_success.jpg',
-    'payment_failed': 'images/payment_failed.jpg',
-}
-
-# Устанавливаем пути к изображениям в утилитах
-set_image_paths(IMAGE_PATHS)
-
-# Проверяем наличие обязательных переменных
-if not TELEGRAM_TOKEN:
-    raise ValueError(
-        "TELEGRAM_TOKEN не найден в переменных окружения!\n"
-        "В Docker: убедитесь, что файл .env существует в корне проекта и содержит TELEGRAM_TOKEN.\n"
-        "Docker Compose автоматически загружает переменные из .env файла."
-    )
-
-if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+if not config.YOOKASSA_SHOP_ID or not config.YOOKASSA_SECRET_KEY:
     print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
 
-# Главное название бренда для VPN клиента
-# Это название будет использоваться для всех серверов в подписке
-VPN_BRAND_NAME = " Daralla VPN"  # Можно изменить на любое красивое название
-
-# Серверы добавляются через админ-панель, конфиг загружается из БД при старте (init_server_managers)
-
-# Настраиваем файловый лог с ротацией в папке data/logs
-logs_dir = os.path.join(DATA_DIR, 'logs')
-os.makedirs(logs_dir, exist_ok=True)
-app_log_path = os.path.join(logs_dir, 'bot.log')
+# 2. Логирование (config.ensure_dirs() уже создал LOGS_DIR)
+app_log_path = str(config.APP_LOG_PATH)
 
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
-
 file_handler = RotatingFileHandler(
     app_log_path,
     maxBytes=1_048_576,
     backupCount=3,
-    encoding='utf-8',
-    delay=True
+    encoding="utf-8",
+    delay=True,
 )
 file_handler.setLevel(logging.WARNING)
-
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[console_handler, file_handler]
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[console_handler, file_handler],
 )
 logger = logging.getLogger(__name__)
 
-# Глобальный экземпляр менеджера серверов (подписки и выбор серверов используют его)
+# 3. Утилиты (пути к изображениям для меню)
+from .utils import UIButtons, check_private_chat, set_image_paths
+
+set_image_paths(config.IMAGE_PATHS)
+
+# 4. Сервисы. При Remnawave subscription_manager и sync_manager не создаём (остаются None).
+from .services import (
+    MultiServerManager,
+    NotificationManager,
+    SubscriptionManager,
+)
+from .services.sync_manager import SyncManager
+
+def _is_remnawave_mode():
+    try:
+        from .services.remnawave_service import is_remnawave_configured
+        return is_remnawave_configured()
+    except Exception:
+        return False
+
 server_manager = MultiServerManager()
-# Менеджер подписок
-subscription_manager = SubscriptionManager(server_manager)
-# Менеджер синхронизации
-sync_manager = SyncManager(server_manager, subscription_manager)
+_remnawave = _is_remnawave_mode()
+if _remnawave:
+    subscription_manager = None
+    sync_manager = None
+    logger.info("Режим Remnawave: SubscriptionManager и SyncManager не создаются")
+else:
+    subscription_manager = SubscriptionManager(server_manager)
+    sync_manager = SyncManager(server_manager, subscription_manager)
+
+# 4.1 Единый контекст приложения (Фаза 2)
+from .context import AppContext
+
+app_context = AppContext(
+    server_manager=server_manager,
+    subscription_manager=subscription_manager,
+    sync_manager=sync_manager,
+    notification_manager=None,
+    admin_ids=config.ADMIN_IDS,
+    telegram_app=None,
+    config=config,
+)
+
+# Реэкспорт конфига для кода, читающего из bot.bot (WEBAPP_URL, ADMIN_IDS и т.д.)
+TELEGRAM_TOKEN = config.TELEGRAM_TOKEN
+ADMIN_IDS = config.ADMIN_IDS
+WEBHOOK_URL = config.WEBHOOK_URL
+WEBAPP_URL = config.WEBAPP_URL
+IMAGE_PATHS = config.IMAGE_PATHS
+VPN_BRAND_NAME = config.VPN_BRAND_NAME
+DATA_DIR = str(config.DATA_DIR)
+
+# 5. Обработчики
+from .handlers.commands import start
+from .handlers.callbacks import link_telegram_confirm_callback
+from .handlers.webhooks import create_webhook_app
+from .handlers.utils import error_handler
+from .core import on_startup
 
 # Инициализация менеджеров серверов из БД
 async def init_server_managers():
     try:
         from .services.server_provider import ServerProvider
-        from .db.subscribers_db import check_and_run_initial_migration
+        from .db import check_and_run_initial_migration
         
         # Проверяем, есть ли серверы в БД
         has_servers = await check_and_run_initial_migration()
@@ -134,22 +125,14 @@ async def init_server_managers():
             server_manager.init_from_config({})
             return
         
-        # Загружаем конфиг из БД
-        config = await ServerProvider.get_all_servers_by_location()
-        server_manager.init_from_config(config)
+        # Загружаем конфиг серверов из БД
+        servers_config = await ServerProvider.get_all_servers_by_location()
+        server_manager.init_from_config(servers_config)
         logger.info("Менеджер серверов успешно инициализирован из БД")
     except Exception as e:
         logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
 
-from .handlers.webhooks import create_webhook_app
-
-
-
-from .handlers.utils import error_handler
-
-from .core import on_startup
-
-# Глобальный менеджер уведомлений
+# Глобальный менеджер уведомлений (инициализируется в on_startup)
 notification_manager = None
 
 # Глобальный объект приложения (будет инициализирован в main)
@@ -182,9 +165,8 @@ async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFA
     )
 
 
-# Регистрируем команды
-if __name__ == '__main__':
-    # Создаем HTTPXRequest с увеличенными таймаутами для стабильной работы
+# --- Запуск (main) ---
+if __name__ == "__main__":
     http_request = HTTPXRequest(
         connection_pool_size=8,  # Размер пула соединений
         connect_timeout=30.0,    # Таймаут на установку соединения (увеличен с дефолтных 5)
@@ -194,13 +176,11 @@ if __name__ == '__main__':
     )
     
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
-    
-    # Сохраняем app в глобальную переменную для доступа из других модулей
-    import sys
     sys.modules[__name__].app = app
-    
-    # Создаем Flask приложение для webhook'ов
-    webhook_app = create_webhook_app(app)
+    app_context.telegram_app = app
+
+    # Создаем Flask приложение для webhook'ов (контекст передаётся в маршруты через app.config)
+    webhook_app = create_webhook_app(app, app_context)
     
     # Запускаем webhook сервер в отдельном потоке
     def run_webhook():

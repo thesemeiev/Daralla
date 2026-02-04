@@ -9,7 +9,7 @@ from . import DB_PATH
 logger = logging.getLogger(__name__)
 
 async def init_users_db():
-    """Инициализирует таблицу конфигурации (таблица users уже создана в subscribers_db)"""
+    """Инициализирует таблицу config (источник пользователей — accounts в accounts_db)."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''
             CREATE TABLE IF NOT EXISTS config (
@@ -22,31 +22,35 @@ async def init_users_db():
         await db.commit()
 
 async def get_all_user_ids(min_last_seen: int = None) -> list:
-    """Возвращает список всех user_id"""
+    """Возвращает список всех user_id (Remnawave: account_id как строка)."""
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             if min_last_seen is not None:
-                async with db.execute('SELECT user_id FROM users WHERE last_seen >= ? ORDER BY last_seen DESC', (min_last_seen,)) as cur:
+                async with db.execute(
+                    "SELECT account_id FROM accounts WHERE last_seen >= ? ORDER BY last_seen DESC",
+                    (min_last_seen,),
+                ) as cur:
                     rows = await cur.fetchall()
             else:
-                async with db.execute('SELECT user_id FROM users ORDER BY last_seen DESC') as cur:
+                async with db.execute("SELECT account_id FROM accounts ORDER BY last_seen DESC") as cur:
                     rows = await cur.fetchall()
-            return [row[0] for row in rows]
+            return [str(row[0]) for row in rows]
     except Exception as e:
         logger.error(f"GET_ALL_USER_IDS error: {e}")
         return []
 
 async def register_simple_user(user_id: str):
-    """Регистрирует пользователя (используя единую логику из subscribers_db)"""
-    from .subscribers_db import get_or_create_subscriber
-    await get_or_create_subscriber(user_id)
+    """Remnawave: no-op (пользователи создаются через get_or_create_account_for_telegram)."""
+    pass
 
 async def is_known_user(user_id: str) -> bool:
-    """Проверяет наличие пользователя"""
+    """Проверяет наличие пользователя (Remnawave: account_id в таблице accounts)."""
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute('SELECT 1 FROM users WHERE user_id = ? LIMIT 1', (user_id,)) as cursor:
-                return (await cursor.fetchone()) is not None
+        if isinstance(user_id, str) and user_id.isdigit():
+            async with aiosqlite.connect(DB_PATH) as db:
+                async with db.execute("SELECT 1 FROM accounts WHERE account_id = ? LIMIT 1", (int(user_id),)) as cursor:
+                    return (await cursor.fetchone()) is not None
+        return False
     except Exception as e:
         logger.error(f"IS_KNOWN_USER error: {e}")
         return False

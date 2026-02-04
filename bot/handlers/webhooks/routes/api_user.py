@@ -28,190 +28,78 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/register', methods=['POST', 'OPTIONS'])
     def api_user_register():
-        """Регистрация пользователя при первом открытии мини-приложения."""
+        """Регистрация/приветствие при первом открытии мини-приложения. Работает по account_id."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            data = request.get_json(silent=True) or {}
-            user_id = authenticate_request()
-            init_data = request.args.get('initData') or data.get('initData')
-            tg_user_id = None
-            if init_data:
-                tg_user_id = verify_telegram_init_data(init_data)
-            if not user_id and tg_user_id:
-                user_id = None
-            if not user_id and not tg_user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                from ....db import is_known_user, register_simple_user
-                from ....db.subscribers_db import (
-                    get_all_active_subscriptions_by_user,
-                    get_or_create_subscriber,
-                    create_subscription,
-                    is_subscription_active,
-                    is_known_telegram_id,
-                    mark_telegram_id_known,
-                    get_user_by_telegram_id_v2,
-                    create_telegram_link,
-                    update_user_telegram_id,
-                    generate_tg_user_id,
-                )
-                just_created_tg_user = False
-                if not user_id and tg_user_id:
-                    _tg_str = str(tg_user_id)
-                    _existing = loop.run_until_complete(get_user_by_telegram_id_v2(_tg_str, use_fallback=True))
-                    if _existing:
-                        user_id = _existing["user_id"]
+                from ....db.accounts_db import get_remnawave_mapping, set_remnawave_mapping
+                mapping = loop.run_until_complete(get_remnawave_mapping(account_id))
+                was_new_user = mapping is None
+                short_uuid = mapping.get("remnawave_short_uuid") if mapping else None
+
+                try:
+                    from ....services.remnawave_service import load_remnawave_config, RemnawaveClient
+                    from ....db.accounts_db import get_telegram_id_for_account
+                    cfg = load_remnawave_config()
+                    client = RemnawaveClient(cfg)
+                    telegram_id = loop.run_until_complete(get_telegram_id_for_account(account_id))
+                    if mapping:
+                        short_uuid = short_uuid or (mapping.get("remnawave_short_uuid"))
                     else:
-                        user_id = generate_tg_user_id()
-                        loop.run_until_complete(register_simple_user(user_id))
-                        loop.run_until_complete(create_telegram_link(_tg_str, user_id))
-                        loop.run_until_complete(update_user_telegram_id(user_id, _tg_str))
-                        just_created_tg_user = True
-                        logger.info(f"Регистрация нового TG-first пользователя: user_id={user_id}, telegram_id={_tg_str}")
-                if not user_id:
-                    return jsonify({'error': 'Invalid authentication'}), 401
-                is_web = user_id.startswith('web_')
-                was_known_user = loop.run_until_complete(is_known_user(user_id))
-                if tg_user_id:
-                    was_known_user = was_known_user or loop.run_until_complete(is_known_telegram_id(str(tg_user_id)))
-                if just_created_tg_user:
-                    was_known_user = False
-                if not just_created_tg_user:
-                    loop.run_until_complete(register_simple_user(user_id))
-                if tg_user_id:
-                    loop.run_until_complete(mark_telegram_id_known(str(tg_user_id)))
-                trial_created = False
-                subscription_id = None
-                if not was_known_user and not is_web:
-                    try:
-                        existing_subs = loop.run_until_complete(get_all_active_subscriptions_by_user(user_id))
-                        now = int(time.time())
-                        active_subs = [sub for sub in existing_subs if is_subscription_active(sub)]
-                        if len(active_subs) == 0:
-                            logger.info(f"Создание пробной подписки для нового пользователя: {user_id}")
-                            subscriber_id = loop.run_until_complete(get_or_create_subscriber(user_id))
-                            expires_at = now + (5 * 24 * 60 * 60)
-                            subscription_id, token = loop.run_until_complete(create_subscription(
-                                subscriber_id=subscriber_id,
-                                period='month',
-                                device_limit=1,
-                                price=0.0,
-                                expires_at=expires_at,
-                                name="Пробная подписка"
+                        remna_user = client.get_user_by_telegram_id(telegram_id) if telegram_id else None
+                        if remna_user:
+                            short_uuid = remna_user.get("shortUuid") or remna_user.get("short_uuid")
+                            loop.run_until_complete(set_remnawave_mapping(
+                                account_id,
+                                remna_user.get("uuid", remna_user.get("id", "")),
+                                short_uuid,
                             ))
-                            trial_created = True
-                            logger.info(f"✅ Пробная подписка создана: subscription_id={subscription_id}")
-                            from ..webhook_auth import get_server_manager, get_subscription_manager
-                            subscription_manager = get_subscription_manager()
-                            server_manager = get_server_manager()
-                            if subscription_manager and server_manager:
-                                unique_email = f"{user_id}_{subscription_id}"
-                                all_configured_servers = []
-                                for server in server_manager.servers:
-                                    server_name = server["name"]
-                                    if server.get("x3") is not None:
-                                        all_configured_servers.append(server_name)
-                                if all_configured_servers:
-                                    async def attach_servers():
-                                        for server_name in all_configured_servers:
-                                            try:
-                                                await subscription_manager.attach_server_to_subscription(
-                                                    subscription_id=subscription_id,
-                                                    server_name=server_name,
-                                                    client_email=unique_email,
-                                                    client_id=None,
-                                                )
-                                            except Exception as attach_e:
-                                                if "UNIQUE constraint" not in str(attach_e) and "already exists" not in str(attach_e).lower():
-                                                    logger.error(f"Ошибка привязки сервера {server_name}: {attach_e}")
-                                    loop.run_until_complete(attach_servers())
-                                    async def create_clients():
-                                        successful = []
-                                        for server_name in all_configured_servers:
-                                            try:
-                                                client_exists, client_created = await subscription_manager.ensure_client_on_server(
-                                                    subscription_id=subscription_id,
-                                                    server_name=server_name,
-                                                    client_email=unique_email,
-                                                    user_id=user_id,
-                                                    expires_at=expires_at,
-                                                    token=token,
-                                                    device_limit=1
-                                                )
-                                                if client_exists:
-                                                    successful.append(server_name)
-                                            except Exception as e:
-                                                logger.error(f"Ошибка создания клиента на {server_name}: {e}")
-                                        return successful
-                                    successful_servers = loop.run_until_complete(create_clients())
-                                    logger.info(f"Пробная подписка: создано на {len(successful_servers)}/{len(all_configured_servers)} серверах")
-                    except Exception as e:
-                        logger.error(f"Ошибка создания пробной подписки: {e}", exc_info=True)
+                        elif telegram_id:
+                            create_payload = {"telegramId": str(telegram_id), "username": f"tg_{telegram_id}"}
+                            created = client.create_user(create_payload)
+                            ruuid = created.get("uuid") or created.get("id") or created.get("obj", {}).get("uuid")
+                            short_uuid = created.get("shortUuid") or created.get("short_uuid") or (created.get("obj", {}) or {}).get("shortUuid")
+                            if ruuid:
+                                loop.run_until_complete(set_remnawave_mapping(account_id, str(ruuid), short_uuid))
+                except Exception as remna_e:
+                    logger.warning("Remnawave create/lookup skipped: %s", remna_e)
+
                 return jsonify({
                     'success': True,
-                    'was_new_user': not was_known_user,
-                    'trial_created': trial_created,
-                    'subscription_id': subscription_id
+                    'was_new_user': was_new_user,
+                    'account_id': account_id,
+                    'short_uuid': short_uuid,
                 })
             finally:
-                try:
-                    pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                except Exception:
-                    pass
-                finally:
-                    loop.close()
-                    asyncio.set_event_loop(None)
+                loop.close()
+                asyncio.set_event_loop(None)
         except Exception as e:
-            logger.error(f"Ошибка регистрации пользователя: {e}", exc_info=True)
+            logger.error("Ошибка регистрации пользователя: %s", e, exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 
     @bp.route('/api/subscriptions', methods=['GET', 'OPTIONS'])
     def api_subscriptions():
-        """API endpoint для получения подписок пользователя"""
+        """Подписки пользователя из Remnawave (source of truth)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            from ....db.subscribers_db import get_all_subscriptions_by_user, is_subscription_active
+            from ....services.subscription_service import get_subscriptions_for_account
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id))
+                formatted_subs = loop.run_until_complete(get_subscriptions_for_account(account_id))
             finally:
                 loop.close()
-            current_time = int(time.time())
-            formatted_subs = []
-            for sub in subscriptions:
-                expires_at = sub['expires_at']
-                is_active = is_subscription_active(sub)
-                is_expired = expires_at < current_time
-                expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
-                created_datetime = datetime.datetime.fromtimestamp(sub['created_at'])
-                formatted_subs.append({
-                    'id': sub['id'],
-                    'name': sub.get('name', f"Подписка {sub['id']}"),
-                    'status': 'active' if is_active else ('expired' if is_expired else sub['status']),
-                    'period': sub['period'],
-                    'device_limit': sub['device_limit'],
-                    'created_at': sub['created_at'],
-                    'created_at_formatted': created_datetime.strftime('%d.%m.%Y %H:%M'),
-                    'expires_at': expires_at,
-                    'expires_at_formatted': expiry_datetime.strftime('%d.%m.%Y %H:%M'),
-                    'price': sub['price'],
-                    'token': sub['subscription_token'],
-                    'days_remaining': max(0, (expires_at - current_time) // (24 * 60 * 60)) if is_active else 0
-                })
-            formatted_subs.sort(key=lambda x: (x['status'] != 'active', -x['created_at']))
             return jsonify({
                 'success': True,
                 'subscriptions': formatted_subs,
@@ -219,18 +107,19 @@ def create_blueprint(bot_app):
                 'active': len([s for s in formatted_subs if s['status'] == 'active'])
             }), 200, _cors_headers()
         except Exception as e:
-            logger.error(f"Ошибка в API /api/subscriptions: {e}", exc_info=True)
+            logger.error("Ошибка в API /api/subscriptions: %s", e, exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500, _cors_headers()
 
     @bp.route('/api/user/payment/create', methods=['POST', 'OPTIONS'])
     def api_user_payment_create():
-        """API endpoint для создания платежа (покупка или продление подписки)"""
+        """API endpoint для создания платежа (покупка или продление подписки). user_id в БД = str(account_id)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
+            user_id = str(account_id)
             data = request.get_json(silent=True) or {}
             period = data.get('period')
             subscription_id = data.get('subscription_id')
@@ -258,20 +147,21 @@ def create_blueprint(bot_app):
                 payment_period = f"extend_sub_{period}" if subscription_id else period
                 payment = Payment.create({
                     "amount": {"value": price, "currency": "RUB"},
-                    "confirmation": {"type": "redirect", "return_url": f"https://t.me/{user_id}"},
+                    "confirmation": {"type": "redirect", "return_url": "https://t.me/"},
                     "capture": True,
-                    "description": f"VPN {period} для {user_id}",
+                    "description": f"VPN {period}",
                     "metadata": {
                         "user_id": user_id,
+                        "account_id": account_id,
                         "type": payment_period,
                         "device_limit": 1,
                         "unique_email": unique_email,
                         "price": price,
                     },
                     "receipt": {
-                        "customer": {"email": f"{user_id}@vpn-x3.ru"},
+                        "customer": {"email": f"{user_id}@vpn.local"},
                         "items": [{
-                            "description": f"VPN {period} для {user_id}",
+                            "description": f"VPN {period}",
                             "quantity": "1.00",
                             "amount": {"value": price, "currency": "RUB"},
                             "vat_code": 1
@@ -313,8 +203,8 @@ def create_blueprint(bot_app):
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             from ....db import get_payment_by_id
             loop = asyncio.new_event_loop()
@@ -325,7 +215,7 @@ def create_blueprint(bot_app):
                 loop.close()
             if not payment_info:
                 return jsonify({'error': 'Payment not found'}), 404
-            if payment_info['user_id'] != user_id:
+            if payment_info['user_id'] != str(account_id):
                 return jsonify({'error': 'Access denied'}), 403
             return jsonify({
                 'success': True,
@@ -339,52 +229,34 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/subscription/<int:sub_id>/rename', methods=['POST', 'OPTIONS'])
     def api_user_subscription_rename(sub_id):
-        """API endpoint для переименования подписки пользователя"""
+        """Remnawave-only: переименование не поддерживается, no-op."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             data = request.get_json(silent=True) or {}
-            new_name = data.get('name', '').strip()
-            if not new_name:
-                return jsonify({'error': 'Name is required'}), 400
-            from ....db.subscribers_db import get_subscription_by_id, update_subscription_name
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                sub = loop.run_until_complete(get_subscription_by_id(sub_id, user_id))
-                if not sub:
-                    return jsonify({'error': 'Subscription not found or access denied'}), 404
-                loop.run_until_complete(update_subscription_name(sub_id, new_name))
-            finally:
-                loop.close()
+            new_name = (data.get('name') or '').strip()
             return jsonify({
                 'success': True,
-                'message': 'Subscription renamed successfully',
-                'name': new_name
+                'message': 'OK',
+                'name': new_name or 'Подписка'
             }), 200, _cors_headers()
         except Exception as e:
-            logger.error(f"Ошибка в API /api/user/subscription/{sub_id}/rename: {e}", exc_info=True)
+            logger.error("Ошибка в API /api/user/subscription/rename: %s", e, exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500, _cors_headers()
 
     @bp.route('/api/user/server-usage', methods=['GET', 'OPTIONS'])
     def api_user_server_usage():
-        """API endpoint для получения данных о серверах и их использовании пользователем"""
+        """Remnawave-only: данные о серверах из server_manager (usage по подписке не хранится локально)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            from ....db.subscribers_db import get_user_server_usage
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                server_usage = loop.run_until_complete(get_user_server_usage(user_id))
-            finally:
-                loop.close()
+            server_usage = {}
 
             def get_servers_info():
                 try:
@@ -439,8 +311,8 @@ def create_blueprint(bot_app):
             init_data = data.get('initData')
             if not init_data:
                 return jsonify({'error': 'Telegram data required'}), 400
-            user_id = verify_telegram_init_data(init_data)
-            if not user_id:
+            telegram_id = verify_telegram_init_data(init_data)
+            if not telegram_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
             data = request.get_json(silent=True)
             username = (data.get('username') or '').strip().lower()
@@ -449,26 +321,27 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Логин слишком короткий (мин. 3 символа)'}), 400
             if len(password) < 6:
                 return jsonify({'error': 'Пароль слишком короткий (мин. 6 символов)'}), 400
-            from ....db.subscribers_db import (
-                get_user_by_id, username_available,
-                update_user_username, update_user_password
+            from ....db.accounts_db import (
+                get_or_create_account_for_telegram,
+                replace_password_identity,
+                set_account_password,
+                username_available,
             )
             password_hash = generate_password_hash(password)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user:
-                    return jsonify({'error': 'Пользователь не найден'}), 404
-                ok = loop.run_until_complete(username_available(username, user_id))
+                account_id = loop.run_until_complete(get_or_create_account_for_telegram(telegram_id))
+                ok = loop.run_until_complete(username_available(username, exclude_account_id=None))
                 if not ok:
                     return jsonify({'error': 'Этот логин уже занят'}), 409
-                loop.run_until_complete(update_user_username(user_id, username))
-                loop.run_until_complete(update_user_password(user_id, password_hash))
+                loop.run_until_complete(replace_password_identity(account_id, username))
+                loop.run_until_complete(set_account_password(account_id, password_hash))
                 return jsonify({
                     'success': True,
                     'message': f'Web-доступ настроен. Теперь вы можете войти на сайт с логином {username}.',
                     'username': username,
+                    'account_id': account_id,
                 })
             finally:
                 loop.close()
@@ -477,91 +350,85 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/link-telegram/start', methods=['POST', 'OPTIONS'])
     def api_user_link_telegram_start():
-        """Начать привязку Telegram (веб-пользователь). Возвращает ссылку t.me/bot?start=link_<state>."""
+        """Начать привязку Telegram. В state сохраняем str(account_id)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
-            from ....db.subscribers_db import (
-                get_user_by_id, link_telegram_create_state,
-                update_user_telegram_id
-            )
+            from ....db.accounts_db import get_telegram_id_for_account, link_telegram_create_state
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user:
-                    return jsonify({'error': 'Пользователь не найден'}), 404
-                if user.get('telegram_id'):
+                tid = loop.run_until_complete(get_telegram_id_for_account(account_id))
+                if tid:
                     return jsonify({'error': 'Telegram уже привязан'}), 400
-                state = loop.run_until_complete(link_telegram_create_state(user_id))
+                state = loop.run_until_complete(link_telegram_create_state(account_id))
                 bot_username = os.getenv('BOT_USERNAME', 'Daralla_bot')
                 link = f"https://t.me/{bot_username}?start=link_{state}"
                 return jsonify({'success': True, 'link': link, 'state': state})
             finally:
                 loop.close()
         except Exception as e:
-            logger.error(f"Ошибка link-telegram/start: {e}", exc_info=True)
+            logger.error("Ошибка link-telegram/start: %s", e, exc_info=True)
             return jsonify({'error': str(e)}), 500
 
     @bp.route('/api/user/link-status', methods=['GET', 'OPTIONS'])
     def api_user_link_status():
-        """Статус привязки Telegram для текущего веб-пользователя."""
+        """Статус привязки Telegram и веб-доступа по account_id и identities."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
-            from ....db.subscribers_db import get_user_by_id
+            from ....db.accounts_db import (
+                get_telegram_id_for_account,
+                get_username_for_account,
+                get_remnawave_mapping,
+                get_account_password_hash,
+            )
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user:
-                    return jsonify({'error': 'Пользователь не найден'}), 404
-                uid = user.get('user_id')
-                tid = user.get('telegram_id')
-                is_web = uid and isinstance(uid, str) and uid.startswith('web_')
-                is_tg_first = uid and isinstance(uid, str) and (uid.isdigit() or uid.startswith('tg_'))
-                telegram_linked = is_tg_first or (is_web and bool(tid))
-                display_tid = tid or (uid if (uid and uid.isdigit()) else None)
-                username = user.get('username') or uid or ''
-                web_access_enabled = bool(user.get('password_hash'))
+                tid = loop.run_until_complete(get_telegram_id_for_account(account_id))
+                username = loop.run_until_complete(get_username_for_account(account_id))
+                mapping = loop.run_until_complete(get_remnawave_mapping(account_id))
+                short_uuid = mapping.get("remnawave_short_uuid") if mapping else None
+                pwd_hash = loop.run_until_complete(get_account_password_hash(account_id))
+                web_access_enabled = pwd_hash is not None
                 return jsonify({
                     'success': True,
-                    'telegram_linked': telegram_linked,
-                    'is_web': is_web,
-                    'username': username,
-                    'user_id': uid,
-                    'telegram_id': display_tid,
+                    'telegram_linked': tid is not None,
+                    'is_web': username is not None,
+                    'username': username or '',
+                    'account_id': account_id,
+                    'user_id': str(account_id),
+                    'telegram_id': tid,
                     'web_access_enabled': web_access_enabled,
+                    'short_uuid': short_uuid,
                 })
             finally:
                 loop.close()
         except Exception as e:
-            logger.error(f"Ошибка link-status: {e}", exc_info=True)
+            logger.error("Ошибка link-status: %s", e, exc_info=True)
             return jsonify({'error': str(e)}), 500
 
     @bp.route('/api/user/avatar', methods=['GET', 'OPTIONS'])
     def api_user_avatar():
-        """Проксирует аватар пользователя из Telegram (getUserProfilePhotos). Только для пользователей с привязанным telegram_id."""
+        """Проксирует аватар из Telegram по account_id (telegram identity)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return Response(status=401)
-            from ....db.subscribers_db import get_user_by_id
+            from ....db.accounts_db import get_telegram_id_for_account
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user:
-                    return Response(status=404)
-                tid = user.get('telegram_id')
+                tid = loop.run_until_complete(get_telegram_id_for_account(account_id))
                 if not tid:
                     return Response(status=404)
                 bot = bot_app.bot
@@ -603,8 +470,8 @@ def create_blueprint(bot_app):
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
             data = request.get_json(silent=True) or {}
             current = (data.get('current_password') or '').strip()
@@ -613,24 +480,24 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Введите текущий пароль'}), 400
             if len(new_pw) < 6:
                 return jsonify({'error': 'Новый пароль слишком короткий (минимум 6 символов)'}), 400
-            from ....db.subscribers_db import get_user_by_id, update_user_password
+            from ....db.accounts_db import get_account_password_hash, set_account_password
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user or not user.get('password_hash'):
+                pwd_hash = loop.run_until_complete(get_account_password_hash(account_id))
+                if not pwd_hash:
                     return jsonify({'error': 'Пароль для этого аккаунта не настроен'}), 400
-                if not check_password_hash(user['password_hash'], current):
+                if not check_password_hash(pwd_hash, current):
                     return jsonify({'error': 'Неверный текущий пароль'}), 401
-                if check_password_hash(user['password_hash'], new_pw):
+                if check_password_hash(pwd_hash, new_pw):
                     return jsonify({'error': 'Новый пароль должен отличаться от текущего'}), 400
                 new_hash = generate_password_hash(new_pw)
-                loop.run_until_complete(update_user_password(user_id, new_hash))
+                loop.run_until_complete(set_account_password(account_id, new_hash))
                 return jsonify({'success': True, 'message': 'Пароль изменён'})
             finally:
                 loop.close()
         except Exception as e:
-            logger.error(f"Ошибка change-password: {e}", exc_info=True)
+            logger.error("Ошибка change-password: %s", e, exc_info=True)
             return jsonify({'error': str(e)}), 500
 
     @bp.route('/api/user/change-login', methods=['POST', 'OPTIONS'])
@@ -639,8 +506,8 @@ def create_blueprint(bot_app):
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
             data = request.get_json(silent=True) or {}
             current = (data.get('current_password') or '').strip()
@@ -649,82 +516,66 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Введите текущий пароль'}), 400
             if len(new_login) < 3:
                 return jsonify({'error': 'Логин слишком короткий (минимум 3 символа)'}), 400
-            from ....db.subscribers_db import (
-                get_user_by_id, update_user_username,
+            from ....db.accounts_db import (
+                get_username_for_account,
+                get_account_password_hash,
                 username_available,
+                replace_password_identity,
             )
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user or not user.get('password_hash'):
+                username = loop.run_until_complete(get_username_for_account(account_id))
+                pwd_hash = loop.run_until_complete(get_account_password_hash(account_id))
+                if not username or not pwd_hash:
                     return jsonify({'error': 'Пароль для этого аккаунта не настроен'}), 400
-                if not check_password_hash(user['password_hash'], current):
+                if not check_password_hash(pwd_hash, current):
                     return jsonify({'error': 'Неверный текущий пароль'}), 401
-                cur_username = (user.get('username') or '').strip().lower()
+                cur_username = username.strip().lower()
                 if new_login == cur_username:
                     return jsonify({'error': 'Укажите новый логин, отличный от текущего'}), 400
-                ok = loop.run_until_complete(username_available(new_login, user_id))
+                ok = loop.run_until_complete(username_available(new_login, exclude_account_id=account_id))
                 if not ok:
                     return jsonify({'error': 'Этот логин уже занят'}), 409
-                loop.run_until_complete(update_user_username(user_id, new_login))
+                loop.run_until_complete(replace_password_identity(account_id, new_login))
                 return jsonify({'success': True, 'message': 'Логин изменён', 'username': new_login})
             finally:
                 loop.close()
         except Exception as e:
-            logger.error(f"Ошибка change-login: {e}", exc_info=True)
+            logger.error("Ошибка change-login: %s", e, exc_info=True)
             return jsonify({'error': str(e)}), 500
 
     @bp.route('/api/user/unlink-telegram', methods=['POST', 'OPTIONS'])
     def api_user_unlink_telegram():
-        """Отвязка Telegram от веб-аккаунта. Требует текущий пароль."""
+        """Отвязка Telegram от аккаунта. Требует текущий пароль (веб-доступ)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
             data = request.get_json(silent=True) or {}
             current_password = (data.get('current_password') or '').strip()
             if not current_password:
                 return jsonify({'error': 'Введите текущий пароль'}), 400
-            from ....db.subscribers_db import (
-                get_user_by_id, update_user_telegram_id,
-                delete_telegram_link, mark_telegram_id_known,
-                rename_user_id, get_telegram_chat_id_for_notification,
+            from ....db.accounts_db import (
+                get_telegram_id_for_account,
+                get_account_password_hash,
+                delete_identity,
             )
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_id(user_id))
-                if not user:
-                    return jsonify({'error': 'Пользователь не найден'}), 404
-                if not user.get('password_hash'):
+                pwd_hash = loop.run_until_complete(get_account_password_hash(account_id))
+                if not pwd_hash:
                     return jsonify({'error': 'Для отвязки Telegram необходимо сначала настроить веб-доступ (логин и пароль)'}), 400
-                if not check_password_hash(user['password_hash'], current_password):
+                if not check_password_hash(pwd_hash, current_password):
                     return jsonify({'error': 'Неверный текущий пароль'}), 401
-                telegram_id = user.get('telegram_id')
-                if telegram_id is not None:
-                    telegram_id = str(telegram_id)
-                if not telegram_id:
-                    _chat_id = loop.run_until_complete(get_telegram_chat_id_for_notification(user_id))
-                    if _chat_id is not None:
-                        telegram_id = str(_chat_id)
-                is_tg_first = user_id.startswith('tg_') or user_id.isdigit()
+                telegram_id = loop.run_until_complete(get_telegram_id_for_account(account_id))
                 if not telegram_id:
                     return jsonify({'error': 'Telegram не привязан к этому аккаунту'}), 400
-                if is_tg_first:
-                    username = user.get('username')
-                    if not username:
-                        return jsonify({'error': 'Ошибка: у аккаунта нет логина для превращения в веб-аккаунт. Сначала смените логин.'}), 400
-                    new_user_id = f"web_{username}"
-                    loop.run_until_complete(rename_user_id(user_id, new_user_id))
-                    logger.info(f"Аккаунт {user_id} превращен в {new_user_id} при отвязке TG")
-                    user_id = new_user_id
-                loop.run_until_complete(delete_telegram_link(telegram_id))
-                loop.run_until_complete(mark_telegram_id_known(telegram_id))
-                loop.run_until_complete(update_user_telegram_id(user_id, None))
-                logger.info(f"Отвязан Telegram {telegram_id} от аккаунта {user_id}. Связь в telegram_links удалена, TG помечен как известный.")
+                loop.run_until_complete(delete_identity(account_id, "telegram", telegram_id))
+                logger.info("Отвязан Telegram %s от account_id=%s", telegram_id, account_id)
                 return jsonify({
                     'success': True,
                     'message': 'Telegram успешно отвязан. Аккаунт переведен в режим веб-доступа.'
@@ -732,7 +583,7 @@ def create_blueprint(bot_app):
             finally:
                 loop.close()
         except Exception as e:
-            logger.error(f"Ошибка unlink-telegram: {e}", exc_info=True)
+            logger.error("Ошибка unlink-telegram: %s", e, exc_info=True)
             return jsonify({'error': str(e)}), 500
 
     return bp

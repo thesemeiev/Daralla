@@ -5,11 +5,17 @@ import asyncio
 import logging
 from flask import request
 
+from ...context import get_app_context
+
 logger = logging.getLogger(__name__)
 
 
 def authenticate_request():
-    """Универсальная функция аутентификации (TG initData или Web Token)"""
+    """
+    Универсальная функция аутентификации (TG initData или Web Token).
+
+    После рефакторинга возвращает internal account_id (int), а не legacy user_id.
+    """
     # 1. Проверяем заголовок Authorization (Web Token)
     web_token = request.headers.get('Authorization')
     if web_token and web_token.startswith('Bearer '):
@@ -17,13 +23,13 @@ def authenticate_request():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            from ...db.subscribers_db import get_user_by_auth_token
-            user = loop.run_until_complete(get_user_by_auth_token(token))
-            if user:
-                logger.info(f"Успешная веб-аутентификация для user_id={user['user_id']}")
-                return user['user_id']
-            else:
-                logger.warning(f"Веб-токен не найден в БД: {token[:10]}...")
+            from ...db.accounts_db import get_account_id_by_auth_token, touch_account
+            account_id = loop.run_until_complete(get_account_id_by_auth_token(token))
+            if account_id:
+                loop.run_until_complete(touch_account(account_id))
+                logger.info("Успешная веб-аутентификация для account_id=%s", account_id)
+                return account_id
+            logger.warning(f"Веб-токен не найден в БД: {token[:10]}...")
         finally:
             loop.close()
 
@@ -44,11 +50,9 @@ def authenticate_request():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            from ...db.subscribers_db import get_user_by_telegram_id_v2
-            user = loop.run_until_complete(get_user_by_telegram_id_v2(tg_user_id, use_fallback=True))
-            if user:
-                return user['user_id']
-            return None
+            from ...db.accounts_db import get_or_create_account_for_telegram
+            account_id = loop.run_until_complete(get_or_create_account_for_telegram(str(tg_user_id)))
+            return account_id
         finally:
             loop.close()
 
@@ -137,44 +141,44 @@ def verify_telegram_init_data(init_data: str):
         return None
 
 
-def check_admin_access(user_id: str) -> bool:
-    """Проверяет, является ли пользователь админом. Учитывает и user_id, и привязанный telegram_id."""
+def check_admin_access(account_id_or_telegram_id) -> bool:
+    """Проверяет, является ли пользователь админом. Принимает account_id (int) или telegram_id (str)."""
     try:
-        from ... import bot as bot_module
-        from ...db.subscribers_db import get_user_by_id
-        ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
+        from ...db.accounts_db import get_telegram_id_for_account
+        ctx = get_app_context()
+        admin_ids = list(ctx.admin_ids) if ctx else []
+        if not admin_ids:
+            from ... import bot as bot_module
+            admin_ids = getattr(bot_module, "ADMIN_IDS", [])
+        admin_set = {str(a) for a in admin_ids}
 
-        user_id_str = str(user_id)
-        admin_set = {str(a) for a in ADMIN_IDS}
-
-        if user_id_str in admin_set:
-            logger.info(f"Пользователь {user_id} является админом (по user_id)")
+        if str(account_id_or_telegram_id) in admin_set:
+            logger.info("Пользователь %s является админом (по telegram_id)", account_id_or_telegram_id)
             return True
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            user = loop.run_until_complete(get_user_by_id(user_id))
-            if user:
-                tid = user.get('telegram_id')
+        if isinstance(account_id_or_telegram_id, int):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                tid = loop.run_until_complete(get_telegram_id_for_account(account_id_or_telegram_id))
                 if tid and str(tid) in admin_set:
-                    logger.info(f"Пользователь {user_id} является админом (по telegram_id={tid})")
+                    logger.info("Пользователь account_id=%s является админом (telegram_id=%s)", account_id_or_telegram_id, tid)
                     return True
-        finally:
-            loop.close()
+            finally:
+                loop.close()
 
-        logger.info(f"Пользователь {user_id} НЕ является админом")
+        logger.info("Пользователь %s НЕ является админом", account_id_or_telegram_id)
         return False
     except Exception as e:
-        logger.error(f"Ошибка при проверке прав админа: {e}", exc_info=True)
+        logger.error("Ошибка при проверке прав админа: %s", e, exc_info=True)
         return False
 
 
 def get_bot_module():
-    """Возвращает модуль bot.bot для доступа к глобальным объектам (server_manager, subscription_manager и т.д.)."""
+    """Возвращает модуль bot.bot (обратная совместимость). Предпочтительно использовать get_app_context()."""
     try:
         import sys
-        bot_module = sys.modules.get('bot.bot')
+        bot_module = sys.modules.get("bot.bot")
         if bot_module is not None:
             return bot_module
         from ... import bot as bot_module
@@ -184,12 +188,18 @@ def get_bot_module():
 
 
 def get_server_manager():
-    """Возвращает server_manager из bot.bot или None."""
+    """Возвращает server_manager из контекста приложения или из bot.bot."""
+    ctx = get_app_context()
+    if ctx is not None:
+        return ctx.server_manager
     bot_module = get_bot_module()
-    return getattr(bot_module, 'server_manager', None) if bot_module else None
+    return getattr(bot_module, "server_manager", None) if bot_module else None
 
 
 def get_subscription_manager():
-    """Возвращает subscription_manager из bot.bot или None."""
+    """Возвращает subscription_manager из контекста приложения или из bot.bot."""
+    ctx = get_app_context()
+    if ctx is not None:
+        return ctx.subscription_manager
     bot_module = get_bot_module()
-    return getattr(bot_module, 'subscription_manager', None) if bot_module else None
+    return getattr(bot_module, "subscription_manager", None) if bot_module else None

@@ -2344,8 +2344,10 @@ async function loadAdminUsers(page = 1, search = '') {
                 const lastSeen = new Date(user.last_seen * 1000).toLocaleDateString('ru-RU');
                 
                 const extra = [user.telegram_id && `TG: ${escapeHtml(user.telegram_id)}`, user.username && `Логин: ${escapeHtml(user.username)}`].filter(Boolean).join(' · ');
+                const accountLine = (user.account_id != null || user.remnawave_short_uuid) ? [user.account_id != null ? `Account: ${user.account_id}` : '', user.remnawave_short_uuid ? `Sub: ${escapeHtml(user.remnawave_short_uuid)}` : ''].filter(Boolean).join(' · ') : '';
                 card.innerHTML = `
                     <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
+                    ${accountLine ? `<div class="admin-user-extra" style="font-size: 11px; color: #6a9;">${accountLine}</div>` : ''}
                     ${extra ? `<div class="admin-user-extra" style="font-size: 12px; color: #888; margin-top: 4px;">${extra}</div>` : ''}
                     <div class="admin-user-meta">
                         <span>Создан: ${firstSeen}</span>
@@ -2457,7 +2459,9 @@ async function showAdminUserDetail(userId) {
         // Информация о пользователе
         const user = data.user;
         const infoRows = [
-            { label: 'ID аккаунта', value: user.user_id },
+            { label: 'ID (user_id)', value: user.user_id },
+            user.account_id != null ? { label: 'Account ID', value: String(user.account_id) } : null,
+            user.remnawave_short_uuid ? { label: 'Remnawave short_uuid', value: user.remnawave_short_uuid } : null,
             user.telegram_id ? { label: 'Telegram ID', value: user.telegram_id } : null,
             user.username ? { label: 'Логин', value: user.username } : null,
             { label: 'Первый запуск', value: user.first_seen_formatted },
@@ -2473,6 +2477,14 @@ async function showAdminUserDetail(userId) {
                     </div>
                 `).join('')}
             </div>
+            ${user.remnawave_short_uuid ? `
+            <div class="admin-user-detail-section">
+                <h3>Remnawave</h3>
+                <div class="admin-detail-item"><span class="admin-detail-label">short_uuid</span><span class="admin-detail-value">${escapeHtml(user.remnawave_short_uuid)}</span></div>
+                <button type="button" class="btn-primary" style="margin-top: 8px;" onclick="fetchRemnawaveSubscriptionInfo('${escapeHtml(user.remnawave_short_uuid)}')">Проверить подписку Remnawave</button>
+                <div id="admin-remnawave-sub-result" style="margin-top: 8px; font-size: 13px;"></div>
+            </div>
+            ` : ''}
             
             <div class="admin-user-detail-section">
                 <h3>Подписки (${data.subscriptions.length})</h3>
@@ -2514,6 +2526,30 @@ async function showAdminUserDetail(userId) {
         document.getElementById('admin-user-detail-loading').style.display = 'none';
         document.getElementById('admin-user-detail-content').innerHTML = 
             '<div class="error"><p>Ошибка загрузки информации</p></div>';
+    }
+}
+
+async function fetchRemnawaveSubscriptionInfo(shortUuid) {
+    const resultEl = document.getElementById('admin-remnawave-sub-result');
+    if (resultEl) resultEl.textContent = 'Загрузка...';
+    try {
+        const response = await apiFetch('/api/admin/subscription/by-short-uuid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ short_uuid: shortUuid })
+        });
+        const data = await response.json();
+        if (!resultEl) return;
+        if (!response.ok) {
+            resultEl.textContent = 'Ошибка: ' + (data.error || response.status);
+            resultEl.style.color = '#c00';
+            return;
+        }
+        const sub = data.subscription || {};
+        resultEl.innerHTML = sub.expires_at_formatted ? `Истекает: <strong>${escapeHtml(sub.expires_at_formatted)}</strong>` : 'Данные получены (нет даты истечения)';
+        resultEl.style.color = '';
+    } catch (e) {
+        if (resultEl) { resultEl.textContent = 'Ошибка: ' + e.message; resultEl.style.color = '#c00'; }
     }
 }
 

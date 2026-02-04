@@ -34,7 +34,7 @@ async def grant_rewards(event_id: int) -> dict:
         place_to_referrers.setdefault(p, []).append(row["referrer_user_id"])
 
     extended = []
-    from bot.db.subscribers_db import get_all_active_subscriptions_by_user, update_subscription_expiry
+    from bot.services.subscription_service import extend_subscription
 
     for r in rewards:
         place = r.get("place")
@@ -43,22 +43,19 @@ async def grant_rewards(event_id: int) -> dict:
             continue
         referrers = place_to_referrers.get(place, [])
         for user_id in referrers:
-            subs = await get_all_active_subscriptions_by_user(user_id)
-            if not subs:
-                logger.warning("grant_rewards: no subscription for referrer user_id=%s", user_id)
+            account_id = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else (int(user_id) if isinstance(user_id, int) else None)
+            if account_id is None:
+                logger.warning("grant_rewards: invalid referrer user_id=%s", user_id)
                 continue
-            sub = max(subs, key=lambda s: s.get("expires_at") or 0)
-            sub_id = sub.get("id")
-            if not sub_id:
-                continue
-            current_expires = sub.get("expires_at") or int(time.time())
-            new_expires = current_expires + days * 24 * 60 * 60
             try:
-                await update_subscription_expiry(sub_id, new_expires)
-                extended.append({"user_id": user_id, "subscription_id": sub_id, "days": days})
-                logger.info("grant_rewards: extended subscription %s for user %s by %s days", sub_id, user_id, days)
+                new_expiry = await extend_subscription(account_id, days)
+                if new_expiry:
+                    extended.append({"user_id": user_id, "subscription_id": 0, "days": days})
+                    logger.info("grant_rewards: extended subscription for account %s by %s days", account_id, days)
+                else:
+                    logger.warning("grant_rewards: extend failed for account_id=%s", account_id)
             except Exception as e:
-                logger.warning("grant_rewards: update_subscription_expiry failed for sub %s: %s", sub_id, e)
+                logger.warning("grant_rewards: extend_subscription failed for account %s: %s", account_id, e)
 
     await set_rewards_granted(event_id)
     return {"granted": True, "extended": extended}

@@ -6,9 +6,10 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 
 from ...utils import safe_answer_callback_query, check_private_chat, get_site_urls
-from ...db.subscribers_db import (
-    link_telegram_consume_state, get_user_by_id,
-    link_telegram_to_account,
+from ...db.accounts_db import (
+    link_telegram_consume_state,
+    link_identity,
+    get_telegram_id_for_account,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,30 +48,18 @@ async def link_telegram_confirm_callback(update: Update, context: ContextTypes.D
     
     # Пользователь нажал "Да" - выполняем привязку
     try:
-        # Получаем web_user_id из контекста (сохранен в start_handler)
         web_user_id = context.user_data.get(f"link_web_user_id_{state}")
-        
-        if not web_user_id:
+        if not web_user_id or not web_user_id.isdigit():
             await query.message.edit_text("Ошибка: данные привязки устарели. Зайдите на сайт и нажмите «Привязать Telegram» снова.")
             return
-        
-        # Проверяем веб-пользователя
-        web_user = await get_user_by_id(web_user_id)
-        if not web_user:
-            await query.message.edit_text("Ошибка: веб-аккаунт не найден.")
-            return
-        
-        if web_user.get("telegram_id"):
+        account_id = int(web_user_id)
+        has_tg = await get_telegram_id_for_account(account_id)
+        if has_tg:
             await query.message.edit_text("Аккаунт уже привязан к Telegram.")
             return
-        
-        # Единая привязка: связь TG ↔ веб-аккаунт; при перепривязке — merge и удаление старого аккаунта
-        result = await link_telegram_to_account(tg_user_id, web_user_id)
-        logger.info(
-            f"Привязан Telegram {tg_user_id} к веб-аккаунту {web_user_id} (после подтверждения через callback)"
-            + (f", объединён с {result['previous_user_id']}" if result.get("merged") else "")
-        )
-        
+        await link_identity(account_id, "telegram", tg_user_id)
+        logger.info("Привязан Telegram %s к account_id=%s (после подтверждения)", tg_user_id, account_id)
+
         # Удаляем временные данные из контекста
         context.user_data.pop(f"link_web_user_id_{state}", None)
         

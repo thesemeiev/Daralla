@@ -6,33 +6,43 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def _use_xui_sync():
+    """True если нужна синхронизация с X-UI (не используется Remnawave)."""
+    try:
+        from ..services.remnawave_service import is_remnawave_configured
+        return not is_remnawave_configured()
+    except Exception:
+        return True
+
+
 async def start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager=None):
-    """Запускает все фоновые задачи"""
+    """Запускает все фоновые задачи. sync_manager/subscription_manager могут быть None (режим Remnawave)."""
     logger.info("🚀 Запуск цикла фоновых задач...")
-    
-    # 1. Задача синхронизации и очистки (каждые 6 часов)
-    # Она удаляет подписки через 3 дня после истечения и правит время на серверах
+
+    # 1. Задача синхронизации X-UI (не запускается при Remnawave или при sync_manager=None)
     asyncio.create_task(sync_task_loop(sync_manager))
-    
+
     # 2. Задача проверки истекающих подписок для уведомлений (каждые 30 минут)
     asyncio.create_task(notifications_task_loop(notification_manager))
-    
+
     # 3. Задача очистки старых платежей (каждый час)
     asyncio.create_task(payments_cleanup_loop())
-    
-    # 4. Задача сохранения снимков нагрузки на серверы (каждые 10 минут)
-    if server_manager:
+
+    # 4. Снимки нагрузки на X-UI серверы (только при использовании X-UI)
+    if server_manager and _use_xui_sync():
         asyncio.create_task(server_load_snapshot_loop(server_manager))
 
+
 async def sync_task_loop(sync_manager):
-    """Цикл синхронизации данных"""
+    """Цикл синхронизации данных с X-UI. При Remnawave (sync_manager=None) только пауза."""
     while True:
         try:
-            await sync_manager.run_sync()
+            if sync_manager is None or not _use_xui_sync():
+                logger.debug("Remnawave включён — синхронизация X-UI пропущена")
+            else:
+                await sync_manager.run_sync()
         except Exception as e:
-            logger.error(f"Ошибка в цикле синхронизации: {e}")
-        
-        # Раз в 6 часов
+            logger.error("Ошибка в цикле синхронизации: %s", e)
         await asyncio.sleep(6 * 3600)
 
 async def notifications_task_loop(notification_manager):
@@ -63,7 +73,7 @@ async def payments_cleanup_loop():
 
 async def server_load_snapshot_loop(server_manager):
     """Периодическое сохранение снимков нагрузки на серверы для расчета средних значений"""
-    from ..db.subscribers_db import save_server_load_snapshot, cleanup_old_server_load_history
+    from ..db import save_server_load_snapshot, cleanup_old_server_load_history
     
     # Ждем 30 секунд после запуска бота, чтобы все инициализировалось
     await asyncio.sleep(30)

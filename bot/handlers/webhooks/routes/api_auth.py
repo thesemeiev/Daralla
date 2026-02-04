@@ -31,17 +31,24 @@ def create_blueprint(bot_app):
             if len(password) < 6:
                 return jsonify({'error': 'Пароль слишком короткий (минимум 6 символов)'}), 400
 
-            from ....db.subscribers_db import register_web_user
             password_hash = generate_password_hash(password)
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user_id = loop.run_until_complete(register_web_user(username, password_hash))
+                from ....db.accounts_db import (
+                    get_or_create_account_for_username,
+                    set_account_password,
+                    set_account_auth_token,
+                    username_available,
+                )
+                if not loop.run_until_complete(username_available(username, exclude_account_id=None)):
+                    return jsonify({'error': 'Этот логин уже занят'}), 409
+                account_id = loop.run_until_complete(get_or_create_account_for_username(username))
+                loop.run_until_complete(set_account_password(account_id, password_hash))
                 token = secrets.token_hex(32)
-                from ....db.subscribers_db import update_user_auth_token
-                loop.run_until_complete(update_user_auth_token(user_id, token))
-                return jsonify({'success': True, 'token': token, 'user_id': user_id})
+                loop.run_until_complete(set_account_auth_token(account_id, token))
+                return jsonify({'success': True, 'token': token, 'account_id': account_id})
             finally:
                 loop.close()
         except Exception as e:
@@ -61,22 +68,29 @@ def create_blueprint(bot_app):
             if not username or not password:
                 return jsonify({'error': 'Введите логин и пароль'}), 400
 
-            from ....db.subscribers_db import get_user_by_username_or_id
+            from ....db.accounts_db import (
+                get_account_id_by_identity,
+                get_account_password_hash,
+                set_account_auth_token,
+                get_username_for_account,
+            )
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_username_or_id(username))
-                if not user or not user['password_hash'] or not check_password_hash(user['password_hash'], password):
+                account_id = loop.run_until_complete(get_account_id_by_identity("password", username))
+                if not account_id:
                     return jsonify({'error': 'Неверный логин или пароль'}), 401
-
+                pwd_hash = loop.run_until_complete(get_account_password_hash(account_id))
+                if not pwd_hash or not check_password_hash(pwd_hash, password):
+                    return jsonify({'error': 'Неверный логин или пароль'}), 401
                 token = secrets.token_hex(32)
-                from ....db.subscribers_db import update_user_auth_token
-                loop.run_until_complete(update_user_auth_token(user['user_id'], token))
+                loop.run_until_complete(set_account_auth_token(account_id, token))
+                display_username = loop.run_until_complete(get_username_for_account(account_id)) or username
                 return jsonify({
                     'success': True,
                     'token': token,
-                    'user_id': user['user_id'],
-                    'username': user['username'] or user['user_id']
+                    'account_id': account_id,
+                    'username': display_username,
                 })
             finally:
                 loop.close()
@@ -95,17 +109,18 @@ def create_blueprint(bot_app):
             if not token:
                 return jsonify({'error': 'Token required'}), 400
 
-            from ....db.subscribers_db import get_user_by_auth_token
+            from ....db.accounts_db import get_account_id_by_auth_token, get_username_for_account
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                user = loop.run_until_complete(get_user_by_auth_token(token))
-                if not user:
+                account_id = loop.run_until_complete(get_account_id_by_auth_token(token))
+                if not account_id:
                     return jsonify({'error': 'Invalid token'}), 401
+                username = loop.run_until_complete(get_username_for_account(account_id))
                 return jsonify({
                     'success': True,
-                    'user_id': user['user_id'],
-                    'username': user['username']
+                    'account_id': account_id,
+                    'username': username,
                 })
             finally:
                 loop.close()

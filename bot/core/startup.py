@@ -118,16 +118,22 @@ async def on_startup(app):
     """Инициализация бота при запуске"""
     try:
         import sys
-        # Получаем объекты напрямую из модуля bot.bot
-        bot_module = sys.modules.get('bot.bot')
+        bot_module = sys.modules.get("bot.bot")
         if not bot_module:
             import importlib
-            bot_module = importlib.import_module('bot.bot')
-        
-        server_manager = getattr(bot_module, 'server_manager', None)
-        subscription_manager = getattr(bot_module, 'subscription_manager', None)
-        sync_manager = getattr(bot_module, 'sync_manager', None)
-        admin_ids = getattr(bot_module, 'ADMIN_IDS', [])
+            bot_module = importlib.import_module("bot.bot")
+
+        ctx = getattr(bot_module, "app_context", None)
+        if ctx:
+            server_manager = ctx.server_manager
+            subscription_manager = ctx.subscription_manager
+            sync_manager = ctx.sync_manager
+            admin_ids = ctx.admin_ids
+        else:
+            server_manager = getattr(bot_module, "server_manager", None)
+            subscription_manager = getattr(bot_module, "subscription_manager", None)
+            sync_manager = getattr(bot_module, "sync_manager", None)
+            admin_ids = getattr(bot_module, "ADMIN_IDS", [])
         
         logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
         
@@ -152,20 +158,6 @@ async def on_startup(app):
         except Exception as e:
             logger.warning("Миграция telegram_links: %s (возможно уже выполнена)", e)
 
-        # 1.0.1 Миграция legacy числовых user_id → tg_<uuid> (единая модель: user_id не равен telegram_id)
-        try:
-            from ..db.subscribers_db import migrate_legacy_numeric_user_ids
-            await migrate_legacy_numeric_user_ids()
-        except Exception as e:
-            logger.warning("Миграция legacy numeric user_id: %s", e)
-
-        # 1.0.2 Миграция длинных tg_ user_id → короткий формат (tg_ + 12 hex = 15 символов)
-        try:
-            from ..db.subscribers_db import migrate_long_tg_user_ids
-            await migrate_long_tg_user_ids()
-        except Exception as e:
-            logger.warning("Миграция long tg_ user_id: %s", e)
-        
         # 1.1 Инициализация менеджеров серверов из БД
         init_server_managers = getattr(bot_module, 'init_server_managers', None)
         if init_server_managers:
@@ -177,6 +169,8 @@ async def on_startup(app):
         await notification_manager.initialize()
         await notification_manager.start()
         bot_module.notification_manager = notification_manager
+        if ctx:
+            ctx.notification_manager = notification_manager
         
         logger.info("Менеджер уведомлений запущен")
         logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
@@ -185,15 +179,25 @@ async def on_startup(app):
         from .tasks import start_background_tasks
         await start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager)
         
-        # 4. Запуск мониторинга здоровья серверов
-        asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))
+        # 4. Запуск мониторинга здоровья серверов (только при использовании X-UI)
+        def _use_xui_sync():
+            try:
+                from ..services.remnawave_service import is_remnawave_configured
+                return not is_remnawave_configured()
+            except Exception:
+                return True
+        if _use_xui_sync():
+            asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))
+        else:
+            logger.info("Remnawave включён — мониторинг X-UI серверов отключён")
         
-        # 5. Первоначальная синхронизация через 30 секунд
+        # 5. Первоначальная синхронизация X-UI (пропуск при Remnawave)
         async def initial_sync():
             await asyncio.sleep(30)
-            if subscription_manager:
-                logger.info("Выполнение первоначальной синхронизации серверов...")
-                await subscription_manager.sync_servers_with_config(auto_create_clients=True)
+            if not _use_xui_sync() or not subscription_manager:
+                return
+            logger.info("Выполнение первоначальной синхронизации серверов...")
+            await subscription_manager.sync_servers_with_config(auto_create_clients=True)
         
         asyncio.create_task(initial_sync())
         
