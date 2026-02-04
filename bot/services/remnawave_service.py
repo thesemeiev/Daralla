@@ -92,13 +92,14 @@ class RemnawaveClient:
             raise RemnawaveError(f"Remnawave login failed: HTTP {r.status_code}: {r.text[:300]}")
         data = _safe_json(r)
         # We don't know exact response shape. Common variants:
-        # { token: '...' } / { accessToken: '...' } / { jwt: '...' } / { data: { token: '...' } }
+        # { token: '...' } / { accessToken: '...' } / { jwt: '...' } / { data: { token: '...' } } / { response: { accessToken: '...' } }
+        resp = data.get("response") or data.get("data") or {}
         token = (
             data.get("token")
             or data.get("accessToken")
             or data.get("jwt")
-            or (data.get("data") or {}).get("token")
-            or (data.get("data") or {}).get("accessToken")
+            or resp.get("token")
+            or resp.get("accessToken")
         )
         if not token or not isinstance(token, str):
             raise RemnawaveError("Remnawave login: cannot find token in response")
