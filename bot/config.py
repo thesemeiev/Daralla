@@ -65,6 +65,8 @@ VPN_BRAND_NAME = " Daralla VPN"
 REMNAWAVE_BASE_URL = _str("REMNAWAVE_BASE_URL")
 REMNAWAVE_ADMIN_USERNAME = _str("REMNAWAVE_ADMIN_USERNAME")
 REMNAWAVE_ADMIN_PASSWORD = _str("REMNAWAVE_ADMIN_PASSWORD")
+# API-токен из админки Remnawave (для запросов к API; если задан — используется вместо логина)
+REMNAWAVE_API_TOKEN = _str("REMNAWAVE_API_TOKEN")
 
 
 def validate_required() -> None:

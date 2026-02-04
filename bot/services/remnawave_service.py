@@ -28,6 +28,7 @@ class RemnawaveConfig:
     base_url: str
     admin_username: str
     admin_password: str
+    api_token: Optional[str] = None  # если задан — используем его для API вместо login
     timeout_seconds: int = 20
 
 
@@ -46,8 +47,9 @@ def load_remnawave_config() -> RemnawaveConfig:
         raise RemnawaveError("REMNAWAVE_BASE_URL is not set")
     admin_username = (os.getenv("REMNAWAVE_ADMIN_USERNAME") or "").strip()
     admin_password = (os.getenv("REMNAWAVE_ADMIN_PASSWORD") or "").strip()
-    if not admin_username or not admin_password:
-        raise RemnawaveError("REMNAWAVE_ADMIN_USERNAME/REMNAWAVE_ADMIN_PASSWORD are not set")
+    api_token = (os.getenv("REMNAWAVE_API_TOKEN") or "").strip() or None
+    if not api_token and (not admin_username or not admin_password):
+        raise RemnawaveError("REMNAWAVE_API_TOKEN or REMNAWAVE_ADMIN_USERNAME/REMNAWAVE_ADMIN_PASSWORD must be set")
     timeout = os.getenv("REMNAWAVE_TIMEOUT_SECONDS")
     try:
         timeout_seconds = int(timeout) if timeout else 20
@@ -57,6 +59,7 @@ def load_remnawave_config() -> RemnawaveConfig:
         base_url=base_url,
         admin_username=admin_username,
         admin_password=admin_password,
+        api_token=api_token,
         timeout_seconds=timeout_seconds,
     )
 
@@ -77,8 +80,9 @@ class RemnawaveClient:
 
     def _headers(self) -> dict[str, str]:
         h = {"Accept": "application/json"}
-        if self._admin_jwt:
-            h["Authorization"] = f"Bearer {self._admin_jwt}"
+        token = self.cfg.api_token or self._admin_jwt
+        if token:
+            h["Authorization"] = f"Bearer {token}"
         return h
 
     def login(self, force: bool = False) -> None:
@@ -110,7 +114,8 @@ class RemnawaveClient:
         if not path.startswith("/"):
             path = "/" + path
         url = f"{self.cfg.base_url}{path}"
-        self.login()
+        if not self.cfg.api_token:
+            self.login()
         r = self._session.request(
             method=method.upper(),
             url=url,
@@ -119,8 +124,8 @@ class RemnawaveClient:
             params=params,
             timeout=self.cfg.timeout_seconds,
         )
-        if r.status_code == 401:
-            # Token expired/invalid, retry once.
+        if r.status_code == 401 and not self.cfg.api_token:
+            # JWT expired/invalid, retry once after re-login.
             self.login(force=True)
             r = self._session.request(
                 method=method.upper(),
