@@ -171,9 +171,10 @@ class RemnawaveClient:
         if not short_uuid:
             raise RemnawaveError("shortUuid is required")
         url = f"{self.cfg.base_url}/api/sub/{short_uuid}"
-        self.login()
+        if not self.cfg.api_token:
+            self.login()
         r = self._session.get(url, headers=self._headers(), timeout=self.cfg.timeout_seconds)
-        if r.status_code == 401:
+        if r.status_code == 401 and not self.cfg.api_token:
             self.login(force=True)
             r = self._session.get(url, headers=self._headers(), timeout=self.cfg.timeout_seconds)
         if r.status_code >= 400:

@@ -62,7 +62,13 @@ def create_blueprint(bot_app):
                                 short_uuid,
                             ))
                         elif telegram_id:
-                            create_payload = {"telegramId": str(telegram_id), "username": f"tg_{telegram_id}"}
+                            import datetime
+                            expire_at_iso = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")  # без подписки — «истекшая» дата
+                            create_payload = {
+                                "telegramId": int(telegram_id),
+                                "username": f"tg_{telegram_id}",
+                                "expireAt": expire_at_iso,
+                            }
                             created = client.create_user(create_payload)
                             ruuid = created.get("uuid") or created.get("id") or created.get("obj", {}).get("uuid")
                             short_uuid = created.get("shortUuid") or created.get("short_uuid") or (created.get("obj", {}) or {}).get("shortUuid")

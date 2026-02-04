@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import datetime
 import logging
 import time
 from typing import Any, Optional, Tuple
@@ -41,7 +42,6 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
         exp_ts = int(exp_ms / 1000) if exp_ms and exp_ms >= 1e12 else (int(exp_ms) if exp_ms else 0)
         current_time = int(time.time())
         is_active = exp_ts > current_time if exp_ts else False
-        import datetime
         return [{
             "id": 0,
             "name": "Подписка",
@@ -132,10 +132,15 @@ async def activate_subscription_after_payment(
             if not remna_user and username:
                 remna_user = client.get_user_by_username(username)
             if not remna_user:
-                create_payload = {}
+                now_ts = int(time.time())
+                exp_ts = now_ts + days * 24 * 60 * 60
+                expire_at_iso = datetime.datetime.utcfromtimestamp(exp_ts).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                create_payload = {
+                    "username": (username or f"acc_{account_id}").strip() or f"acc_{account_id}",
+                    "expireAt": expire_at_iso,
+                }
                 if telegram_id:
-                    create_payload["telegramId"] = str(telegram_id)
-                create_payload["username"] = (username or f"acc_{account_id}").strip() or f"acc_{account_id}"
+                    create_payload["telegramId"] = int(telegram_id)
                 created = client.create_user(create_payload)
                 ruuid = created.get("uuid") or created.get("id") or (created.get("obj") or {}).get("uuid")
                 short_uuid = created.get("shortUuid") or created.get("short_uuid") or (created.get("obj") or {}).get("shortUuid")
