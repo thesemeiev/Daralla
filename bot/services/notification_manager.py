@@ -138,7 +138,6 @@ class NotificationManager:
                 try:
                     account_id = row["account_id"]
                     expires_at = row["expires_at"]
-                    user_id = str(account_id)
                     subscription_id = 0
                     expiry_time = datetime.datetime.fromtimestamp(expires_at)
                     time_diff = expiry_time - now
@@ -153,7 +152,7 @@ class NotificationManager:
                     if notification_type:
                         time_remaining = calculate_time_remaining(expires_at)
                         success = await self._send_subscription_expiry_notification(
-                            user_id, subscription_id, notification_type, time_remaining,
+                            account_id, subscription_id, notification_type, time_remaining,
                             time_diff.days, expiry_time
                         )
                         if success:
@@ -166,20 +165,19 @@ class NotificationManager:
             logger.error(f"Ошибка в _check_expiring_subscriptions: {e}")
     
     async def _send_subscription_expiry_notification(
-        self, user_id: str, subscription_id: int, notification_type: str,
+        self, account_id: int | str, subscription_id: int, notification_type: str,
         time_remaining: str, days_until_expiry: int, expiry_datetime=None
     ) -> bool:
         """Отправляет уведомление об истекающей подписке"""
         try:
-            # Проверка отправки за последние 24 часа для защиты от спама
-            if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
+            if await is_subscription_notification_sent(account_id, subscription_id, notification_type):
                 return False
             
             from ..db.accounts_db import get_telegram_chat_id_for_account
-            account_id = int(user_id) if user_id.isdigit() else None
-            chat_id = await get_telegram_chat_id_for_account(account_id) if account_id is not None else None
+            acct = int(account_id) if isinstance(account_id, str) and account_id.isdigit() else account_id
+            chat_id = await get_telegram_chat_id_for_account(acct) if acct is not None else None
             if chat_id is None:
-                logger.debug(f"Пропуск уведомления для user_id={user_id}: нет Telegram (веб-only без привязки)")
+                logger.debug(f"Пропуск уведомления для account_id={account_id}: нет Telegram (веб-only без привязки)")
                 return False
             
             message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
@@ -205,7 +203,7 @@ class NotificationManager:
                     reply_markup=keyboard
                 )
                 
-                await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
+                await mark_subscription_notification_sent(account_id, subscription_id, notification_type)
                 await record_notification_metrics(notification_type, True)
                 return True
                 
@@ -214,7 +212,7 @@ class NotificationManager:
                 is_blocked = "Chat not found" in str(e) or isinstance(e, telegram.error.Forbidden)
                 await record_notification_metrics(notification_type, False, is_blocked=is_blocked)
                 # Чтобы больше не пытаться слать этому пользователю сегодня
-                await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
+                await mark_subscription_notification_sent(account_id, subscription_id, notification_type)
                 return False
                 
         except Exception as e:

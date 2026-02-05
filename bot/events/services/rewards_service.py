@@ -17,7 +17,7 @@ async def grant_rewards(event_id: int) -> dict:
     """
     Начисляет награды по событию: для каждого места из rewards (place, days)
     находит рефереров с этим местом и продлевает им подписку на days дней.
-    Возвращает { granted: bool, error?: str, extended: [{ user_id, subscription_id, days }] }.
+    Возвращает { granted: bool, error?: str, extended: [{ account_id, subscription_id, days }] }.
     """
     ev = await get_event_by_id(event_id)
     if not ev:
@@ -31,7 +31,7 @@ async def grant_rewards(event_id: int) -> dict:
     place_to_referrers = {}
     for row in leaderboard:
         p = row["place"]
-        place_to_referrers.setdefault(p, []).append(row["referrer_user_id"])
+        place_to_referrers.setdefault(p, []).append(row["referrer_account_id"])
 
     extended = []
     from bot.services.subscription_service import extend_subscription
@@ -42,15 +42,15 @@ async def grant_rewards(event_id: int) -> dict:
         if place is None or days <= 0:
             continue
         referrers = place_to_referrers.get(place, [])
-        for user_id in referrers:
-            account_id = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else (int(user_id) if isinstance(user_id, int) else None)
+        for account_id_str in referrers:
+            account_id = int(account_id_str) if isinstance(account_id_str, str) and account_id_str.isdigit() else (int(account_id_str) if isinstance(account_id_str, int) else None)
             if account_id is None:
-                logger.warning("grant_rewards: invalid referrer user_id=%s", user_id)
+                logger.warning("grant_rewards: invalid referrer account_id=%s", account_id_str)
                 continue
             try:
                 new_expiry = await extend_subscription(account_id, days)
                 if new_expiry:
-                    extended.append({"user_id": user_id, "subscription_id": 0, "days": days})
+                    extended.append({"account_id": account_id_str, "subscription_id": 0, "days": days})
                     logger.info("grant_rewards: extended subscription for account %s by %s days", account_id, days)
                 else:
                     logger.warning("grant_rewards: extend failed for account_id=%s", account_id)

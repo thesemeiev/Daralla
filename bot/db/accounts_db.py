@@ -388,3 +388,16 @@ async def get_telegram_chat_id_for_account(account_id: int) -> Optional[int]:
     except (TypeError, ValueError):
         return None
 
+
+async def delete_account(account_id: int) -> None:
+    """Удаляет аккаунт и все связанные данные."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM account_expiry_cache WHERE account_id = ?", (account_id,))
+        await db.execute("DELETE FROM account_auth_tokens WHERE account_id = ?", (account_id,))
+        await db.execute("DELETE FROM link_telegram_states WHERE account_id = ?", (account_id,))
+        await db.execute("DELETE FROM account_web_credentials WHERE account_id = ?", (account_id,))
+        await db.execute("DELETE FROM account_remnawave WHERE account_id = ?", (account_id,))
+        await db.execute("DELETE FROM identities WHERE account_id = ?", (account_id,))
+        await db.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
+        await db.commit()
+

@@ -118,14 +118,13 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/payment/create', methods=['POST', 'OPTIONS'])
     def api_user_payment_create():
-        """API endpoint для создания платежа (покупка или продление подписки). user_id в БД = str(account_id)."""
+        """API endpoint для создания платежа (покупка или продление подписки). В БД хранится account_id."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
             account_id = authenticate_request()
             if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            user_id = str(account_id)
             data = request.get_json(silent=True) or {}
             period = data.get('period')
             subscription_id = data.get('subscription_id')
@@ -142,14 +141,14 @@ def create_blueprint(bot_app):
                 async def cancel_old_payments():
                     async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
                         await db.execute(
-                            'UPDATE payments SET status = ? WHERE user_id = ? AND status = ?',
-                            ('canceled', user_id, 'pending')
+                            'UPDATE payments SET status = ? WHERE account_id = ? AND status = ?',
+                            ('canceled', str(account_id), 'pending')
                         )
                         await db.commit()
                 loop.run_until_complete(cancel_old_payments())
                 now = int(datetime.datetime.now().timestamp())
                 subscription_uuid = str(uuid.uuid4())
-                unique_email = f'{user_id}_{subscription_uuid}'
+                unique_email = f'{account_id}_{subscription_uuid}'
                 payment_period = f"extend_sub_{period}" if subscription_id else period
                 payment = Payment.create({
                     "amount": {"value": price, "currency": "RUB"},
@@ -157,7 +156,6 @@ def create_blueprint(bot_app):
                     "capture": True,
                     "description": f"VPN {period}",
                     "metadata": {
-                        "user_id": user_id,
                         "account_id": account_id,
                         "type": payment_period,
                         "device_limit": 1,
@@ -165,7 +163,7 @@ def create_blueprint(bot_app):
                         "price": price,
                     },
                     "receipt": {
-                        "customer": {"email": f"{user_id}@vpn.local"},
+                        "customer": {"email": f"{account_id}@vpn.local"},
                         "items": [{
                             "description": f"VPN {period}",
                             "quantity": "1.00",
@@ -185,7 +183,7 @@ def create_blueprint(bot_app):
                 async def save_payment():
                     await add_payment(
                         payment_id=payment.id,
-                        user_id=user_id,
+                        account_id=account_id,
                         status='pending',
                         meta=payment_meta
                     )
@@ -387,7 +385,6 @@ def create_blueprint(bot_app):
                     'is_web': username is not None,
                     'username': username or '',
                     'account_id': account_id,
-                    'user_id': str(account_id),
                     'telegram_id': tid,
                     'web_access_enabled': web_access_enabled,
                     'short_uuid': short_uuid,

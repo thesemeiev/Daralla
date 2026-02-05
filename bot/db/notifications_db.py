@@ -15,7 +15,7 @@ async def init_notifications_db():
         await db.execute('''
             CREATE TABLE IF NOT EXISTS sent_notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
+                account_id TEXT NOT NULL,
                 subscription_id INTEGER NOT NULL,
                 notification_type TEXT NOT NULL, -- e.g., 'expiry_3d', 'expiry_1d', 'expired'
                 sent_at INTEGER NOT NULL,
@@ -121,23 +121,25 @@ async def set_notification_setting(key: str, value: str):
         ''', (key, value, now))
         await db.commit()
 
-async def is_subscription_notification_sent(user_id: str, subscription_id: int, notification_type: str) -> bool:
-    """Проверяет, было ли уже отправлено такое уведомление для конкретной подписки за последние 24 часа"""
+async def is_subscription_notification_sent(account_id: int | str, subscription_id: int, notification_type: str) -> bool:
+    """Проверяет, было ли уже отправлено такое уведомление для конкретной подписки за последние 24 часа."""
     yesterday = int((datetime.datetime.now() - datetime.timedelta(hours=24)).timestamp())
+    acct = str(account_id)
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute('''
-            SELECT 1 FROM sent_notifications 
-            WHERE user_id = ? AND subscription_id = ? AND notification_type = ? AND sent_at > ?
+            SELECT 1 FROM sent_notifications
+            WHERE account_id = ? AND subscription_id = ? AND notification_type = ? AND sent_at > ?
             LIMIT 1
-        ''', (user_id, subscription_id, notification_type, yesterday)) as cur:
+        ''', (acct, subscription_id, notification_type, yesterday)) as cur:
             return (await cur.fetchone()) is not None
 
-async def mark_subscription_notification_sent(user_id: str, subscription_id: int, notification_type: str, server_name: str = None):
+async def mark_subscription_notification_sent(account_id: int | str, subscription_id: int, notification_type: str, server_name: str = None):
     now = int(datetime.datetime.now().timestamp())
+    acct = str(account_id)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''
-            INSERT INTO sent_notifications (user_id, subscription_id, notification_type, sent_at, server_name)
+            INSERT INTO sent_notifications (account_id, subscription_id, notification_type, sent_at, server_name)
             VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, subscription_id, notification_type, now, server_name))
+        ''', (acct, subscription_id, notification_type, now, server_name))
         await db.commit()
 

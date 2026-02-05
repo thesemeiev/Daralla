@@ -36,9 +36,9 @@ def register_broadcast_routes(bp, bot_app):
             message_text = (data.get("message") or "").strip()
             if not message_text:
                 return jsonify({"error": "Message text is required"}), 400
-            user_ids = data.get("user_ids", [])
+            account_ids = data.get("account_ids", data.get("user_ids", []))  # user_ids — legacy
 
-            from .....db import get_all_user_ids
+            from .....db import get_all_account_ids
             from .....db.accounts_db import get_telegram_chat_id_for_account
             from .....utils import UIButtons
 
@@ -47,10 +47,10 @@ def register_broadcast_routes(bp, bot_app):
             admin_set = set(str(a) for a in admin_ids)
 
             async def send_broadcast_async():
-                if user_ids:
-                    recipients = [str(uid) for uid in user_ids if str(uid) not in admin_set]
+                if account_ids:
+                    recipients = [str(aid) for aid in account_ids if str(aid) not in admin_set]
                 else:
-                    recipients = await get_all_user_ids()
+                    recipients = await get_all_account_ids()
                     recipients = [str(uid) for uid in recipients if str(uid) not in admin_set]
                 total = len(recipients)
                 if total == 0:
@@ -102,7 +102,7 @@ def register_broadcast_routes(bp, bot_app):
                             except Exception:
                                 failed += 1
                         except Exception as e:
-                            logger.error("Ошибка отправки пользователю %s: %s", user_id, e)
+                            logger.error("Ошибка отправки пользователю %s: %s", account_id_str, e)
                             failed += 1
                     if i + batch < total:
                         await asyncio.sleep(0.1)

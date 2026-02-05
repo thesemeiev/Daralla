@@ -8,6 +8,7 @@ This module is intentionally isolated from the rest of the codebase:
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 import time
@@ -168,6 +169,29 @@ class RemnawaveClient:
     def patch_user(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request("PATCH", "/api/users", json=payload)
 
+    def delete_user(self, user_uuid: str) -> None:
+        """
+        Удаляет пользователя в Remnawave (подписка аннулируется).
+        При 404 (User not found) не бросает исключение — считаем успехом.
+        """
+        if not user_uuid:
+            return
+        path = f"/api/users/{user_uuid}"
+        if not path.startswith("/"):
+            path = "/" + path
+        url = f"{self.cfg.base_url}{path}"
+        if not self.cfg.api_token:
+            self.login()
+        r = self._session.delete(url, headers=self._headers(), timeout=self.cfg.timeout_seconds)
+        if r.status_code == 401 and not self.cfg.api_token:
+            self.login(force=True)
+            r = self._session.delete(url, headers=self._headers(), timeout=self.cfg.timeout_seconds)
+        if r.status_code == 404:
+            logger.info("Remnawave user %s already deleted (404)", user_uuid)
+            return
+        if r.status_code >= 400:
+            raise RemnawaveError(f"Remnawave DELETE {path} HTTP {r.status_code}: {r.text[:300]}")
+
     def get_sub_info(self, short_uuid: str) -> dict[str, Any]:
         return self.request("GET", f"/api/sub/{short_uuid}/info")
 
@@ -195,11 +219,12 @@ class RemnawaveClient:
         """
         Set user subscription expiry (and optionally device limit).
         expire_at_unix_ts: Unix timestamp in seconds.
-        Remnawave often expects expireAt in milliseconds.
+        Remnawave expects expireAt as ISO 8601 string.
         """
+        expire_at_iso = datetime.datetime.utcfromtimestamp(expire_at_unix_ts).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         payload: dict[str, Any] = {
             "uuid": user_uuid,
-            "expireAt": expire_at_unix_ts * 1000,
+            "expireAt": expire_at_iso,
         }
         if device_limit is not None:
             payload["deviceLimit"] = device_limit

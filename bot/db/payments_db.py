@@ -15,7 +15,7 @@ async def init_payments_db():
         await db.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 payment_id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                account_id TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 meta TEXT,
@@ -24,15 +24,16 @@ async def init_payments_db():
         ''')
         await db.commit()
 
-async def add_payment(payment_id: str, user_id: str, status: str, meta: dict = None):
+async def add_payment(payment_id: str, account_id: int | str, status: str, meta: dict = None):
     try:
         now = int(datetime.datetime.now().timestamp())
         meta_json = json.dumps(meta) if meta else None
+        acct = str(account_id)
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute('''
-                INSERT INTO payments (payment_id, user_id, status, created_at, meta)
+                INSERT INTO payments (payment_id, account_id, status, created_at, meta)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (payment_id, user_id, status, now, meta_json))
+            ''', (payment_id, acct, status, now, meta_json))
             await db.commit()
             return True
     except Exception as e:
@@ -86,15 +87,16 @@ async def get_all_pending_payments() -> list:
         logger.error(f"GET_ALL_PENDING_PAYMENTS error: {e}")
         return []
 
-async def get_pending_payment(user_id: str, period: str = None) -> dict:
+async def get_pending_payment(account_id: int | str, period: str = None) -> dict:
     try:
+        acct = str(account_id)
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
             if period:
                 # Ищем платеж с конкретным периодом в meta (JSON)
                 async with db.execute(
-                    "SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC", 
-                    (user_id,)
+                    "SELECT * FROM payments WHERE account_id = ? AND status = 'pending' ORDER BY created_at DESC",
+                    (acct,)
                 ) as cursor:
                     rows = await cursor.fetchall()
                     for row in rows:
@@ -108,8 +110,8 @@ async def get_pending_payment(user_id: str, period: str = None) -> dict:
             else:
                 # Просто последний ожидающий платеж
                 async with db.execute(
-                    "SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1", 
-                    (user_id,)
+                    "SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+                    (acct,)
                 ) as cursor:
                     row = await cursor.fetchone()
                     if row:
@@ -146,14 +148,15 @@ async def cleanup_expired_pending_payments(minutes_old: int = 60) -> int:
         logger.error(f"CLEANUP_EXPIRED_PENDING_PAYMENTS error: {e}")
         return 0
 
-async def get_payments_by_user(user_id: str, limit: int = 50) -> list:
-    """Возвращает все платежи пользователя"""
+async def get_payments_by_account(account_id: int | str, limit: int = 50) -> list:
+    """Возвращает все платежи аккаунта."""
     try:
+        acct = str(account_id)
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
-                (user_id, limit)
+                (acct, limit)
             ) as cursor:
                 rows = await cursor.fetchall()
                 result = []
@@ -169,3 +172,11 @@ async def get_payments_by_user(user_id: str, limit: int = 50) -> list:
     except Exception as e:
         logger.error(f"GET_PAYMENTS_BY_USER error: {e}")
         return []
+
+
+async def delete_payments_by_account_id(account_id: int | str) -> int:
+    """Удаляет все платежи аккаунта. Возвращает количество удалённых."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("DELETE FROM payments WHERE account_id = ?", (str(account_id),))
+        await db.commit()
+        return cursor.rowcount

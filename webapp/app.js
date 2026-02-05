@@ -8,7 +8,7 @@ try {
 } catch (e) {
     console.warn('LocalStorage access blocked by browser');
 }
-let currentUserId = null;
+let currentAccountId = null;
 let isWebMode = !tg.initData;
 
 // Функция для выполнения защищенных запросов к API
@@ -54,7 +54,7 @@ function logout() {
         localStorage.removeItem('web_token');
     } catch (e) {}
     webAuthToken = null;
-    currentUserId = null;
+    currentAccountId = null;
     showPage('login');
 }
 
@@ -149,8 +149,8 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         showExtendSubscriptionModal(Number(p.id));
         return true;
     }
-    if (route.pageName === 'admin-create-subscription' && p.userId) {
-        showCreateSubscriptionForm(p.userId);
+    if (route.pageName === 'admin-create-subscription' && (p.accountId || p.userId)) {
+        showCreateSubscriptionForm(p.accountId || p.userId);
         return true;
     }
     if (route.pageName === 'admin-users') {
@@ -307,12 +307,12 @@ function showPage(pageName, params) {
     }
 }
 
-function updateProfileCard(userId, username) {
+function updateProfileCard(accountId, username) {
     var titleEl = document.getElementById('profile-card-title');
     var subtitleEl = document.getElementById('profile-card-subtitle');
     if (!titleEl || !subtitleEl) return;
     titleEl.textContent = (username && username !== '—') ? username : 'Мой аккаунт';
-    subtitleEl.textContent = (userId && userId !== '—') ? userId : 'Нажмите, чтобы открыть';
+    subtitleEl.textContent = (accountId && accountId !== '—') ? accountId : 'Нажмите, чтобы открыть';
 }
 
 var profileCardAvatarObjectURL = null;
@@ -839,7 +839,7 @@ function buildLeaderboardHtml(leaderboard) {
     var html = '<div class="live-ranking"><div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div><ul class="leaderboard-list">';
     leaderboard.forEach(function (row) {
         var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
-        var accountId = row.account_id || row.referrer_user_id || '';
+        var accountId = row.account_id || row.referrer_account_id || '';
         html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + escapeHtml(accountId) + ' — ' + row.count + '</li>';
     });
     html += '</ul></div>';
@@ -2194,6 +2194,8 @@ function formatTimeRemaining(expiresAt) {
 let isAdmin = false;
 let currentAdminUserPage = 1;
 let currentAdminUserSearch = '';
+let currentAdminUserDetailAccountId = null;
+let currentCreatingSubscriptionAccountId = null;
 let currentEditingSubscriptionId = null;
 let previousAdminPage = 'admin-users';
 
@@ -2317,7 +2319,7 @@ async function loadAdminUsers(page = 1, search = '') {
             data.users.forEach(user => {
                 const card = document.createElement('div');
                 card.className = 'admin-user-card';
-                card.onclick = () => showAdminUserDetail(user.user_id);
+                card.onclick = () => showAdminUserDetail(user.account_id ?? user.id);
                 
                 const firstSeen = new Date(user.first_seen * 1000).toLocaleDateString('ru-RU');
                 const lastSeen = new Date(user.last_seen * 1000).toLocaleDateString('ru-RU');
@@ -2325,7 +2327,7 @@ async function loadAdminUsers(page = 1, search = '') {
                 const extra = [user.telegram_id && `TG: ${escapeHtml(user.telegram_id)}`, user.username && `Логин: ${escapeHtml(user.username)}`].filter(Boolean).join(' · ');
                 const accountLine = (user.account_id != null || user.remnawave_short_uuid) ? [user.account_id != null ? `Account: ${user.account_id}` : '', user.remnawave_short_uuid ? `Sub: ${escapeHtml(user.remnawave_short_uuid)}` : ''].filter(Boolean).join(' · ') : '';
                 card.innerHTML = `
-                    <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
+                    <div class="admin-user-id">ID: ${escapeHtml(String(user.account_id ?? user.id ?? ''))}</div>
                     ${accountLine ? `<div class="admin-user-extra" style="font-size: 11px; color: #6a9;">${accountLine}</div>` : ''}
                     ${extra ? `<div class="admin-user-extra" style="font-size: 12px; color: #888; margin-top: 4px;">${extra}</div>` : ''}
                     <div class="admin-user-meta">
@@ -2407,15 +2409,15 @@ function showAdminPagination(currentPage, totalPages) {
 }
 
 // Показать детальную информацию о пользователе
-async function showAdminUserDetail(userId) {
+async function showAdminUserDetail(accountId) {
     try {
         previousAdminPage = 'admin-users';
-        showPage('admin-user-detail', { id: userId });
+        showPage('admin-user-detail', { id: accountId });
         
         document.getElementById('admin-user-detail-loading').style.display = 'block';
         document.getElementById('admin-user-detail-content').innerHTML = '';
         
-        const response = await apiFetch(`/api/admin/user/${userId}`, {
+        const response = await apiFetch(`/api/admin/user/${accountId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2430,16 +2432,14 @@ async function showAdminUserDetail(userId) {
         
         document.getElementById('admin-user-detail-loading').style.display = 'none';
         
-        // Сохраняем userId для использования при возврате назад
-        currentAdminUserDetailUserId = userId;
+        currentAdminUserDetailAccountId = accountId;
         
         const contentEl = document.getElementById('admin-user-detail-content');
         
         // Информация о пользователе
         const user = data.user;
         const infoRows = [
-            { label: 'ID (user_id)', value: user.user_id },
-            user.account_id != null ? { label: 'Account ID', value: String(user.account_id) } : null,
+            { label: 'Account ID', value: String(user.account_id ?? user.id ?? '') },
             user.remnawave_short_uuid ? { label: 'Remnawave short_uuid', value: user.remnawave_short_uuid } : null,
             user.telegram_id ? { label: 'Telegram ID', value: user.telegram_id } : null,
             user.username ? { label: 'Логин', value: user.username } : null,
@@ -2496,8 +2496,8 @@ async function showAdminUserDetail(userId) {
             ` : ''}
             
             <div class="create-subscription-section" style="margin-top: 24px;">
-                <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')" style="width: 100%; margin-bottom: 12px;">Создать подписку</button>
-                <button class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')" style="width: 100%; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Удалить пользователя</button>
+                <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(String(data.user.account_id ?? ''))}')" style="width: 100%; margin-bottom: 12px;">Создать подписку</button>
+                <button class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(String(data.user.account_id ?? ''))}')" style="width: 100%; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Удалить пользователя</button>
             </div>
         `;
     } catch (error) {
@@ -2949,8 +2949,8 @@ function goBackFromSubscriptionEdit() {
     switchSubscriptionTab('params');
     if (previousAdminPage === 'admin-user-detail') {
         // Нужно перезагрузить информацию о пользователе
-        if (currentAdminUserDetailUserId) {
-            showAdminUserDetail(currentAdminUserDetailUserId);
+        if (currentAdminUserDetailAccountId) {
+            showAdminUserDetail(currentAdminUserDetailAccountId);
         } else {
             showPage('admin-users');
         }
@@ -2961,10 +2961,10 @@ function goBackFromSubscriptionEdit() {
 }
 
 // Показать форму создания подписки
-function showCreateSubscriptionForm(userId) {
-    currentCreatingSubscriptionUserId = userId;
+function showCreateSubscriptionForm(accountId) {
+    currentCreatingSubscriptionAccountId = accountId;
     previousAdminPage = 'admin-user-detail';
-    showPage('admin-create-subscription', userId ? { userId: userId } : {});
+    showPage('admin-create-subscription', accountId ? { accountId: accountId } : {});
     
     // Очищаем форму
     document.getElementById('create-sub-name').value = '';
@@ -2985,12 +2985,12 @@ function showCreateSubscriptionForm(userId) {
 
 // Возврат назад из создания подписки
 function goBackFromCreateSubscription() {
-    if (previousAdminPage === 'admin-user-detail' && currentCreatingSubscriptionUserId) {
-        showAdminUserDetail(currentCreatingSubscriptionUserId);
+    if (previousAdminPage === 'admin-user-detail' && currentCreatingSubscriptionAccountId) {
+        showAdminUserDetail(currentCreatingSubscriptionAccountId);
     } else {
         showPage('admin-users');
     }
-    currentCreatingSubscriptionUserId = null;
+    currentCreatingSubscriptionAccountId = null;
 }
 
 // Возврат назад из детальной информации о пользователе
@@ -2999,7 +2999,7 @@ function goBackFromUserDetail() {
 }
 
 // Показать модальное окно подтверждения удаления пользователя
-function showDeleteUserConfirm(userId) {
+function showDeleteUserConfirm(accountId) {
     const modal = document.getElementById('delete-user-confirm-modal');
     if (!modal) {
         // Создаем модальное окно, если его нет
@@ -3028,10 +3028,9 @@ function showDeleteUserConfirm(userId) {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
     }
     
-    // Обновляем userId в кнопке подтверждения
     const confirmBtn = document.getElementById('delete-user-confirm-btn');
     if (confirmBtn) {
-        confirmBtn.onclick = () => confirmDeleteUser(userId);
+        confirmBtn.onclick = () => confirmDeleteUser(accountId);
     }
     
     document.getElementById('delete-user-confirm-modal').style.display = 'flex';
@@ -3053,7 +3052,7 @@ function closeDeleteUserModal() {
 }
 
 // Подтвердить удаление пользователя
-async function confirmDeleteUser(userId) {
+async function confirmDeleteUser(accountId) {
     try {
         const confirmBtn = document.getElementById('delete-user-confirm-btn');
         if (confirmBtn) {
@@ -3061,7 +3060,7 @@ async function confirmDeleteUser(userId) {
             confirmBtn.textContent = 'Удаление...';
         }
         
-        const response = await apiFetch(`/api/admin/user/${userId}/delete`, {
+        const response = await apiFetch(`/api/admin/user/${accountId}/delete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3123,7 +3122,7 @@ async function createSubscription(event) {
     event.preventDefault();
     
     try {
-        if (!currentCreatingSubscriptionUserId) {
+        if (!currentCreatingSubscriptionAccountId) {
             alert('Ошибка: ID пользователя не найден');
             return;
         }
@@ -3144,7 +3143,7 @@ async function createSubscription(event) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Создание...';
         
-        const response = await apiFetch(`/api/admin/user/${currentCreatingSubscriptionUserId}/create-subscription`, {
+        const response = await apiFetch(`/api/admin/user/${currentCreatingSubscriptionAccountId}/create-subscription`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3287,7 +3286,7 @@ async function initTelegramFlow() {
         const res = await apiFetch('/api/user/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
         if (!res.ok) return false;
         const data = await res.json();
-        if (data.account_id || data.user_id) currentUserId = data.account_id || data.user_id;
+        if (data.account_id) currentAccountId = data.account_id;
         await loadSubscriptions();
         await checkAdminAccess();
         var route = parseHashRoute();
@@ -3362,7 +3361,7 @@ async function initApp() {
                 });
                 const result = await response.json();
                 if (result.success) {
-                    currentUserId = result.user_id;
+                    currentAccountId = result.account_id;
                     await checkAdminAccess();
                     var route = parseHashRoute();
                     if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
@@ -3407,7 +3406,7 @@ if (document.readyState === 'loading') {
 // ==================== РАССЫЛКА ====================
 
 // Глобальные переменные для рассылки
-let broadcastSelectedUsers = []; // Массив выбранных user_id
+let broadcastSelectedAccountIds = [];
 let broadcastUserSearchTimeout = null;
 let broadcastSendMode = 'all'; // 'all' | 'selected'
 let broadcastCurrentQuery = '';
@@ -3451,7 +3450,7 @@ async function loadBroadcastPage() {
         broadcastTotalUsers = totalUsers;
         
         // Сбрасываем выбор пользователей при загрузке страницы
-        broadcastSelectedUsers = [];
+        broadcastSelectedAccountIds = [];
         broadcastCurrentQuery = '';
         broadcastCurrentResults = [];
         
@@ -3496,7 +3495,7 @@ function setBroadcastMode(mode) {
         renderBroadcastUserResults();
     } else {
         if (selectionDiv) selectionDiv.style.display = 'none';
-        broadcastSelectedUsers = [];
+        broadcastSelectedAccountIds = [];
         broadcastCurrentQuery = '';
         broadcastCurrentResults = [];
         if (searchInput) searchInput.value = '';
@@ -3519,7 +3518,7 @@ function renderBroadcastUserResults() {
     }
     
     // Фильтруем: выбранные показываем только в чипах
-    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
+    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedAccountIds.includes(u.account_id ?? u.user_id));
     if (usersToShow.length === 0) {
         listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Нет результатов</div>';
         return;
@@ -3533,7 +3532,7 @@ function renderBroadcastUserResults() {
         userCard.style.cssText = 'padding: 12px; border-bottom: 1px solid #3a3a3a; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
         userCard.style.background = 'transparent';
         
-        userCard.onclick = () => toggleUserForBroadcast(user.user_id);
+        userCard.onclick = () => toggleUserForBroadcast(user.account_id ?? user.user_id);
         
         // В этой модели чекбокс можно убрать, но оставляем как визуальный affordance (всегда unchecked)
         const checkbox = document.createElement('input');
@@ -3542,13 +3541,13 @@ function renderBroadcastUserResults() {
         checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
         checkbox.onclick = (e) => {
             e.stopPropagation();
-            toggleUserForBroadcast(user.user_id);
+            toggleUserForBroadcast(user.account_id ?? user.user_id);
         };
         
         const userInfo = document.createElement('div');
         userInfo.style.cssText = 'flex: 1;';
         
-        const idLine = highlightMatchRaw(`ID: ${String(user.user_id)}`, qLower);
+        const idLine = highlightMatchRaw(`ID: ${String(user.account_id ?? user.user_id ?? '')}`, qLower);
         const subsText = `Подписок: ${user.subscriptions_count || 0}`;
         userInfo.innerHTML = `
             <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${idLine}</div>
@@ -3615,13 +3614,12 @@ async function searchUsersForBroadcast() {
 }
 
 // Переключение выбора пользователя
-function toggleUserForBroadcast(userId) {
-    const index = broadcastSelectedUsers.indexOf(userId);
+function toggleUserForBroadcast(accountId) {
+    const index = broadcastSelectedAccountIds.indexOf(accountId);
     if (index === -1) {
-        broadcastSelectedUsers.push(userId);
+        broadcastSelectedAccountIds.push(accountId);
     } else {
-        // В текущей UX модели повторный клик в выдаче не должен случаться, т.к. выбранный исчезает.
-        broadcastSelectedUsers.splice(index, 1);
+        broadcastSelectedAccountIds.splice(index, 1);
     }
     
     updateSelectedCount();
@@ -3632,7 +3630,7 @@ function toggleUserForBroadcast(userId) {
 
 // Очистить выбор пользователей
 function clearUserSelection() {
-    broadcastSelectedUsers = [];
+    broadcastSelectedAccountIds = [];
     updateSelectedCount();
     updateBroadcastRecipientsCount();
     updateSendButtonState();
@@ -3643,7 +3641,7 @@ function clearUserSelection() {
 function updateSelectedCount() {
     const countEl = document.getElementById('broadcast-selected-count');
     if (countEl) {
-        countEl.textContent = broadcastSelectedUsers.length;
+        countEl.textContent = broadcastSelectedAccountIds.length;
     }
     updateSelectedChips();
 }
@@ -3654,7 +3652,7 @@ function updateBroadcastRecipientsCount() {
     if (!recipientsCountEl) return;
     
     if (broadcastSendMode === 'selected') {
-        recipientsCountEl.textContent = broadcastSelectedUsers.length;
+        recipientsCountEl.textContent = broadcastSelectedAccountIds.length;
     } else {
         recipientsCountEl.textContent = broadcastTotalUsers || '-';
     }
@@ -3665,7 +3663,7 @@ function updateSendButtonState() {
     const sendBtn = document.getElementById('broadcast-send-btn');
     if (!sendBtn) return;
     
-    if (broadcastSendMode === 'selected' && broadcastSelectedUsers.length === 0) {
+    if (broadcastSendMode === 'selected' && broadcastSelectedAccountIds.length === 0) {
         sendBtn.disabled = true;
         sendBtn.textContent = 'Отправить рассылку';
     } else {
@@ -3680,27 +3678,27 @@ function updateSelectedChips() {
     if (!chipsEl) return;
     
     chipsEl.innerHTML = '';
-    if (broadcastSelectedUsers.length === 0) {
+    if (broadcastSelectedAccountIds.length === 0) {
         chipsEl.style.display = 'none';
         return;
     }
     chipsEl.style.display = 'flex';
     
-    broadcastSelectedUsers.forEach((userId) => {
+    broadcastSelectedAccountIds.forEach((accountId) => {
         const chip = document.createElement('div');
         chip.className = 'chip';
         chip.innerHTML = `
-            <span>${escapeHtml(userId)}</span>
-            <button aria-label="Удалить" onclick="removeUserFromSelection('${userId}')">×</button>
+            <span>${escapeHtml(accountId)}</span>
+            <button aria-label="Удалить" onclick="removeUserFromSelection('${accountId}')">×</button>
         `;
         chipsEl.appendChild(chip);
     });
 }
 
-function removeUserFromSelection(userId) {
-    const idx = broadcastSelectedUsers.indexOf(userId);
+function removeUserFromSelection(accountId) {
+    const idx = broadcastSelectedAccountIds.indexOf(accountId);
     if (idx > -1) {
-        broadcastSelectedUsers.splice(idx, 1);
+        broadcastSelectedAccountIds.splice(idx, 1);
         updateSelectedCount();
         updateBroadcastRecipientsCount();
         updateSendButtonState();
@@ -3710,9 +3708,9 @@ function removeUserFromSelection(userId) {
 
 // Выбрать все в текущей выдаче
 function selectAllBroadcastResults() {
-    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
+    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedAccountIds.includes(u.account_id ?? u.user_id));
     if (!usersToShow.length) return;
-    usersToShow.forEach((u) => broadcastSelectedUsers.push(u.user_id));
+    usersToShow.forEach((u) => broadcastSelectedAccountIds.push(u.account_id ?? u.user_id));
     updateSelectedCount();
     updateBroadcastRecipientsCount();
     updateSendButtonState();
@@ -3753,7 +3751,7 @@ async function sendBroadcast() {
     
     const isSelectMode = broadcastSendMode === 'selected';
     
-    if (isSelectMode && broadcastSelectedUsers.length === 0) {
+    if (isSelectMode && broadcastSelectedAccountIds.length === 0) {
         if (!isWebMode && tg?.showAlert) {
             tg.showAlert('Пожалуйста, выберите хотя бы одного пользователя');
         } else {
@@ -3765,7 +3763,7 @@ async function sendBroadcast() {
     // Формируем текст подтверждения
     let confirmText;
     if (isSelectMode) {
-        confirmText = `Вы уверены, что хотите отправить рассылку ${broadcastSelectedUsers.length} выбранным пользователям?`;
+        confirmText = `Вы уверены, что хотите отправить рассылку ${broadcastSelectedAccountIds.length} выбранным пользователям?`;
     } else {
         confirmText = 'Вы уверены, что хотите отправить рассылку всем пользователям?';
     }
@@ -3798,9 +3796,8 @@ async function sendBroadcast() {
             message: message
         };
         
-        // Если выбран режим выбора пользователей - добавляем user_ids
-        if (isSelectMode && broadcastSelectedUsers.length > 0) {
-            requestBody.user_ids = broadcastSelectedUsers;
+        if (isSelectMode && broadcastSelectedAccountIds.length > 0) {
+            requestBody.account_ids = broadcastSelectedAccountIds;
         }
         
         const response = await apiFetch('/api/admin/broadcast', {

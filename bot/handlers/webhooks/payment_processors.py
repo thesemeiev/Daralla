@@ -34,44 +34,41 @@ async def process_payment_webhook(bot_app, payment_id, status):
             logger.info(f"Платеж {payment_id} уже обработан, пропускаем повторную обработку")
             return
         
-        user_id = payment_info['user_id']
+        account_id_str = payment_info.get('account_id') or ''
         meta = payment_info['meta'] if isinstance(payment_info['meta'], dict) else json.loads(payment_info['meta'])
         
-        logger.info(f"Обработка webhook платежа: payment_id={payment_id}, user_id={user_id}, status={status}, current_status={current_status}, activated={is_activated}")
+        logger.info(f"Обработка webhook платежа: payment_id={payment_id}, account_id={account_id_str}, status={status}, current_status={current_status}, activated={is_activated}")
         
         # Обрабатываем платеж в зависимости от статуса
         if status == 'succeeded':
-            # Успешная оплата - создаем или продлеваем подписку
-            await process_successful_payment(bot_app, payment_id, user_id, meta)
+            await process_successful_payment(bot_app, payment_id, account_id_str, meta)
         elif status in ['canceled', 'refunded']:
-            # Отмененная/возвращенная оплата
-            await process_canceled_payment(bot_app, payment_id, user_id, meta, status)
+            await process_canceled_payment(bot_app, payment_id, account_id_str, meta, status)
         elif status not in ['pending']:
-            # Любой другой неуспешный статус
-            await process_failed_payment(bot_app, payment_id, user_id, meta, status)
+            await process_failed_payment(bot_app, payment_id, account_id_str, meta, status)
         
     except Exception as e:
         logger.error(f"Ошибка обработки webhook платежа {payment_id}: {e}")
 
 
-async def _get_chat_id_for_payment_user(user_id: str):
-    """Для уведомлений: user_id = str(account_id), берём chat_id по identity."""
-    if isinstance(user_id, str) and user_id.isdigit():
-        tid = await get_telegram_id_for_account(int(user_id))
+async def _get_chat_id_for_account(account_id_str: str):
+    """Для уведомлений: account_id_str = str(account_id), берём chat_id по identity."""
+    if isinstance(account_id_str, str) and account_id_str.isdigit():
+        tid = await get_telegram_id_for_account(int(account_id_str))
         return int(tid) if tid else None
     return None
 
 
-async def process_successful_payment(bot_app, payment_id, user_id, meta):
-    """Обрабатывает успешный платеж. Только Remnawave: user_id = str(account_id)."""
+async def process_successful_payment(bot_app, payment_id, account_id_str, meta):
+    """Обрабатывает успешный платеж. account_id_str = str(account_id)."""
     try:
         from ...services.remnawave_service import is_remnawave_configured
         message_id = meta.get('message_id')
-        if not isinstance(user_id, str) or not user_id.isdigit() or not is_remnawave_configured():
-            logger.warning("Платеж %s: ожидается user_id=account_id (число) и Remnawave", payment_id)
+        if not isinstance(account_id_str, str) or not account_id_str.isdigit() or not is_remnawave_configured():
+            logger.warning("Платеж %s: ожидается account_id и Remnawave", payment_id)
             await update_payment_status(payment_id, 'failed')
             return
-        account_id = int(user_id)
+        account_id = int(account_id_str)
         await process_successful_payment_remnawave(bot_app, payment_id, account_id, meta, message_id)
     except Exception as e:
         logger.error(f"Ошибка обработки успешного платежа {payment_id}: {e}")
@@ -194,19 +191,19 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
                 parse_mode="HTML",
                 menu_type=MenuTypes.PAYMENT_FAILED
             )
-            logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {user_id}")
+            logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {account_id_str}")
                     
     except Exception as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
 
 
-async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
+async def process_failed_payment(bot_app, payment_id, account_id_str, meta, status):
     """Обрабатывает неудачный платеж"""
     try:
         await update_payment_status(payment_id, 'failed')
         await update_payment_activation(payment_id, 0)
         
-        chat_id = await _get_chat_id_for_payment_user(user_id)
+        chat_id = await _get_chat_id_for_account(account_id_str)
         period = meta.get('type', 'month')
         is_extension = period.startswith('extend_')
         
@@ -270,7 +267,7 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
                 parse_mode="HTML",
                 menu_type=menu_type
             )
-            logger.info(f"Отправлено сообщение об ошибке пользователю {user_id}")
+            logger.info(f"Отправлено сообщение об ошибке пользователю {account_id_str}")
             
     except Exception as e:
         logger.error(f"Ошибка обработки неудачного платежа {payment_id}: {e}")

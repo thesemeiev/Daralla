@@ -1,5 +1,5 @@
 """
-Модуль работы с общими пользователями и конфигурацией (Единая БД)
+Модуль: список account_id (из accounts).
 """
 import aiosqlite
 import logging
@@ -7,21 +7,13 @@ from . import DB_PATH
 
 logger = logging.getLogger(__name__)
 
-async def init_users_db():
-    """Инициализирует таблицу config (источник пользователей — accounts в accounts_db)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS config (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                description TEXT,
-                updated_at INTEGER
-            )
-        ''')
-        await db.commit()
 
-async def get_all_user_ids(min_last_seen: int = None) -> list:
-    """Возвращает список всех user_id (Remnawave: account_id как строка)."""
+async def init_users_db():
+    """Резерв для совместимости (accounts создаются в accounts_db)."""
+    pass
+
+async def get_all_account_ids(min_last_seen: int = None) -> list:
+    """Возвращает список всех account_id (как строки)."""
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             if min_last_seen is not None:

@@ -54,19 +54,19 @@ def create_events_blueprint():
     # --- Admin: создание, список всех, удаление ---
     def _admin_check():
         from bot.handlers.webhooks.webhook_auth import authenticate_request, check_admin_access
-        user_id = authenticate_request()
-        if not user_id:
+        account_id = authenticate_request()
+        if not account_id:
             return None, 401
-        if not check_admin_access(user_id):
+        if not check_admin_access(account_id):
             return None, 403
-        return user_id, None
+        return account_id, None
 
     @bp.route("/admin/list", methods=["GET", "OPTIONS"])
     def admin_list():
         """GET /api/events/admin/list — все события (админ)."""
         if request.method == "OPTIONS":
             return ("", 200, _CORS)
-        user_id, err = _admin_check()
+        account_id, err = _admin_check()
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
@@ -87,7 +87,7 @@ def create_events_blueprint():
         """POST /api/events/admin/create — создать событие (админ). Body: name, description, start_at, end_at, rewards."""
         if request.method == "OPTIONS":
             return ("", 200, _CORS)
-        user_id, err = _admin_check()
+        account_id, err = _admin_check()
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
@@ -121,7 +121,7 @@ def create_events_blueprint():
         """PUT/PATCH /api/events/admin/<id> — редактировать событие (админ). Рефералы и рейтинги не затрагиваются."""
         if request.method == "OPTIONS":
             return ("", 200, _CORS)
-        user_id, err = _admin_check()
+        account_id, err = _admin_check()
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
@@ -156,7 +156,7 @@ def create_events_blueprint():
         """DELETE /api/events/admin/<id> — удалить событие (админ)."""
         if request.method == "OPTIONS":
             return ("", 200, _CORS)
-        user_id, err = _admin_check()
+        account_id, err = _admin_check()
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
@@ -179,14 +179,14 @@ def create_events_blueprint():
         """GET /api/events/my-code — реферальный код текущего пользователя."""
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({"error": "Unauthorized"}), 401
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 from bot.events.db.queries import get_or_create_referral_code
-                code = loop.run_until_complete(get_or_create_referral_code(user_id))
+                code = loop.run_until_complete(get_or_create_referral_code(str(account_id)))
                 return jsonify({"code": code}), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()
@@ -199,16 +199,17 @@ def create_events_blueprint():
         """GET /api/events/am-i-referred — проверка, является ли пользователь приглашённым и нужно ли показывать модалку."""
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({"error": "Unauthorized"}), 401
+            account_id_str = str(account_id)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 import time
-                from bot.events.db.queries import is_user_already_referred, get_user_first_seen
-                referred = loop.run_until_complete(is_user_already_referred(user_id))
-                first_seen = loop.run_until_complete(get_user_first_seen(user_id))
+                from bot.events.db.queries import is_user_already_referred, get_account_first_seen
+                referred = loop.run_until_complete(is_user_already_referred(account_id_str))
+                first_seen = loop.run_until_complete(get_account_first_seen(account_id_str))
                 now = int(time.time())
                 age_seconds = (now - first_seen) if first_seen else 0
                 show_modal = not referred and (first_seen is None or age_seconds < 30 * 86400)
@@ -226,9 +227,10 @@ def create_events_blueprint():
             return ("", 200, _CORS)
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({"error": "Unauthorized"}), 401
+            referred_account_id = str(account_id)
             data = request.get_json(silent=True) or {}
             code = (data.get("code") or "").strip()
             if not code:
@@ -242,24 +244,24 @@ def create_events_blueprint():
             asyncio.set_event_loop(loop)
             try:
                 from bot.events.db.queries import (
-                    get_user_id_by_code,
+                    get_account_id_by_code,
                     is_user_already_referred,
                     list_events_active,
                 )
                 from bot.events.services.referral_service import record_visit
-                referrer_user_id = loop.run_until_complete(get_user_id_by_code(code))
-                if not referrer_user_id:
+                referrer_account_id = loop.run_until_complete(get_account_id_by_code(code))
+                if not referrer_account_id:
                     return jsonify({"error": "Код не найден"}), 400
-                if referrer_user_id == user_id:
+                if referrer_account_id == referred_account_id:
                     return jsonify({"error": "Нельзя использовать свой код"}), 400
-                if loop.run_until_complete(is_user_already_referred(user_id)):
+                if loop.run_until_complete(is_user_already_referred(referred_account_id)):
                     return jsonify({"error": "Вы уже записаны по приглашению"}), 400
                 if event_id is None:
                     active = loop.run_until_complete(list_events_active())
                     if not active:
                         return jsonify({"error": "Сейчас нет активных событий"}), 400
                     event_id = active[0]["id"]
-                ok = loop.run_until_complete(record_visit(referrer_user_id, user_id, event_id))
+                ok = loop.run_until_complete(record_visit(referrer_account_id, referred_account_id, event_id))
                 return jsonify({"success": True, "recorded": ok}), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()
@@ -310,14 +312,14 @@ def create_events_blueprint():
         """GET /api/events/<id>/my-place — место текущего пользователя в рейтинге."""
         try:
             from bot.handlers.webhooks.webhook_auth import authenticate_request
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({"error": "Unauthorized"}), 401
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 from bot.events.db.queries import get_my_place
-                result = loop.run_until_complete(get_my_place(event_id, user_id))
+                result = loop.run_until_complete(get_my_place(event_id, str(account_id)))
                 return jsonify({"place": result}), 200, {"Content-Type": "application/json", **_CORS}
             finally:
                 loop.close()

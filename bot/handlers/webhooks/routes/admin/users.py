@@ -57,10 +57,10 @@ def register_users_routes(bp):
         if request.method == "OPTIONS":
             return options_response()
         try:
-            user_id = authenticate_request()
-            if not user_id:
+            account_id = authenticate_request()
+            if not account_id:
                 return jsonify({"error": "Invalid authentication"}), 401
-            if not check_admin_access(user_id):
+            if not check_admin_access(account_id):
                 return jsonify({"error": "Access denied"}), 403
 
             data = request.get_json(silent=True) or {}
@@ -107,7 +107,6 @@ def register_users_routes(bp):
                         short_uuid = remna.get("remnawave_short_uuid") if remna else None
                         users.append({
                             "id": account_id,
-                            "user_id": str(account_id),
                             "account_id": account_id,
                             "remnawave_short_uuid": short_uuid,
                             "telegram_id": telegram_id,
@@ -151,7 +150,7 @@ def register_users_routes(bp):
                 get_telegram_id_for_account,
                 get_username_for_account,
             )
-            from .....db.payments_db import get_payments_by_user
+            from .....db.payments_db import get_payments_by_account
             from .....services.subscription_service import get_subscriptions_for_account
 
             account_id = None
@@ -169,7 +168,7 @@ def register_users_routes(bp):
             telegram_id = _run_async(get_telegram_id_for_account(account_id))
             username = _run_async(get_username_for_account(account_id))
             subscriptions = _run_async(get_subscriptions_for_account(account_id))
-            payments = _run_async(get_payments_by_user(str(account_id), limit=10))
+            payments = _run_async(get_payments_by_account(account_id, limit=10))
 
             async def get_account_timestamps():
                 async with aiosqlite.connect(DB_PATH) as db:
@@ -205,7 +204,6 @@ def register_users_routes(bp):
                 jsonify({
                     "success": True,
                     "user": {
-                        "user_id": str(account_id),
                         "account_id": account_id,
                         "remnawave_short_uuid": remnawave_short_uuid,
                         "telegram_id": telegram_id,
@@ -224,3 +222,47 @@ def register_users_routes(bp):
         except Exception as e:
             logger.error("Ошибка в /api/admin/user: %s", e, exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
+
+    @bp.route("/api/admin/user/<user_id_param>/delete", methods=["POST", "OPTIONS"])
+    def api_admin_user_delete(user_id_param):
+        if request.method == "OPTIONS":
+            return options_response()
+        try:
+            admin_id = authenticate_request()
+            if not admin_id or not check_admin_access(admin_id):
+                return jsonify({"error": "Access denied"}), 403
+
+            data = request.get_json(silent=True) or {}
+            if not data.get("confirm"):
+                return jsonify({"error": "Подтверждение требуется (confirm: true)"}), 400
+
+            from .....db.accounts_db import get_account_id_by_identity
+            from .user_operations import delete_user_full
+
+            account_id = None
+            if user_id_param.isdigit():
+                account_id = int(user_id_param)
+            if account_id is None:
+                account_id = _run_async(get_account_id_by_identity("telegram", user_id_param))
+            if account_id is None:
+                account_id = _run_async(get_account_id_by_identity("password", (user_id_param or "").strip().lower()))
+            if account_id is None:
+                return jsonify({"error": "User not found"}), 404
+
+            subscriptions_deleted, payments_deleted = _run_async(delete_user_full(account_id))
+
+            return (
+                jsonify({
+                    "success": True,
+                    "stats": {
+                        "subscriptions_deleted": subscriptions_deleted,
+                        "payments_deleted": payments_deleted,
+                    },
+                    "deleted_servers": [],
+                }),
+                200,
+                {**CORS_HEADERS, "Content-Type": "application/json"},
+            )
+        except Exception as e:
+            logger.error("Ошибка в /api/admin/user/delete: %s", e, exc_info=True)
+            return jsonify({"error": str(e)}), 500

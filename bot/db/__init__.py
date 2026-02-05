@@ -22,10 +22,11 @@ NOTIFICATIONS_DB_PATH = DB_PATH
 from .payments_db import (
     init_payments_db, add_payment, get_payment_by_id, update_payment_status,
     update_payment_activation, get_all_pending_payments, get_pending_payment,
-    cleanup_old_payments, cleanup_expired_pending_payments, get_payments_by_user
+    cleanup_old_payments,     cleanup_expired_pending_payments, get_payments_by_account,
+    delete_payments_by_account_id,
 )
 from .users_db import (
-    init_users_db, get_all_user_ids,
+    init_users_db, get_all_account_ids,
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
@@ -57,6 +58,7 @@ from .accounts_db import (
     get_telegram_chat_id_for_account,
     upsert_account_expiry_cache,
     get_accounts_expiring_soon,
+    delete_account,
 )
 from .server_config_db import (
     init_server_config_db,
@@ -97,10 +99,11 @@ __all__ = [
     'link_telegram_create_state', 'link_telegram_consume_state',
     'set_account_auth_token', 'get_account_id_by_auth_token',
     'get_telegram_chat_id_for_account', 'upsert_account_expiry_cache', 'get_accounts_expiring_soon',
+    'delete_account',
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
-    'get_payments_by_user',
-    'get_all_user_ids',
+    'get_payments_by_account', 'delete_payments_by_account_id',
+    'get_all_account_ids',
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
     'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',

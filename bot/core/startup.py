@@ -53,7 +53,7 @@ async def on_startup(app):
         try:
             from bot.events import EVENTS_MODULE_ENABLED
             if EVENTS_MODULE_ENABLED:
-                from bot.events.db.migrations import init_events_tables
+                from bot.events.db.schema import init_events_tables
                 await init_events_tables()
         except ImportError:
             pass
