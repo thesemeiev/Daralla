@@ -102,7 +102,7 @@ def register_broadcast_routes(bp, bot_app):
                             except Exception:
                                 failed += 1
                         except Exception as e:
-                            logger.error("Ошибка отправки пользователю %s: %s", account_id_str, e)
+                            logger.error("Ошибка отправки пользователю %s: %s", user_id, e)
                             failed += 1
                     if i + batch < total:
                         await asyncio.sleep(0.1)

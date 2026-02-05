@@ -169,7 +169,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
         await update_payment_activation(payment_id, 0)
         
         message_id = meta.get('message_id')
-        chat_id = await _get_chat_id_for_payment_user(user_id)
+        chat_id = await _get_chat_id_for_account(user_id)
         if message_id and chat_id:
             error_message = (
                 f"{UIStyles.header('Ошибка оплаты')}\n\n"
@@ -191,7 +191,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
                 parse_mode="HTML",
                 menu_type=MenuTypes.PAYMENT_FAILED
             )
-            logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {account_id_str}")
+            logger.info("Отправлено сообщение об ошибке оплаты пользователю %s", user_id)
                     
     except Exception as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
