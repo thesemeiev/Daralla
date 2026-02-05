@@ -1,6 +1,6 @@
 """
 Модуль событий (реферальные конкурсы с рейтингом и наградами).
-Подключаемый: отключение через EVENTS_MODULE_ENABLED=False или удаление папки.
+Модуль включён по умолчанию. Отключение: EVENTS_MODULE_ENABLED=false
 """
 
 from .config import EVENTS_MODULE_ENABLED

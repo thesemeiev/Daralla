@@ -106,20 +106,6 @@ async def get_notification_stats(days: int = 7):
 
         return stats
 
-async def get_daily_notification_stats(days: int = 14):
-    cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute('''
-            SELECT date, SUM(total_sent) as total, SUM(success_count) as success
-            FROM notification_metrics 
-            WHERE date >= ?
-            GROUP BY date
-            ORDER BY date DESC
-        ''', (cutoff,)) as cur:
-            rows = await cur.fetchall()
-            return [dict(row) for row in rows]
-
 async def get_notification_settings():
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT key, value FROM notification_settings") as cur:

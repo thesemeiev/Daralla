@@ -4,32 +4,6 @@
     box-sizing: border-box;
 }
 
-/* Стили для горизонтальной прокрутки графиков */
-.chart-scroll-container {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    margin-bottom: 24px;
-}
-
-.chart-scroll-container::-webkit-scrollbar {
-    height: 8px;
-}
-
-.chart-scroll-container::-webkit-scrollbar-track {
-    background: #1a1a1a;
-    border-radius: 4px;
-}
-
-.chart-scroll-container::-webkit-scrollbar-thumb {
-    background: #4a4a4a;
-    border-radius: 4px;
-}
-
-.chart-scroll-container::-webkit-scrollbar-thumb:hover {
-    background: #5a5a5a;
-}
-
 /* Лендинг до входа — полноэкран, scroll-snap, минимализм */
 .landing-fullscreen {
     position: fixed;
@@ -725,12 +699,6 @@ h1 {
     background: rgba(255, 59, 48, 0.4);
     color: #ff5c5c;
     border: 1px solid rgba(255, 59, 48, 0.5);
-}
-
-.subscription-status.trial {
-    background: rgba(255, 152, 0, 0.4);
-    color: #ffb74d;
-    border: 1px solid rgba(255, 152, 0, 0.5);
 }
 
 .subscription-status-blink,
@@ -2735,177 +2703,11 @@ h1 {
     color: #a0a0a0;
 }
 
-/* Скрываем кнопки полного экрана на мобильных устройствах */
-@media (max-width: 768px) {
-    .fullscreen-btn {
-        display: none !important;
-    }
-}
-
 @media (max-width: 600px) {
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
-    /* Улучшение отображения графиков на мобильных */
-    .chart-scroll-container {
-        margin-left: -16px;
-        margin-right: -16px;
-        padding-left: 16px;
-        padding-right: 16px;
-    }
-    
-    .chart-scroll-container > div {
-        min-width: 700px; /* Увеличиваем минимальную ширину для лучшей читаемости */
-    }
 }
-
-/* Стили для легенды Chart.js - элементы друг под другом */
-canvas + div {
-    margin-top: 16px;
-}
-
-/* Улучшение отображения легенды */
-.chartjs-legend {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-}
-
-/* Стили для полноэкранного режима графиков */
-div[style*="position: relative"]:fullscreen {
-    background: #1a1a1a;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-div[style*="position: relative"]:-webkit-full-screen {
-    background: #1a1a1a;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-div[style*="position: relative"]:-moz-full-screen {
-    background: #1a1a1a;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-div[style*="position: relative"]:-ms-fullscreen {
-    background: #1a1a1a;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Стили для кнопки полноэкранного режима */
-button[onclick*="toggleFullscreen"] {
-    transition: background-color 0.2s;
-}
-
-button[onclick*="toggleFullscreen"]:hover {
-    background: #2a2a2a !important;
-}
-
-button[onclick*="toggleFullscreen"]:active {
-    background: #3a3a3a !important;
-}
-
-/* Стили для списка нагрузки серверов (карточки с progress bar) */
-.servers-load-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.server-load-card {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
-    border-radius: 12px;
-    padding: 14px 16px;
-    transition: border-color 0.2s, background 0.2s;
-}
-
-.server-load-card:hover {
-    border-color: #4a4a4a;
-}
-
-.server-load-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    gap: 8px;
-}
-
-.server-load-card-name {
-    font-weight: 600;
-    font-size: 15px;
-    color: #fff;
-}
-
-.server-load-card-percent {
-    font-weight: 700;
-    font-size: 15px;
-    flex-shrink: 0;
-}
-
-.server-load-card-percent.low {
-    color: #4bc0c0;
-}
-
-.server-load-card-percent.medium {
-    color: #ffca28;
-}
-
-.server-load-card-percent.high {
-    color: #ff6384;
-}
-
-.server-load-progress-track {
-    height: 8px;
-    background: #252525;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 8px;
-}
-
-.server-load-progress-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.4s ease;
-}
-
-.server-load-progress-fill.low {
-    background: linear-gradient(90deg, #4bc0c0 0%, #5dd5d5 100%);
-}
-
-.server-load-progress-fill.medium {
-    background: linear-gradient(90deg, #ffca28 0%, #ffdd57 100%);
-}
-
-.server-load-progress-fill.high {
-    background: linear-gradient(90deg, #ff6384 0%, #ff7b94 100%);
-}
-
-.server-load-card-details {
-    font-size: 12px;
-    color: #6a6a6a;
-}
-
-
 
 .web-only {
     display: none !important;

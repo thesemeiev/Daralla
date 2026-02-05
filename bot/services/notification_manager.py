@@ -29,9 +29,8 @@ logger = logging.getLogger(__name__)
 class NotificationManager:
     """Менеджер уведомлений с метриками и мониторингом"""
     
-    def __init__(self, bot, server_manager, admin_ids: List[int]):
+    def __init__(self, bot, admin_ids: List[int]):
         self.bot = bot
-        self.server_manager = server_manager
         self.admin_ids = admin_ids
         self.is_running = False
         

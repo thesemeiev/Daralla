@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def start_background_tasks(notification_manager, server_manager=None):
+async def start_background_tasks(notification_manager):
     """Запускает фоновые задачи."""
     logger.info("🚀 Запуск цикла фоновых задач...")
 

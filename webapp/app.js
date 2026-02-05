@@ -442,8 +442,7 @@ function showSubscriptionDetail(sub) {
     
     const statusClass = sub.status === 'active' ? 'active' : 'expired';
     const statusText = sub.status === 'active' ? 'Активна' : 
-                      sub.status === 'expired' ? 'Истекла' : 
-                      sub.status === 'trial' ? 'Пробная' : sub.status;
+                      sub.status === 'expired' ? 'Истекла' : sub.status;
     
     contentEl.innerHTML = `
         <div class="detail-card">
@@ -594,8 +593,7 @@ function createSubscriptionCard(sub) {
     
     const statusClass = sub.status === 'active' ? 'active' : 'expired';
     const statusText = sub.status === 'active' ? 'Активна' : 
-                      sub.status === 'expired' ? 'Истекла' : 
-                      sub.status === 'trial' ? 'Пробная' : sub.status;
+                      sub.status === 'expired' ? 'Истекла' : sub.status;
     
     card.innerHTML = `
         <div class="subscription-header">
@@ -3268,6 +3266,44 @@ function loadAdminStats() {
 // === Удалены: loadUserGrowthChart, loadConversionChart, loadRevenueTrendChart,
 // loadServerLoadChart, loadNotificationStats, loadSubscriptionStats и связанные ===
 
+// Загружаем цены с сервера (публичный API, без авторизации)
+async function loadPrices() {
+    try {
+        const res = await fetch('/api/prices');
+        if (res.ok) {
+            const data = await res.json();
+            const prices = data.prices || { month: 150, '3month': 350 };
+            document.querySelectorAll('.plan-price[data-period="month"]').forEach(el => { el.textContent = (prices.month || 150) + '₽'; });
+            document.querySelectorAll('.plan-price[data-period="3month"]').forEach(el => { el.textContent = (prices['3month'] || 350) + '₽'; });
+        }
+    } catch (e) {
+        console.warn('Не удалось загрузить цены, используются значения по умолчанию', e);
+    }
+}
+
+// Инициализация при открытии в Telegram (регистрация, подписки, роут)
+async function initTelegramFlow() {
+    try {
+        const res = await apiFetch('/api/user/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.account_id || data.user_id) currentUserId = data.account_id || data.user_id;
+        await loadSubscriptions();
+        await checkAdminAccess();
+        var route = parseHashRoute();
+        if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
+            applyRoute(route, true, isAdmin);
+        } else {
+            showPage('subscriptions');
+        }
+        return true;
+    } catch (e) {
+        console.error('initTelegramFlow error:', e);
+        showPage('subscriptions');
+        return false;
+    }
+}
+
 function preventCloseOnScroll() {
     let touchStartY = 0;
     let touchEndY = 0;
@@ -3306,6 +3342,66 @@ function preventCloseOnScroll() {
         touchEndY = 0;
         isScrolling = false;
     }, { passive: true });
+}
+
+// Загружаем приложение при готовности DOM
+async function initApp() {
+    loadPrices();
+    preventCloseOnScroll();
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function () {}, function (err) { console.warn('SW register failed', err); });
+    }
+    if (isWebMode) {
+        document.body.classList.add('web-mode');
+        if (webAuthToken) {
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: webAuthToken })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    currentUserId = result.user_id;
+                    await checkAdminAccess();
+                    var route = parseHashRoute();
+                    if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
+                        applyRoute(route, true, isAdmin);
+                    } else {
+                        showPage('subscriptions');
+                    }
+                } else {
+                    var routeGuest = parseHashRoute();
+                    if (routeGuest && isPageAllowedForUser(routeGuest.pageName, false, false)) {
+                        applyRoute(routeGuest, false, false);
+                    } else {
+                        showPage('landing');
+                    }
+                }
+            } catch (e) {
+                var routeGuest2 = parseHashRoute();
+                if (routeGuest2 && isPageAllowedForUser(routeGuest2.pageName, false, false)) {
+                    applyRoute(routeGuest2, false, false);
+                } else {
+                    showPage('landing');
+                }
+            }
+        } else {
+            var routeGuest3 = parseHashRoute();
+            if (routeGuest3 && isPageAllowedForUser(routeGuest3.pageName, false, false)) {
+                applyRoute(routeGuest3, false, false);
+            } else {
+                showPage('landing');
+            }
+        }
+    } else {
+        await initTelegramFlow();
+    }
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
 }
 
 // ==================== РАССЫЛКА ====================
@@ -4435,306 +4531,109 @@ function initNavIndicator() {
     }, { passive: true });
 }
 
-// === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
+// === МАРКЕРЫ НА КАРТЕ (АДМИН) ===
 
-let currentAdminGroups = [];
 let currentAdminServers = [];
-let currentSelectedGroupId = null;
 
-// Загрузка страницы управления серверами
 async function loadServerManagement() {
     const loadingEl = document.getElementById('admin-server-management-loading');
     const contentEl = document.getElementById('admin-server-management-content');
-    
+
     if (loadingEl) loadingEl.style.display = 'block';
     if (contentEl) contentEl.style.display = 'none';
 
     try {
-        await loadServerGroups();
+        await loadServersList();
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
     } catch (err) {
-        console.error('Ошибка загрузки управления серверами:', err);
+        console.error('Ошибка загрузки маркеров:', err);
         if (loadingEl) loadingEl.style.display = 'none';
         alert('Ошибка при загрузке данных: ' + err.message);
     }
 }
 
-// Загрузка групп серверов
-async function loadServerGroups() {
-    console.log('Загрузка групп серверов...');
-    const listEl = document.getElementById('admin-server-groups-list');
-    
-    try {
-        const response = await apiFetch('/api/admin/server-groups', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка сети при получении групп');
-        }
-        
-        const result = await response.json();
-        console.log('Результат загрузки групп:', result);
-        if (result.success) {
-            currentAdminGroups = result.groups || [];
-            const stats = result.stats || [];
-            renderServerGroups(currentAdminGroups, stats);
-        } else {
-            throw new Error(result.error || 'Ошибка API');
-        }
-    } catch (err) {
-        console.error('Ошибка в loadServerGroups:', err);
-        if (listEl) {
-            listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">Ошибка: ${err.message}</p>`;
-        }
-        throw err;
-    }
-}
-
-// Отрисовка списка групп
-function renderServerGroups(groups, stats) {
-    console.log('Отрисовка групп:', groups, stats);
-    const listEl = document.getElementById('admin-server-groups-list');
+async function loadServersList() {
+    const listEl = document.getElementById('admin-servers-list');
     if (!listEl) return;
-    
-    if (!groups || groups.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Нет созданных групп серверов</p>';
-        return;
-    }
-
-    listEl.innerHTML = groups.map(group => {
-        const groupStats = (stats || []).find(s => s.id === group.id) || {};
-        const safeName = escapeHtml(group.name);
-        const isActive = currentSelectedGroupId === group.id;
-        return `
-            <div id="group-card-${group.id}" class="admin-user-card group-card ${isActive ? 'active' : ''}" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
-                <div class="card-content-wrapper">
-                    <div class="card-main-info">
-                        <div class="card-title-row">
-                            <span class="card-title">${safeName}</span>
-                            <div class="card-badges">
-                                ${group.is_default ? '<span class="badge-default">По умолчанию</span>' : ''}
-                                ${!group.is_active ? '<span class="badge-inactive">Неактивна</span>' : ''}
-                            </div>
-                        </div>
-                        <div class="card-description">${escapeHtml(group.description || 'Нет описания')}</div>
-                        <div class="card-stats-row">
-                            <span>Подписок: <b>${groupStats.active_subscriptions || 0}</b></span>
-                            <span>Серверов: <b>${groupStats.active_servers || 0}</b></span>
-                        </div>
-                    </div>
-                    <button class="btn-secondary card-action-btn" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// Скрыть детали группы
-function hideGroupDetail() {
-    currentSelectedGroupId = null;
-    document.getElementById('admin-group-detail').style.display = 'none';
-    // Снимаем подсветку со всех карточек
-    document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
-}
-
-// Показать модалку добавления группы
-function showAddServerGroupModal() {
-    console.log('Открытие модалки добавления группы');
-    const titleEl = document.getElementById('server-group-modal-title');
-    const idEl = document.getElementById('group-id-input');
-    const nameEl = document.getElementById('group-name-input');
-    const descEl = document.getElementById('group-desc-input');
-    const defaultEl = document.getElementById('group-default-input');
-
-    if (titleEl) titleEl.innerText = 'Добавить группу';
-    if (idEl) idEl.value = '';
-    if (nameEl) nameEl.value = '';
-    if (descEl) descEl.value = '';
-    if (defaultEl) defaultEl.checked = false;
-    
-    showModal('server-group-modal');
-}
-
-// Показать модалку редактирования группы
-function editServerGroup(groupId) {
-    const group = currentAdminGroups.find(g => g.id === groupId);
-    if (!group) return;
-
-    document.getElementById('server-group-modal-title').innerText = 'Редактировать группу';
-    document.getElementById('group-id-input').value = group.id;
-    document.getElementById('group-name-input').value = group.name;
-    document.getElementById('group-desc-input').value = group.description || '';
-    document.getElementById('group-default-input').checked = !!group.is_default;
-    showModal('server-group-modal');
-}
-
-// Сохранение группы
-async function saveServerGroup(event) {
-    event.preventDefault();
-    const id = document.getElementById('group-id-input').value;
-    const name = document.getElementById('group-name-input').value;
-    const description = document.getElementById('group-desc-input').value;
-    const is_default = document.getElementById('group-default-input').checked ? 1 : 0;
-
-    try {
-        const url = id ? '/api/admin/server-group/update' : '/api/admin/server-groups';
-        const body = {
-            name, description, is_default,
-            action: id ? undefined : 'add',
-            id: id || undefined
-        };
-
-        const response = await apiFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const result = await response.json();
-        if (result.success) {
-            closeModal('server-group-modal');
-            loadServerGroups();
-        } else {
-            alert('Ошибка: ' + result.error);
-        }
-    } catch (err) {
-        console.error('Ошибка сохранения группы:', err);
-        alert('Ошибка при сохранении');
-    }
-}
-
-// Загрузка серверов в группе
-async function loadServersInGroup(groupId, groupName) {
-    // Если нажали на уже активную группу - скрываем её
-    if (currentSelectedGroupId === groupId) {
-        hideGroupDetail();
-        return;
-    }
-
-    currentSelectedGroupId = groupId;
-    
-    // Подсветка активной карточки
-    document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
-    const activeCard = document.getElementById(`group-card-${groupId}`);
-    if (activeCard) activeCard.classList.add('active');
-
-    document.getElementById('admin-group-detail').style.display = 'block';
-    
-    const listEl = document.getElementById('admin-servers-in-group-list');
     listEl.innerHTML = '<div class="spinner"></div>';
 
     try {
         const response = await apiFetch('/api/admin/servers-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list', group_id: groupId })
+            body: JSON.stringify({ action: 'list' })
         });
         const result = await response.json();
         if (result.success) {
-            currentAdminServers = result.servers;
-            renderServersInGroup(result.servers);
-            // Прокрутка к списку серверов
-            document.getElementById('admin-group-detail').scrollIntoView({ behavior: 'smooth' });
+            currentAdminServers = result.servers || [];
+            renderServersList(currentAdminServers);
+        } else {
+            listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">${result.error || 'Ошибка API'}</p>`;
         }
     } catch (err) {
-        console.error('Ошибка загрузки серверов:', err);
-        listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
+        console.error('Ошибка загрузки маркеров:', err);
+        listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">Ошибка: ${err.message}</p>`;
     }
 }
 
-// Отрисовка списка серверов
-function renderServersInGroup(servers) {
-    const listEl = document.getElementById('admin-servers-in-group-list');
+function renderServersList(servers) {
+    const listEl = document.getElementById('admin-servers-list');
+    if (!listEl) return;
     if (!servers || servers.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">В этой группе пока нет серверов</p>';
+        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Нет маркеров. Добавьте первый.</p>';
         return;
     }
-
     listEl.innerHTML = servers.map(server => `
         <div class="admin-user-card server-card">
             <div class="card-content-wrapper">
                 <div class="card-main-info">
-                    <div class="card-title">${server.display_name || server.name}</div>
-                    <div class="card-description">${server.host} | ${server.name}</div>
+                    <div class="card-title">${escapeHtml(server.display_name || server.name)}</div>
+                    <div class="card-description">${server.lat != null && server.lng != null ? `${server.lat}, ${server.lng}` : '—'}</div>
                 </div>
                 <div class="card-actions-row">
-                    <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
-                    <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
+                    <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить">Изменить</button>
+                    <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить">Удалить</button>
                 </div>
             </div>
         </div>
     `).join('');
 }
 
-// Показать модалку добавления сервера
 function showAddServerConfigModal() {
-    document.getElementById('server-config-modal-title').innerText = 'Добавить сервер';
+    document.getElementById('server-config-modal-title').innerText = 'Добавить маркер';
     document.getElementById('server-id-input').value = '';
-    document.getElementById('server-name-input').value = '';
     document.getElementById('server-display-input').value = '';
-    document.getElementById('server-host-input').value = '';
-    document.getElementById('server-login-input').value = '';
-    document.getElementById('server-pass-input').value = '';
-    document.getElementById('server-vpnhost-input').value = '';
-    document.getElementById('server-subscription-port-input').value = '2096';
-    document.getElementById('server-subscription-url-input').value = '';
-    document.getElementById('server-client-flow-input').value = '';
-    document.getElementById('server-map-label-input').value = '';
     document.getElementById('server-lat-input').value = '';
     document.getElementById('server-lng-input').value = '';
-    document.getElementById('server-location-input').value = '';
-    document.getElementById('server-max-concurrent-input').value = '50';
     showModal('server-config-modal');
 }
 
-// Показать модалку редактирования сервера
 function editServerConfig(serverId) {
     const server = currentAdminServers.find(s => s.id === serverId);
     if (!server) return;
 
-    document.getElementById('server-config-modal-title').innerText = 'Редактировать сервер';
+    document.getElementById('server-config-modal-title').innerText = 'Редактировать маркер';
     document.getElementById('server-id-input').value = server.id;
-    document.getElementById('server-name-input').value = server.name;
     document.getElementById('server-display-input').value = server.display_name || '';
-    document.getElementById('server-host-input').value = server.host;
-    document.getElementById('server-login-input').value = server.login;
-    document.getElementById('server-pass-input').value = server.password;
-    document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
-    document.getElementById('server-subscription-port-input').value = server.subscription_port != null ? String(server.subscription_port) : '2096';
-    document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
-    document.getElementById('server-client-flow-input').value = server.client_flow || '';
-    document.getElementById('server-map-label-input').value = server.map_label || '';
-    document.getElementById('server-lat-input').value = server.lat || '';
-    document.getElementById('server-lng-input').value = server.lng || '';
-    document.getElementById('server-location-input').value = server.location || '';
-    document.getElementById('server-max-concurrent-input').value = server.max_concurrent_clients != null ? String(server.max_concurrent_clients) : '50';
+    document.getElementById('server-lat-input').value = server.lat ?? '';
+    document.getElementById('server-lng-input').value = server.lng ?? '';
     showModal('server-config-modal');
 }
 
-// Сохранение сервера
 async function saveServerConfig(event) {
     event.preventDefault();
     const id = document.getElementById('server-id-input').value;
-    const portVal = document.getElementById('server-subscription-port-input').value;
+    const displayName = (document.getElementById('server-display-input').value || '').trim();
+    const latVal = document.getElementById('server-lat-input').value;
+    const lngVal = document.getElementById('server-lng-input').value;
+
     const body = {
-        group_id: currentSelectedGroupId,
-        name: document.getElementById('server-name-input').value,
-        display_name: document.getElementById('server-display-input').value,
-        host: document.getElementById('server-host-input').value,
-        login: document.getElementById('server-login-input').value,
-        password: document.getElementById('server-pass-input').value,
-        vpn_host: document.getElementById('server-vpnhost-input').value || null,
-        subscription_port: portVal ? parseInt(portVal, 10) : null,
-        subscription_url: document.getElementById('server-subscription-url-input').value || null,
-        client_flow: document.getElementById('server-client-flow-input').value?.trim() || null,
-        map_label: document.getElementById('server-map-label-input').value?.trim() || null,
-        lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
-        lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
-        location: document.getElementById('server-location-input').value?.trim() || null,
-        max_concurrent_clients: (() => { const v = document.getElementById('server-max-concurrent-input').value; const n = parseInt(v, 10); return (v !== '' && !isNaN(n) && n >= 1) ? n : null; })(),
+        display_name: displayName || undefined,
+        map_label: displayName || undefined,
+        location: displayName || undefined,
+        lat: latVal ? parseFloat(latVal) : undefined,
+        lng: lngVal ? parseFloat(lngVal) : undefined,
         id: id || undefined,
         action: id ? undefined : 'add'
     };
@@ -4749,40 +4648,18 @@ async function saveServerConfig(event) {
         const result = await response.json();
         if (result.success) {
             closeModal('server-config-modal');
-            const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
-            loadServersInGroup(currentSelectedGroupId, group.name);
-            if (result.client_flow_changed && result.server_id) {
-                if (confirm('Обновить flow у существующих клиентов на этом сервере?')) {
-                    try {
-                        const syncRes = await apiFetch('/api/admin/server-config/sync-flow', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ server_id: result.server_id })
-                        });
-                        const syncData = await syncRes.json();
-                        if (syncData.success) {
-                            alert(`Обновлено клиентов: ${syncData.updated}${syncData.errors?.length ? '. Ошибки: ' + syncData.errors.slice(0, 3).join('; ') : ''}`);
-                        } else {
-                            alert('Ошибка синхронизации flow: ' + (syncData.error || 'unknown'));
-                        }
-                    } catch (e) {
-                        console.error('sync-flow', e);
-                        alert('Ошибка при синхронизации flow');
-                    }
-                }
-            }
+            loadServersList();
         } else {
-            alert('Ошибка: ' + result.error);
+            alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
         }
     } catch (err) {
-        console.error('Ошибка сохранения сервера:', err);
+        console.error('Ошибка сохранения маркера:', err);
         alert('Ошибка при сохранении');
     }
 }
 
-// Удаление сервера
 async function deleteServerConfig(serverId) {
-    if (!confirm('Вы уверены, что хотите удалить конфигурацию сервера? Это не удалит клиентов с самого сервера, но бот перестанет его использовать.')) return;
+    if (!confirm('Удалить этот маркер с карты?')) return;
 
     try {
         const response = await apiFetch('/api/admin/server-config/delete', {
@@ -4792,45 +4669,13 @@ async function deleteServerConfig(serverId) {
         });
         const result = await response.json();
         if (result.success) {
-            const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
-            loadServersInGroup(currentSelectedGroupId, group.name);
+            loadServersList();
         } else {
-            alert('Ошибка: ' + result.error);
+            alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
         }
     } catch (err) {
-        console.error('Ошибка удаления сервера:', err);
+        console.error('Ошибка удаления маркера:', err);
         alert('Ошибка при удалении');
     }
 }
 
-// Синхронизация всех серверов
-async function syncAllServers() {
-    if (!confirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.')) return;
-    
-    if (!isWebMode && tg?.MainButton) {
-        tg.MainButton.setText('СИНХРОНИЗАЦИЯ...');
-        tg.MainButton.show();
-        tg.MainButton.disable();
-    }
-
-    try {
-        const response = await apiFetch('/api/admin/sync-all', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const result = await response.json();
-        if (result.success) {
-            alert('Синхронизация завершена!\n' + 
-                  'Проверено подписок: ' + result.stats.subscriptions_checked + '\n' +
-                  'Создано клиентов: ' + result.stats.total_clients_created);
-            loadServerGroups();
-        } else {
-            alert('Ошибка: ' + result.error);
-        }
-    } catch (err) {
-        console.error('Ошибка синхронизации:', err);
-        alert('Ошибка при выполнении синхронизации');
-    } finally {
-        if (!isWebMode && tg?.MainButton) tg.MainButton.hide();
-    }
-}

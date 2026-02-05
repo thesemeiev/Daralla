@@ -52,47 +52,21 @@ async def init_server_config_db():
         await db.commit()
 
 
-def _get_server_manager():
-    """Получает server_manager только из контекста приложения (get_app_context())."""
-    try:
-        from ..context import get_app_context
-        ctx = get_app_context()
-        return ctx.server_manager if ctx else None
-    except Exception as e:
-        logger.debug("Не удалось получить server_manager: %s", e)
-        return None
-
-
-async def get_server_load_data():
-    """Данные по серверам для админки (список серверов с нулевой нагрузкой — Remnawave)."""
-    server_manager = _get_server_manager()
-    if not server_manager or not getattr(server_manager, 'servers', None):
-        return []
-    return [
-        {
-            'server_name': server.get("name", "Unknown"),
-            'online_clients': 0,
-            'total_active': 0,
-            'offline_clients': 0,
-            'avg_online_24h': 0,
-            'max_online_24h': 0,
-            'min_online_24h': 0,
-            'samples_24h': 0,
-            'load_percentage': 0,
-        }
-        for server in server_manager.servers
-    ]
-
-
-async def get_server_groups(only_active: bool = True):
-    """Возвращает все группы серверов."""
+async def get_or_create_default_group() -> int:
+    """Возвращает ID группы по умолчанию (для маркеров на карте). Создаёт её при первом вызове."""
     async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        query = "SELECT * FROM server_groups"
-        if only_active:
-            query += " WHERE is_active = 1"
-        async with db.execute(query) as cur:
-            return [dict(row) for row in await cur.fetchall()]
+        async with db.execute("SELECT id FROM server_groups LIMIT 1") as cur:
+            row = await cur.fetchone()
+        if row:
+            return row[0]
+        await db.execute(
+            "INSERT INTO server_groups (name, description, is_active, is_default) VALUES (?, ?, 1, 1)",
+            ("Серверы", "Маркеры на карте"),
+        )
+        await db.commit()
+        async with db.execute("SELECT id FROM server_groups ORDER BY id DESC LIMIT 1") as cur:
+            row = await cur.fetchone()
+        return row[0] if row else 1
 
 
 async def get_servers_config(group_id: int = None, only_active: bool = True):
@@ -120,71 +94,6 @@ async def get_server_by_id(server_id: int):
         async with db.execute("SELECT * FROM servers_config WHERE id = ?", (server_id,)) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
-
-
-async def add_server_group(name: str, description: str = None, is_default: bool = False):
-    """Добавляет новую группу серверов."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        if is_default:
-            await db.execute("UPDATE server_groups SET is_default = 0")
-        async with db.execute(
-            "INSERT INTO server_groups (name, description, is_default) VALUES (?, ?, ?)",
-            (name, description, 1 if is_default else 0),
-        ) as cur:
-            group_id = cur.lastrowid
-            await db.commit()
-            return group_id
-
-
-async def get_least_loaded_group_id():
-    """Возвращает ID первой активной группы, в которой есть активные серверы (для Remnawave без локальных подписок)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("""
-            SELECT g.id FROM server_groups g
-            WHERE g.is_active = 1
-              AND EXISTS (SELECT 1 FROM servers_config sc WHERE sc.group_id = g.id AND sc.is_active = 1)
-            ORDER BY g.id
-            LIMIT 1
-        """) as cur:
-            row = await cur.fetchone()
-            return row[0] if row else None
-
-
-async def update_server_group(group_id: int, name: str = None, description: str = None, is_active: int = None, is_default: int = None):
-    """Обновляет группу серверов."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        updates, params = [], []
-        if name is not None:
-            updates.append("name = ?")
-            params.append(name)
-        if description is not None:
-            updates.append("description = ?")
-            params.append(description)
-        if is_active is not None:
-            updates.append("is_active = ?")
-            params.append(is_active)
-        if is_default is not None:
-            if is_default == 1:
-                await db.execute("UPDATE server_groups SET is_default = 0")
-            updates.append("is_default = ?")
-            params.append(is_default)
-        if not updates:
-            return False
-        params.append(group_id)
-        await db.execute(f"UPDATE server_groups SET {', '.join(updates)} WHERE id = ?", params)
-        await db.commit()
-        return True
-
-
-async def delete_server_group(group_id: int):
-    """Удаляет группу, если в ней нет серверов."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT COUNT(*) FROM servers_config WHERE group_id = ?", (group_id,)) as cur:
-            if (await cur.fetchone())[0] > 0:
-                raise ValueError("Нельзя удалить группу, в которой есть серверы")
-        await db.execute("DELETE FROM server_groups WHERE id = ?", (group_id,))
-        await db.commit()
-        return True
 
 
 async def add_server_config(
@@ -230,17 +139,3 @@ async def delete_server_config(server_id: int):
         await db.execute("DELETE FROM servers_config WHERE id = ?", (server_id,))
         await db.commit()
         return True
-
-
-async def get_group_load_statistics():
-    """Статистика по группам (активные серверы; подписки в Remnawave не считаем)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("""
-            SELECT
-                g.id, g.name, g.is_active, g.is_default,
-                0 as active_subscriptions,
-                (SELECT COUNT(*) FROM servers_config WHERE group_id = g.id AND is_active = 1) as active_servers
-            FROM server_groups g
-        """) as cur:
-            return [dict(row) for row in await cur.fetchall()]

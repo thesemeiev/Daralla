@@ -40,10 +40,8 @@ async def on_startup(app):
 
         ctx = getattr(bot_module, "app_context", None)
         if ctx:
-            server_manager = ctx.server_manager
             admin_ids = ctx.admin_ids
         else:
-            server_manager = getattr(bot_module, "server_manager", None)
             admin_ids = getattr(bot_module, "ADMIN_IDS", [])
         
         logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
@@ -63,7 +61,7 @@ async def on_startup(app):
             logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
 
         # 2. Инициализация и запуск менеджера уведомлений
-        notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
+        notification_manager = NotificationManager(app.bot, admin_ids)
         await notification_manager.initialize()
         await notification_manager.start()
         bot_module.notification_manager = notification_manager
@@ -75,7 +73,7 @@ async def on_startup(app):
         
         # 3. Запуск фоновых задач
         from .tasks import start_background_tasks
-        await start_background_tasks(notification_manager, server_manager)
+        await start_background_tasks(notification_manager)
 
     except Exception as e:
         logger.error(f"Ошибка инициализации бота: {e}")

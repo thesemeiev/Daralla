@@ -1,8 +1,9 @@
 """
-Маршруты: группы серверов, конфигурация серверов, синхронизация.
+Маршруты: маркеры на карте (название + положение).
 """
 import asyncio
 import logging
+import time
 
 from flask import request, jsonify
 
@@ -22,60 +23,6 @@ def _run_async(coro):
 
 
 def register_servers_routes(bp):
-    @bp.route("/api/admin/server-groups", methods=["POST", "OPTIONS"])
-    def api_admin_server_groups():
-        if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
-            data = request.get_json(silent=True) or {}
-            from .....db import add_server_group, get_group_load_statistics, get_server_groups
-
-            action = data.get("action", "list")
-            if action == "list":
-                groups = _run_async(get_server_groups(only_active=False))
-                stats = _run_async(get_group_load_statistics())
-                return jsonify({"success": True, "groups": groups, "stats": stats})
-            if action == "add":
-                name = data.get("name")
-                description = data.get("description")
-                is_default = data.get("is_default", False)
-                if not name:
-                    return jsonify({"error": "Name is required"}), 400
-                group_id = _run_async(add_server_group(name, description, is_default))
-                return jsonify({"success": True, "group_id": group_id})
-            return jsonify({"error": "Unknown action"}), 400
-        except Exception as e:
-            logger.error("Ошибка в /api/admin/server-groups: %s", e)
-            return jsonify({"error": str(e)}), 500
-
-    @bp.route("/api/admin/server-group/update", methods=["POST", "OPTIONS"])
-    def api_admin_server_group_update():
-        if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
-            data = request.get_json(silent=True) or {}
-            group_id = data.get("id")
-            if not group_id:
-                return jsonify({"error": "Group ID is required"}), 400
-            from .....db import update_server_group
-
-            _run_async(update_server_group(
-                group_id,
-                name=data.get("name"),
-                description=data.get("description"),
-                is_active=data.get("is_active"),
-                is_default=data.get("is_default"),
-            ))
-            return jsonify({"success": True})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
     @bp.route("/api/admin/servers-config", methods=["POST", "OPTIONS"])
     def api_admin_servers_config():
         if request.method == "OPTIONS":
@@ -85,38 +32,44 @@ def register_servers_routes(bp):
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({"error": "Access denied"}), 403
             data = request.get_json(silent=True) or {}
-            from .....db import add_server_config, get_servers_config
+            from .....db import add_server_config, get_servers_config, get_or_create_default_group
             from .....services.server_provider import ServerProvider
 
             action = data.get("action", "list")
             if action == "list":
-                group_id = data.get("group_id")
-                servers = _run_async(get_servers_config(group_id=group_id, only_active=False))
+                servers = _run_async(get_servers_config(group_id=None, only_active=False))
                 return jsonify({"success": True, "servers": servers})
             if action == "add":
-                group_id = data.get("group_id")
-                name = data.get("name")
-                host = data.get("host")
-                login = data.get("login")
-                password = data.get("password")
-                if not all([group_id, name, host, login, password]):
-                    return jsonify({"error": "All fields are required"}), 400
+                display_name = (data.get("display_name") or data.get("name") or "").strip()
+                lat = data.get("lat")
+                lng = data.get("lng")
+                if not display_name:
+                    return jsonify({"error": "Название обязательно"}), 400
+                if lat is None and lng is None:
+                    return jsonify({"error": "Укажите широту и долготу"}), 400
+                try:
+                    lat_f = float(lat) if lat is not None else 0.0
+                    lng_f = float(lng) if lng is not None else 0.0
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Некорректные координаты"}), 400
+                group_id = _run_async(get_or_create_default_group())
+                name = f"m{int(time.time() * 1000)}"
                 server_id = _run_async(add_server_config(
                     group_id,
                     name,
-                    host,
-                    login,
-                    password,
-                    display_name=data.get("display_name"),
-                    vpn_host=data.get("vpn_host"),
-                    lat=data.get("lat"),
-                    lng=data.get("lng"),
-                    subscription_port=data.get("subscription_port"),
-                    subscription_url=data.get("subscription_url") or None,
-                    client_flow=data.get("client_flow") or None,
-                    map_label=data.get("map_label") or None,
-                    location=data.get("location") or None,
-                    max_concurrent_clients=data.get("max_concurrent_clients"),
+                    host="",
+                    login="",
+                    password="",
+                    display_name=display_name,
+                    vpn_host=None,
+                    lat=lat_f,
+                    lng=lng_f,
+                    subscription_port=2096,
+                    subscription_url=None,
+                    client_flow=None,
+                    map_label=display_name,
+                    location=display_name,
+                    max_concurrent_clients=50,
                 ))
                 try:
                     from .....bot import server_manager
@@ -142,14 +95,10 @@ def register_servers_routes(bp):
             server_id = data.get("id")
             if not server_id:
                 return jsonify({"error": "Server ID is required"}), 400
-            from .....db import get_server_by_id, update_server_config
+            from .....db import update_server_config
             from .....services.server_provider import ServerProvider
 
             update_data = {k: v for k, v in data.items() if k not in ("initData", "id")}
-            old_server = _run_async(get_server_by_id(int(server_id)))
-            old_flow = (old_server.get("client_flow") or "").strip() or None if old_server else None
-            new_flow = (update_data.get("client_flow") or "").strip() or None
-            client_flow_changed = old_flow != new_flow
 
             _run_async(update_server_config(server_id, **update_data))
             try:
@@ -159,23 +108,8 @@ def register_servers_routes(bp):
                     server_manager.init_from_config(new_config)
             except Exception as mgr_e:
                 logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
-            return jsonify({"success": True, "client_flow_changed": client_flow_changed, "server_id": int(server_id)})
+            return jsonify({"success": True, "server_id": int(server_id)})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    @bp.route("/api/admin/server-config/sync-flow", methods=["POST", "OPTIONS"])
-    def api_admin_server_config_sync_flow():
-        if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
-            return jsonify({
-                "error": "X-UI sync is not available. Subscriptions are managed by Remnawave."
-            }), 410
-        except Exception as e:
-            logger.exception("sync-flow error")
             return jsonify({"error": str(e)}), 500
 
     @bp.route("/api/admin/server-config/delete", methods=["POST", "OPTIONS"])
@@ -197,14 +131,3 @@ def register_servers_routes(bp):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @bp.route("/api/admin/sync-all", methods=["POST", "OPTIONS"])
-    def api_admin_sync_all():
-        if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
-            return jsonify({"success": True, "stats": {"message": "Remnawave: синхронизация не выполняется"}})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500

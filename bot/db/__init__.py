@@ -29,7 +29,7 @@ from .users_db import (
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
-    get_notification_stats, get_daily_notification_stats,
+    get_notification_stats,
     get_notification_settings, set_notification_setting,
     is_subscription_notification_sent, mark_subscription_notification_sent,
 )
@@ -60,18 +60,12 @@ from .accounts_db import (
 )
 from .server_config_db import (
     init_server_config_db,
-    get_server_groups,
     get_servers_config,
     get_server_by_id,
-    add_server_group,
-    update_server_group,
-    delete_server_group,
     add_server_config,
     update_server_config,
     delete_server_config,
-    get_least_loaded_group_id,
-    get_group_load_statistics,
-    get_server_load_data,
+    get_or_create_default_group,
     SERVER_CONFIG_UPDATE_KEYS,
 )
 
@@ -108,12 +102,10 @@ __all__ = [
     'get_payments_by_user',
     'get_all_user_ids',
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
-    'get_daily_notification_stats', 'get_notification_settings',
+    'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
     'init_server_config_db',
-    'get_server_groups', 'get_servers_config', 'get_server_by_id',
-    'add_server_group', 'update_server_group', 'delete_server_group',
+    'get_servers_config', 'get_server_by_id',
     'add_server_config', 'update_server_config', 'delete_server_config',
-    'get_least_loaded_group_id', 'get_group_load_statistics',
-    'get_server_load_data', 'SERVER_CONFIG_UPDATE_KEYS',
+    'get_or_create_default_group', 'SERVER_CONFIG_UPDATE_KEYS',
 ]

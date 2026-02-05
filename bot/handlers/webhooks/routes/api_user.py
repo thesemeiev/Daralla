@@ -251,7 +251,6 @@ def create_blueprint(bot_app):
                     server_manager = ctx.server_manager if ctx else None
                     if not server_manager:
                         return []
-                    health_status = server_manager.get_server_health_status()
                     servers_info = []
                     for location, servers in server_manager.servers_by_location.items():
                         for server in servers:
@@ -261,9 +260,6 @@ def create_blueprint(bot_app):
                             lat = server['config'].get('lat')
                             lng = server['config'].get('lng')
                             if lat is not None and lng is not None:
-                                usage_data = server_usage.get(server_name, {'count': 0, 'percentage': 0})
-                                status_info = health_status.get(server_name, {})
-                                status = status_info.get('status', 'unknown')
                                 servers_info.append({
                                     'name': server_name,
                                     'display_name': display_name,
@@ -271,9 +267,9 @@ def create_blueprint(bot_app):
                                     'location': location,
                                     'lat': lat,
                                     'lng': lng,
-                                    'usage_count': usage_data['count'],
-                                    'usage_percentage': usage_data['percentage'],
-                                    'status': status
+                                    'usage_count': 0,
+                                    'usage_percentage': 0,
+                                    'status': 'available'
                                 })
                     return servers_info
                 except (ImportError, AttributeError) as e:
