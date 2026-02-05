@@ -14,11 +14,8 @@ if TYPE_CHECKING:
 class AppContext:
     """
     Контейнер сервисов и настроек. Создаётся в bot.py, передаётся в webhook app и startup.
-    При режиме Remnawave subscription_manager и sync_manager могут быть None.
     """
     server_manager: Any
-    subscription_manager: Optional[Any] = None  # None при Remnawave
-    sync_manager: Optional[Any] = None  # None при Remnawave
     notification_manager: Optional[Any] = None
     admin_ids: List[int] = None
     telegram_app: Optional["Application"] = None

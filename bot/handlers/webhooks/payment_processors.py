@@ -17,19 +17,6 @@ from ...navigation import MenuTypes
 logger = logging.getLogger(__name__)
 
 
-def get_globals():
-    """Сервисы только из get_app_context()."""
-    from ...context import get_app_context
-    ctx = get_app_context()
-    if not ctx:
-        return {"server_manager": None, "notification_manager": None, "subscription_manager": None}
-    return {
-        "server_manager": ctx.server_manager,
-        "notification_manager": ctx.notification_manager,
-        "subscription_manager": ctx.subscription_manager,
-    }
-
-
 async def process_payment_webhook(bot_app, payment_id, status):
     """Обрабатывает платеж из webhook'а"""
     try:

@@ -21,18 +21,6 @@ import time
 
 logger = logging.getLogger(__name__)
 
-def get_globals():
-    """Сервисы и настройки только из get_app_context()."""
-    from ...context import get_app_context
-    ctx = get_app_context()
-    if not ctx:
-        return {"server_manager": None, "subscription_manager": None, "WEBAPP_URL": None}
-    return {
-        "server_manager": ctx.server_manager,
-        "subscription_manager": ctx.subscription_manager,
-        "WEBAPP_URL": ctx.config.WEBAPP_URL if ctx.config else None,
-    }
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""

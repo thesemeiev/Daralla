@@ -168,15 +168,3 @@ def check_admin_access(account_id_or_telegram_id) -> bool:
     except Exception as e:
         logger.error("Ошибка при проверке прав админа: %s", e, exc_info=True)
         return False
-
-
-def get_server_manager():
-    """Возвращает server_manager только из контекста приложения (get_app_context())."""
-    ctx = get_app_context()
-    return ctx.server_manager if ctx else None
-
-
-def get_subscription_manager():
-    """Возвращает subscription_manager только из контекста приложения (get_app_context())."""
-    ctx = get_app_context()
-    return ctx.subscription_manager if ctx else None

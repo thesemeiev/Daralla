@@ -1,5 +1,5 @@
 """
-Фоновые задачи бота (Remnawave-only: синхронизация X-UI и снимки нагрузки отключены).
+Фоновые задачи бота.
 """
 import asyncio
 import logging
@@ -7,8 +7,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager=None):
-    """Запускает фоновые задачи. sync_manager/subscription_manager не используются (Remnawave)."""
+async def start_background_tasks(notification_manager, server_manager=None):
+    """Запускает фоновые задачи."""
     logger.info("🚀 Запуск цикла фоновых задач...")
 
     # 1. Задача проверки истекающих подписок для уведомлений (каждые 30 минут)

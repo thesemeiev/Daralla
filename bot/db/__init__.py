@@ -25,8 +25,7 @@ from .payments_db import (
     cleanup_old_payments, cleanup_expired_pending_payments, get_payments_by_user
 )
 from .users_db import (
-    init_users_db, get_all_user_ids, register_simple_user, is_known_user,
-    get_config, set_config, get_all_config
+    init_users_db, get_all_user_ids,
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
@@ -107,7 +106,7 @@ __all__ = [
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
     'get_payments_by_user',
-    'get_all_user_ids', 'register_simple_user', 'is_known_user', 'get_config', 'set_config', 'get_all_config',
+    'get_all_user_ids',
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
     'get_daily_notification_stats', 'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',

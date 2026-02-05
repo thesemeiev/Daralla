@@ -41,13 +41,9 @@ async def on_startup(app):
         ctx = getattr(bot_module, "app_context", None)
         if ctx:
             server_manager = ctx.server_manager
-            subscription_manager = ctx.subscription_manager
-            sync_manager = ctx.sync_manager
             admin_ids = ctx.admin_ids
         else:
             server_manager = getattr(bot_module, "server_manager", None)
-            subscription_manager = getattr(bot_module, "subscription_manager", None)
-            sync_manager = getattr(bot_module, "sync_manager", None)
             admin_ids = getattr(bot_module, "ADMIN_IDS", [])
         
         logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
@@ -66,13 +62,6 @@ async def on_startup(app):
         except Exception as e:
             logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
 
-        # 1.0 Миграция telegram_links / known_telegram_ids (идемпотентно заполняет связи TG ↔ аккаунт)
-        try:
-            from ..db.migrations.migrate_telegram_links import migrate_telegram_links
-            await migrate_telegram_links()
-        except Exception as e:
-            logger.warning("Миграция telegram_links: %s (возможно уже выполнена)", e)
-
         # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
         await notification_manager.initialize()
@@ -86,7 +75,7 @@ async def on_startup(app):
         
         # 3. Запуск фоновых задач
         from .tasks import start_background_tasks
-        await start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager)
+        await start_background_tasks(notification_manager, server_manager)
 
     except Exception as e:
         logger.error(f"Ошибка инициализации бота: {e}")

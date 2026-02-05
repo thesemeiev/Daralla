@@ -55,20 +55,16 @@ from .utils import UIButtons, check_private_chat, set_image_paths
 
 set_image_paths(config.IMAGE_PATHS)
 
-# 4. Сервисы (Remnawave-only: подписки через Remnawave, sync/subscription managers не используются).
+# 4. Сервисы (подписки через Remnawave)
 from .services import MultiServerManager, NotificationManager
 
 server_manager = MultiServerManager()
-subscription_manager = None
-sync_manager = None
 
 # 4.1 Единый контекст приложения (Фаза 2)
 from .context import AppContext
 
 app_context = AppContext(
     server_manager=server_manager,
-    subscription_manager=subscription_manager,
-    sync_manager=sync_manager,
     notification_manager=None,
     admin_ids=config.ADMIN_IDS,
     telegram_app=None,
