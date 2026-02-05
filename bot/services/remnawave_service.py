@@ -244,13 +244,13 @@ class RemnawaveClient:
         now_ts = int(time.time())
         base_ts = now_ts
         try:
+            from .subscription_service import _parse_expiry_to_timestamp
             info = self.get_sub_info(short_uuid)
             obj = info.get("obj") or info.get("data") or info
-            exp_ms = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
-            if exp_ms:
-                exp_ts = int(exp_ms / 1000) if exp_ms >= 1e12 else int(exp_ms)
-                if exp_ts > 0:
-                    base_ts = max(exp_ts, now_ts)
+            raw_exp = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
+            exp_ts = _parse_expiry_to_timestamp(raw_exp)
+            if exp_ts > 0:
+                base_ts = max(exp_ts, now_ts)
         except Exception as e:
             logger.warning("Remnawave get_sub_info for extend failed, using now: %s", e)
         new_expiry = base_ts + add_days * 24 * 60 * 60
