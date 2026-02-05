@@ -6,7 +6,7 @@ import json
 import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
-from ...db import get_payment_by_id, update_payment_status, update_payment_activation
+from ...db import get_payment_by_id, update_payment_status, update_payment_activation, update_payment_meta
 from ...db.accounts_db import get_telegram_id_for_account
 from ...utils import (
     UIEmojis, UIStyles, UIMessages,
@@ -111,6 +111,15 @@ async def process_successful_payment_remnawave(bot_app, payment_id, account_id, 
     from ...config import SUBSCRIPTION_URL, WEBHOOK_URL
     base_url = (SUBSCRIPTION_URL or WEBHOOK_URL or "").rstrip("/")
     subscription_url = f"{base_url}/sub/{short_uuid}" if (base_url and "://" in base_url and short_uuid) else ""
+
+    # Сохраняем в meta для отображения в Web App после возврата из ЮKassa
+    await update_payment_meta(payment_id, {
+        "subscription_url": subscription_url or "",
+        "short_uuid": short_uuid or "",
+        "expires_at": new_expires_at,
+        "period": actual_period,
+        "device_limit": device_limit,
+    })
 
     if is_extension:
         success_message = (

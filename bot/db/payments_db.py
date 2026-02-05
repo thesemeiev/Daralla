@@ -76,6 +76,27 @@ async def update_payment_activation(payment_id: str, activated: bool) -> bool:
         logger.error(f"UPDATE_PAYMENT_ACTIVATION error: {e}")
         return False
 
+
+async def update_payment_meta(payment_id: str, meta_updates: dict) -> bool:
+    """Merge meta_updates into payment meta (for subscription_url etc. after success)."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute('SELECT meta FROM payments WHERE payment_id = ?', (payment_id,)) as cur:
+                row = await cur.fetchone()
+            if not row:
+                return False
+            meta = {}
+            if row['meta']:
+                meta = json.loads(row['meta'])
+            meta.update(meta_updates)
+            await db.execute('UPDATE payments SET meta = ? WHERE payment_id = ?', (json.dumps(meta), payment_id))
+            await db.commit()
+            return True
+    except Exception as e:
+        logger.error(f"UPDATE_PAYMENT_META error: {e}")
+        return False
+
 async def get_all_pending_payments() -> list:
     try:
         async with aiosqlite.connect(DB_PATH) as db:

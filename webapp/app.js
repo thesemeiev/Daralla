@@ -1876,6 +1876,31 @@ function goBackFromPayment() {
     }
 }
 
+// Переход к подпискам после успешной оплаты (с экрана успеха)
+function goToSubscriptionsFromPaymentSuccess() {
+    currentPaymentData = null;
+    showPage('subscriptions');
+    setTimeout(function() { loadSubscriptions(); }, 300);
+}
+
+// Показать на странице оплаты состояние «Подписка активирована!» с ссылкой
+function showPaymentSuccessState(data) {
+    var waitingEl = document.getElementById('payment-waiting');
+    var successEl = document.getElementById('payment-success');
+    if (!waitingEl || !successEl) return;
+    waitingEl.style.display = 'none';
+    successEl.style.display = 'block';
+    var linkEl = document.getElementById('payment-success-link');
+    var expiryEl = document.getElementById('payment-success-expiry');
+    var devicesEl = document.getElementById('payment-success-devices');
+    if (linkEl && data.subscription_url) linkEl.textContent = data.subscription_url;
+    if (expiryEl && data.expires_at) {
+        var d = new Date(data.expires_at * 1000);
+        expiryEl.textContent = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    if (devicesEl && data.device_limit != null) devicesEl.textContent = String(data.device_limit);
+}
+
 // Функция открытия ссылки на оплату
 function openPaymentLink() {
     if (!currentPaymentData || !currentPaymentData.payment_url) {
@@ -1954,9 +1979,13 @@ async function createPayment(period, subscriptionId = null) {
 
 // Функция показа страницы оплаты
 function showPaymentPage() {
-    // Показываем страницу
     showPage('payment');
-    
+    // Всегда показываем блок «Ожидает оплаты», скрываем блок успеха (на случай возврата на страницу)
+    var waitingEl = document.getElementById('payment-waiting');
+    var successEl = document.getElementById('payment-success');
+    if (waitingEl) waitingEl.style.display = 'block';
+    if (successEl) successEl.style.display = 'none';
+
     if (!currentPaymentData) {
         // Если данных еще нет, показываем индикатор загрузки
         document.getElementById('payment-period').textContent = 'Загрузка...';
@@ -2033,28 +2062,32 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
             // Проверяем, что платеж успешен И обработан вебхуком (activated = true)
             // Вебхук обрабатывает платеж и устанавливает activated = true
             if (data.success && data.status === 'succeeded' && data.activated) {
-                // Платеж успешно обработан вебхуком
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
-                
-                // Показываем уведомление только если мы еще на странице оплаты
-                // Это предотвращает дублирование уведомлений
+
                 const currentPage = document.querySelector('.page.active');
                 const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
-                
-                if (isOnPaymentPage) {
-                    if (!isWebMode && tg?.showAlert) {
+
+                if (isOnPaymentPage && data.subscription_url) {
+                    // Обновляем экран: показываем «Подписка активирована!» и ссылку на этой же странице
+                    showPaymentSuccessState(data);
+                    if (typeof tg !== 'undefined' && tg && tg.showAlert) {
                         tg.showAlert('Подписка успешно активирована!');
                     } else {
                         alert('Подписка успешно активирована!');
                     }
+                } else {
+                    // Нет subscription_url (старый платёж или API без ссылки) — как раньше: уведомление и переход к подпискам
+                    if (isOnPaymentPage) {
+                        if (typeof tg !== 'undefined' && tg && tg.showAlert) {
+                            tg.showAlert('Подписка успешно активирована!');
+                        } else {
+                            alert('Подписка успешно активирована!');
+                        }
+                    }
+                    showPage('subscriptions');
+                    setTimeout(function() { loadSubscriptions(); }, 1000);
                 }
-                
-                // Обновляем список подписок
-                showPage('subscriptions');
-                setTimeout(() => {
-                    loadSubscriptions();
-                }, 1000);
             } else if (data.success && (data.status === 'canceled' || data.status === 'refunded' || data.status === 'failed')) {
                 // Платеж отменен, возвращен или не прошел
                 clearInterval(paymentCheckInterval);

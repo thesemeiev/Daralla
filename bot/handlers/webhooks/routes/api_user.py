@@ -219,14 +219,25 @@ def create_blueprint(bot_app):
                 loop.close()
             if not payment_info:
                 return jsonify({'error': 'Payment not found'}), 404
-            if payment_info['user_id'] != str(account_id):
+            if payment_info.get('account_id') != str(account_id):
                 return jsonify({'error': 'Access denied'}), 403
-            return jsonify({
+            payload = {
                 'success': True,
                 'payment_id': payment_id,
                 'status': payment_info['status'],
                 'activated': bool(payment_info.get('activated', 0))
-            }), 200, _cors_headers()
+            }
+            if payment_info['status'] == 'succeeded' and payment_info.get('meta'):
+                meta = payment_info['meta'] if isinstance(payment_info['meta'], dict) else {}
+                if meta.get('subscription_url'):
+                    payload['subscription_url'] = meta['subscription_url']
+                if meta.get('expires_at'):
+                    payload['expires_at'] = int(meta['expires_at'])
+                if meta.get('period'):
+                    payload['period'] = meta['period']
+                if meta.get('device_limit') is not None:
+                    payload['device_limit'] = int(meta['device_limit'])
+            return jsonify(payload), 200, _cors_headers()
         except Exception as e:
             logger.error(f"Ошибка в API /api/user/payment/status/{payment_id}: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500, _cors_headers()

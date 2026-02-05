@@ -241,32 +241,64 @@
             </header>
             
             <div id="payment-content" style="padding: 24px;">
-                <div class="detail-card">
-                    <div class="detail-header">
-                        <div class="detail-status active">Ожидает оплаты</div>
-                    </div>
-                    
-                    <div class="detail-info-grid">
-                        <div class="detail-info-item">
-                            <div class="detail-info-label">Период</div>
-                            <div class="detail-info-value" id="payment-period">-</div>
+                <div id="payment-waiting" class="payment-state">
+                    <div class="detail-card">
+                        <div class="detail-header">
+                            <div class="detail-status active">Ожидает оплаты</div>
                         </div>
                         
-                        <div class="detail-info-item">
-                            <div class="detail-info-label">Сумма</div>
-                            <div class="detail-info-value" id="payment-amount">-</div>
+                        <div class="detail-info-grid">
+                            <div class="detail-info-item">
+                                <div class="detail-info-label">Период</div>
+                                <div class="detail-info-value" id="payment-period">-</div>
+                            </div>
+                            
+                            <div class="detail-info-item">
+                                <div class="detail-info-label">Сумма</div>
+                                <div class="detail-info-value" id="payment-amount">-</div>
+                            </div>
+                        </div>
+                        
+                        <div class="detail-actions">
+                            <button class="action-button" id="payment-link-button" onclick="openPaymentLink()" style="background: #4a9eff;">
+                                Перейти к оплате
+                            </button>
+                        </div>
+                        
+                        <p class="hint" style="margin-top: 16px; text-align: center; color: #999; font-size: 14px;">
+                            Ссылка действительна 15 минут
+                        </p>
+                    </div>
+                </div>
+                <div id="payment-success" class="payment-state" style="display: none;">
+                    <div class="detail-card">
+                        <div class="detail-header">
+                            <div class="detail-status" style="color: #4ade80;">Подписка активирована!</div>
+                        </div>
+                        <p style="margin: 12px 0; color: #ccc;">Ваша подписка успешно создана.</p>
+                        <div class="detail-info-grid">
+                            <div class="detail-info-item">
+                                <div class="detail-info-label">Окончание</div>
+                                <div class="detail-info-value" id="payment-success-expiry">-</div>
+                            </div>
+                            <div class="detail-info-item">
+                                <div class="detail-info-label">Устройств</div>
+                                <div class="detail-info-value" id="payment-success-devices">1</div>
+                            </div>
+                        </div>
+                        <div class="detail-info-item" style="margin-top: 12px;">
+                            <div class="detail-info-label">Ссылка на подписку</div>
+                            <div style="margin-top: 6px; word-break: break-all;">
+                                <code id="payment-success-link" style="background: #2a2a2a; padding: 8px 12px; border-radius: 8px; font-size: 12px; display: block;">-</code>
+                            </div>
+                        </div>
+                        <p class="hint" style="margin-top: 12px; color: #999; font-size: 13px;">Используйте эту ссылку для импорта в VPN-клиент.</p>
+                        <div class="detail-actions" style="margin-top: 20px;">
+                            <button class="action-button" id="payment-success-back-btn" onclick="goToSubscriptionsFromPaymentSuccess()" style="background: #4a9eff;">
+                                К подпискам
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="detail-actions">
-                        <button class="action-button" id="payment-link-button" onclick="openPaymentLink()" style="background: #4a9eff;">
-                            Перейти к оплате
-                        </button>
-                    </div>
-                    
-                    <p class="hint" style="margin-top: 16px; text-align: center; color: #999; font-size: 14px;">
-                        Ссылка действительна 15 минут
-                    </p>
                 </div>
             </div>
         </div>

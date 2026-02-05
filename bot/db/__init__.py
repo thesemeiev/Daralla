@@ -21,7 +21,7 @@ NOTIFICATIONS_DB_PATH = DB_PATH
 # Импортируем все функции из подмодулей
 from .payments_db import (
     init_payments_db, add_payment, get_payment_by_id, update_payment_status,
-    update_payment_activation, get_all_pending_payments, get_pending_payment,
+    update_payment_activation, update_payment_meta, get_all_pending_payments, get_pending_payment,
     cleanup_old_payments,     cleanup_expired_pending_payments, get_payments_by_account,
     delete_payments_by_account_id,
 )
@@ -100,7 +100,7 @@ __all__ = [
     'set_account_auth_token', 'get_account_id_by_auth_token',
     'get_telegram_chat_id_for_account', 'upsert_account_expiry_cache', 'get_accounts_expiring_soon',
     'delete_account',
-    'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
+    'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation', 'update_payment_meta',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
     'get_payments_by_account', 'delete_payments_by_account_id',
     'get_all_account_ids',
