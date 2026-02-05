@@ -315,6 +315,51 @@ function updateProfileCard(accountId, username) {
     subtitleEl.textContent = (accountId && accountId !== '—') ? accountId : 'Нажмите, чтобы открыть';
 }
 
+// Загружает данные аккаунта (ID, логин, Telegram ID) и обновляет блок «Данные аккаунта» и карточку профиля
+async function refreshAboutAccount() {
+    var userIdEl = document.getElementById('about-user-id');
+    var loginEl = document.getElementById('about-login');
+    var telegramIdEl = document.getElementById('about-telegram-id');
+    var setupEl = document.getElementById('tg-web-access-setup');
+    var manageEl = document.getElementById('tg-web-access-manage');
+    var fallback = '—';
+    function setText(el, val) {
+        if (el) el.textContent = (val != null && val !== '') ? String(val) : fallback;
+    }
+    setText(userIdEl, currentAccountId);
+    setText(loginEl, null);
+    setText(telegramIdEl, null);
+    if (manageEl) manageEl.style.display = 'none';
+    if (setupEl) setupEl.style.display = 'block';
+    try {
+        var res = await apiFetch('/api/user/link-status', { method: 'GET' });
+        if (!res.ok) {
+            updateProfileCard(currentAccountId || null, null);
+            return;
+        }
+        var data = await res.json();
+        if (!data.success) {
+            updateProfileCard(currentAccountId || null, null);
+            return;
+        }
+        var accountId = data.account_id != null ? String(data.account_id) : null;
+        var username = data.username || null;
+        var telegramId = data.telegram_id != null ? String(data.telegram_id) : null;
+        if (accountId) currentAccountId = accountId;
+        setText(userIdEl, accountId);
+        setText(loginEl, username);
+        setText(telegramIdEl, telegramId);
+        updateProfileCard(accountId, username);
+        if (data.web_access_enabled && manageEl && setupEl) {
+            setupEl.style.display = 'none';
+            manageEl.style.display = 'block';
+        }
+    } catch (e) {
+        console.warn('refreshAboutAccount:', e);
+        updateProfileCard(currentAccountId || null, null);
+    }
+}
+
 var profileCardAvatarObjectURL = null;
 
 function setProfileAvatarFromInitData() {

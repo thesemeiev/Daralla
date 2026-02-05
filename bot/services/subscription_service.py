@@ -20,6 +20,42 @@ from ..db.accounts_db import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_expiry_to_timestamp(value) -> int:
+    """
+    Преобразует значение срока подписки в Unix timestamp (секунды).
+    Поддерживает: число (мс или сек), ISO-строку (например от Remnawave).
+    """
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return 0
+        # ISO строка типа "2026-03-07T02:58:00.000Z"
+        if "T" in value or (len(value) >= 10 and value[:10].replace("-", "").isdigit()):
+            try:
+                from datetime import datetime
+                s = value.replace("Z", "+00:00")
+                if s.endswith("+00:00") or "+" in s or (s.count("-") >= 2 and "T" in s):
+                    dt = datetime.fromisoformat(s)
+                else:
+                    dt = datetime.fromisoformat(s.replace("Z", ""))
+                return int(dt.timestamp())
+            except Exception as e:
+                logger.debug("Failed to parse expiry string %r: %s", value[:50], e)
+                return 0
+        try:
+            num = int(float(value))
+            return int(num / 1000) if num >= 1e12 else num
+        except (ValueError, TypeError):
+            return 0
+    try:
+        num = int(value)
+        return int(num / 1000) if num >= 1e12 else num
+    except (TypeError, ValueError):
+        return 0
+
+
 def _get_client():
     from .remnawave_service import RemnawaveClient, load_remnawave_config
     cfg = load_remnawave_config()
@@ -38,8 +74,8 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
         client = _get_client()
         info = client.get_sub_info(short_uuid)
         obj = info.get("obj") or info.get("data") or info
-        exp_ms = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
-        exp_ts = int(exp_ms / 1000) if exp_ms and exp_ms >= 1e12 else (int(exp_ms) if exp_ms else 0)
+        raw_exp = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
+        exp_ts = _parse_expiry_to_timestamp(raw_exp)
         current_time = int(time.time())
         is_active = exp_ts > current_time if exp_ts else False
         return [{
