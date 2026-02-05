@@ -131,7 +131,7 @@ async def get_pending_payment(account_id: int | str, period: str = None) -> dict
             else:
                 # Просто последний ожидающий платеж
                 async with db.execute(
-                    "SELECT * FROM payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+                    "SELECT * FROM payments WHERE account_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
                     (acct,)
                 ) as cursor:
                     row = await cursor.fetchone()
@@ -176,7 +176,7 @@ async def get_payments_by_account(account_id: int | str, limit: int = 50) -> lis
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+                "SELECT * FROM payments WHERE account_id = ? ORDER BY created_at DESC LIMIT ?",
                 (acct, limit)
             ) as cursor:
                 rows = await cursor.fetchall()
@@ -191,7 +191,7 @@ async def get_payments_by_account(account_id: int | str, limit: int = 50) -> lis
                     result.append(res)
                 return result
     except Exception as e:
-        logger.error(f"GET_PAYMENTS_BY_USER error: {e}")
+        logger.error(f"GET_PAYMENTS_BY_ACCOUNT error: {e}")
         return []
 
 
