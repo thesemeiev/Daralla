@@ -107,7 +107,8 @@ jobs:
               # Verify backup integrity
               if sudo tar -tzf "/root/backups/data/backup_${timestamp}.tar.gz" > /dev/null 2>&1; then
                 BACKUP_SIZE=$(sudo stat -c%s "/root/backups/data/backup_${timestamp}.tar.gz" 2>/dev/null || echo "0")
-                if [ "$BACKUP_SIZE" -gt 1000 ]; then
+                # TEST server may have empty/minimal DB; accept backup >= 50 bytes (empty DB tar.gz ~100+ bytes)
+                if [ "$BACKUP_SIZE" -gt 50 ]; then
                   echo "✅ Database backup created and verified: /root/backups/data/backup_${timestamp}.tar.gz (size: ${BACKUP_SIZE} bytes)"
                   BACKUP_SUCCESS=true
                 else
