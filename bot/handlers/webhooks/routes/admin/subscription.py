@@ -33,10 +33,16 @@ def register_subscription_routes(bp):
             except Exception as remna_e:
                 logger.warning("Remnawave get_sub_info failed: %s", remna_e)
                 return jsonify({"error": "Remnawave unavailable or short_uuid not found", "detail": str(remna_e)}), 502
-            obj = info.get("obj") or info.get("data") or info
-            from .....services.subscription_service import _parse_expiry_to_timestamp
-            raw_exp = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
-            exp_ts = _parse_expiry_to_timestamp(raw_exp)
+            # Remnawave OpenAPI: GetSubscriptionInfoResponseDto has response.user.expiresAt
+            obj = info.get("response") or info.get("obj") or info.get("data") or info
+            from .....services.subscription_service import _extract_expiry_from_obj
+            exp_ts = _extract_expiry_from_obj(obj) if isinstance(obj, dict) else 0
+            if exp_ts == 0 and isinstance(obj, dict):
+                for v in obj.values():
+                    if isinstance(v, dict):
+                        exp_ts = _extract_expiry_from_obj(v)
+                        if exp_ts > 0:
+                            break
             return (
                 jsonify({
                     "success": True,

@@ -246,8 +246,11 @@ class RemnawaveClient:
         try:
             from .subscription_service import _parse_expiry_to_timestamp
             info = self.get_sub_info(short_uuid)
-            obj = info.get("obj") or info.get("data") or info
+            # Remnawave OpenAPI: GetSubscriptionInfoResponseDto has response.user.expiresAt
+            obj = info.get("response") or info.get("obj") or info.get("data") or info
             raw_exp = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
+            if not raw_exp and isinstance(obj.get("user"), dict):
+                raw_exp = obj["user"].get("expiresAt") or obj["user"].get("expires_at") or 0
             exp_ts = _parse_expiry_to_timestamp(raw_exp)
             if exp_ts > 0:
                 base_ts = max(exp_ts, now_ts)

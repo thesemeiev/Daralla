@@ -31,12 +31,12 @@ def _parse_expiry_to_timestamp(value) -> int:
         value = value.strip()
         if not value:
             return 0
-        # ISO строка типа "2026-03-07T02:58:00.000Z"
-        if "T" in value or (len(value) >= 10 and value[:10].replace("-", "").isdigit()):
+        # ISO строка: "2026-03-07T02:58:00.000Z" или "2026-03-07 02:58:00"
+        if "T" in value or " " in value or (len(value) >= 10 and value[:10].replace("-", "").isdigit()):
             try:
                 from datetime import datetime
-                s = value.replace("Z", "+00:00")
-                if s.endswith("+00:00") or "+" in s or (s.count("-") >= 2 and "T" in s):
+                s = value.replace("Z", "+00:00").replace(" ", "T", 1)
+                if "+" in s or s.endswith("+00:00"):
                     dt = datetime.fromisoformat(s)
                 else:
                     dt = datetime.fromisoformat(s.replace("Z", ""))
@@ -56,6 +56,31 @@ def _parse_expiry_to_timestamp(value) -> int:
         return 0
 
 
+def _extract_expiry_from_obj(obj: dict) -> int:
+    """Пытается извлечь дату окончания из объекта ответа Remnawave (разные ключи)."""
+    if not obj or not isinstance(obj, dict):
+        return 0
+    keys = (
+        "expiresAt", "expires_at", "expiryTime", "expireAt", "expire_at",
+        "endAt", "end_at", "validUntil", "valid_until", "expirationDate",
+    )
+    for k in keys:
+        v = obj.get(k)
+        if v is None:
+            continue
+        ts = _parse_expiry_to_timestamp(v)
+        if ts > 0:
+            return ts
+    # Попытка по значениям: любое значение, похожее на ISO-дату или число >= года
+    for v in obj.values():
+        if v is None:
+            continue
+        ts = _parse_expiry_to_timestamp(v)
+        if ts > 0 and ts > 1e9:  # разумный unix timestamp (после 2001)
+            return ts
+    return 0
+
+
 def _get_client():
     from .remnawave_service import RemnawaveClient, load_remnawave_config
     cfg = load_remnawave_config()
@@ -73,9 +98,18 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
     try:
         client = _get_client()
         info = client.get_sub_info(short_uuid)
-        obj = info.get("obj") or info.get("data") or info
-        raw_exp = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
-        exp_ts = _parse_expiry_to_timestamp(raw_exp)
+        # Remnawave OpenAPI: GetSubscriptionInfoResponseDto has response.user.expiresAt (date-time)
+        obj = info.get("response") or info.get("obj") or info.get("data") or info
+        exp_ts = _extract_expiry_from_obj(obj) if isinstance(obj, dict) else 0
+        # вложенный объект (например info.obj.sub или info.data.user)
+        if exp_ts == 0 and isinstance(obj, dict):
+            for v in obj.values():
+                if isinstance(v, dict):
+                    exp_ts = _extract_expiry_from_obj(v)
+                    if exp_ts > 0:
+                        break
+        if exp_ts == 0 and isinstance(obj, dict):
+            logger.debug("Remnawave sub info keys for account %s: %s", account_id, list(obj.keys()))
         current_time = int(time.time())
         is_active = exp_ts > current_time if exp_ts else False
         return [{
@@ -83,7 +117,7 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
             "name": "Подписка",
             "status": "active" if is_active else "expired",
             "period": "month",
-            "device_limit": obj.get("deviceLimit", 1),
+            "device_limit": (obj.get("user") or {}).get("deviceLimit") or obj.get("deviceLimit", 1),
             "created_at": current_time,
             "created_at_formatted": datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
             "expires_at": exp_ts,
