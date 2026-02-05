@@ -128,10 +128,11 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         showAdminUserDetail(p.id);
         return true;
     }
-    if (route.pageName === 'subscription-detail' && p.id) {
+    if (route.pageName === 'subscription-detail' && (p.id !== undefined && p.id !== null && p.id !== '')) {
         loadSubscriptions().then(function () {
             var subs = window.allSubscriptions || [];
             var sub = subs.find(function (s) { return String(s.id) === String(p.id); });
+            if (!sub && subs.length === 1 && (p.id === '0' || p.id === 0)) sub = subs[0];
             if (sub) showSubscriptionDetail(sub);
             else showPage('subscriptions');
         });
@@ -145,8 +146,9 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         showAdminSubscriptionEdit(Number(p.id));
         return true;
     }
-    if (route.pageName === 'extend-subscription' && p.id) {
-        showExtendSubscriptionModal(Number(p.id));
+    if (route.pageName === 'extend-subscription' && (p.id !== undefined && p.id !== null && p.id !== '')) {
+        var extId = p.id === '0' || p.id === 0 ? 0 : Number(p.id);
+        if (!isNaN(extId)) showExtendSubscriptionModal(extId);
         return true;
     }
     if (route.pageName === 'admin-create-subscription' && (p.accountId || p.userId)) {
@@ -513,7 +515,7 @@ function showSubscriptionDetail(sub) {
                 
                 <div class="detail-info-item">
                     <div class="detail-info-label">${sub.status === 'active' ? 'Истекает' : 'Истекла'}</div>
-                    <div class="detail-info-value">${sub.expires_at_formatted}</div>
+                    <div class="detail-info-value">${sub.expires_at_formatted || (sub.expires_at ? new Date(sub.expires_at * 1000).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')}</div>
                 </div>
                 
                 ${sub.status === 'active' && sub.expires_at ? `
@@ -1895,12 +1897,12 @@ let currentExtendSubscriptionId = null;
 let currentPaymentData = null;
 
 // Функция показа страницы продления подписки
+// subscriptionId может быть 0 (у Remnawave одна подписка с id: 0)
 function showExtendSubscriptionModal(subscriptionId) {
-    if (!subscriptionId) {
+    if (subscriptionId === undefined || subscriptionId === null) {
         alert('Ошибка: ID подписки не найден');
         return;
     }
-    
     currentExtendSubscriptionId = subscriptionId;
     showPage('extend-subscription', { id: String(subscriptionId) });
 }
