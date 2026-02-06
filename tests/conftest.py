@@ -104,13 +104,17 @@ async def db():
     
     yield database
     
-    # Cleanup: drop all tables
+    # Cleanup: drop all tables (except SQLite system tables)
     cursor = await database.cursor()
     await cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = await cursor.fetchall()
     
+    # SQLite system tables that should not be dropped
+    system_tables = {'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat2', 'sqlite_stat3', 'sqlite_stat4'}
+    
     for (table_name,) in tables:
-        await database.execute(f"DROP TABLE IF EXISTS {table_name}")
+        if table_name not in system_tables:
+            await database.execute(f"DROP TABLE IF EXISTS {table_name}")
     
     await database.commit()
 
