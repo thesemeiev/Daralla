@@ -14,7 +14,8 @@ async def check_private_chat(update: Update) -> bool:
     Проверяет, что команда используется в приватном чате.
     Возвращает True если чат приватный, False если нет.
     """
-    if not update.effective_chat or update.effective_chat.type != 'private':
+    effective_chat = update.effective_chat
+    if effective_chat is None or effective_chat.type != 'private':
         await safe_edit_or_reply(
             update.message,
             f"{UIEmojis.WARNING} Эта команда работает только в личных сообщениях.\n"
