@@ -24,20 +24,13 @@ class APIResponse:
     
     @staticmethod
     def _make_response(payload: Dict[str, Any], status_code: int) -> Tuple[Response, int, Dict]:
-        """Создает Response объект, работает с Flask контекстом и без него"""
-        try:
-            # Пытаемся использовать jsonify если есть Flask application context
-            from flask import has_app_context, current_app
-            if has_app_context():
-                response = jsonify(payload)
-                response.status_code = status_code
-                return response, status_code, APIResponse.cors_headers()
-        except (RuntimeError, AttributeError):
-            pass
-        
-        # Fallback: создаем Response вручную без Flask контекста
-        json_str = json.dumps(payload, ensure_ascii=False)
-        response = Response(json_str, status=status_code, mimetype='application/json')
+        """
+        Создает Response объект с использованием Flask jsonify.
+        Требует активного Flask application context.
+        В production коде контекст всегда доступен через Flask request context.
+        """
+        response = jsonify(payload)
+        response.status_code = status_code
         return response, status_code, APIResponse.cors_headers()
     
     @staticmethod

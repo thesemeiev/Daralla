@@ -116,12 +116,18 @@ async def db():
 
 
 @pytest.fixture
-def app(db):
+def app():
     """Create Flask test application."""
     app = Flask(__name__)
     app.config['TESTING'] = True
     
     return app
+
+
+@pytest.fixture
+def app_context(app):
+    """Create Flask application context for testing."""
+    return app.app_context()
 
 
 @pytest.fixture

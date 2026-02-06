@@ -96,36 +96,36 @@ class TestWebBearerTokenAuthentication:
 class TestAPIResponseInAuth:
     """Test that auth endpoints return proper APIResponse format."""
     
-    @pytest.mark.asyncio
-    async def test_unauthorized_response_format(self):
+    def test_unauthorized_response_format(self, app_context):
         """Test that unauthorized response has correct format."""
-        response, status, headers = APIResponse.unauthorized()
-        
-        # Should be tuple (data, status, headers)
-        assert status == 401
-        assert headers['Content-Type'] == 'application/json'
-        assert headers['Access-Control-Allow-Origin'] == '*'
-        # Check response data
-        import json
-        data = json.loads(response.data)
-        assert data['success'] is False
-        assert data['error'] == "Unauthorized"
-        assert data['error_code'] == "UNAUTHORIZED"
+        with app_context:
+            response, status, headers = APIResponse.unauthorized()
+            
+            # Should be tuple (data, status, headers)
+            assert status == 401
+            assert headers['Content-Type'] == 'application/json'
+            assert headers['Access-Control-Allow-Origin'] == '*'
+            # Check response data
+            import json
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert data['error'] == "Unauthorized"
+            assert data['error_code'] == "UNAUTHORIZED"
     
-    @pytest.mark.asyncio
-    async def test_forbidden_response_format(self):
+    def test_forbidden_response_format(self, app_context):
         """Test that forbidden response has correct format."""
-        response, status, headers = APIResponse.forbidden()
-        
-        assert status == 403
-        assert headers['Content-Type'] == 'application/json'
-        assert headers['Access-Control-Allow-Origin'] == '*'
-        # Check response data
-        import json
-        data = json.loads(response.data)
-        assert data['success'] is False
-        assert data['error'] == "Forbidden"
-        assert data['error_code'] == "FORBIDDEN"
+        with app_context:
+            response, status, headers = APIResponse.forbidden()
+            
+            assert status == 403
+            assert headers['Content-Type'] == 'application/json'
+            assert headers['Access-Control-Allow-Origin'] == '*'
+            # Check response data
+            import json
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert data['error'] == "Forbidden"
+            assert data['error_code'] == "FORBIDDEN"
 
 
 class TestAdminAuthentication:
