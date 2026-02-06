@@ -103,7 +103,7 @@ def create_blueprint(bot_app):
                             expire_at_iso = expire_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
                             create_payload = {
                                 "telegramId": int(telegram_id),
-                                "username": f"tg_{telegram_id}",
+                                "username": f"acc_{account_id}",
                                 "expireAt": expire_at_iso,
                             }
                             created = client.create_user(create_payload)

@@ -232,11 +232,13 @@ async def activate_subscription_after_payment(
             if not remna_user and username:
                 remna_user = client.get_user_by_username(username)
             if not remna_user:
+                remna_user = client.get_user_by_username(f"acc_{account_id}")
+            if not remna_user:
                 now_ts = int(time.time())
                 exp_ts = now_ts + days * 24 * 60 * 60
                 expire_at_iso = datetime.datetime.utcfromtimestamp(exp_ts).strftime("%Y-%m-%dT%H:%M:%S.000Z")
                 create_payload = {
-                    "username": (username or f"acc_{account_id}").strip() or f"acc_{account_id}",
+                    "username": f"acc_{account_id}",
                     "expireAt": expire_at_iso,
                 }
                 if telegram_id:
