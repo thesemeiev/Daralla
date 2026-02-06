@@ -230,6 +230,14 @@ class RemnawaveClient:
             payload["deviceLimit"] = device_limit
         return self.patch_user(payload)
 
+    def update_user_telegram_id(self, user_uuid: str, telegram_id: Optional[int]) -> dict[str, Any]:
+        """
+        Set or clear telegramId for a user in Remnawave.
+        telegram_id=None clears the field (e.g. after unlink).
+        """
+        payload: dict[str, Any] = {"uuid": user_uuid, "telegramId": telegram_id}
+        return self.patch_user(payload)
+
     def extend_user_by_days(
         self,
         user_uuid: str,

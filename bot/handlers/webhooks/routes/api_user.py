@@ -63,7 +63,9 @@ def create_blueprint(bot_app):
                             ))
                         elif telegram_id:
                             import datetime
-                            expire_at_iso = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")  # без подписки — «истекшая» дата
+                            trial_days = 5
+                            expire_at = datetime.datetime.utcnow() + datetime.timedelta(days=trial_days)
+                            expire_at_iso = expire_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
                             create_payload = {
                                 "telegramId": int(telegram_id),
                                 "username": f"tg_{telegram_id}",
@@ -390,6 +392,10 @@ def create_blueprint(bot_app):
                 short_uuid = mapping.get("remnawave_short_uuid") if mapping else None
                 pwd_hash = loop.run_until_complete(get_account_password_hash(account_id))
                 web_access_enabled = pwd_hash is not None
+                from ....config import SUBSCRIPTION_URL, WEBHOOK_URL
+                base_url = (SUBSCRIPTION_URL or WEBHOOK_URL or "").rstrip("/")
+                subscription_base_url = base_url if (base_url and "://" in base_url) else ""
+                subscription_url = f"{base_url}/sub/{short_uuid}" if (subscription_base_url and short_uuid) else ""
                 return jsonify({
                     'success': True,
                     'telegram_linked': tid is not None,
@@ -399,6 +405,8 @@ def create_blueprint(bot_app):
                     'telegram_id': tid,
                     'web_access_enabled': web_access_enabled,
                     'short_uuid': short_uuid,
+                    'subscription_base_url': subscription_base_url,
+                    'subscription_url': subscription_url,
                 })
             finally:
                 loop.close()
@@ -566,6 +574,8 @@ def create_blueprint(bot_app):
                 if not telegram_id:
                     return jsonify({'error': 'Telegram не привязан к этому аккаунту'}), 400
                 loop.run_until_complete(delete_identity(account_id, "telegram", telegram_id))
+                from ....services.subscription_service import sync_remnawave_telegram_id
+                loop.run_until_complete(sync_remnawave_telegram_id(account_id, None))
                 logger.info("Отвязан Telegram %s от account_id=%s", telegram_id, account_id)
                 return jsonify({
                     'success': True,

@@ -11,6 +11,7 @@ from ...db.accounts_db import (
     link_identity,
     get_telegram_id_for_account,
 )
+from ...services.subscription_service import sync_remnawave_telegram_id
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ async def link_telegram_confirm_callback(update: Update, context: ContextTypes.D
             await query.message.edit_text("Аккаунт уже привязан к Telegram.")
             return
         await link_identity(account_id, "telegram", tg_user_id)
+        await sync_remnawave_telegram_id(account_id, int(tg_user_id))
         logger.info("Привязан Telegram %s к account_id=%s (после подтверждения)", tg_user_id, account_id)
 
         # Удаляем временные данные из контекста

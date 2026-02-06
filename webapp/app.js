@@ -352,6 +352,7 @@ async function refreshAboutAccount() {
         setText(loginEl, username);
         setText(telegramIdEl, telegramId);
         updateProfileCard(accountId, username);
+        window.__subscriptionBaseUrl = data.subscription_base_url || '';
         if (data.web_access_enabled && manageEl && setupEl) {
             setupEl.style.display = 'none';
             manageEl.style.display = 'block';
@@ -531,7 +532,7 @@ function showSubscriptionDetail(sub) {
                     Переименовать подписку
                 </button>
                 ${sub.status === 'active' ? `
-                    <button class="action-button" onclick="copySubscriptionLink('${sub.token}')" style="margin-bottom: 12px;">
+                    <button class="action-button" data-token="${escapeHtml(sub.token || '')}" data-subscription-url="${escapeHtml(sub.subscription_url || '')}" onclick="copySubscriptionLinkFromButton(this)" style="margin-bottom: 12px;">
                         Копировать ссылку подписки
                     </button>
                 ` : ''}
@@ -2209,9 +2210,21 @@ async function renameSubscription(subId, newName) {
     }
 }
 
-function copySubscriptionLink(token) {
-    const webhookUrl = window.location.origin;
-    const subscriptionUrl = `${webhookUrl}/sub/${token}`;
+function copySubscriptionLinkFromButton(btn) {
+    var token = btn.getAttribute('data-token') || '';
+    var subscriptionUrl = btn.getAttribute('data-subscription-url') || '';
+    copySubscriptionLink(token, subscriptionUrl || null);
+}
+
+function copySubscriptionLink(token, subscriptionUrlFromApi) {
+    var subscriptionUrl;
+    if (subscriptionUrlFromApi && subscriptionUrlFromApi.indexOf('/sub/') !== -1) {
+        subscriptionUrl = subscriptionUrlFromApi;
+    } else if (window.__subscriptionBaseUrl) {
+        subscriptionUrl = window.__subscriptionBaseUrl.replace(/\/$/, '') + '/sub/' + token;
+    } else {
+        subscriptionUrl = window.location.origin + '/sub/' + token;
+    }
     
     const showCopyMessage = (msg) => {
         if (!isWebMode && tg?.showAlert) tg.showAlert(msg);

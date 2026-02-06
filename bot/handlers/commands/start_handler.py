@@ -63,6 +63,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("Аккаунт уже привязан к Telegram.")
             return
         await link_identity(account_id, "telegram", tg_user_id)
+        from ...services.subscription_service import sync_remnawave_telegram_id
+        await sync_remnawave_telegram_id(account_id, int(tg_user_id))
         logger.info("Привязан Telegram %s к account_id=%s", tg_user_id, account_id)
         text = (
             "Аккаунт привязан.\n\n"

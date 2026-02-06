@@ -87,6 +87,32 @@ def _get_client():
     return RemnawaveClient(cfg)
 
 
+async def sync_remnawave_telegram_id(account_id: int, telegram_id: Optional[int]) -> None:
+    """
+    Синхронизирует telegramId в Remnawave с текущей привязкой аккаунта.
+    telegram_id=None — очистить (после отвязки Telegram).
+    Best-effort: при ошибке Remnawave только логируем, не пробрасываем.
+    """
+    try:
+        from .remnawave_service import is_remnawave_configured
+        if not is_remnawave_configured():
+            return
+    except Exception:
+        return
+    mapping = await get_remnawave_mapping(account_id)
+    if not mapping:
+        return
+    uuid_rw = mapping.get("remnawave_user_uuid")
+    if not uuid_rw:
+        return
+    try:
+        client = _get_client()
+        client.update_user_telegram_id(uuid_rw, telegram_id)
+        logger.debug("Remnawave telegramId synced for account_id=%s: %s", account_id, telegram_id)
+    except Exception as e:
+        logger.warning("Remnawave sync telegramId for account_id=%s failed (non-fatal): %s", account_id, e)
+
+
 async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]:
     """Список подписок аккаунта из Remnawave (обычно одна запись)."""
     mapping = await get_remnawave_mapping(account_id)
@@ -112,6 +138,9 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
             logger.debug("Remnawave sub info keys for account %s: %s", account_id, list(obj.keys()))
         current_time = int(time.time())
         is_active = exp_ts > current_time if exp_ts else False
+        from ..config import SUBSCRIPTION_URL, WEBHOOK_URL
+        base_url = (SUBSCRIPTION_URL or WEBHOOK_URL or "").rstrip("/")
+        subscription_url = f"{base_url}/sub/{short_uuid}" if (base_url and "://" in base_url and short_uuid) else ""
         return [{
             "id": 0,
             "name": "Подписка",
@@ -125,6 +154,7 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
             "price": 0,
             "token": short_uuid,
             "short_uuid": short_uuid,
+            "subscription_url": subscription_url,
             "days_remaining": max(0, (exp_ts - current_time) // (24 * 60 * 60)) if is_active and exp_ts else 0,
         }]
     except Exception as e:
