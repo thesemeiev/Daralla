@@ -89,13 +89,11 @@ async def db():
         """
         CREATE TABLE IF NOT EXISTS payments (
             payment_id TEXT PRIMARY KEY,
-            account_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            status TEXT DEFAULT 'pending',
-            activated INTEGER DEFAULT 0,
-            meta TEXT,
+            account_id TEXT NOT NULL,
+            status TEXT NOT NULL,
             created_at INTEGER NOT NULL,
-            FOREIGN KEY(account_id) REFERENCES accounts(account_id)
+            meta TEXT,
+            activated INTEGER DEFAULT 0
         )
         """
     )
@@ -120,9 +118,25 @@ async def db():
 
 
 @pytest.fixture
-def app():
-    """Create Flask test application."""
-    app = Flask(__name__)
+def mock_bot_app():
+    """Create a mock bot application for testing."""
+    from unittest.mock import MagicMock
+    mock_app = MagicMock()
+    return mock_app
+
+
+@pytest.fixture
+def app(mock_bot_app):
+    """Create Flask test application with registered routes."""
+    from bot.handlers.webhooks.webhook_app import create_webhook_app
+    from bot.context import AppContext
+    
+    # Create minimal app context
+    app_context = AppContext()
+    app_context.telegram_app = mock_bot_app
+    
+    # Create webhook app with routes
+    app = create_webhook_app(mock_bot_app, app_context)
     app.config['TESTING'] = True
     
     return app
@@ -207,10 +221,10 @@ async def test_payment(db, test_account):
     await cursor.execute(
         """
         INSERT INTO payments 
-        (payment_id, account_id, amount, status, activated, meta, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (payment_id, account_id, status, activated, meta, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (payment_id, account_id, 299.0, "pending", 0, meta, now)
+        (payment_id, str(account_id), "pending", 0, meta, now)
     )
     
     await db.commit()
@@ -218,7 +232,6 @@ async def test_payment(db, test_account):
     return {
         "payment_id": payment_id,
         "account_id": account_id,
-        "amount": 299.0,
         "status": "pending",
         "activated": 0,
         "meta": json.loads(meta),

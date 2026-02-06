@@ -11,8 +11,7 @@ from unittest.mock import Mock, patch, AsyncMock
 class TestPaymentWebhookReception:
     """Test receiving and parsing YooKassa webhook."""
     
-    @pytest.mark.asyncio
-    async def test_webhook_invalid_json(self, client):
+    def test_webhook_invalid_json(self, client):
         """Test webhook with invalid JSON."""
         response = client.post(
             '/webhook/yookassa',
@@ -24,8 +23,7 @@ class TestPaymentWebhookReception:
         data = response.get_json()
         assert data.get('status') == 'error'
     
-    @pytest.mark.asyncio
-    async def test_webhook_missing_object_field(self, client):
+    def test_webhook_missing_object_field(self, client):
         """Test webhook without 'object' field."""
         response = client.post(
             '/webhook/yookassa',
@@ -36,8 +34,7 @@ class TestPaymentWebhookReception:
         data = response.get_json()
         assert data.get('status') == 'error'
     
-    @pytest.mark.asyncio
-    async def test_webhook_missing_payment_id(self, client):
+    def test_webhook_missing_payment_id(self, client):
         """Test webhook with missing payment_id."""
         response = client.post(
             '/webhook/yookassa',
@@ -53,8 +50,7 @@ class TestPaymentWebhookReception:
         data = response.get_json()
         assert data.get('status') == 'error'
     
-    @pytest.mark.asyncio
-    async def test_webhook_missing_status(self, client):
+    def test_webhook_missing_status(self, client):
         """Test webhook with missing status."""
         response = client.post(
             '/webhook/yookassa',
@@ -70,8 +66,7 @@ class TestPaymentWebhookReception:
         data = response.get_json()
         assert data.get('status') == 'error'
     
-    @pytest.mark.asyncio
-    async def test_webhook_valid_structure(self, client):
+    def test_webhook_valid_structure(self, client):
         """Test webhook with valid structure."""
         response = client.post(
             '/webhook/yookassa',
@@ -205,8 +200,7 @@ class TestPaymentFailureWebhook:
 class TestPaymentWebhookWithUnknownPayment:
     """Test webhook handling for non-existent payments."""
     
-    @pytest.mark.asyncio
-    async def test_webhook_unknown_payment_id(self, client):
+    def test_webhook_unknown_payment_id(self, client):
         """Test webhook for payment that doesn't exist in DB."""
         response = client.post(
             '/webhook/yookassa',
@@ -279,8 +273,7 @@ class TestPaymentWebhookDataIntegrity:
         # Verify payment data wasn't corrupted
         # TODO: Query DB and verify amount unchanged
     
-    @pytest.mark.asyncio
-    async def test_webhook_with_metadata(self, db, client):
+    def test_webhook_with_metadata(self, db, client):
         """Test webhook with additional metadata."""
         meta_data = {
             'type': 'month',
@@ -349,8 +342,7 @@ class TestPaymentWebhookResponseFormat:
 class TestPaymentWebhookErrors:
     """Test webhook error handling."""
     
-    @pytest.mark.asyncio
-    async def test_webhook_handles_database_error(self, client):
+    def test_webhook_handles_database_error(self, client):
         """Test webhook handles database errors gracefully."""
         # Even if DB fails, webhook should return 200 to YooKassa
         response = client.post(
@@ -365,8 +357,7 @@ class TestPaymentWebhookErrors:
         
         assert response.status_code in [200, 202, 500]
     
-    @pytest.mark.asyncio
-    async def test_webhook_handles_timeout(self, client):
+    def test_webhook_handles_timeout(self, client):
         """Test webhook handles timeout gracefully."""
         # Should not hang indefinitely
         response = client.post(
@@ -386,8 +377,7 @@ class TestPaymentWebhookErrors:
 class TestPaymentWebhookSecurity:
     """Test webhook security aspects."""
     
-    @pytest.mark.asyncio
-    async def test_webhook_without_signature(self, client):
+    def test_webhook_without_signature(self, client):
         """Test webhook without YooKassa signature."""
         # For now, signature verification might be disabled for testing
         response = client.post(
@@ -403,8 +393,7 @@ class TestPaymentWebhookSecurity:
         # Should handle appropriately
         assert response.status_code in [200, 202, 401]
     
-    @pytest.mark.asyncio
-    async def test_webhook_with_invalid_signature(self, client):
+    def test_webhook_with_invalid_signature(self, client):
         """Test webhook with invalid signature."""
         response = client.post(
             '/webhook/yookassa',
