@@ -71,7 +71,7 @@ async def on_startup(app):
         notification_manager = NotificationManager(app.bot, admin_ids)
         await notification_manager.initialize()
         await notification_manager.start()
-        bot_module.notification_manager = notification_manager
+        setattr(bot_module, "notification_manager", notification_manager)
         if ctx:
             ctx.notification_manager = notification_manager
         

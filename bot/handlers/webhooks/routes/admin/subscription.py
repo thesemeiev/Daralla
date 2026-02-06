@@ -4,35 +4,35 @@
 import datetime
 import logging
 
-from flask import request, jsonify
+from flask import request
 
-from ...webhook_auth import authenticate_request, check_admin_access
-from ._common import CORS_HEADERS, options_response
+from ...webhook_utils import APIResponse, require_admin, handle_options, run_async, AuthContext
 
 logger = logging.getLogger(__name__)
 
 
 def register_subscription_routes(bp):
     @bp.route("/api/admin/subscription/by-short-uuid", methods=["POST", "OPTIONS"])
-    def api_admin_subscription_by_short_uuid():
+    @require_admin
+    def api_admin_subscription_by_short_uuid(auth: AuthContext):
         if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
-            data = request.get_json(silent=True) or {}
-            short_uuid = (data.get("short_uuid") or data.get("shortUuid") or "").strip()
-            if not short_uuid:
-                return jsonify({"error": "short_uuid required"}), 400
+            return handle_options()
+        
+        data = request.get_json(silent=True) or {}
+        short_uuid = (data.get("short_uuid") or data.get("shortUuid") or "").strip()
+        if not short_uuid:
+            return APIResponse.bad_request('short_uuid required')
+        
+        async def fetch():
             try:
                 from .....services.remnawave_service import RemnawaveClient, load_remnawave_config
                 cfg = load_remnawave_config()
                 client = RemnawaveClient(cfg)
-                info = client.get_sub_info(short_uuid)
+                info = await client.get_sub_info(short_uuid)
             except Exception as remna_e:
                 logger.warning("Remnawave get_sub_info failed: %s", remna_e)
-                return jsonify({"error": "Remnawave unavailable or short_uuid not found", "detail": str(remna_e)}), 502
+                return APIResponse.internal_error(f'Remnawave unavailable or short_uuid not found')
+            
             # Remnawave OpenAPI: GetSubscriptionInfoResponseDto has response.user.expiresAt
             obj = info.get("response") or info.get("obj") or info.get("data") or info
             from .....services.subscription_service import _extract_expiry_from_obj
@@ -43,19 +43,18 @@ def register_subscription_routes(bp):
                         exp_ts = _extract_expiry_from_obj(v)
                         if exp_ts > 0:
                             break
-            return (
-                jsonify({
-                    "success": True,
-                    "subscription": {
-                        "short_uuid": short_uuid,
-                        "expires_at": exp_ts,
-                        "expires_at_formatted": datetime.datetime.fromtimestamp(exp_ts).strftime("%d.%m.%Y %H:%M") if exp_ts else None,
-                        "raw": obj,
-                    },
-                }),
-                200,
-                {**CORS_HEADERS, "Content-Type": "application/json"},
+            
+            return APIResponse.success(
+                subscription={
+                    "short_uuid": short_uuid,
+                    "expires_at": exp_ts,
+                    "expires_at_formatted": datetime.datetime.fromtimestamp(exp_ts).strftime("%d.%m.%Y %H:%M") if exp_ts else None,
+                    "raw": obj,
+                }
             )
+        
+        try:
+            return run_async(fetch())
         except Exception as e:
             logger.error("Ошибка в /api/admin/subscription/by-short-uuid: %s", e, exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
+            return APIResponse.internal_error()

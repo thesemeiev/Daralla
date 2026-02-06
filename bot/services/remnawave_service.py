@@ -285,7 +285,7 @@ class RemnawaveClient:
         return new_expiry
 
 
-def _safe_json(r: requests.Response) -> dict[str, Any]:
+def _safe_json(r: httpx.Response) -> dict[str, Any]:
     try:
         data = r.json()
     except Exception as e:

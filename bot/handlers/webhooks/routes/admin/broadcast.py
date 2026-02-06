@@ -5,38 +5,26 @@ import asyncio
 import logging
 
 import telegram
-from flask import request, jsonify
+from flask import request
 
-from ...webhook_auth import authenticate_request, check_admin_access
+from ...webhook_utils import require_admin, APIResponse, run_async, AuthContext, handle_options
 from .....context import get_app_context
-from ._common import CORS_HEADERS, options_response
 
 logger = logging.getLogger(__name__)
 
 
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
 def register_broadcast_routes(bp, bot_app):
     @bp.route("/api/admin/broadcast", methods=["POST", "OPTIONS"])
-    def api_admin_broadcast():
+    @require_admin
+    def api_admin_broadcast(auth: AuthContext):
         if request.method == "OPTIONS":
-            return options_response()
+            return handle_options()
         try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
             data = request.get_json(silent=True) or {}
             message_text = (data.get("message") or "").strip()
             if not message_text:
-                return jsonify({"error": "Message text is required"}), 400
-            account_ids = data.get("account_ids", data.get("user_ids", []))  # user_ids — legacy
+                return APIResponse.bad_request("Message text is required")
+            account_ids = data.get("account_ids", data.get("user_ids", []))
 
             from .....db import get_all_account_ids
             from .....db.accounts_db import get_telegram_chat_id_for_account
@@ -108,12 +96,8 @@ def register_broadcast_routes(bp, bot_app):
                         await asyncio.sleep(0.1)
                 return {"sent": sent, "failed": failed, "total": total}
 
-            result = _run_async(send_broadcast_async())
-            return (
-                jsonify(result),
-                200,
-                {**CORS_HEADERS, "Content-Type": "application/json"},
-            )
+            result = run_async(send_broadcast_async())
+            return APIResponse.success(**result)
         except Exception as e:
             logger.error("Ошибка в /api/admin/broadcast: %s", e, exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
+            return APIResponse.internal_error()

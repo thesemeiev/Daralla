@@ -5,6 +5,7 @@ import aiosqlite
 import logging
 import datetime
 import json
+from typing import Optional
 from . import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def init_payments_db():
         ''')
         await db.commit()
 
-async def add_payment(payment_id: str, account_id: int | str, status: str, meta: dict = None):
+async def add_payment(payment_id: str, account_id: int | str, status: str, meta: Optional[dict] = None):
     try:
         now = int(datetime.datetime.now().timestamp())
         meta_json = json.dumps(meta) if meta else None
@@ -40,7 +41,7 @@ async def add_payment(payment_id: str, account_id: int | str, status: str, meta:
         logger.error(f"ADD_PAYMENT error: {e}")
         return False
 
-async def get_payment_by_id(payment_id: str) -> dict:
+async def get_payment_by_id(payment_id: str) -> Optional[dict]:
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
@@ -108,7 +109,7 @@ async def get_all_pending_payments() -> list:
         logger.error(f"GET_ALL_PENDING_PAYMENTS error: {e}")
         return []
 
-async def get_pending_payment(account_id: int | str, period: str = None) -> dict:
+async def get_pending_payment(account_id: int | str, period: Optional[str] = None) -> Optional[dict]:
     try:
         acct = str(account_id)
         async with aiosqlite.connect(DB_PATH) as db:
@@ -127,23 +128,23 @@ async def get_pending_payment(account_id: int | str, period: str = None) -> dict
                             if meta.get('type') == period:
                                 res['meta'] = meta
                                 return res
-                return None
-            else:
-                # Просто последний ожидающий платеж
-                async with db.execute(
-                    "SELECT * FROM payments WHERE account_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
-                    (acct,)
-                ) as cursor:
-                    row = await cursor.fetchone()
-                    if row:
-                        res = dict(row)
-                        if res['meta']:
-                            res['meta'] = json.loads(res['meta'])
-                        return res
                     return None
+            # Просто последний ожидающий платеж
+            async with db.execute(
+                "SELECT * FROM payments WHERE account_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+                (acct,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    res = dict(row)
+                    if res['meta']:
+                        res['meta'] = json.loads(res['meta'])
+                    return res
+                return None
     except Exception as e:
         logger.error(f"GET_PENDING_PAYMENT error: {e}")
         return None
+
 
 async def cleanup_old_payments(days: int = 30) -> int:
     try:

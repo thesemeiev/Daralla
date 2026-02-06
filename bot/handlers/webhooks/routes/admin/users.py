@@ -1,30 +1,20 @@
 """
 Маршруты: список пользователей и карточка пользователя.
 """
-import asyncio
 import datetime
 import json
 import logging
 
 import aiosqlite
-from flask import request, jsonify
+from flask import request
 
-from ...webhook_auth import authenticate_request, check_admin_access
-from ._common import CORS_HEADERS, options_response
+from ...webhook_utils import APIResponse, require_admin, handle_options, run_async, AuthContext
 
 logger = logging.getLogger(__name__)
 
 
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
 def _format_payment(payment):
+    """Форматирует один платеж для вывода."""
     payment_id = payment.get("payment_id") or payment.get("id", "N/A")
     status = payment.get("status", "unknown")
     created_at = payment.get("created_at", 0)
@@ -53,21 +43,17 @@ def _format_payment(payment):
 
 def register_users_routes(bp):
     @bp.route("/api/admin/users", methods=["POST", "OPTIONS"])
-    def api_admin_users():
+    @require_admin
+    def api_admin_users(auth: AuthContext):
         if request.method == "OPTIONS":
-            return options_response()
-        try:
-            account_id = authenticate_request()
-            if not account_id:
-                return jsonify({"error": "Invalid authentication"}), 401
-            if not check_admin_access(account_id):
-                return jsonify({"error": "Access denied"}), 403
+            return handle_options()
 
-            data = request.get_json(silent=True) or {}
-            search = (data.get("search") or "").strip()
-            page = int(data.get("page", 1))
-            limit = int(data.get("limit", 20))
+        data = request.get_json(silent=True) or {}
+        search = (data.get("search") or "").strip()
+        page = int(data.get("page", 1))
+        limit = int(data.get("limit", 20))
 
+        async def fetch():
             from .....db import DB_PATH
             from .....db.accounts_db import (
                 get_remnawave_mapping,
@@ -75,74 +61,68 @@ def register_users_routes(bp):
                 get_username_for_account,
             )
 
-            async def get_users():
-                async with aiosqlite.connect(DB_PATH) as db:
-                    db.row_factory = aiosqlite.Row
-                    search_pattern = f"%{search}%" if search else None
-                    if search:
-                        async with db.execute(
-                            "SELECT COUNT(DISTINCT a.account_id) as count FROM accounts a LEFT JOIN identities i ON i.account_id = a.account_id LEFT JOIN account_remnawave ar ON ar.account_id = a.account_id WHERE CAST(a.account_id AS TEXT) LIKE ? OR i.provider_user_id LIKE ? OR ar.remnawave_short_uuid LIKE ?",
-                            (search_pattern, search_pattern, search_pattern),
-                        ) as cur:
-                            total = (await cur.fetchone())["count"] or 0
-                        async with db.execute(
-                            "SELECT DISTINCT a.account_id, a.created_at, a.last_seen FROM accounts a LEFT JOIN identities i ON i.account_id = a.account_id LEFT JOIN account_remnawave ar ON ar.account_id = a.account_id WHERE CAST(a.account_id AS TEXT) LIKE ? OR i.provider_user_id LIKE ? OR ar.remnawave_short_uuid LIKE ? ORDER BY a.last_seen DESC LIMIT ? OFFSET ?",
-                            (search_pattern, search_pattern, search_pattern, limit, (page - 1) * limit),
-                        ) as cur:
-                            rows = await cur.fetchall()
-                    else:
-                        async with db.execute("SELECT COUNT(*) as count FROM accounts") as cur:
-                            total = (await cur.fetchone())["count"] or 0
-                        async with db.execute(
-                            "SELECT account_id, created_at, last_seen FROM accounts ORDER BY last_seen DESC LIMIT ? OFFSET ?",
-                            (limit, (page - 1) * limit),
-                        ) as cur:
-                            rows = await cur.fetchall()
-                    users = []
-                    for row in rows:
-                        account_id = row["account_id"]
-                        telegram_id = await get_telegram_id_for_account(account_id)
-                        username = await get_username_for_account(account_id)
-                        remna = await get_remnawave_mapping(account_id)
-                        short_uuid = remna.get("remnawave_short_uuid") if remna else None
-                        users.append({
-                            "id": account_id,
-                            "account_id": account_id,
-                            "remnawave_short_uuid": short_uuid,
-                            "telegram_id": telegram_id,
-                            "username": username,
-                            "first_seen": row["created_at"],
-                            "last_seen": row["last_seen"],
-                            "subscriptions_count": 1 if short_uuid else 0,
-                        })
-                    return users, total
+            async with aiosqlite.connect(DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                search_pattern = f"%{search}%" if search else None
+                if search:
+                    async with db.execute(
+                        "SELECT COUNT(DISTINCT a.account_id) as count FROM accounts a LEFT JOIN identities i ON i.account_id = a.account_id LEFT JOIN account_remnawave ar ON ar.account_id = a.account_id WHERE CAST(a.account_id AS TEXT) LIKE ? OR i.provider_user_id LIKE ? OR ar.remnawave_short_uuid LIKE ?",
+                        (search_pattern, search_pattern, search_pattern),
+                    ) as cur:
+                        total = (await cur.fetchone())["count"] or 0
+                    async with db.execute(
+                        "SELECT DISTINCT a.account_id, a.created_at, a.last_seen FROM accounts a LEFT JOIN identities i ON i.account_id = a.account_id LEFT JOIN account_remnawave ar ON ar.account_id = a.account_id WHERE CAST(a.account_id AS TEXT) LIKE ? OR i.provider_user_id LIKE ? OR ar.remnawave_short_uuid LIKE ? ORDER BY a.last_seen DESC LIMIT ? OFFSET ?",
+                        (search_pattern, search_pattern, search_pattern, limit, (page - 1) * limit),
+                    ) as cur:
+                        rows = await cur.fetchall()
+                else:
+                    async with db.execute("SELECT COUNT(*) as count FROM accounts") as cur:
+                        total = (await cur.fetchone())["count"] or 0
+                    async with db.execute(
+                        "SELECT account_id, created_at, last_seen FROM accounts ORDER BY last_seen DESC LIMIT ? OFFSET ?",
+                        (limit, (page - 1) * limit),
+                    ) as cur:
+                        rows = await cur.fetchall()
+                
+                users = []
+                for row in rows:
+                    account_id = row["account_id"]
+                    telegram_id = await get_telegram_id_for_account(account_id)
+                    username = await get_username_for_account(account_id)
+                    remna = await get_remnawave_mapping(account_id)
+                    short_uuid = remna.get("remnawave_short_uuid") if remna else None
+                    users.append({
+                        "id": account_id,
+                        "account_id": account_id,
+                        "remnawave_short_uuid": short_uuid,
+                        "telegram_id": telegram_id,
+                        "username": username,
+                        "first_seen": row["created_at"],
+                        "last_seen": row["last_seen"],
+                        "subscriptions_count": 1 if short_uuid else 0,
+                    })
+                return users, total
 
-            users, total = _run_async(get_users())
-            return (
-                jsonify({
-                    "success": True,
-                    "users": users,
-                    "total": total,
-                    "page": page,
-                    "limit": limit,
-                    "pages": (total + limit - 1) // limit if limit > 0 else 0,
-                }),
-                200,
-                {**CORS_HEADERS, "Content-Type": "application/json"},
+        try:
+            users, total = await fetch()
+            return APIResponse.success(
+                users=users,
+                total=total,
+                page=page,
+                limit=limit,
+                pages=(total + limit - 1) // limit if limit > 0 else 0,
             )
         except Exception as e:
             logger.error("Ошибка в /api/admin/users: %s", e, exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
+            return APIResponse.internal_error()
 
     @bp.route("/api/admin/user/<user_id_param>", methods=["POST", "OPTIONS"])
-    def api_admin_user_info(user_id_param):
+    @require_admin
+    def api_admin_user_info(auth: AuthContext, user_id_param):
         if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
+            return handle_options()
 
+        async def fetch():
             from .....db import DB_PATH
             from .....db.accounts_db import (
                 get_account_id_by_identity,
@@ -157,27 +137,26 @@ def register_users_routes(bp):
             if user_id_param.isdigit():
                 account_id = int(user_id_param)
             if account_id is None:
-                account_id = _run_async(get_account_id_by_identity("telegram", user_id_param))
+                account_id = await get_account_id_by_identity("telegram", user_id_param)
             if account_id is None:
-                account_id = _run_async(get_account_id_by_identity("password", (user_id_param or "").strip().lower()))
+                account_id = await get_account_id_by_identity("password", (user_id_param or "").strip().lower())
             if account_id is None:
-                return jsonify({"error": "User not found"}), 404
+                return APIResponse.not_found('User not found')
 
-            remna = _run_async(get_remnawave_mapping(account_id))
+            remna = await get_remnawave_mapping(account_id)
             remnawave_short_uuid = remna.get("remnawave_short_uuid") if remna else None
-            telegram_id = _run_async(get_telegram_id_for_account(account_id))
-            username = _run_async(get_username_for_account(account_id))
-            subscriptions = _run_async(get_subscriptions_for_account(account_id))
-            payments = _run_async(get_payments_by_account(account_id, limit=10))
+            telegram_id = await get_telegram_id_for_account(account_id)
+            username = await get_username_for_account(account_id)
+            subscriptions = await get_subscriptions_for_account(account_id)
+            payments = await get_payments_by_account(account_id, limit=10)
 
-            async def get_account_timestamps():
-                async with aiosqlite.connect(DB_PATH) as db:
-                    db.row_factory = aiosqlite.Row
-                    async with db.execute("SELECT created_at, last_seen FROM accounts WHERE account_id = ?", (account_id,)) as cur:
-                        row = await cur.fetchone()
-                    return (row["created_at"] if row else 0, row["last_seen"] if row else 0)
-
-            created_at, last_seen = _run_async(get_account_timestamps())
+            # Получить timestamps аккаунта
+            async with aiosqlite.connect(DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute("SELECT created_at, last_seen FROM accounts WHERE account_id = ?", (account_id,)) as cur:
+                    row = await cur.fetchone()
+                created_at = row["created_at"] if row else 0
+                last_seen = row["last_seen"] if row else 0
 
             formatted_subs = []
             for sub in subscriptions:
@@ -200,42 +179,38 @@ def register_users_routes(bp):
 
             formatted_payments = [_format_payment(p) for p in payments]
 
-            return (
-                jsonify({
-                    "success": True,
-                    "user": {
-                        "account_id": account_id,
-                        "remnawave_short_uuid": remnawave_short_uuid,
-                        "telegram_id": telegram_id,
-                        "username": username,
-                        "first_seen": created_at,
-                        "first_seen_formatted": datetime.datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M"),
-                        "last_seen": last_seen,
-                        "last_seen_formatted": datetime.datetime.fromtimestamp(last_seen).strftime("%d.%m.%Y %H:%M"),
-                    },
-                    "subscriptions": formatted_subs,
-                    "payments": formatted_payments,
-                }),
-                200,
-                {**CORS_HEADERS, "Content-Type": "application/json"},
+            return APIResponse.success(
+                user={
+                    "account_id": account_id,
+                    "remnawave_short_uuid": remnawave_short_uuid,
+                    "telegram_id": telegram_id,
+                    "username": username,
+                    "first_seen": created_at,
+                    "first_seen_formatted": datetime.datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M"),
+                    "last_seen": last_seen,
+                    "last_seen_formatted": datetime.datetime.fromtimestamp(last_seen).strftime("%d.%m.%Y %H:%M"),
+                },
+                subscriptions=formatted_subs,
+                payments=formatted_payments,
             )
+
+        try:
+            return run_async(fetch())
         except Exception as e:
             logger.error("Ошибка в /api/admin/user: %s", e, exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
+            return APIResponse.internal_error()
 
     @bp.route("/api/admin/user/<user_id_param>/delete", methods=["POST", "OPTIONS"])
-    def api_admin_user_delete(user_id_param):
+    @require_admin
+    def api_admin_user_delete(auth: AuthContext, user_id_param):
         if request.method == "OPTIONS":
-            return options_response()
-        try:
-            admin_id = authenticate_request()
-            if not admin_id or not check_admin_access(admin_id):
-                return jsonify({"error": "Access denied"}), 403
+            return handle_options()
 
-            data = request.get_json(silent=True) or {}
-            if not data.get("confirm"):
-                return jsonify({"error": "Подтверждение требуется (confirm: true)"}), 400
+        data = request.get_json(silent=True) or {}
+        if not data.get("confirm"):
+            return APIResponse.bad_request('Подтверждение требуется (confirm: true)')
 
+        async def delete():
             from .....db.accounts_db import get_account_id_by_identity
             from .user_operations import delete_user_full
 
@@ -243,26 +218,24 @@ def register_users_routes(bp):
             if user_id_param.isdigit():
                 account_id = int(user_id_param)
             if account_id is None:
-                account_id = _run_async(get_account_id_by_identity("telegram", user_id_param))
+                account_id = await get_account_id_by_identity("telegram", user_id_param)
             if account_id is None:
-                account_id = _run_async(get_account_id_by_identity("password", (user_id_param or "").strip().lower()))
+                account_id = await get_account_id_by_identity("password", (user_id_param or "").strip().lower())
             if account_id is None:
-                return jsonify({"error": "User not found"}), 404
+                return APIResponse.not_found('User not found')
 
-            subscriptions_deleted, payments_deleted = _run_async(delete_user_full(account_id))
+            subscriptions_deleted, payments_deleted = await delete_user_full(account_id)
 
-            return (
-                jsonify({
-                    "success": True,
-                    "stats": {
-                        "subscriptions_deleted": subscriptions_deleted,
-                        "payments_deleted": payments_deleted,
-                    },
-                    "deleted_servers": [],
-                }),
-                200,
-                {**CORS_HEADERS, "Content-Type": "application/json"},
+            return APIResponse.success(
+                stats={
+                    "subscriptions_deleted": subscriptions_deleted,
+                    "payments_deleted": payments_deleted,
+                },
+                deleted_servers=[],
             )
+
+        try:
+            return run_async(delete())
         except Exception as e:
             logger.error("Ошибка в /api/admin/user/delete: %s", e, exc_info=True)
-            return jsonify({"error": str(e)}), 500
+            return APIResponse.internal_error()

@@ -4,6 +4,7 @@
 import aiosqlite
 import logging
 import datetime
+from typing import Optional, Any
 from . import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ async def cleanup_old_notifications(days: int = 30):
         await db.commit()
         return deleted_count
 
-async def get_notification_stats(days: int = 7):
+async def get_notification_stats(days: int = 7) -> dict[str, Any]:
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -84,7 +85,7 @@ async def get_notification_stats(days: int = 7):
             WHERE date >= ?
         ''', (cutoff,)) as cur:
             row = await cur.fetchone()
-            stats = dict(row) if row and row['total_sent'] else {
+            stats: dict[str, Any] = dict(row) if row and row['total_sent'] else {
                 'total_sent': 0, 'success_count': 0, 'failed_count': 0, 'blocked_users': 0
             }
 
@@ -133,7 +134,7 @@ async def is_subscription_notification_sent(account_id: int | str, subscription_
         ''', (acct, subscription_id, notification_type, yesterday)) as cur:
             return (await cur.fetchone()) is not None
 
-async def mark_subscription_notification_sent(account_id: int | str, subscription_id: int, notification_type: str, server_name: str = None):
+async def mark_subscription_notification_sent(account_id: int | str, subscription_id: int, notification_type: str, server_name: Optional[str] = None):
     now = int(datetime.datetime.now().timestamp())
     acct = str(account_id)
     async with aiosqlite.connect(DB_PATH) as db:

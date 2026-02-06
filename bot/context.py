@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, List, Optional
-import asyncio
 
 if TYPE_CHECKING:
     from telegram.ext import Application
@@ -17,9 +16,8 @@ class AppContext:
     Контейнер сервисов и настроек. Создаётся в bot.py, передаётся в webhook app и startup.
     """
     notification_manager: Optional[Any] = None
-    admin_ids: List[int] = None
+    admin_ids: Optional[List[int]] = None
     telegram_app: Optional["Application"] = None
-    main_loop: Optional[asyncio.AbstractEventLoop] = None
     config: Any = None  # bot.config module
 
     def __post_init__(self):

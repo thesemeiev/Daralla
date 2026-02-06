@@ -1,11 +1,10 @@
 """
-Blueprint: GET /api/servers (server list for Mini App).
+Blueprint: GET /api/prices, /api/servers.
 """
-import asyncio
 import logging
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
 
-from ..webhook_auth import authenticate_request
+from ..webhook_utils import APIResponse, handle_options, run_async
 
 logger = logging.getLogger(__name__)
 
@@ -17,52 +16,30 @@ def create_blueprint(bot_app):
     def api_prices():
         """API endpoint для получения цен (публичный, без авторизации)"""
         if request.method == 'OPTIONS':
-            return ('', 200, {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            })
+            return handle_options()
         try:
             from ....prices_config import PRICES
-            return jsonify({
-                'success': True,
-                'prices': PRICES,
-                'month': PRICES.get('month', 150),
-                '3month': PRICES.get('3month', 350),
-            }), 200, {
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "application/json",
-            }
+            return APIResponse.success(
+                prices=PRICES,
+                month=PRICES.get('month', 150),
+                **{'3month': PRICES.get('3month', 350)}
+            )
         except Exception as e:
             logger.error(f"Ошибка в API /api/prices: {e}", exc_info=True)
-            return jsonify({'success': True, 'prices': {'month': 150, '3month': 350}, 'month': 150, '3month': 350}), 200, {
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "application/json",
-            }
+            return APIResponse.internal_error()
 
     @bp.route('/api/servers', methods=['GET', 'OPTIONS'])
     def api_servers():
         """API endpoint для получения статуса серверов. При Remnawave — ноды из API."""
         if request.method == 'OPTIONS':
-            return ('', 200, {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            })
-
+            return handle_options()
         try:
-            user_id = authenticate_request()
-            if not user_id:
-                return jsonify({'error': 'Invalid authentication'}), 401
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
+            async def fetch_servers():
                 from ....services.remnawave_service import is_remnawave_configured
                 from ....services.nodes_display_service import get_remnawave_nodes_for_display
 
                 if is_remnawave_configured():
-                    nodes = loop.run_until_complete(get_remnawave_nodes_for_display())
+                    nodes = await get_remnawave_nodes_for_display()
                     servers = [
                         {
                             "name": n.get("display_name", n.get("name")),
@@ -75,19 +52,10 @@ def create_blueprint(bot_app):
                     ]
                 else:
                     servers = []
-
-                return jsonify({'success': True, 'servers': servers}), 200, {
-                    "Access-Control-Allow-Origin": "*",
-                    "Content-Type": "application/json"
-                }
-            finally:
-                loop.close()
-
+                return APIResponse.success(servers=servers)
+            return run_async(fetch_servers())
         except Exception as e:
             logger.error(f"Ошибка в API /api/servers: {e}", exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500, {
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "application/json"
-            }
+            return APIResponse.internal_error()
 
     return bp

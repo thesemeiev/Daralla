@@ -28,7 +28,7 @@ Configuration.account_id = config.YOOKASSA_SHOP_ID
 Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
 if not config.YOOKASSA_SHOP_ID or not config.YOOKASSA_SECRET_KEY:
-    logger.warning("YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
+    print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
 
 # 2. Логирование (config.ensure_dirs() уже создал LOGS_DIR)
 app_log_path = str(config.APP_LOG_PATH)
@@ -99,15 +99,18 @@ async def open_mini_app_fallback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer()
         btn = UIButtons.create_webapp_button(text="Открыть в приложении")
         kb = InlineKeyboardMarkup([[btn]]) if btn else None
-        await query.message.reply_text(
-            "Пожалуйста, откройте приложение для управления подписками и оплатой.",
-            reply_markup=kb,
-        )
+        if query.message:
+            await query.message.reply_text(
+                "Пожалуйста, откройте приложение для управления подписками и оплатой.",
+                reply_markup=kb,
+            )
 
 
 async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ответ на текстовое сообщение в ЛС: предлагаем открыть приложение."""
     if not await check_private_chat(update):
+        return
+    if not update.message:
         return
     btn = UIButtons.create_webapp_button(text="Открыть в приложении")
     kb = InlineKeyboardMarkup([[btn]]) if btn else None
@@ -128,7 +131,7 @@ if __name__ == "__main__":
     )
     
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
-    sys.modules[__name__].app = app
+    setattr(sys.modules[__name__], "app", app)
     app_context.telegram_app = app
 
     # Создаем Flask приложение для webhook'ов (контекст передаётся в маршруты через app.config)

@@ -108,7 +108,7 @@ async def create_account() -> int:
             (now, now),
         )
         await db.commit()
-        return int(cur.lastrowid)
+        return int(cur.lastrowid or 0)
 
 
 async def touch_account(account_id: int) -> None:
