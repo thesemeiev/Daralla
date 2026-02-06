@@ -42,7 +42,7 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/servers', methods=['GET', 'OPTIONS'])
     def api_servers():
-        """API endpoint для получения статуса серверов"""
+        """API endpoint для получения статуса серверов. При Remnawave — ноды из API."""
         if request.method == 'OPTIONS':
             return ('', 200, {
                 "Access-Control-Allow-Origin": "*",
@@ -55,27 +55,36 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
 
-            from ....context import get_app_context
-            ctx = get_app_context()
-            server_manager = ctx.server_manager if ctx else None
-            if not server_manager:
-                return jsonify({'error': 'Server manager not available'}), 503
-
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                servers = [
-                    {
-                        'name': server["name"],
-                        'status': 'available',
-                    }
-                    for server in server_manager.servers
-                ]
+                from ....services.remnawave_service import is_remnawave_configured
+                from ....services.nodes_display_service import get_remnawave_nodes_for_display
 
-                return jsonify({
-                    'success': True,
-                    'servers': servers
-                }), 200, {
+                if is_remnawave_configured():
+                    nodes = loop.run_until_complete(get_remnawave_nodes_for_display())
+                    servers = [
+                        {
+                            "name": n.get("display_name", n.get("name")),
+                            "status": n.get("status", "offline"),
+                            "display_name": n.get("display_name"),
+                            "location": n.get("location"),
+                            "uuid": n.get("uuid"),
+                        }
+                        for n in nodes
+                    ]
+                else:
+                    from ....context import get_app_context
+                    ctx = get_app_context()
+                    server_manager = ctx.server_manager if ctx else None
+                    if not server_manager:
+                        return jsonify({'error': 'Server manager not available'}), 503
+                    servers = [
+                        {"name": s["name"], "status": "available"}
+                        for s in server_manager.servers
+                    ]
+
+                return jsonify({'success': True, 'servers': servers}), 200, {
                     "Access-Control-Allow-Origin": "*",
                     "Content-Type": "application/json"
                 }

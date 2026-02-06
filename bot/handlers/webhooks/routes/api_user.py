@@ -17,6 +17,41 @@ from ..webhook_auth import authenticate_request, verify_telegram_init_data
 logger = logging.getLogger(__name__)
 
 
+def _get_servers_from_manager():
+    """Fallback: серверы из server_manager (servers_config) когда Remnawave не используется."""
+    try:
+        from ....context import get_app_context
+        ctx = get_app_context()
+        server_manager = ctx.server_manager if ctx else None
+        if not server_manager:
+            return []
+        servers_info = []
+        for location, servers in server_manager.servers_by_location.items():
+            for server in servers:
+                server_name = server["name"]
+                config = server.get("config", {})
+                display_name = config.get("display_name", server_name)
+                map_label = config.get("map_label")
+                lat = config.get("lat")
+                lng = config.get("lng")
+                if lat is not None and lng is not None:
+                    servers_info.append({
+                        "name": server_name,
+                        "display_name": display_name,
+                        "map_label": map_label,
+                        "location": location,
+                        "lat": lat,
+                        "lng": lng,
+                        "usage_count": 0,
+                        "usage_percentage": 0,
+                        "status": "available",
+                    })
+        return servers_info
+    except (ImportError, AttributeError) as e:
+        logger.error("Ошибка получения информации о серверах: %s", e)
+        return []
+
+
 def create_blueprint(bot_app):
     bp = Blueprint('api_user', __name__)
 
@@ -246,51 +281,27 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/server-usage', methods=['GET', 'OPTIONS'])
     def api_user_server_usage():
-        """Remnawave-only: данные о серверах из server_manager (usage по подписке не хранится локально)."""
+        """Данные о серверах: из Remnawave при наличии, иначе из server_manager (fallback)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
             account_id = authenticate_request()
             if not account_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            server_usage = {}
 
-            def get_servers_info():
-                try:
-                    from ....context import get_app_context
-                    ctx = get_app_context()
-                    server_manager = ctx.server_manager if ctx else None
-                    if not server_manager:
-                        return []
-                    servers_info = []
-                    for location, servers in server_manager.servers_by_location.items():
-                        for server in servers:
-                            server_name = server['name']
-                            display_name = server['config'].get('display_name', server_name)
-                            map_label = server['config'].get('map_label')
-                            lat = server['config'].get('lat')
-                            lng = server['config'].get('lng')
-                            if lat is not None and lng is not None:
-                                servers_info.append({
-                                    'name': server_name,
-                                    'display_name': display_name,
-                                    'map_label': map_label,
-                                    'location': location,
-                                    'lat': lat,
-                                    'lng': lng,
-                                    'usage_count': 0,
-                                    'usage_percentage': 0,
-                                    'status': 'available'
-                                })
-                    return servers_info
-                except (ImportError, AttributeError) as e:
-                    logger.error(f"Ошибка получения информации о серверах: {e}")
-                    return []
-            servers_info = get_servers_info()
-            return jsonify({
-                'success': True,
-                'servers': servers_info
-            }), 200, _cors_headers()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from ....services.remnawave_service import is_remnawave_configured
+                from ....services.nodes_display_service import get_remnawave_nodes_for_display
+
+                if is_remnawave_configured():
+                    servers_info = loop.run_until_complete(get_remnawave_nodes_for_display())
+                else:
+                    servers_info = _get_servers_from_manager()
+                return jsonify({'success': True, 'servers': servers_info}), 200, _cors_headers()
+            finally:
+                loop.close()
         except Exception as e:
             logger.error(f"Ошибка в API /api/user/server-usage: {e}", exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500

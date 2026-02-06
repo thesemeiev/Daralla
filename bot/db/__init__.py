@@ -69,6 +69,8 @@ from .server_config_db import (
     delete_server_config,
     get_or_create_default_group,
     SERVER_CONFIG_UPDATE_KEYS,
+    get_node_map_overrides,
+    upsert_node_map_override,
 )
 
 async def init_all_db():
@@ -111,4 +113,5 @@ __all__ = [
     'get_servers_config', 'get_server_by_id',
     'add_server_config', 'update_server_config', 'delete_server_config',
     'get_or_create_default_group', 'SERVER_CONFIG_UPDATE_KEYS',
+    'get_node_map_overrides', 'upsert_node_map_override',
 ]

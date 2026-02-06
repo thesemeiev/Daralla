@@ -4621,9 +4621,9 @@ function initNavIndicator() {
     }, { passive: true });
 }
 
-// === МАРКЕРЫ НА КАРТЕ (АДМИН) ===
+// === НОДЫ REMNAWAVE НА КАРТЕ (АДМИН) ===
 
-let currentAdminServers = [];
+let currentAdminNodes = [];
 
 async function loadServerManagement() {
     const loadingEl = document.getElementById('admin-server-management-loading');
@@ -4637,7 +4637,7 @@ async function loadServerManagement() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
     } catch (err) {
-        console.error('Ошибка загрузки маркеров:', err);
+        console.error('Ошибка загрузки нод:', err);
         if (loadingEl) loadingEl.style.display = 'none';
         alert('Ошибка при загрузке данных: ' + err.message);
     }
@@ -4649,88 +4649,80 @@ async function loadServersList() {
     listEl.innerHTML = '<div class="spinner"></div>';
 
     try {
-        const response = await apiFetch('/api/admin/servers-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' })
-        });
+        const response = await apiFetch('/api/admin/nodes');
         const result = await response.json();
         if (result.success) {
-            currentAdminServers = result.servers || [];
-            renderServersList(currentAdminServers);
+            currentAdminNodes = result.nodes || [];
+            renderServersList(currentAdminNodes);
+            if (!result.remnawave) {
+                listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Remnawave не настроен. Ноды загружаются из Remnawave.</p>';
+            }
         } else {
             listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">${result.error || 'Ошибка API'}</p>`;
         }
     } catch (err) {
-        console.error('Ошибка загрузки маркеров:', err);
+        console.error('Ошибка загрузки нод:', err);
         listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">Ошибка: ${err.message}</p>`;
     }
 }
 
-function renderServersList(servers) {
+function renderServersList(nodes) {
     const listEl = document.getElementById('admin-servers-list');
     if (!listEl) return;
-    if (!servers || servers.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Нет маркеров. Добавьте первый.</p>';
+    if (!nodes || nodes.length === 0) {
+        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Нет нод. Убедитесь, что Remnawave настроен и содержит ноды.</p>';
         return;
     }
-    listEl.innerHTML = servers.map(server => `
-        <div class="admin-user-card server-card">
-            <div class="card-content-wrapper">
+    listEl.innerHTML = nodes.map((node, idx) => {
+        const statusClass = node.status === 'online' ? 'online' : 'offline';
+        const statusText = node.status === 'online' ? 'Онлайн' : 'Офлайн';
+        const coordsText = (node.lat != null && node.lng != null) ? `${node.lat.toFixed(2)}, ${node.lng.toFixed(2)}` : '—';
+        return `
+        <div class="admin-user-card server-card ${statusClass}" data-node-idx="${idx}">
+            <div class="card-content-wrapper" style="cursor: pointer;" onclick="editNodeConfigByIdx(${idx})">
                 <div class="card-main-info">
-                    <div class="card-title">${escapeHtml(server.display_name || server.name)}</div>
-                    <div class="card-description">${server.lat != null && server.lng != null ? `${server.lat}, ${server.lng}` : '—'}</div>
+                    <div class="card-title">${escapeHtml(node.display_name || node.name)}</div>
+                    <div class="card-description">${escapeHtml(node.address || '')} · ${node.country_code || ''} · ${coordsText}</div>
+                    <div class="server-status-badge ${statusClass}" style="margin-top: 8px; display: inline-block;">${statusText}</div>
                 </div>
                 <div class="card-actions-row">
-                    <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить">Изменить</button>
-                    <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить">Удалить</button>
+                    <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editNodeConfigByIdx(${idx})" aria-label="Расположение">Задать расположение</button>
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
-function showAddServerConfigModal() {
-    document.getElementById('server-config-modal-title').innerText = 'Добавить маркер';
-    document.getElementById('server-id-input').value = '';
-    document.getElementById('server-display-input').value = '';
-    document.getElementById('server-lat-input').value = '';
-    document.getElementById('server-lng-input').value = '';
-    showModal('server-config-modal');
-}
+function editNodeConfigByIdx(idx) {
+    const node = currentAdminNodes[idx];
+    if (!node) return;
 
-function editServerConfig(serverId) {
-    const server = currentAdminServers.find(s => s.id === serverId);
-    if (!server) return;
-
-    document.getElementById('server-config-modal-title').innerText = 'Редактировать маркер';
-    document.getElementById('server-id-input').value = server.id;
-    document.getElementById('server-display-input').value = server.display_name || '';
-    document.getElementById('server-lat-input').value = server.lat ?? '';
-    document.getElementById('server-lng-input').value = server.lng ?? '';
+    document.getElementById('server-config-modal-title').innerText = 'Расположение на карте';
+    document.getElementById('server-node-uuid-input').value = node.uuid;
+    document.getElementById('server-config-node-info').innerText = `${node.name} · ${node.address || ''} · ${node.country_code || ''}`;
+    document.getElementById('server-display-input').value = node.map_label || node.display_name || '';
+    document.getElementById('server-lat-input').value = node.lat != null ? node.lat : '';
+    document.getElementById('server-lng-input').value = node.lng != null ? node.lng : '';
     showModal('server-config-modal');
 }
 
 async function saveServerConfig(event) {
     event.preventDefault();
-    const id = document.getElementById('server-id-input').value;
-    const displayName = (document.getElementById('server-display-input').value || '').trim();
+    const nodeUuid = document.getElementById('server-node-uuid-input').value;
+    const mapLabel = (document.getElementById('server-display-input').value || '').trim();
     const latVal = document.getElementById('server-lat-input').value;
     const lngVal = document.getElementById('server-lng-input').value;
 
     const body = {
-        display_name: displayName || undefined,
-        map_label: displayName || undefined,
-        location: displayName || undefined,
+        node_uuid: nodeUuid,
+        map_label: mapLabel || undefined,
         lat: latVal ? parseFloat(latVal) : undefined,
-        lng: lngVal ? parseFloat(lngVal) : undefined,
-        id: id || undefined,
-        action: id ? undefined : 'add'
+        lng: lngVal ? parseFloat(lngVal) : undefined
     };
 
     try {
-        const url = id ? '/api/admin/server-config/update' : '/api/admin/servers-config';
-        const response = await apiFetch(url, {
+        const response = await apiFetch('/api/admin/node-map-override', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -4743,29 +4735,8 @@ async function saveServerConfig(event) {
             alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
         }
     } catch (err) {
-        console.error('Ошибка сохранения маркера:', err);
+        console.error('Ошибка сохранения расположения:', err);
         alert('Ошибка при сохранении');
-    }
-}
-
-async function deleteServerConfig(serverId) {
-    if (!confirm('Удалить этот маркер с карты?')) return;
-
-    try {
-        const response = await apiFetch('/api/admin/server-config/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: serverId })
-        });
-        const result = await response.json();
-        if (result.success) {
-            loadServersList();
-        } else {
-            alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
-        }
-    } catch (err) {
-        console.error('Ошибка удаления маркера:', err);
-        alert('Ошибка при удалении');
     }
 }
 

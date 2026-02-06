@@ -238,6 +238,20 @@ class RemnawaveClient:
         payload: dict[str, Any] = {"uuid": user_uuid, "telegramId": telegram_id}
         return self.patch_user(payload)
 
+    def get_nodes(self) -> list[dict[str, Any]]:
+        """
+        Возвращает список нод Remnawave (GET /api/nodes).
+        Каждая нода: uuid, name, address, port, is_connected, is_disabled, country_code, etc.
+        """
+        data = self.request("GET", "/api/nodes")
+        if isinstance(data, list):
+            return data
+        for key in ("response", "obj", "data", "nodes"):
+            v = data.get(key) if isinstance(data, dict) else None
+            if isinstance(v, list):
+                return v
+        return []
+
     def extend_user_by_days(
         self,
         user_uuid: str,
