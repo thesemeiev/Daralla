@@ -25,9 +25,6 @@ from .payments_db import (
     cleanup_old_payments,     cleanup_expired_pending_payments, get_payments_by_account,
     delete_payments_by_account_id,
 )
-from .users_db import (
-    init_users_db, get_all_account_ids,
-)
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
     get_notification_stats,
@@ -59,16 +56,10 @@ from .accounts_db import (
     upsert_account_expiry_cache,
     get_accounts_expiring_soon,
     delete_account,
+    get_all_account_ids,
 )
 from .server_config_db import (
     init_server_config_db,
-    get_servers_config,
-    get_server_by_id,
-    add_server_config,
-    update_server_config,
-    delete_server_config,
-    get_or_create_default_group,
-    SERVER_CONFIG_UPDATE_KEYS,
     get_node_map_overrides,
     upsert_node_map_override,
 )
@@ -81,7 +72,6 @@ async def init_all_db():
     # Последовательно вызываем инициализацию каждой части
     # Все они теперь будут открывать один и тот же файл DB_PATH
     await init_accounts_db()
-    await init_users_db()
     await init_server_config_db()
     await init_payments_db()
     await init_notifications_db()
@@ -110,8 +100,5 @@ __all__ = [
     'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
     'init_server_config_db',
-    'get_servers_config', 'get_server_by_id',
-    'add_server_config', 'update_server_config', 'delete_server_config',
-    'get_or_create_default_group', 'SERVER_CONFIG_UPDATE_KEYS',
     'get_node_map_overrides', 'upsert_node_map_override',
 ]

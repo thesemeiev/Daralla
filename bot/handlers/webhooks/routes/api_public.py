@@ -74,15 +74,7 @@ def create_blueprint(bot_app):
                         for n in nodes
                     ]
                 else:
-                    from ....context import get_app_context
-                    ctx = get_app_context()
-                    server_manager = ctx.server_manager if ctx else None
-                    if not server_manager:
-                        return jsonify({'error': 'Server manager not available'}), 503
-                    servers = [
-                        {"name": s["name"], "status": "available"}
-                        for s in server_manager.servers
-                    ]
+                    servers = []
 
                 return jsonify({'success': True, 'servers': servers}), 200, {
                     "Access-Control-Allow-Origin": "*",

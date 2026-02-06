@@ -17,41 +17,6 @@ from ..webhook_auth import authenticate_request, verify_telegram_init_data
 logger = logging.getLogger(__name__)
 
 
-def _get_servers_from_manager():
-    """Fallback: серверы из server_manager (servers_config) когда Remnawave не используется."""
-    try:
-        from ....context import get_app_context
-        ctx = get_app_context()
-        server_manager = ctx.server_manager if ctx else None
-        if not server_manager:
-            return []
-        servers_info = []
-        for location, servers in server_manager.servers_by_location.items():
-            for server in servers:
-                server_name = server["name"]
-                config = server.get("config", {})
-                display_name = config.get("display_name", server_name)
-                map_label = config.get("map_label")
-                lat = config.get("lat")
-                lng = config.get("lng")
-                if lat is not None and lng is not None:
-                    servers_info.append({
-                        "name": server_name,
-                        "display_name": display_name,
-                        "map_label": map_label,
-                        "location": location,
-                        "lat": lat,
-                        "lng": lng,
-                        "usage_count": 0,
-                        "usage_percentage": 0,
-                        "status": "available",
-                    })
-        return servers_info
-    except (ImportError, AttributeError) as e:
-        logger.error("Ошибка получения информации о серверах: %s", e)
-        return []
-
-
 def create_blueprint(bot_app):
     bp = Blueprint('api_user', __name__)
 
@@ -281,7 +246,7 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/server-usage', methods=['GET', 'OPTIONS'])
     def api_user_server_usage():
-        """Данные о серверах: из Remnawave при наличии, иначе из server_manager (fallback)."""
+        """Данные о серверах из Remnawave (ноды для карты и списка)."""
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
@@ -298,7 +263,7 @@ def create_blueprint(bot_app):
                 if is_remnawave_configured():
                     servers_info = loop.run_until_complete(get_remnawave_nodes_for_display())
                 else:
-                    servers_info = _get_servers_from_manager()
+                    servers_info = []
                 return jsonify({'success': True, 'servers': servers_info}), 200, _cors_headers()
             finally:
                 loop.close()

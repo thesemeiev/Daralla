@@ -56,15 +56,12 @@ from .utils import UIButtons, check_private_chat, set_image_paths
 set_image_paths(config.IMAGE_PATHS)
 
 # 4. Сервисы (подписки через Remnawave)
-from .services import MultiServerManager, NotificationManager
+from .services import NotificationManager
 
-server_manager = MultiServerManager()
-
-# 4.1 Единый контекст приложения (Фаза 2)
+# 4.1 Единый контекст приложения
 from .context import AppContext
 
 app_context = AppContext(
-    server_manager=server_manager,
     notification_manager=None,
     admin_ids=config.ADMIN_IDS,
     telegram_app=None,

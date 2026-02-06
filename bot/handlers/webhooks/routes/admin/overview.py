@@ -1,5 +1,6 @@
 """
-Маршруты: статистика и графики (stats, server-load, notifications).
+Админ: сводные данные (количество пользователей, платежи).
+Используется рассылкой для числа получателей; при необходимости — другими экранами админки.
 """
 import asyncio
 import json
@@ -8,7 +9,6 @@ import time
 
 from flask import request, jsonify
 
-from .....context import get_app_context
 from ...webhook_auth import authenticate_request, check_admin_access
 from ._common import CORS_HEADERS, options_response
 
@@ -24,36 +24,21 @@ def _run_async(coro):
         loop.close()
 
 
-def register_stats_routes(bp):
-    @bp.route("/api/admin/stats", methods=["POST", "OPTIONS"])
-    def api_admin_stats():
+def register_overview_routes(bp):
+    @bp.route("/api/admin/overview", methods=["POST", "OPTIONS"])
+    def api_admin_overview():
         if request.method == "OPTIONS":
             return options_response()
         try:
             admin_id = authenticate_request()
             if not admin_id or not check_admin_access(admin_id):
                 return jsonify({"error": "Access denied"}), 403
-            try:
-                data = request.get_json(silent=True) or {}
-            except Exception as json_e:
-                logger.warning("Ошибка парсинга JSON в /api/admin/stats: %s", json_e)
-                data = {}
+            request.get_json(silent=True)
 
             from .....db import DB_PATH
             import aiosqlite
 
-            stats = {
-                "total": 0,
-                "active": 0,
-                "expired": 0,
-                "deleted": 0,
-                "trial": 0,
-                "mrr": 0,
-                "mrr_change": 0,
-                "mrr_change_percent": 0,
-            }
-
-            async def get_user_stats():
+            async def get_user_counts():
                 async with aiosqlite.connect(DB_PATH) as db:
                     db.row_factory = aiosqlite.Row
                     async with db.execute("SELECT COUNT(*) as count FROM accounts") as cur:
@@ -68,9 +53,9 @@ def register_stats_routes(bp):
                         new_users_30d = row["count"] if row else 0
                     return total_users, new_users_30d
 
-            total_users, new_users_30d = _run_async(get_user_stats())
+            total_users, new_users_30d = _run_async(get_user_counts())
 
-            async def get_payment_stats():
+            async def get_payment_counts():
                 async with aiosqlite.connect(DB_PATH) as db:
                     db.row_factory = aiosqlite.Row
                     async with db.execute("SELECT COUNT(*) as count FROM payments") as cur:
@@ -100,36 +85,25 @@ def register_stats_routes(bp):
                                     logger.debug("Ошибка парсинга meta платежа: %s", e)
                     return total_payments, succeeded_payments, total_revenue
 
-            total_payments, succeeded_payments, total_revenue = _run_async(get_payment_stats())
+            total_payments, succeeded_payments, total_revenue = _run_async(get_payment_counts())
 
             return (
                 jsonify({
                     "success": True,
                     "stats": {
                         "users": {"total": total_users, "new_30d": new_users_30d},
-                        "subscriptions": {
-                            "total": stats.get("total", 0),
-                            "active": stats.get("active", 0),
-                            "expired": stats.get("expired", 0),
-                            "deleted": stats.get("deleted", 0),
-                            "trial": stats.get("trial", 0),
-                        },
+                        "subscriptions": {"total": 0, "active": 0, "expired": 0, "deleted": 0, "trial": 0},
                         "payments": {
                             "total": total_payments,
                             "succeeded": succeeded_payments,
                             "revenue": round(total_revenue, 2),
                         },
-                        "business": {
-                            "mrr": stats.get("mrr", 0),
-                            "mrr_change": stats.get("mrr_change", 0),
-                            "mrr_change_percent": stats.get("mrr_change_percent", 0),
-                        },
+                        "business": {"mrr": 0, "mrr_change": 0, "mrr_change_percent": 0},
                     },
                 }),
                 200,
                 {**CORS_HEADERS, "Content-Type": "application/json"},
             )
         except Exception as e:
-            logger.error("Ошибка в /api/admin/stats: %s", e, exc_info=True)
+            logger.error("Ошибка в /api/admin/overview: %s", e, exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
-

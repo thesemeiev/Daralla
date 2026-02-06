@@ -15,7 +15,6 @@ class AppContext:
     """
     Контейнер сервисов и настроек. Создаётся в bot.py, передаётся в webhook app и startup.
     """
-    server_manager: Any
     notification_manager: Optional[Any] = None
     admin_ids: List[int] = None
     telegram_app: Optional["Application"] = None

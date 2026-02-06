@@ -401,3 +401,21 @@ async def delete_account(account_id: int) -> None:
         await db.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
         await db.commit()
 
+
+async def get_all_account_ids(min_last_seen: int | None = None) -> list[str]:
+    """Возвращает список всех account_id (как строки)."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            if min_last_seen is not None:
+                async with db.execute(
+                    "SELECT account_id FROM accounts WHERE last_seen >= ? ORDER BY last_seen DESC",
+                    (min_last_seen,),
+                ) as cur:
+                    rows = await cur.fetchall()
+            else:
+                async with db.execute("SELECT account_id FROM accounts ORDER BY last_seen DESC") as cur:
+                    rows = await cur.fetchall()
+            return [str(row[0]) for row in rows]
+    except Exception as e:
+        logger.error("get_all_account_ids error: %s", e)
+        return []

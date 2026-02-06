@@ -471,13 +471,13 @@
             </div>
         </div>
 
-        <!-- АДМИН-ПАНЕЛЬ: Главный экран -->
-        <div id="page-admin-stats" class="page" style="display: none;">
+        <!-- АДМИН-ПАНЕЛЬ: главный экран (меню разделов) -->
+        <div id="page-admin" class="page" style="display: none;">
             <header>
                 <h1>Админ панель</h1>
             </header>
             
-            <div id="admin-stats-content" class="admin-panel-content">
+            <div id="admin-hub-content" class="admin-panel-content">
                 <section class="admin-panel-section admin-panel-section-management">
                     <h2 class="admin-panel-section-title">Управление</h2>
                     <div class="admin-panel-rows">
@@ -505,7 +505,7 @@
         <!-- АДМИН-ПАНЕЛЬ: События -->
         <div id="page-admin-events" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" onclick="showPage('admin')">← Назад</button>
             </header>
             <div id="admin-events-content" class="admin-page-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -564,7 +564,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Список пользователей -->
         <div id="page-admin-users" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" onclick="showPage('admin')">← Назад</button>
             </header>
             
             <div class="admin-search-box">
@@ -598,7 +598,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Рассылка -->
         <div id="page-admin-broadcast" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" onclick="showPage('admin')">← Назад</button>
             </header>
             
             <div id="admin-broadcast-loading" class="loading" style="display: none;">
@@ -836,7 +836,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Управление серверами -->
         <div id="page-admin-server-management" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" onclick="showPage('admin')">← Назад</button>
             </header>
             
             <div id="admin-server-management-loading" class="loading" style="display: none;">

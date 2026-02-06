@@ -81,12 +81,12 @@ var ROUTE_PAGE_NAMES = new Set([
     'landing', 'login', 'register',
     'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'payment',
     'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
-    'admin-stats', 'admin-users', 'admin-broadcast',
+    'admin', 'admin-users', 'admin-broadcast',
     'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
     'admin-events'
 ]);
 var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
-function isPageAdminOnly(pageName) { return pageName && pageName.startsWith('admin-'); }
+function isPageAdminOnly(pageName) { return pageName === 'admin' || (pageName && pageName.startsWith('admin-')); }
 function getPageFromHash() {
     var r = parseHashRoute();
     return r ? r.pageName : null;
@@ -187,7 +187,7 @@ function showPage(pageName, params) {
         pageName === 'events' ||
         pageName === 'instructions' ||
         pageName === 'about' ||
-        pageName === 'admin-stats'
+        pageName === 'admin'
     );
     if (bottomNav) {
         bottomNav.style.display = isMainSectionPage ? 'flex' : 'none';
@@ -235,7 +235,7 @@ function showPage(pageName, params) {
         } else if (pageName === 'about') {
             navItems[4]?.classList.add('active');
             activeIndex = 4;
-        } else if ((pageName === 'admin-stats' || pageName.startsWith('admin-')) && document.getElementById('admin-nav-button')) {
+        } else if ((pageName === 'admin' || pageName.startsWith('admin-')) && document.getElementById('admin-nav-button')) {
             const adminButton = document.getElementById('admin-nav-button');
             adminButton.classList.add('active');
             const allNavItems = Array.from(document.querySelectorAll('.nav-item'));
@@ -287,8 +287,8 @@ function showPage(pageName, params) {
             ? String(params.search)
             : currentAdminUserSearch;
         loadAdminUsers(page, search);
-    } else if (pageName === 'admin-stats') {
-        loadAdminStats();
+    } else if (pageName === 'admin') {
+        loadAdminHub();
     } else if (pageName === 'admin-broadcast') {
         loadBroadcastPage();
     } else if (pageName === 'admin-server-management') {
@@ -2352,10 +2352,10 @@ function addAdminNavButton() {
     const adminButton = document.createElement('button');
     adminButton.id = 'admin-nav-button';
     adminButton.className = 'nav-item';
-    adminButton.setAttribute('data-page', 'admin-stats');
+    adminButton.setAttribute('data-page', 'admin');
     adminButton.onclick = () => {
         console.log('Переход в админ-панель');
-        showPage('admin-stats');
+        showPage('admin');
     };
     adminButton.innerHTML = `
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2368,7 +2368,7 @@ function addAdminNavButton() {
     console.log('Кнопка админ-панели успешно добавлена');
     
     // Если мы уже на странице админа, нужно обновить индикатор
-    if (currentPage === 'admin-stats') {
+    if (currentPage === 'admin') {
         const allNavItems = document.querySelectorAll('.nav-item');
         const index = Array.from(allNavItems).indexOf(adminButton);
         if (index >= 0) {
@@ -3347,16 +3347,11 @@ function showError(elementId, message) {
     }
 }
 
-// Главный экран админ-панели (две карточки «Аналитика» и «Управление») — данных не грузим
-function loadAdminStats() {
-    const contentEl = document.getElementById('admin-stats-content');
+// Главный экран админ-панели: меню разделов (пользователи, серверы, рассылка, события)
+function loadAdminHub() {
+    const contentEl = document.getElementById('admin-hub-content');
     if (contentEl) contentEl.style.display = 'block';
 }
-
-// (Аналитика удалена — оставлено только Управление)
-
-// === Удалены: loadUserGrowthChart, loadConversionChart, loadRevenueTrendChart,
-// loadServerLoadChart, loadNotificationStats, loadSubscriptionStats и связанные ===
 
 // Загружаем цены с сервера (публичный API, без авторизации)
 async function loadPrices() {
@@ -3526,7 +3521,7 @@ async function loadBroadcastPage() {
     
     try {
         // Получаем статистику для определения количества пользователей
-        const statsResponse = await apiFetch('/api/admin/stats', {
+        const statsResponse = await apiFetch('/api/admin/overview', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3538,7 +3533,7 @@ async function loadBroadcastPage() {
         }
         
         const statsData = await statsResponse.json();
-        // Структура ответа: stats.users.total (как в loadAdminStats)
+        // Структура ответа: stats.users.total (API /api/admin/overview)
         const totalUsers = statsData.stats?.users?.total || 0;
         broadcastTotalUsers = totalUsers;
         
@@ -4515,7 +4510,7 @@ function initNavIndicator() {
         if (targetButton && targetButton.dataset && targetButton.dataset.page) {
             showPage(targetButton.dataset.page);
         } else if (targetButton && targetButton.id === 'admin-nav-button') {
-            showPage('admin-stats');
+            showPage('admin');
         }
     });
     
