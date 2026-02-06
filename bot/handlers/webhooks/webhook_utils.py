@@ -7,6 +7,7 @@
 """
 import asyncio
 import functools
+import json
 import logging
 from typing import Optional, Dict, Any, Tuple, Callable
 from flask import request, jsonify, Response
@@ -22,13 +23,31 @@ class APIResponse:
     """Единый формат ответа API"""
     
     @staticmethod
+    def _make_response(payload: Dict[str, Any], status_code: int) -> Tuple[Response, int, Dict]:
+        """Создает Response объект, работает с Flask контекстом и без него"""
+        try:
+            # Пытаемся использовать jsonify если есть Flask application context
+            from flask import has_app_context, current_app
+            if has_app_context():
+                response = jsonify(payload)
+                response.status_code = status_code
+                return response, status_code, APIResponse.cors_headers()
+        except (RuntimeError, AttributeError):
+            pass
+        
+        # Fallback: создаем Response вручную без Flask контекста
+        json_str = json.dumps(payload, ensure_ascii=False)
+        response = Response(json_str, status=status_code, mimetype='application/json')
+        return response, status_code, APIResponse.cors_headers()
+    
+    @staticmethod
     def success(data: Optional[Dict[str, Any]] = None, **kwargs) -> Tuple[Response, int, Dict]:
         """Успешный ответ с данными"""
         payload = {"success": True}
         if data:
             payload.update(data)
         payload.update(kwargs)  # Allow inline kwargs like success(count=5, items=[...])
-        return jsonify(payload), 200, APIResponse.cors_headers()
+        return APIResponse._make_response(payload, 200)
     
     @staticmethod
     def error(message: str, code: int = 400, error_code: Optional[str] = None) -> Tuple[Response, int, Dict]:
@@ -39,7 +58,7 @@ class APIResponse:
         }
         if error_code:
             payload["error_code"] = error_code
-        return jsonify(payload), code, APIResponse.cors_headers()
+        return APIResponse._make_response(payload, code)
     
     @staticmethod
     def unauthorized(message: str = "Unauthorized") -> Tuple[Response, int, Dict]:

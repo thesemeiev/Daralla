@@ -99,21 +99,33 @@ class TestAPIResponseInAuth:
     @pytest.mark.asyncio
     async def test_unauthorized_response_format(self):
         """Test that unauthorized response has correct format."""
-        response = APIResponse.unauthorized()
+        response, status, headers = APIResponse.unauthorized()
         
         # Should be tuple (data, status, headers)
-        if isinstance(response, tuple):
-            data, status = response[0], response[1]
-            assert status == 401
+        assert status == 401
+        assert headers['Content-Type'] == 'application/json'
+        assert headers['Access-Control-Allow-Origin'] == '*'
+        # Check response data
+        import json
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert data['error'] == "Unauthorized"
+        assert data['error_code'] == "UNAUTHORIZED"
     
     @pytest.mark.asyncio
     async def test_forbidden_response_format(self):
         """Test that forbidden response has correct format."""
-        response = APIResponse.forbidden()
+        response, status, headers = APIResponse.forbidden()
         
-        if isinstance(response, tuple):
-            data, status = response[0], response[1]
-            assert status == 403
+        assert status == 403
+        assert headers['Content-Type'] == 'application/json'
+        assert headers['Access-Control-Allow-Origin'] == '*'
+        # Check response data
+        import json
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert data['error'] == "Forbidden"
+        assert data['error_code'] == "FORBIDDEN"
 
 
 class TestAdminAuthentication:

@@ -5,6 +5,7 @@ import os
 import asyncio
 import tempfile
 import pytest
+import pytest_asyncio
 from flask import Flask
 from datetime import datetime, timedelta
 
@@ -35,7 +36,7 @@ def configure_test_environment():
             pass
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def db():
     """Create and initialize test database."""
     import aiosqlite
@@ -129,7 +130,7 @@ def client(app):
     return app.test_client()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_account(db):
     """Create a test account."""
     import time
@@ -152,7 +153,7 @@ async def test_account(db):
     }
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_auth_token(db, test_account):
     """Create a test auth token."""
     import time
@@ -176,7 +177,7 @@ async def test_auth_token(db, test_account):
     }
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_payment(db, test_account):
     """Create a test payment."""
     import time
