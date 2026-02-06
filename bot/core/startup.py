@@ -177,8 +177,14 @@ async def on_startup(app):
         await notification_manager.initialize()
         await notification_manager.start()
         bot_module.notification_manager = notification_manager
-        
         logger.info("Менеджер уведомлений запущен")
+        # Устанавливаем задачу периодического бекапа БД (каждые 2 часа)
+        try:
+            from ..services.backup import install_backup_task
+            install_backup_task(app, interval_seconds=2 * 60 * 60)
+            logger.info("Backup task установлен")
+        except Exception as e:
+            logger.warning(f"Не удалось установить backup task: {e}")
         logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
         
         # 3. Запуск фоновых задач (единый цикл)
