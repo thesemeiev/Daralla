@@ -4,7 +4,7 @@ Blueprint: POST /webhook/yookassa (YooKassa webhook).
 import asyncio
 import logging
 import threading
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 
 from ..payment_processors import process_payment_webhook
 
@@ -44,29 +44,51 @@ def create_blueprint(bot_app):
             else:
                 logger.info(f" WEBHOOK:  Неизвестный статус: {status}")
 
-            def process_payment():
-                import time
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
-                except Exception as e:
-                    logger.error(f"Ошибка обработки платежа в webhook: {e}")
-                finally:
+            # Try to schedule processing in the main bot asyncio loop stored in AppContext
+            app_ctx = None
+            try:
+                app_ctx = current_app.config.get("BOT_CONTEXT")
+            except RuntimeError:
+                app_ctx = None
+            main_loop = getattr(app_ctx, "main_loop", None) if app_ctx is not None else None
+            if main_loop and hasattr(asyncio, "run_coroutine_threadsafe"):
+                fut = asyncio.run_coroutine_threadsafe(
+                    process_payment_webhook(bot_app, payment_id, status), main_loop
+                )
+                # attach callback to log exceptions
+                def _on_done(f):
                     try:
-                        time.sleep(1)
-                        pending = asyncio.all_tasks(loop)
-                        for task in pending:
-                            task.cancel()
-                        if pending:
-                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        exc = f.exception()
+                        if exc:
+                            logger.error("Ошибка в задаче обработки платежа: %s", exc)
+                    except Exception:
+                        pass
+                fut.add_done_callback(_on_done)
+            else:
+                # Fallback: run in a dedicated thread with its own loop (legacy behaviour)
+                def process_payment():
+                    import time
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(process_payment_webhook(bot_app, payment_id, status))
                     except Exception as e:
-                        logger.warning(f"Ошибка при закрытии event loop: {e}")
+                        logger.error(f"Ошибка обработки платежа в webhook: {e}")
                     finally:
-                        loop.close()
+                        try:
+                            time.sleep(1)
+                            pending = asyncio.all_tasks(loop)
+                            for task in pending:
+                                task.cancel()
+                            if pending:
+                                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        except Exception as e:
+                            logger.warning(f"Ошибка при закрытии event loop: {e}")
+                        finally:
+                            loop.close()
 
-            thread = threading.Thread(target=process_payment, daemon=True)
-            thread.start()
+                thread = threading.Thread(target=process_payment, daemon=True)
+                thread.start()
 
             return jsonify({'status': 'ok'})
 

@@ -53,7 +53,7 @@ def create_blueprint(bot_app):
                     if mapping:
                         short_uuid = short_uuid or (mapping.get("remnawave_short_uuid"))
                     else:
-                        remna_user = client.get_user_by_telegram_id(telegram_id) if telegram_id else None
+                        remna_user = loop.run_until_complete(client.get_user_by_telegram_id(telegram_id)) if telegram_id else None
                         if remna_user:
                             short_uuid = remna_user.get("shortUuid") or remna_user.get("short_uuid")
                             loop.run_until_complete(set_remnawave_mapping(
@@ -71,7 +71,7 @@ def create_blueprint(bot_app):
                                 "username": f"acc_{account_id}",
                                 "expireAt": expire_at_iso,
                             }
-                            created = client.create_user(create_payload)
+                            created = loop.run_until_complete(client.create_user(create_payload))
                             ruuid = created.get("uuid") or created.get("id") or created.get("obj", {}).get("uuid")
                             short_uuid = created.get("shortUuid") or created.get("short_uuid") or (created.get("obj", {}) or {}).get("shortUuid")
                             if ruuid:

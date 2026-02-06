@@ -30,7 +30,7 @@ async def get_remnawave_nodes_for_display() -> list[dict[str, Any]]:
     try:
         cfg = load_remnawave_config()
         client = RemnawaveClient(cfg)
-        raw_nodes = client.get_nodes()
+        raw_nodes = await client.get_nodes_async()
     except Exception as e:
         logger.error("nodes_display: failed to fetch Remnawave nodes: %s", e)
         return []

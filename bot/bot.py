@@ -28,7 +28,7 @@ Configuration.account_id = config.YOOKASSA_SHOP_ID
 Configuration.secret_key = config.YOOKASSA_SECRET_KEY
 
 if not config.YOOKASSA_SHOP_ID or not config.YOOKASSA_SECRET_KEY:
-    print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
+    logger.warning("YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
 
 # 2. Логирование (config.ensure_dirs() уже создал LOGS_DIR)
 app_log_path = str(config.APP_LOG_PATH)

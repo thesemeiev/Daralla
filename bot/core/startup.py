@@ -39,6 +39,13 @@ async def on_startup(app):
             bot_module = importlib.import_module("bot.bot")
 
         ctx = getattr(bot_module, "app_context", None)
+        # Store running loop in context so webhook handlers can schedule coroutines
+        try:
+            import asyncio as _asyncio
+            if ctx is not None:
+                ctx.main_loop = _asyncio.get_running_loop()
+        except Exception:
+            pass
         if ctx:
             admin_ids = ctx.admin_ids
         else:

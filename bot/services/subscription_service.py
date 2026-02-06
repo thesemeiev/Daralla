@@ -107,7 +107,7 @@ async def sync_remnawave_telegram_id(account_id: int, telegram_id: Optional[int]
         return
     try:
         client = _get_client()
-        client.update_user_telegram_id(uuid_rw, telegram_id)
+        await client.update_user_telegram_id(uuid_rw, telegram_id)
         logger.debug("Remnawave telegramId synced for account_id=%s: %s", account_id, telegram_id)
     except Exception as e:
         logger.warning("Remnawave sync telegramId for account_id=%s failed (non-fatal): %s", account_id, e)
@@ -123,7 +123,7 @@ async def get_subscriptions_for_account(account_id: int) -> list[dict[str, Any]]
         return []
     try:
         client = _get_client()
-        info = client.get_sub_info(short_uuid)
+        info = await client.get_sub_info(short_uuid)
         # Remnawave OpenAPI: GetSubscriptionInfoResponseDto has response.user.expiresAt (date-time)
         obj = info.get("response") or info.get("obj") or info.get("data") or info
         exp_ts = _extract_expiry_from_obj(obj) if isinstance(obj, dict) else 0
@@ -176,7 +176,7 @@ async def extend_subscription(account_id: int, add_days: int, device_limit: Opti
         return None
     try:
         client = _get_client()
-        new_expiry = client.extend_user_by_days(uuid_rw, short_uuid, add_days, device_limit=device_limit)
+        new_expiry = await client.extend_user_by_days(uuid_rw, short_uuid, add_days, device_limit=device_limit)
         await upsert_account_expiry_cache(account_id, new_expiry)
         return new_expiry
     except Exception as e:
@@ -194,7 +194,7 @@ async def set_subscription_expiry(account_id: int, expires_at_unix: int, device_
         return False
     try:
         client = _get_client()
-        client.update_user_expiry(uuid_rw, expires_at_unix, device_limit=device_limit)
+        await client.update_user_expiry(uuid_rw, expires_at_unix, device_limit=device_limit)
         await upsert_account_expiry_cache(account_id, expires_at_unix)
         return True
     except Exception as e:
@@ -228,22 +228,22 @@ async def activate_subscription_after_payment(
         try:
             remna_user = None
             if telegram_id:
-                remna_user = client.get_user_by_telegram_id(telegram_id)
+                remna_user = await client.get_user_by_telegram_id(telegram_id)
             if not remna_user and username:
-                remna_user = client.get_user_by_username(username)
+                remna_user = await client.get_user_by_username(username)
             if not remna_user:
-                remna_user = client.get_user_by_username(f"acc_{account_id}")
+                remna_user = await client.get_user_by_username(f"acc_{account_id}")
             if not remna_user:
                 now_ts = int(time.time())
                 exp_ts = now_ts + days * 24 * 60 * 60
                 expire_at_iso = datetime.datetime.utcfromtimestamp(exp_ts).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-                create_payload = {
+                create_payload: dict[str, Any] = {
                     "username": f"acc_{account_id}",
                     "expireAt": expire_at_iso,
                 }
                 if telegram_id:
                     create_payload["telegramId"] = int(telegram_id)
-                created = client.create_user(create_payload)
+                created = await client.create_user(create_payload)
                 ruuid = created.get("uuid") or created.get("id")
                 short_uuid = created.get("shortUuid") or created.get("short_uuid") or created.get("shortId")
                 if ruuid:
@@ -275,11 +275,11 @@ async def activate_subscription_after_payment(
 
     try:
         if is_extension and short_uuid:
-            new_expires_at = client.extend_user_by_days(uuid_rw, short_uuid, days, device_limit=device_limit)
+            new_expires_at = await client.extend_user_by_days(uuid_rw, short_uuid, days, device_limit=device_limit)
         else:
             now_ts = int(time.time())
             new_expires_at = now_ts + days * 24 * 60 * 60
-            client.update_user_expiry(uuid_rw, new_expires_at, device_limit=device_limit)
+            await client.update_user_expiry(uuid_rw, new_expires_at, device_limit=device_limit)
         await upsert_account_expiry_cache(account_id, new_expires_at)
         return True, short_uuid, new_expires_at, None
     except RemnawaveError as e:
