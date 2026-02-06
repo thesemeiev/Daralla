@@ -9,7 +9,6 @@ from ...webhook_utils import APIResponse, require_admin, handle_options, run_asy
 
 logger = logging.getLogger(__name__)
 
-
 def register_servers_routes(bp):
     @bp.route("/api/admin/nodes", methods=["GET", "OPTIONS"])
     @require_admin
