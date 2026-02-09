@@ -1,5 +1,23 @@
-// Telegram Web App API
-const tg = window.Telegram.WebApp;
+// Telegram Web App API — безопасная инициализация (не падаем, если API ещё не готов или открыто не из Telegram)
+const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : {
+    initData: '',
+    initDataUnsafe: { user: {} },
+    ready: function() {},
+    expand: function() {},
+    setHeaderColor: function() {},
+    setBackgroundColor: function() {},
+    disableVerticalSwipes: false,
+    openLink: function() {},
+    showAlert: function() {},
+    showConfirm: function(msg, cb) { if (typeof cb === 'function') cb(false); },
+    MainButton: {
+        setText: function() {},
+        show: function() {},
+        hide: function() {},
+        disable: function() {},
+        enable: function() {}
+    }
+};
 
 // Глобальные переменные для веб-авторизации
 let webAuthToken = null;
