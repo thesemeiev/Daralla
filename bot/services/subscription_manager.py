@@ -319,7 +319,7 @@ class SubscriptionManager:
                 days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
                 server_config = self.server_manager.get_server_config(server_name)
                 logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
-                client_flow = server_config.get("client_flow") if server_config else None
+                client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
                 response = xui.addClient(
                     day=days_remaining,
                     tg_id=user_id,
@@ -425,11 +425,11 @@ class SubscriptionManager:
                 display_name = server_display_name
                 logger.info(f"Формируем название для VPN клиента: '{display_name}' (server='{server_display_name}')")
                 
-                # Используем готовый subscription endpoint X-UI вместо ручной генерации
-                # Это более надежно - X-UI сам правильно генерирует ссылки
-                # Передаем красивое название для tag в ссылках (заменит домен ghosttunnel.space на Daralla)
+                # Используем готовый subscription endpoint X-UI вместо ручной генерации.
+                # Передаём client_flow: X-UI часто не добавляет flow в URL подписки — без него VPN-клиент не парсит flow.
                 try:
-                    xui_links = xui.get_subscription_links(client_email, server_name=display_name)
+                    client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
+                    xui_links = xui.get_subscription_links(client_email, server_name=display_name, flow_override=client_flow)
                     if xui_links:
                         # Дедупликация: добавляем только уникальные ссылки (по части без tag)
                         for link in xui_links:

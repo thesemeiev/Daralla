@@ -62,9 +62,9 @@ else:
 
 # Пути к изображениям для меню: главное меню (/start), успех и ошибка (уведомления о платежах)
 IMAGE_PATHS = {
-    'main_menu': 'images/main_menu.jpg',
-    'payment_success': 'images/payment_success.jpg',
-    'payment_failed': 'images/payment_failed.jpg',
+    'main_menu': os.getenv("IMAGE_MAIN_MENU", "images/main_menu.jpg"),
+    'payment_success': os.getenv("IMAGE_PAYMENT_SUCCESS", "images/payment_success.jpg"),
+    'payment_failed': os.getenv("IMAGE_PAYMENT_FAILED", "images/payment_failed.jpg"),
 }
 
 # Устанавливаем пути к изображениям в утилитах
@@ -83,7 +83,7 @@ if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
 
 # Главное название бренда для VPN клиента
 # Это название будет использоваться для всех серверов в подписке
-VPN_BRAND_NAME = " Daralla VPN"  # Можно изменить на любое красивое название
+VPN_BRAND_NAME = os.getenv("VPN_BRAND_NAME", "Daralla VPN").strip()
 
 # Серверы добавляются через админ-панель, конфиг загружается из БД при старте (init_server_managers)
 

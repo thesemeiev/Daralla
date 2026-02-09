@@ -497,7 +497,7 @@ def create_blueprint(bot_app):
                 if user.get('telegram_id'):
                     return jsonify({'error': 'Telegram уже привязан'}), 400
                 state = loop.run_until_complete(link_telegram_create_state(user_id))
-                bot_username = os.getenv('BOT_USERNAME', 'Daralla_bot')
+                bot_username = os.getenv('BOT_USERNAME', 'Daralla_bot').strip()
                 link = f"https://t.me/{bot_username}?start=link_{state}"
                 return jsonify({'success': True, 'link': link, 'state': state})
             finally:

@@ -596,9 +596,9 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             # Получаем главное название VPN для параметра в URL
             try:
                 from ... import bot as bot_module
-                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
+                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', os.getenv('VPN_BRAND_NAME', 'Daralla VPN'))
             except (ImportError, AttributeError):
-                vpn_brand_name = 'Daralla VPN'
+                vpn_brand_name = os.getenv('VPN_BRAND_NAME', 'Daralla VPN').strip()
             
             # Формируем subscription URL
             # Для Happ клиента лучше использовать поддомен (как делают другие разработчики: auth.zkodes.ru)

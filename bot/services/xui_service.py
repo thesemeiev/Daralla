@@ -1427,7 +1427,13 @@ class X3:
 
             # Используем название сервера в tag, если указано, иначе используем user_id
             # Tag должен быть URL-encoded для правильной работы в VPN клиентах
-            tag = quote(server_name, safe='') if server_name else f"Daralla-{user_id}"
+            if server_name:
+                tag = quote(server_name, safe='')
+            else:
+                # Получаем название бренда из переменных окружения для fallback tag
+                import os
+                vpn_brand_name = os.getenv('VPN_BRAND_NAME', 'Daralla').strip()
+                tag = f"{vpn_brand_name}-{user_id}"
 
             # Генерируем ссылку в зависимости от протокола
             if protocol == 'trojan':
@@ -1458,10 +1464,14 @@ class X3:
                 return trojan_link
             else:
                 # VLESS (по умолчанию)
-                # Строго в правильном порядке, включая новые параметры
+                # Строго в правильном порядке, включая новые параметры.
+                # flow обязателен для Vision/Reality — без него VPN-клиент не парсит flow.
                 params = [
                     ("type", network),
                 ]
+                client_flow = (client.get("flow") or "").strip() or None
+                if client_flow:
+                    params.append(("flow", quote(client_flow, safe="")))
                 
                 # Добавляем параметры XHTTP если это XHTTP
                 if network == "xhttp":
@@ -1544,19 +1554,19 @@ class X3:
             logger.error(f"Ошибка получения подписочной ссылки для {user_email}: {e}")
             return ""
     
-    def get_subscription_links(self, user_email: str, server_name: str = None) -> List[str]:
+    def get_subscription_links(self, user_email: str, server_name: str = None, flow_override: str = None) -> List[str]:
         """
-        Получает VLESS ссылки напрямую из X-UI subscription endpoint
+        Получает VLESS ссылки напрямую из X-UI subscription endpoint.
         
-        Это более надежный способ - используем готовый endpoint X-UI вместо ручной генерации.
-        X-UI сам правильно генерирует ссылки с учетом всех настроек.
+        X-UI в ряде версий не добавляет flow в URL подписки, из‑за чего VPN-клиент не парсит flow.
+        Если передан flow_override, он подставляется в каждую VLESS-ссылку (если flow ещё нет).
         
         Args:
             user_email: Email клиента
             server_name: Название сервера для замены tag в ссылках
-            
+            flow_override: Значение flow (например xtls-rprx-vision) — подставить в VLESS-ссылки, если отсутствует
         Returns:
-            Список VLESS ссылок из X-UI subscription endpoint (с обновленным tag если указано server_name)
+            Список VLESS ссылок из X-UI subscription endpoint (с обновленным tag и при необходимости flow)
         """
         self._ensure_connected()
         try:
@@ -1605,34 +1615,38 @@ class X3:
                                 # Заменяем tag (название) в ссылках на название сервера, если указано
                                 # X-UI может возвращать ссылки с доменом в tag (например, ghosttunnel.space)
                                 # Мы заменяем его на красивое название бренда
-                                if server_name:
-                                    updated_links = []
-                                    # URL-encode название сервера для правильной работы в VPN клиентах
-                                    encoded_server_name = quote(server_name, safe='')
-                                    for link in links:
+                                flow_val = (flow_override or "").strip() or None
+                                updated_links = []
+                                encoded_server_name = quote(server_name, safe='') if server_name else None
+                                for link in links:
+                                    # При необходимости подставляем flow в VLESS (X-UI часто не добавляет в подписку)
+                                    if flow_val and link.startswith("vless://") and "flow=" not in link.split("#")[0]:
+                                        before_hash, after_hash = (link.split("#", 1) if "#" in link else (link, None))
+                                        if "?" in before_hash:
+                                            base, qs = before_hash.split("?", 1)
+                                            new_qs = qs + "&flow=" + quote(flow_val, safe="")
+                                        else:
+                                            base, new_qs = before_hash, "flow=" + quote(flow_val, safe="")
+                                        link = f"{base}?{new_qs}" + ("#" + after_hash if after_hash is not None else "")
+                                        logger.debug(f"Добавлен flow={flow_val} в VLESS-ссылку подписки")
+                                    if server_name:
                                         # VLESS ссылка имеет формат: vless://...?#tag
-                                        # Заменяем часть после # на название сервера
                                         if '#' in link:
-                                            # Разделяем ссылку на части до и после #
                                             parts = link.split('#', 1)
                                             link_without_tag = parts[0]
-                                            old_tag = parts[1] if len(parts) > 1 else None
-                                            # Всегда заменяем tag, даже если там домен
                                             updated_link = f"{link_without_tag}#{encoded_server_name}"
-                                            if old_tag:
-                                                logger.debug(f"Заменяем tag: '{old_tag}' -> '{server_name}' в ссылке")
-                                            else:
-                                                logger.debug(f"Добавляем tag '{server_name}' к ссылке")
                                         else:
-                                            # Если tag отсутствует, добавляем его
                                             updated_link = f"{link}#{encoded_server_name}"
-                                            logger.debug(f"Добавляем tag '{server_name}' к ссылке без tag")
-                                        updated_links.append(updated_link)
-                                    links = updated_links
+                                    else:
+                                        updated_link = link
+                                    updated_links.append(updated_link)
+                                links = updated_links
+                                if server_name:
                                     logger.info(f"Обновлены tag в {len(links)} ссылках на '{server_name}'")
-                                    # Логируем первую ссылку для проверки
-                                    if links:
-                                        logger.info(f"Пример обновленной ссылки (первые 150 символов): {links[0][:150]}...")
+                                if flow_val:
+                                    logger.info(f"Подставлен flow в VLESS-ссылки подписки (flow_override={flow_val})")
+                                if links:
+                                    logger.info(f"Пример обновленной ссылки (первые 150 символов): {links[0][:150]}...")
                                 
                                 logger.info(f"Получено {len(links)} ссылок из X-UI subscription endpoint для {user_email}")
                                 return links

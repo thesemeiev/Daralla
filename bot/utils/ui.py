@@ -7,13 +7,16 @@ from telegram import InlineKeyboardButton
 try:
     from ..prices_config import PRICE_MONTH, PRICE_3MONTH
 except ImportError:
-    PRICE_MONTH, PRICE_3MONTH = 150, 350
+    # Если prices_config не найден, берем из переменных окружения или используем значения по умолчанию
+    PRICE_MONTH = int(os.getenv("PRICE_MONTH", "150"))
+    PRICE_3MONTH = int(os.getenv("PRICE_3MONTH", "350"))
 
 
 def get_site_urls():
     """
     Возвращает (webapp_url, site_url) для кнопок «Открыть Mini App» и «Вернуться на сайт».
     site_url = WEBSITE_URL или webapp_url (fallback).
+    URL нормализуется - гарантируется завершающий слеш для Telegram Web App.
     """
     webapp_url = None
     try:
@@ -23,6 +26,11 @@ def get_site_urls():
             webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
     except (ImportError, AttributeError):
         pass
+    
+    # Нормализуем URL - добавляем завершающий слеш если его нет (для Telegram Web App обязательно)
+    if webapp_url and not webapp_url.endswith('/'):
+        webapp_url = webapp_url.rstrip('/') + '/'
+    
     site_url = os.getenv("WEBSITE_URL", "").strip()
     if not site_url and webapp_url:
         site_url = webapp_url
@@ -81,10 +89,14 @@ class UIButtons:
         # Добавляем кнопку мини-приложения, если доступна
         if webapp_url:
             from telegram import WebAppInfo
-            buttons.append([InlineKeyboardButton("Открыть в приложении", web_app=WebAppInfo(url=webapp_url))])
+            # Нормализуем URL - гарантируем завершающий слеш (для Telegram Web App обязательно)
+            normalized_url = webapp_url.rstrip('/') + '/' if webapp_url else None
+            if normalized_url:
+                buttons.append([InlineKeyboardButton("Открыть в приложении", web_app=WebAppInfo(url=normalized_url))])
         
         # Кнопка канала
-        buttons.append([InlineKeyboardButton("Наш канал", url="https://t.me/DarallaNews")])
+        telegram_channel_url = os.getenv("TELEGRAM_CHANNEL_URL", "https://t.me/DarallaNews")
+        buttons.append([InlineKeyboardButton("Наш канал", url=telegram_channel_url)])
         
         return buttons
     
@@ -114,6 +126,10 @@ class UIButtons:
         if not webapp_url:
             return None
         
+        # Нормализуем URL - гарантируем завершающий слеш перед добавлением query параметров
+        # Telegram Web App требует завершающий слеш перед `?` (например: https://daralla.ru/?startapp=...)
+        normalized_url = webapp_url.rstrip('/') + '/'
+        
         # Если нужны параметры, добавляем их как query параметры
         if action or params:
             from urllib.parse import urlencode
@@ -123,9 +139,9 @@ class UIButtons:
                     query_params['startapp'] = f"{action}_{params}"
                 else:
                     query_params['startapp'] = action
-            url_with_params = f"{webapp_url}?{urlencode(query_params)}"
+            url_with_params = f"{normalized_url}?{urlencode(query_params)}"
         else:
-            url_with_params = webapp_url
+            url_with_params = normalized_url
         
         from telegram import InlineKeyboardButton, WebAppInfo
         return InlineKeyboardButton(text, web_app=WebAppInfo(url=url_with_params))
@@ -138,10 +154,20 @@ class UIMessages:
     def welcome_message(is_new_user=False):
         """Приветственное сообщение"""
         # Разный заголовок для нового и существующего пользователя
+        # Получаем название бренда из bot.py
+        vpn_brand_name = "Daralla VPN"
+        try:
+            import sys
+            bot_module = sys.modules.get('bot.bot')
+            if bot_module:
+                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
+        except (ImportError, AttributeError):
+            pass
+        
         if is_new_user:
-            header_text = 'Добро пожаловать в Daralla VPN!'
+            header_text = f'Добро пожаловать в {vpn_brand_name}!'
         else:
-            header_text = 'Рады снова видеть вас в Daralla VPN!'
+            header_text = f'Рады снова видеть вас в {vpn_brand_name}!'
         
         return (
             f"{UIStyles.header(header_text)}\n\n"

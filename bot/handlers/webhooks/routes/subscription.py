@@ -106,12 +106,15 @@ def create_blueprint(bot_app):
 
             from ..webhook_auth import get_bot_module
             bot_module = get_bot_module()
-            vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN') if bot_module else 'Daralla VPN'
+            vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN') if bot_module else os.getenv('VPN_BRAND_NAME', 'Daralla VPN')
 
             clean_name = re.sub(r'[^\w\s-]', '', vpn_brand_name)
             domain_name = re.sub(r'\s+', '-', clean_name.strip()).lower()
             if not domain_name or len(domain_name) > 63:
-                domain_name = 'daralla-vpn'
+                # Fallback: используем значение из .env или дефолтное
+                domain_name = re.sub(r'\s+', '-', os.getenv('VPN_BRAND_NAME', 'daralla-vpn').strip().lower())
+                if not domain_name or len(domain_name) > 63:
+                    domain_name = 'daralla-vpn'
 
             website_url = os.getenv("WEBSITE_URL", "").strip()
             telegram_url = os.getenv("TELEGRAM_URL", "").strip()
@@ -191,7 +194,7 @@ def create_blueprint(bot_app):
 
             clean_name_for_header = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip()
             if not clean_name_for_header:
-                clean_name_for_header = 'Daralla VPN'
+                clean_name_for_header = os.getenv('VPN_BRAND_NAME', 'Daralla VPN').strip()
             if len(clean_name_for_header) > 25:
                 clean_name_for_header = clean_name_for_header[:25]
                 logger.warning(f"profile-title обрезан до 25 символов: '{clean_name_for_header}'")
@@ -239,7 +242,9 @@ def create_blueprint(bot_app):
 
             clean_filename = re.sub(r'[^\w\s-]', '', vpn_brand_name).strip().replace(' ', '-').lower()
             if not clean_filename:
-                clean_filename = 'daralla-vpn'
+                clean_filename = re.sub(r'\s+', '-', os.getenv('VPN_BRAND_NAME', 'daralla-vpn').strip().lower())
+                if not clean_filename:
+                    clean_filename = 'daralla-vpn'
 
             headers = {
                 "Content-Type": "text/plain; charset=utf-8",
