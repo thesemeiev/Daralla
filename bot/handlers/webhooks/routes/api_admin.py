@@ -168,7 +168,7 @@ def create_blueprint(bot_app):
                 if not user:
                     return jsonify({'error': 'User not found'}), 404
                 user_id_resolved = user['user_id']
-                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id_resolved))
+                subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id_resolved, include_deleted=True))
                 payments = loop.run_until_complete(get_payments_by_user(user_id_resolved, limit=10))
             finally:
                 loop.close()
@@ -332,12 +332,13 @@ def create_blueprint(bot_app):
             
                 logger.info(f"✅ Подписка создана в БД: subscription_id={subscription_id}, user_id={user_id_param}, period={period}")
             
-                # Получаем все серверы из конфигурации
-                all_configured_servers = []
-                for server in server_manager.servers:
-                    server_name = server["name"]
-                    if server.get("x3") is not None:
-                        all_configured_servers.append(server_name)
+                # Серверы только из группы подписки (соответствие sync_servers_with_config)
+                group_id = sub_dict.get("group_id")
+                servers_for_group = server_manager.get_servers_by_group(group_id)
+                all_configured_servers = [
+                    s["name"] for s in servers_for_group
+                    if s.get("x3") is not None
+                ]
             
                 successful_servers = []
                 failed_servers = []
@@ -1103,7 +1104,7 @@ def create_blueprint(bot_app):
             asyncio.set_event_loop(loop)
             try:
                 # Получаем все подписки пользователя для удаления клиентов с серверов
-                all_subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id))
+                all_subscriptions = loop.run_until_complete(get_all_subscriptions_by_user(user_id, include_deleted=True))
             
                 # Получаем менеджеры
                 from ..webhook_auth import get_server_manager

@@ -145,27 +145,6 @@ async def on_startup(app):
         except Exception as e:
             logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
 
-        # 1.0 Миграция telegram_links / known_telegram_ids (идемпотентно заполняет связи TG ↔ аккаунт)
-        try:
-            from ..db.migrations.migrate_telegram_links import migrate_telegram_links
-            await migrate_telegram_links()
-        except Exception as e:
-            logger.warning("Миграция telegram_links: %s (возможно уже выполнена)", e)
-
-        # 1.0.1 Миграция legacy числовых user_id → tg_<uuid> (единая модель: user_id не равен telegram_id)
-        try:
-            from ..db.subscribers_db import migrate_legacy_numeric_user_ids
-            await migrate_legacy_numeric_user_ids()
-        except Exception as e:
-            logger.warning("Миграция legacy numeric user_id: %s", e)
-
-        # 1.0.2 Миграция длинных tg_ user_id → короткий формат (tg_ + 12 hex = 15 символов)
-        try:
-            from ..db.subscribers_db import migrate_long_tg_user_ids
-            await migrate_long_tg_user_ids()
-        except Exception as e:
-            logger.warning("Миграция long tg_ user_id: %s", e)
-        
         # 1.1 Инициализация менеджеров серверов из БД
         init_server_managers = getattr(bot_module, 'init_server_managers', None)
         if init_server_managers:

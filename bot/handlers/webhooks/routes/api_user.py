@@ -51,6 +51,7 @@ def create_blueprint(bot_app):
                     get_all_active_subscriptions_by_user,
                     get_or_create_subscriber,
                     create_subscription,
+                    get_subscription_by_id_only,
                     is_subscription_active,
                     is_known_telegram_id,
                     mark_telegram_id_known,
@@ -109,12 +110,14 @@ def create_blueprint(bot_app):
                             subscription_manager = get_subscription_manager()
                             server_manager = get_server_manager()
                             if subscription_manager and server_manager:
+                                sub_dict = loop.run_until_complete(get_subscription_by_id_only(subscription_id))
+                                group_id = sub_dict.get("group_id") if sub_dict else None
+                                servers_for_group = server_manager.get_servers_by_group(group_id)
                                 unique_email = f"{user_id}_{subscription_id}"
-                                all_configured_servers = []
-                                for server in server_manager.servers:
-                                    server_name = server["name"]
-                                    if server.get("x3") is not None:
-                                        all_configured_servers.append(server_name)
+                                all_configured_servers = [
+                                    s["name"] for s in servers_for_group
+                                    if s.get("x3") is not None
+                                ]
                                 if all_configured_servers:
                                     async def attach_servers():
                                         for server_name in all_configured_servers:

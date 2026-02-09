@@ -2498,7 +2498,7 @@ async function showAdminUserDetail(userId) {
                     data.subscriptions.map(sub => `
                         <div class="admin-subscription-card" onclick="showAdminSubscriptionEdit(${sub.id})">
                             <div class="admin-subscription-name">${escapeHtml(sub.name)}</div>
-                            <div class="admin-subscription-status ${sub.status}">${sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : 'Отменена'}</div>
+                            <div class="admin-subscription-status ${sub.status}">${sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : sub.status === 'deleted' ? 'Удалена' : 'Отменена'}</div>
                             <div class="admin-subscription-info">
                                 <div>Создана: ${escapeHtml(sub.created_at_formatted)}</div>
                                 <div>Истекает: ${escapeHtml(sub.expires_at_formatted)}</div>

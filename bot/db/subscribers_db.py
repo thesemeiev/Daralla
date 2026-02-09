@@ -22,18 +22,23 @@ SERVER_CONFIG_UPDATE_KEYS = [
 async def init_subscribers_db():
     """Инициализирует таблицы пользователей и подписок в единой БД"""
     async with aiosqlite.connect(DB_PATH) as db:
-        # 1. Сначала создаем таблицы без зависимостей
-        # Единая таблица пользователей
+        # 1. Таблицы без зависимостей (финальная схема)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT UNIQUE NOT NULL,
                 first_seen INTEGER NOT NULL,
-                last_seen INTEGER NOT NULL
+                last_seen INTEGER NOT NULL,
+                username TEXT,
+                password_hash TEXT,
+                is_web INTEGER DEFAULT 0,
+                auth_token TEXT,
+                telegram_id TEXT
             )
         """)
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL")
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id) WHERE telegram_id IS NOT NULL")
 
-        # Таблица групп серверов
         await db.execute("""
             CREATE TABLE IF NOT EXISTS server_groups (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,56 +49,6 @@ async def init_subscribers_db():
             )
         """)
 
-        # 2. Миграции для таблицы users
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            logger.info("Добавлена колонка username в таблицу users")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (username): {e}")
-        
-        try:
-            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL")
-            logger.info("Создан уникальный индекс для username")
-        except Exception as e:
-            logger.error(f"Ошибка создания индекса для username: {e}")
-
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-            logger.info("Добавлена колонка password_hash в таблицу users")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (password_hash): {e}")
-        
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN is_web INTEGER DEFAULT 0")
-            logger.info("Добавлена колонка is_web в таблицу users")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (is_web): {e}")
-
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN auth_token TEXT")
-            logger.info("Добавлена колонка auth_token в таблицу users")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (auth_token): {e}")
-
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN telegram_id TEXT")
-            logger.info("Добавлена колонка telegram_id в таблицу users")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (telegram_id): {e}")
-
-        try:
-            await db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id) WHERE telegram_id IS NOT NULL"
-            )
-            logger.info("Создан уникальный индекс idx_users_telegram_id")
-        except Exception as e:
-            logger.error(f"Ошибка создания индекса idx_users_telegram_id: {e}")
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS link_telegram_states (
                 state TEXT PRIMARY KEY,
@@ -101,7 +56,6 @@ async def init_subscribers_db():
                 created_at INTEGER NOT NULL
             )
         """)
-        logger.info("Таблица link_telegram_states создана/проверена")
 
         # Таблица связей Telegram ID ↔ аккаунт (user_id)
         await db.execute("""
@@ -125,8 +79,7 @@ async def init_subscribers_db():
             )
         """)
 
-        # 3. Создаем таблицы с зависимостями
-        # Таблица конфигурации серверов
+        # 2. Таблицы с зависимостями (финальная схема)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS servers_config (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,90 +93,33 @@ async def init_subscribers_db():
                 lat REAL,
                 lng REAL,
                 is_active INTEGER DEFAULT 1,
+                subscription_port INTEGER DEFAULT 2096,
+                subscription_url TEXT,
+                client_flow TEXT,
+                map_label TEXT,
+                location TEXT,
+                max_concurrent_clients INTEGER DEFAULT 50,
                 FOREIGN KEY (group_id) REFERENCES server_groups(id)
             )
         """)
 
-        # Таблица подписок
         await db.execute("""
             CREATE TABLE IF NOT EXISTS subscriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 subscriber_id INTEGER NOT NULL,
-                status TEXT NOT NULL,          -- active, expired, deleted
-                period TEXT NOT NULL,          -- month, 3month
+                status TEXT NOT NULL,
+                period TEXT NOT NULL,
                 device_limit INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
                 expires_at INTEGER NOT NULL,
                 subscription_token TEXT UNIQUE NOT NULL,
                 price REAL NOT NULL,
                 name TEXT,
+                group_id INTEGER,
                 FOREIGN KEY (subscriber_id) REFERENCES users(id)
             )
         """)
 
-        # Миграция: добавляем group_id в subscriptions, если его нет
-        try:
-            await db.execute("ALTER TABLE subscriptions ADD COLUMN group_id INTEGER")
-            logger.info("Добавлена колонка group_id в таблицу subscriptions")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (group_id): {e}")
-
-        # Миграция: заполняем group_id у подписок с NULL (группа по умолчанию)
-        try:
-            async with db.execute(
-                "SELECT id FROM server_groups WHERE is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1"
-            ) as cur:
-                row = await cur.fetchone()
-            if row is not None:
-                default_gid = row[0]
-                async with db.execute("UPDATE subscriptions SET group_id = ? WHERE group_id IS NULL", (default_gid,)) as cur:
-                    updated = cur.rowcount
-                if updated and updated > 0:
-                    await db.commit()
-                    logger.info("Миграция: заполнен group_id=%s у %s подписок с NULL", default_gid, updated)
-        except Exception as e:
-            logger.warning("Миграция group_id для существующих подписок: %s", e)
-
-        # Миграция: порт и URL подписки X-UI в настройках сервера
-        try:
-            await db.execute("ALTER TABLE servers_config ADD COLUMN subscription_port INTEGER DEFAULT 2096")
-            logger.info("Добавлена колонка subscription_port в таблицу servers_config")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (subscription_port): {e}")
-        try:
-            await db.execute("ALTER TABLE servers_config ADD COLUMN subscription_url TEXT")
-            logger.info("Добавлена колонка subscription_url в таблицу servers_config")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (subscription_url): {e}")
-        try:
-            await db.execute("ALTER TABLE servers_config ADD COLUMN client_flow TEXT")
-            logger.info("Добавлена колонка client_flow в таблицу servers_config")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (client_flow): {e}")
-        try:
-            await db.execute("ALTER TABLE servers_config ADD COLUMN map_label TEXT")
-            logger.info("Добавлена колонка map_label в таблицу servers_config")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (map_label): {e}")
-        try:
-            await db.execute("ALTER TABLE servers_config ADD COLUMN location TEXT")
-            logger.info("Добавлена колонка location в таблицу servers_config")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (location): {e}")
-        try:
-            await db.execute("ALTER TABLE servers_config ADD COLUMN max_concurrent_clients INTEGER DEFAULT 50")
-            logger.info("Добавлена колонка max_concurrent_clients в таблицу servers_config")
-        except Exception as e:
-            if "duplicate column name" not in str(e).lower():
-                logger.error(f"Ошибка миграции (max_concurrent_clients): {e}")
-
-        # Таблица связей подписки с серверами
         await db.execute("""
             CREATE TABLE IF NOT EXISTS subscription_servers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,36 +127,11 @@ async def init_subscribers_db():
                 server_name TEXT NOT NULL,
                 client_email TEXT NOT NULL,
                 client_id TEXT,
+                UNIQUE(subscription_id, server_name),
                 FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
             )
         """)
-
-        # Миграция: удаление дублей (subscription_id, server_name) и уникальный индекс
-        try:
-            await db.execute("""
-                DELETE FROM subscription_servers
-                WHERE EXISTS (
-                    SELECT 1 FROM subscription_servers s2
-                    WHERE s2.subscription_id = subscription_servers.subscription_id
-                      AND s2.server_name = subscription_servers.server_name
-                      AND s2.id < subscription_servers.id
-                )
-            """)
-            logger.info("Миграция subscription_servers: удалены дубли по (subscription_id, server_name)")
-            await db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_servers_unique "
-                "ON subscription_servers(subscription_id, server_name)"
-            )
-            await db.commit()
-            logger.info("Создан уникальный индекс idx_subscription_servers_unique на subscription_servers")
-        except Exception as e:
-            if "UNIQUE constraint" in str(e) or "unique" in str(e).lower():
-                logger.warning(
-                    "Не удалось создать уникальный индекс subscription_servers: в таблице остались дубли. "
-                    "Удалите дубли по (subscription_id, server_name) и перезапустите бота."
-                )
-            else:
-                raise
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_servers_unique ON subscription_servers(subscription_id, server_name)")
 
         # Таблица промокодов
         await db.execute("""
@@ -317,68 +188,6 @@ TG_USER_ID_HEX_LEN = 12  # tg_ + 12 hex = 15 символов всего
 def generate_tg_user_id() -> str:
     """Генерирует уникальный короткий user_id для TG-first пользователя (tg_ + 12 hex)."""
     return f"tg_{uuid.uuid4().hex[:TG_USER_ID_HEX_LEN]}"
-
-
-async def migrate_legacy_numeric_user_ids():
-    """
-    Миграция: пользователи с числовым user_id (legacy TG-first) получают новый user_id tg_<uuid>
-    и явную связь в telegram_links + users.telegram_id.
-    """
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT user_id FROM users WHERE user_id GLOB '[0-9]*'"
-        ) as cur:
-            rows = await cur.fetchall()
-        old_uids = [row["user_id"] for row in rows]
-    if not old_uids:
-        return
-    for old_uid in old_uids:
-        new_uid = generate_tg_user_id()
-        try:
-            await create_telegram_link(old_uid, new_uid)
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    "UPDATE users SET telegram_id = ? WHERE user_id = ?",
-                    (old_uid, old_uid),
-                )
-                await db.commit()
-            await rename_user_id(old_uid, new_uid)
-            logger.info(f"Миграция legacy user_id: {old_uid} -> {new_uid}")
-        except Exception as e:
-            logger.error(f"Ошибка миграции user_id {old_uid}: {e}", exc_info=True)
-
-
-async def migrate_long_tg_user_ids():
-    """
-    Миграция: пользователи с длинным tg_ user_id (tg_ + 32 hex) получают короткий формат (tg_ + 12 hex).
-    После деплоя все tg_ id будут длиной 15 символов.
-    """
-    target_len = 3 + TG_USER_ID_HEX_LEN  # "tg_" + 12 hex = 15
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT user_id FROM users WHERE user_id LIKE 'tg_%' AND length(user_id) > ?",
-            (target_len,),
-        ) as cur:
-            rows = await cur.fetchall()
-        long_uids = [row["user_id"] for row in rows]
-    if not long_uids:
-        return
-    for old_uid in long_uids:
-        for _ in range(10):
-            new_uid = generate_tg_user_id()
-            existing = await get_user_by_id(new_uid)
-            if not existing:
-                break
-        else:
-            logger.error(f"Миграция tg_ shorten: не удалось сгенерировать уникальный id для {old_uid}")
-            continue
-        try:
-            await rename_user_id(old_uid, new_uid)
-            logger.info(f"Миграция tg_ shorten: {old_uid} -> {new_uid}")
-        except Exception as e:
-            logger.error(f"Ошибка миграции tg_ shorten {old_uid}: {e}", exc_info=True)
 
 
 async def get_or_create_subscriber(user_id: str) -> int:
@@ -1435,17 +1244,22 @@ async def check_and_run_initial_migration():
         # Групп нет - серверы должны быть добавлены через админку
         return False
 
-async def get_all_subscriptions_by_user(user_id: str):
-    """Возвращает все подписки пользователя (включая истекшие и отмененные)"""
+async def get_all_subscriptions_by_user(user_id: str, include_deleted: bool = False):
+    """Возвращает подписки пользователя (активные и истекшие).
+    При include_deleted=False удалённые (status='deleted') не возвращаются — для профиля пользователя.
+    При include_deleted=True возвращаются все, включая удалённые — для админки."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute(
+        query = (
             """SELECT s.* 
                FROM subscriptions s 
                JOIN users u ON s.subscriber_id = u.id 
-               WHERE u.user_id = ?
-               ORDER BY s.created_at DESC""", (user_id,)
-        ) as cur:
+               WHERE u.user_id = ?"""
+        )
+        if not include_deleted:
+            query += " AND s.status != 'deleted'"
+        query += " ORDER BY s.created_at DESC"
+        async with db.execute(query, (user_id,)) as cur:
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
 

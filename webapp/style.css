@@ -2147,9 +2147,15 @@ h1 {
     color: #cf7f7f;
 }
 
-.admin-subscription-status.canceled {
+.admin-subscription-status.canceled,
+.admin-subscription-status.deleted {
     background: #4a4a4a;
     color: #a0a0a0;
+}
+
+.admin-subscription-status.deleted {
+    background: #5a2d2d;
+    color: #cf7f7f;
 }
 
 .admin-subscription-info {
