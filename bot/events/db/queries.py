@@ -121,41 +121,6 @@ async def is_user_already_referred(user_id: str) -> bool:
         return row is not None
 
 
-async def get_referrer_for_user(referred_user_id: str, event_id: int):
-    """
-    Возвращает реферера для приглашённого в рамках события. event_id обязателен.
-    Возвращает dict с referrer_user_id, created_at или None.
-    """
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """
-            SELECT referrer_user_id, created_at FROM event_referrals
-            WHERE referred_user_id = ? AND event_id = ?
-            LIMIT 1
-            """,
-            (referred_user_id, event_id),
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-
-async def list_referrals_by_referrer(referrer_user_id: str, event_id: int):
-    """Список приглашённых по рефереру в рамках события. event_id обязателен."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """
-            SELECT referred_user_id, created_at FROM event_referrals
-            WHERE referrer_user_id = ? AND event_id = ?
-            ORDER BY created_at DESC
-            """,
-            (referrer_user_id, event_id),
-        )
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-
-
 # --- CRUD событий ---
 
 async def create_event(name: str, description: str, start_at: str, end_at: str, rewards_json: str | None = None, status: str = "active") -> int:

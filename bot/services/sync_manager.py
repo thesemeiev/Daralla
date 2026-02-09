@@ -15,6 +15,7 @@ from ..db.subscribers_db import (
     remove_subscription_server,
     sync_subscription_statuses
 )
+from ..db.notifications_db import clear_subscription_notifications
 from .subscription_manager import SubscriptionManager
 
 logger = logging.getLogger(__name__)
@@ -268,6 +269,7 @@ class SyncManager:
             # В реальной БД лучше просто скрыть, но мы удаляем связи
             for s_info in servers:
                 await remove_subscription_server(sub_id, s_info['server_name'])
+            await clear_subscription_notifications(sub_id)
             
             logger.info(f"Подписка {sub_id} полностью удалена")
     
@@ -281,40 +283,6 @@ class SyncManager:
                 row = await cur.fetchone()
                 return dict(row) if row else None
 
-    async def sync_all_clients_states(self):
-        """Проверяет каждый клиент на каждом сервере и синхронизирует время и limitIp"""
-        active_subs = await get_all_active_subscriptions()
-        now = int(time.time())
-        
-        for sub in active_subs:
-            sub_id = sub['id']
-            expires_at = sub['expires_at']
-            user_id = sub['user_id']
-            token = sub['subscription_token']
-            device_limit = sub.get('device_limit', 1)  # Получаем device_limit из подписки
-            
-            # Если подписка истекла, но еще не удалена (меньше 3 дней), 
-            # мы её не трогаем, X-UI сам её заблокирует
-            if expires_at < now:
-                continue
-                
-            servers = await get_subscription_servers(sub_id)
-            for s_info in servers:
-                server_name = s_info['server_name']
-                client_email = s_info['client_email']
-                
-                # Используем ensure_client_on_server, который мы уже доработали.
-                # Он проверит существование И синхронизирует время (expiryTime) и limitIp.
-                await self.subscription_manager.ensure_client_on_server(
-                    subscription_id=sub_id,
-                    server_name=server_name,
-                    client_email=client_email,
-                    user_id=user_id,
-                    expires_at=expires_at,
-                    token=token,
-                    device_limit=device_limit  # Передаем device_limit напрямую
-                )
-    
     async def cleanup_orphaned_clients(self):
         """
         Удаляет клиентов на серверах, которых нет в БД (сиротские клиенты).

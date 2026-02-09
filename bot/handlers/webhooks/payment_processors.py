@@ -46,7 +46,18 @@ async def process_payment_webhook(bot_app, payment_id, status):
             return
         
         user_id = payment_info['user_id']
-        meta = payment_info['meta'] if isinstance(payment_info['meta'], dict) else json.loads(payment_info['meta'])
+        raw_meta = payment_info.get('meta')
+        if raw_meta is None:
+            meta = {}
+        elif isinstance(raw_meta, dict):
+            meta = raw_meta
+        elif isinstance(raw_meta, str):
+            try:
+                meta = json.loads(raw_meta) if raw_meta.strip() else {}
+            except (json.JSONDecodeError, AttributeError):
+                meta = {}
+        else:
+            meta = {}
         
         logger.info(f"Обработка webhook платежа: payment_id={payment_id}, user_id={user_id}, status={status}, current_status={current_status}, activated={is_activated}")
         
@@ -388,13 +399,16 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             await update_payment_status(payment_id, 'failed')
             return
         
-        # Шаг 2: Получаем ВСЕ серверы из БД (не только здоровые)
-        # Гибридный подход: привязываем все серверы к подписке сразу,
-        # но создаем клиентов только на доступных. Нездоровые серверы
-        # будут синхронизированы автоматически при следующей синхронизации.
+        # Шаг 2: Получаем серверы только из группы подписки (sub_dict['group_id'])
+        # Подписка создана с конкретным group_id (наименее загруженная группа);
+        # привязываем и создаём клиентов только на серверах этой группы.
         from ...db.subscribers_db import get_servers_config
         
-        servers_in_db = await get_servers_config(only_active=True)
+        subscription_group_id = sub_dict.get('group_id')
+        servers_in_db = await get_servers_config(
+            group_id=subscription_group_id,
+            only_active=True
+        ) if subscription_group_id is not None else await get_servers_config(only_active=True)
         
         if not servers_in_db or len(servers_in_db) == 0:
             logger.error("Нет серверов в БД для создания подписки")

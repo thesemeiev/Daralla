@@ -1352,19 +1352,6 @@ async def update_server_group(group_id: int, name: str = None, description: str 
             return True
         return False
 
-async def delete_server_group(group_id: int):
-    """Удаляет группу серверов (если в ней нет серверов)"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Проверяем, есть ли серверы в группе
-        async with db.execute("SELECT COUNT(*) FROM servers_config WHERE group_id = ?", (group_id,)) as cur:
-            row = await cur.fetchone()
-            if row and row[0] > 0:
-                raise Exception("Нельзя удалить группу, в которой есть серверы")
-                
-        await db.execute("DELETE FROM server_groups WHERE id = ?", (group_id,))
-        await db.commit()
-        return True
-
 async def update_server_config(server_id: int, **kwargs):
     """Обновляет конфигурацию сервера"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1447,101 +1434,6 @@ async def check_and_run_initial_migration():
                 return True
         # Групп нет - серверы должны быть добавлены через админку
         return False
-
-# ==================== ПРОМОКОДЫ ====================
-
-async def create_promo_code(code: str, promo_type: str, period: str, max_uses: int = 1, expires_at: int = None):
-    """Создает новый промокод"""
-    now = int(datetime.datetime.now().timestamp())
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT INTO promo_codes (code, type, period, max_uses, expires_at, is_active, created_at)
-            VALUES (?, ?, ?, ?, ?, 1, ?)
-        """, (code.upper(), promo_type, period, max_uses, expires_at, now))
-        await db.commit()
-        logger.info(f"Создан промокод: {code} (type={promo_type}, period={period})")
-
-async def get_promo_code(code: str):
-    """Получает промокод по коду"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("""
-            SELECT * FROM promo_codes WHERE code = ? AND is_active = 1
-        """, (code.upper(),)) as cur:
-            row = await cur.fetchone()
-            return dict(row) if row else None
-
-async def check_promo_code_valid(code: str, user_id: str, promo_type: str):
-    """
-    Проверяет валидность промокода для пользователя
-    Returns: (is_valid: bool, error_message: str, promo_data: dict)
-    
-    УСТАРЕЛО: Теперь используется проверка активного промокода из конфигурации.
-    Оставлено для обратной совместимости.
-    """
-    promo = await get_promo_code(code)
-    
-    if not promo:
-        return False, "Промокод не найден", None
-    
-    # Проверяем срок действия
-    if promo['expires_at'] and promo['expires_at'] < int(datetime.datetime.now().timestamp()):
-        return False, "Промокод истек", None
-    
-    # Проверяем лимит использований
-    if promo['max_uses'] > 0 and promo['uses_count'] >= promo['max_uses']:
-        return False, "Промокод уже использован максимальное количество раз", None
-    
-    # УБРАНО: Проверка на повторное использование одним пользователем
-    
-    return True, None, dict(promo)
-
-async def use_promo_code(code: str, user_id: str, subscription_id: int = None):
-    """
-    Отмечает промокод как использованный.
-    Увеличивает счетчик использований, но не блокирует повторное использование одним пользователем.
-    """
-    promo = await get_promo_code(code)
-    if not promo:
-        # Промокод не найден в БД - это нормально, если он только в конфигурации
-        logger.warning(f"Промокод {code} не найден в БД при попытке отметить использование")
-        return False
-    
-    now = int(datetime.datetime.now().timestamp())
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Увеличиваем счетчик использований (не проверяем лимит - промокод может использоваться многократно)
-        await db.execute("""
-            UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?
-        """, (promo['id'],))
-        
-        # Записываем использование (для статистики, но не блокируем повторное использование)
-        await db.execute("""
-            INSERT INTO promo_code_uses (promo_code_id, user_id, subscription_id, used_at)
-            VALUES (?, ?, ?, ?)
-        """, (promo['id'], user_id, subscription_id, now))
-        
-        await db.commit()
-        logger.info(f"Промокод {code} использован пользователем {user_id}, subscription_id={subscription_id}")
-        return True
-
-async def delete_promo_code(code: str):
-    """Удаляет промокод из БД (помечает как неактивный)"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE promo_codes SET is_active = 0 WHERE code = ?
-        """, (code.upper(),))
-        await db.commit()
-        logger.info(f"Промокод {code} удален (помечен как неактивный)")
-
-async def get_all_promo_codes():
-    """Получает все активные промокоды"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("""
-            SELECT * FROM promo_codes WHERE is_active = 1 ORDER BY created_at DESC
-        """) as cur:
-            rows = await cur.fetchall()
-            return [dict(row) for row in rows]
 
 async def get_all_subscriptions_by_user(user_id: str):
     """Возвращает все подписки пользователя (включая истекшие и отмененные)"""
@@ -1849,14 +1741,6 @@ async def register_web_user(username: str, password_hash: str):
         except aiosqlite.IntegrityError:
             raise Exception("Пользователь с таким логином уже существует")
 
-async def get_web_user_by_username(username: str):
-    """Получает веб-пользователя по логину"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM users WHERE username = ? AND is_web = 1", (username.lower(),)) as cur:
-            row = await cur.fetchone()
-            return dict(row) if row else None
-
 async def update_user_auth_token(user_id: str, token: str):
     """Обновляет токен авторизации (для 'запомнить меня')"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1870,18 +1754,6 @@ async def get_user_by_auth_token(token: str):
         async with db.execute("SELECT * FROM users WHERE auth_token = ?", (token,)) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
-
-async def update_user_web_access(user_id: str, password_hash: str):
-    """Устанавливает или обновляет логин и пароль для существующего ТГ пользователя"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        # В качестве логина (username) используем сам user_id (ТГ ID)
-        # Это обеспечит уникальность и удобство для поддержки
-        await db.execute(
-            "UPDATE users SET username = ?, password_hash = ? WHERE user_id = ?",
-            (user_id, password_hash, user_id)
-        )
-        await db.commit()
-        return True
 
 async def get_user_by_username_or_id(login: str):
     """Находит пользователя по логину (username) или ТГ ID"""
@@ -2013,14 +1885,6 @@ async def get_user_by_telegram_id_v2(telegram_id: str, use_fallback: bool = True
         return await _get_user_by_telegram_id_or_user_id_legacy(telegram_id)
 
     return None
-
-
-async def get_user_by_telegram_id_or_user_id(telegram_id: str, use_fallback: bool = True):
-    """
-    Обновлённая универсальная функция поиска пользователя по Telegram ID.
-    По умолчанию использует новую схему (telegram_links) с fallback.
-    """
-    return await get_user_by_telegram_id_v2(telegram_id, use_fallback=use_fallback)
 
 
 async def create_telegram_link(telegram_id: str, user_id: str):

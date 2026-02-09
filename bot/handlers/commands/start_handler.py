@@ -158,24 +158,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         name="Пробная подписка"
                     )
                     subscription_id = sub_dict['id']
+                    subscription_group_id = sub_dict.get('group_id')
                     logger.info(f" Пробная подписка создана для пользователя {user_id}: subscription_id={subscription_id}, token={token}")
                     
                     # Устанавливаем trial_created сразу после создания подписки в БД
                     trial_created = True
                     
-                    # Создаем клиентов на всех серверах для пробной подписки
+                    # Создаем клиентов только на серверах группы подписки (как при обычной покупке)
                     if subscription_manager and server_manager:
                         try:
                             # Генерируем уникальный email для клиента
                             import uuid
                             unique_email = f"{user_id}_{subscription_id}"
                             
-                            # Получаем все серверы из конфигурации
-                            all_configured_servers = []
-                            for server in server_manager.servers:
-                                server_name = server["name"]
-                                if server.get("x3") is not None:
-                                    all_configured_servers.append(server_name)
+                            # Серверы только из группы подписки
+                            from ...db.subscribers_db import get_servers_config
+                            servers_in_db = await get_servers_config(
+                                group_id=subscription_group_id,
+                                only_active=True
+                            ) if subscription_group_id is not None else await get_servers_config(only_active=True)
+                            all_configured_servers = [s["name"] for s in servers_in_db] if servers_in_db else []
+                            # Fallback: если в БД пусто, берём из менеджера по группе
+                            if not all_configured_servers and subscription_group_id is not None:
+                                group_servers = server_manager.get_servers_by_group(subscription_group_id)
+                                all_configured_servers = [s["name"] for s in group_servers if s.get("x3") is not None]
+                            if not all_configured_servers:
+                                for server in server_manager.servers:
+                                    if server.get("x3") is not None:
+                                        all_configured_servers.append(server["name"])
                             
                             if all_configured_servers:
                                 logger.info(f"Создание клиентов на {len(all_configured_servers)} серверах для пробной подписки {subscription_id}")

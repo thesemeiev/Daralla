@@ -3,7 +3,7 @@
 """
 import logging
 from typing import List, Dict, Any
-from ..db.subscribers_db import get_server_groups, get_servers_config
+from ..db.subscribers_db import get_servers_config
 
 logger = logging.getLogger(__name__)
 
@@ -59,17 +59,3 @@ class ServerProvider:
             })
             
         return result
-
-    @staticmethod
-    async def get_servers_for_group(group_id: int) -> List[Dict[str, Any]]:
-        """Возвращает список серверов для конкретной группы"""
-        servers = await get_servers_config(group_id=group_id, only_active=True)
-        return servers
-
-    @staticmethod
-    async def get_group_load_stats() -> List[Dict[str, Any]]:
-        """Возвращает статистику загрузки по группам"""
-        groups = await get_server_groups(only_active=False)
-        # Здесь можно добавить логику подсчета подписок на группу
-        return groups
-

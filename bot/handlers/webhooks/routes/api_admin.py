@@ -511,7 +511,8 @@ def create_blueprint(bot_app):
             if not updates:
                 return jsonify({'error': 'No fields to update'}), 400
         
-            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, DB_PATH
+            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, update_subscription_device_limit
+            from ....db.notifications_db import clear_subscription_notifications
             import aiosqlite
         
             # Создаем новый event loop, но НЕ устанавливаем его глобально для потока
@@ -551,14 +552,7 @@ def create_blueprint(bot_app):
                     loop.run_until_complete(update_subscription_expiry(sub_id, updates['expires_at']))
             
                 if 'device_limit' in updates:
-                    async def update_device_limit():
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            await db.execute(
-                                "UPDATE subscriptions SET device_limit = ? WHERE id = ?",
-                                (updates['device_limit'], sub_id)
-                            )
-                            await db.commit()
-                    loop.run_until_complete(update_device_limit())
+                    loop.run_until_complete(update_subscription_device_limit(sub_id, updates['device_limit']))
             
                 # Статус обновляется последним (только для deleted, active/expired управляются через expires_at)
                 if 'status' in updates:
@@ -566,6 +560,7 @@ def create_blueprint(bot_app):
                     # Обновляем только если это deleted
                     if new_status == 'deleted':
                         loop.run_until_complete(update_subscription_status(sub_id, new_status))
+                        loop.run_until_complete(clear_subscription_notifications(sub_id))
                     # Если пытались установить active/expired - игнорируем (уже обновлено через expires_at)
             
                 # Получаем обновленную подписку

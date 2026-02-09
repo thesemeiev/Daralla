@@ -48,13 +48,21 @@ async def notifications_task_loop(notification_manager):
         await asyncio.sleep(1800)
 
 async def payments_cleanup_loop():
-    """Очистка просроченных платежей"""
-    from ..db import cleanup_expired_pending_payments
+    """Очистка просроченных платежей (pending → expired) и старых записей (раз в сутки)"""
+    from ..db import cleanup_expired_pending_payments, cleanup_old_payments
+    iteration = 0
     while True:
         try:
             count = await cleanup_expired_pending_payments(minutes_old=60)
             if count > 0:
                 logger.info(f"Очищено {count} просроченных платежей")
+            # Раз в 24 часа удаляем старые не-pending платежи (старше 30 дней)
+            iteration += 1
+            if iteration >= 24:
+                iteration = 0
+                deleted = await cleanup_old_payments(days=30)
+                if deleted > 0:
+                    logger.info(f"Удалено {deleted} старых записей платежей (старше 30 дней)")
         except Exception as e:
             logger.error(f"Ошибка в очистке платежей: {e}")
             
