@@ -11,7 +11,7 @@ import time
 import urllib.parse
 from flask import Blueprint, request
 
-from ....db.subscribers_db import (
+from ....db.subscriptions_db import (
     get_subscription_by_token,
     get_subscription_servers,
     is_subscription_active,

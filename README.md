@@ -76,7 +76,7 @@ Daralla/
 ├── bot/                    # Ядро бота
 │   ├── bot.py              # Точка входа
 │   ├── core/               # Старт, мониторинг
-│   ├── db/                 # Работа с БД (daralla.db)
+│   ├── db/                 # Работа с БД (daralla.db). Модули: config, users, servers, subscriptions, promo, payments, notifications — см. [bot/db/README.md](bot/db/README.md)
 │   ├── handlers/           # Команды, webhooks, API
 │   ├── services/           # Subscription, Server, Sync
 │   └── utils/              # UI, helpers, validators

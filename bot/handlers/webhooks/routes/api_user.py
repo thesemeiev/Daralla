@@ -47,18 +47,20 @@ def create_blueprint(bot_app):
             asyncio.set_event_loop(loop)
             try:
                 from ....db import is_known_user, register_simple_user
-                from ....db.subscribers_db import (
-                    get_all_active_subscriptions_by_user,
+                from ....db.users_db import (
                     get_or_create_subscriber,
-                    create_subscription,
-                    get_subscription_by_id_only,
-                    is_subscription_active,
                     is_known_telegram_id,
                     mark_telegram_id_known,
                     get_user_by_telegram_id_v2,
                     create_telegram_link,
                     update_user_telegram_id,
                     generate_tg_user_id,
+                )
+                from ....db.subscriptions_db import (
+                    get_all_active_subscriptions_by_user,
+                    create_subscription,
+                    get_subscription_by_id_only,
+                    is_subscription_active,
                 )
                 just_created_tg_user = False
                 if not user_id and tg_user_id:
@@ -185,7 +187,7 @@ def create_blueprint(bot_app):
             user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            from ....db.subscribers_db import get_all_subscriptions_by_user, is_subscription_active
+            from ....db.subscriptions_db import get_all_subscriptions_by_user, is_subscription_active
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -242,13 +244,13 @@ def create_blueprint(bot_app):
             from ....prices_config import PRICES
             price = f"{PRICES[period]:.2f}"
             from yookassa import Payment
-            from ....db import add_payment, PAYMENTS_DB_PATH
+            from ....db import add_payment, DB_PATH
             import aiosqlite
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 async def cancel_old_payments():
-                    async with aiosqlite.connect(PAYMENTS_DB_PATH) as db:
+                    async with aiosqlite.connect(DB_PATH) as db:
                         await db.execute(
                             'UPDATE payments SET status = ? WHERE user_id = ? AND status = ?',
                             ('canceled', user_id, 'pending')
@@ -353,7 +355,7 @@ def create_blueprint(bot_app):
             new_name = data.get('name', '').strip()
             if not new_name:
                 return jsonify({'error': 'Name is required'}), 400
-            from ....db.subscribers_db import get_subscription_by_id, update_subscription_name
+            from ....db.subscriptions_db import get_subscription_by_id, update_subscription_name
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -381,7 +383,7 @@ def create_blueprint(bot_app):
             user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Invalid authentication'}), 401
-            from ....db.subscribers_db import get_user_server_usage
+            from ....db.users_db import get_user_server_usage
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -452,7 +454,7 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Логин слишком короткий (мин. 3 символа)'}), 400
             if len(password) < 6:
                 return jsonify({'error': 'Пароль слишком короткий (мин. 6 символов)'}), 400
-            from ....db.subscribers_db import (
+            from ....db.users_db import (
                 get_user_by_id, username_available,
                 update_user_username, update_user_password
             )
@@ -487,7 +489,7 @@ def create_blueprint(bot_app):
             user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
-            from ....db.subscribers_db import (
+            from ....db.users_db import (
                 get_user_by_id, link_telegram_create_state,
                 update_user_telegram_id
             )
@@ -518,7 +520,7 @@ def create_blueprint(bot_app):
             user_id = authenticate_request()
             if not user_id:
                 return jsonify({'error': 'Требуется авторизация'}), 401
-            from ....db.subscribers_db import get_user_by_id
+            from ....db.users_db import get_user_by_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -557,7 +559,7 @@ def create_blueprint(bot_app):
             user_id = authenticate_request()
             if not user_id:
                 return Response(status=401)
-            from ....db.subscribers_db import get_user_by_id
+            from ....db.users_db import get_user_by_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -616,7 +618,7 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Введите текущий пароль'}), 400
             if len(new_pw) < 6:
                 return jsonify({'error': 'Новый пароль слишком короткий (минимум 6 символов)'}), 400
-            from ....db.subscribers_db import get_user_by_id, update_user_password
+            from ....db.users_db import get_user_by_id, update_user_password
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -652,7 +654,7 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Введите текущий пароль'}), 400
             if len(new_login) < 3:
                 return jsonify({'error': 'Логин слишком короткий (минимум 3 символа)'}), 400
-            from ....db.subscribers_db import (
+            from ....db.users_db import (
                 get_user_by_id, update_user_username,
                 username_available,
             )
@@ -691,7 +693,7 @@ def create_blueprint(bot_app):
             current_password = (data.get('current_password') or '').strip()
             if not current_password:
                 return jsonify({'error': 'Введите текущий пароль'}), 400
-            from ....db.subscribers_db import (
+            from ....db.users_db import (
                 get_user_by_id, update_user_telegram_id,
                 delete_telegram_link, mark_telegram_id_known,
                 rename_user_id, get_telegram_chat_id_for_notification,

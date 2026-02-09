@@ -7,7 +7,7 @@ import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 from ...db import get_payment_by_id, update_payment_status, update_payment_activation
-from ...db.subscribers_db import get_telegram_chat_id_for_notification
+from ...db.users_db import get_telegram_chat_id_for_notification
 from ...utils import (
     UIEmojis, UIStyles, UIMessages,
     safe_edit_message_with_photo, safe_send_message_with_photo
@@ -134,7 +134,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 return
             
             # Проверяем, что подписка принадлежит пользователю
-            from ...db.subscribers_db import get_subscription_by_id, get_subscription_servers
+            from ...db.subscriptions_db import get_subscription_by_id, get_subscription_servers
             sub = await get_subscription_by_id(extension_subscription_id, user_id)
             
             if not sub:
@@ -160,7 +160,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 if sub_price == 0:
                     from ...prices_config import PRICES
                     paid_price = PRICES.get(actual_period, 150)
-                    from ...db.subscribers_db import update_subscription_price
+                    from ...db.subscriptions_db import update_subscription_price
                     await update_subscription_price(extension_subscription_id, float(paid_price))
                     logger.info(f"Пробная подписка {extension_subscription_id} конвертирована в платную (price={paid_price})")
 
@@ -171,7 +171,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 new_expires_at = base_time + days * 24 * 60 * 60
 
                 # Обновляем expires_at в БД ПЕРЕД синхронизацией серверов
-                from ...db.subscribers_db import update_subscription_expiry
+                from ...db.subscriptions_db import update_subscription_expiry
                 await update_subscription_expiry(extension_subscription_id, new_expires_at)
                 logger.info(f"Подписка {extension_subscription_id} продлена до {new_expires_at} в БД")
             else:
@@ -402,7 +402,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         # Шаг 2: Получаем серверы только из группы подписки (sub_dict['group_id'])
         # Подписка создана с конкретным group_id (наименее загруженная группа);
         # привязываем и создаём клиентов только на серверах этой группы.
-        from ...db.subscribers_db import get_servers_config
+        from ...db.servers_db import get_servers_config
         
         subscription_group_id = sub_dict.get('group_id')
         servers_in_db = await get_servers_config(
@@ -520,7 +520,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             # Компенсирующая транзакция (Saga Pattern): откатываем создание подписки в БД
             if subscription_created and sub_dict:
                 try:
-                    from ...db.subscribers_db import update_subscription_status
+                    from ...db.subscriptions_db import update_subscription_status
                     await update_subscription_status(sub_dict['id'], 'deleted')
                     logger.info(f"Подписка {sub_dict['id']} удалена из-за ошибки создания клиентов (компенсирующая транзакция)")
                 except Exception as rollback_e:

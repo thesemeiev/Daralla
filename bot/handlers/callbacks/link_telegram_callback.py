@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 
 from ...utils import safe_answer_callback_query, check_private_chat, get_site_urls
-from ...db.subscribers_db import (
+from ...db.users_db import (
     link_telegram_consume_state, get_user_by_id,
     link_telegram_to_account,
 )

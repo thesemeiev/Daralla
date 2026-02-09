@@ -9,15 +9,11 @@ logger = logging.getLogger(__name__)
 # Пути к единой базе данных
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-DB_PATH = os.path.join(DATA_DIR, 'daralla.db')
-
-# Экспорт путей для совместимости (если где-то остались старые импорты)
-PAYMENTS_DB_PATH = DB_PATH
-USERS_DB_PATH = DB_PATH
-NOTIFICATIONS_DB_PATH = DB_PATH
-SUBSCRIBERS_DB_PATH = DB_PATH
+# В тестах задайте DARALLA_TEST_DB (например :memory: или путь к временному файлу) до импорта bot.db
+DB_PATH = os.environ.get('DARALLA_TEST_DB', os.path.join(DATA_DIR, 'daralla.db'))
 
 # Импортируем все функции из подмодулей
+from .config_db import init_config_db, get_config, set_config, get_all_config
 from .payments_db import (
     init_payments_db, add_payment, get_payment_by_id, update_payment_status,
     update_payment_activation, get_all_pending_payments, get_pending_payment,
@@ -25,7 +21,63 @@ from .payments_db import (
 )
 from .users_db import (
     init_users_db, get_all_user_ids, register_simple_user, is_known_user,
-    get_config, set_config, get_all_config
+    TG_USER_ID_HEX_LEN, generate_tg_user_id, get_or_create_subscriber,
+    get_user_by_id, get_user_by_username, resolve_user_by_query,
+    get_user_growth_data, get_user_server_usage, register_web_user,
+    update_user_auth_token, get_user_by_auth_token, get_user_by_username_or_id,
+    username_available, update_user_username, update_user_password,
+    link_telegram_create_state, link_telegram_consume_state,
+    get_user_by_telegram_id, get_user_by_telegram_id_v2,
+    create_telegram_link, delete_telegram_link, get_telegram_link,
+    is_known_telegram_id, mark_telegram_id_known, update_user_telegram_id,
+    get_telegram_chat_id_for_notification, merge_user_into_target,
+    link_telegram_to_account, rename_user_id, delete_user_completely,
+)
+from .servers_db import (
+    init_servers_db,
+    get_servers_config,
+    get_server_by_id,
+    get_server_groups,
+    get_least_loaded_group_id,
+    check_and_run_initial_migration,
+    save_server_load_snapshot,
+    get_server_load_averages,
+    cleanup_old_server_load_history,
+    get_server_load_data,
+    get_group_load_statistics,
+    add_server_group,
+    add_server_config,
+    update_server_group,
+    update_server_config,
+    delete_server_config,
+    SERVER_CONFIG_UPDATE_KEYS,
+)
+from .subscriptions_db import (
+    init_subscriptions_db,
+    create_subscription,
+    get_all_active_subscriptions,
+    get_subscriptions_to_sync,
+    get_all_active_subscriptions_by_user,
+    get_all_subscriptions_by_user,
+    update_subscription_status,
+    update_subscription_name,
+    update_subscription_expiry,
+    update_subscription_device_limit,
+    update_subscription_price,
+    is_subscription_active,
+    sync_subscription_statuses,
+    get_subscription_by_token,
+    get_subscription_by_id,
+    get_subscription_by_id_only,
+    get_subscription_servers,
+    add_subscription_server,
+    remove_subscription_server,
+    get_subscription_statistics,
+    get_subscription_types_statistics,
+    get_subscription_dynamics_data,
+    get_subscription_conversion_data,
+    get_revenue_trend_data,
+    get_conversion_data,
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
@@ -34,21 +86,7 @@ from .notifications_db import (
     is_subscription_notification_sent, mark_subscription_notification_sent,
     clear_subscription_notifications
 )
-from .subscribers_db import (
-    init_subscribers_db, get_or_create_subscriber, create_subscription,
-    get_all_active_subscriptions, update_subscription_status, update_subscription_name,
-    get_subscription_by_token, get_subscription_servers, add_subscription_server,
-    remove_subscription_server, get_all_active_subscriptions_by_user,
-    get_subscription_by_id, get_subscription_by_id_only, update_subscription_expiry, 
-    update_subscription_device_limit, get_subscription_statistics,
-    get_user_by_id, get_all_subscriptions_by_user, update_user_telegram_id,
-    get_user_by_telegram_id_v2,
-    create_telegram_link, delete_telegram_link, get_telegram_link,
-    is_known_telegram_id, mark_telegram_id_known, rename_user_id,
-    merge_user_into_target, link_telegram_to_account,
-    generate_tg_user_id,
-    resolve_user_by_query, get_user_by_username,
-)
+from .promo_db import init_promo_db
 
 async def init_all_db():
     """Инициализирует все таблицы в единой базе данных"""
@@ -57,8 +95,11 @@ async def init_all_db():
     
     # Последовательно вызываем инициализацию каждой части
     # Все они теперь будут открывать один и тот же файл DB_PATH
+    await init_config_db()
     await init_users_db()
-    await init_subscribers_db()
+    await init_servers_db()
+    await init_subscriptions_db()
+    await init_promo_db()
     await init_payments_db()
     await init_notifications_db()
     
@@ -66,6 +107,7 @@ async def init_all_db():
 
 __all__ = [
     'init_all_db', 'DB_PATH', 'DATA_DIR',
+    'init_config_db', 'init_users_db', 'init_servers_db', 'init_subscriptions_db', 'init_promo_db',
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
     'get_payments_by_user',
@@ -74,16 +116,30 @@ __all__ = [
     'get_daily_notification_stats', 'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
     'clear_subscription_notifications',
-    'get_or_create_subscriber', 'create_subscription', 'get_all_active_subscriptions',
-    'update_subscription_status', 'update_subscription_name', 'get_subscription_by_token',
-    'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
-    'get_all_active_subscriptions_by_user', 'get_subscription_by_id', 'get_subscription_by_id_only',
-    'update_subscription_expiry', 'update_subscription_device_limit', 'get_subscription_statistics',
-    'get_user_by_id', 'get_all_subscriptions_by_user', 'update_user_telegram_id',
-    'get_user_by_telegram_id_v2',
+    'TG_USER_ID_HEX_LEN', 'generate_tg_user_id', 'get_or_create_subscriber', 'get_user_by_id', 'get_user_by_username',
+    'resolve_user_by_query', 'get_user_growth_data', 'get_user_server_usage', 'register_web_user',
+    'update_user_auth_token', 'get_user_by_auth_token', 'get_user_by_username_or_id',
+    'username_available', 'update_user_username', 'update_user_password',
+    'link_telegram_create_state', 'link_telegram_consume_state',
+    'get_user_by_telegram_id', 'get_user_by_telegram_id_v2',
     'create_telegram_link', 'delete_telegram_link', 'get_telegram_link',
-    'is_known_telegram_id', 'mark_telegram_id_known', 'rename_user_id',
-    'merge_user_into_target', 'link_telegram_to_account',
-    'generate_tg_user_id',
-    'resolve_user_by_query', 'get_user_by_username',
+    'is_known_telegram_id', 'mark_telegram_id_known', 'update_user_telegram_id',
+    'get_telegram_chat_id_for_notification', 'merge_user_into_target', 'link_telegram_to_account',
+    'rename_user_id', 'delete_user_completely',
+    'create_subscription', 'get_all_active_subscriptions', 'get_subscriptions_to_sync',
+    'get_all_active_subscriptions_by_user', 'get_all_subscriptions_by_user',
+    'update_subscription_status', 'update_subscription_name', 'update_subscription_expiry',
+    'update_subscription_device_limit', 'update_subscription_price',
+    'is_subscription_active', 'sync_subscription_statuses',
+    'get_subscription_by_token', 'get_subscription_by_id', 'get_subscription_by_id_only',
+    'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
+    'get_subscription_statistics', 'get_subscription_types_statistics',
+    'get_subscription_dynamics_data', 'get_subscription_conversion_data',
+    'get_revenue_trend_data', 'get_conversion_data',
+    'init_servers_db', 'get_servers_config', 'get_server_by_id', 'get_server_groups',
+    'get_least_loaded_group_id', 'check_and_run_initial_migration',
+    'save_server_load_snapshot', 'get_server_load_averages', 'cleanup_old_server_load_history',
+    'get_server_load_data', 'get_group_load_statistics',
+    'add_server_group', 'add_server_config', 'update_server_group', 'update_server_config',
+    'delete_server_config', 'SERVER_CONFIG_UPDATE_KEYS',
 ]

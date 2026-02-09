@@ -17,7 +17,7 @@ def authenticate_request():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            from ...db.subscribers_db import get_user_by_auth_token
+            from ...db.users_db import get_user_by_auth_token
             user = loop.run_until_complete(get_user_by_auth_token(token))
             if user:
                 logger.info(f"Успешная веб-аутентификация для user_id={user['user_id']}")
@@ -44,7 +44,7 @@ def authenticate_request():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            from ...db.subscribers_db import get_user_by_telegram_id_v2
+            from ...db.users_db import get_user_by_telegram_id_v2
             user = loop.run_until_complete(get_user_by_telegram_id_v2(tg_user_id, use_fallback=True))
             if user:
                 return user['user_id']
@@ -141,7 +141,7 @@ def check_admin_access(user_id: str) -> bool:
     """Проверяет, является ли пользователь админом. Учитывает и user_id, и привязанный telegram_id."""
     try:
         from ... import bot as bot_module
-        from ...db.subscribers_db import get_user_by_id
+        from ...db.users_db import get_user_by_id
         ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
 
         user_id_str = str(user_id)

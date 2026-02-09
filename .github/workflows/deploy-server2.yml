@@ -29,11 +29,7 @@ jobs:
         pip install pytest pytest-asyncio
 
     - name: Run tests
-      run: |
-        mkdir -p tests
-        echo "import pytest" > tests/__init__.py
-        echo "def test_basic(): assert True" > tests/test_basic.py
-        pytest tests/ -v
+      run: pytest tests/ -v
 
     - name: Lint code
       run: |

@@ -119,7 +119,7 @@ sync_manager = SyncManager(server_manager, subscription_manager)
 async def init_server_managers():
     try:
         from .services.server_provider import ServerProvider
-        from .db.subscribers_db import check_and_run_initial_migration
+        from .db.servers_db import check_and_run_initial_migration
         
         # Проверяем, есть ли серверы в БД
         has_servers = await check_and_run_initial_migration()

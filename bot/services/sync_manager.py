@@ -7,7 +7,7 @@ import logging
 import time
 from typing import List, Dict, Any
 
-from ..db.subscribers_db import (
+from ..db.subscriptions_db import (
     get_all_active_subscriptions,
     get_subscriptions_to_sync,
     get_subscription_servers,
@@ -206,7 +206,7 @@ class SyncManager:
         # ИСПРАВЛЕНИЕ: Получаем подписки со статусом 'active' или 'expired',
         # которые истекли более N дней назад (не только 'active')
         # Это важно, так как sync_subscription_statuses() на шаге 1 может уже изменить статус на 'expired'
-        from ..db.subscribers_db import DB_PATH
+        from ..db import DB_PATH
         import aiosqlite
         
         expired_subs = []
@@ -275,7 +275,7 @@ class SyncManager:
     
     async def _get_subscription_by_id(self, sub_id: int):
         """Вспомогательная функция для получения подписки по ID без проверки user_id"""
-        from ..db.subscribers_db import DB_PATH
+        from ..db import DB_PATH
         import aiosqlite
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row

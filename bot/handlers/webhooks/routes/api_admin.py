@@ -69,7 +69,7 @@ def create_blueprint(bot_app):
             page = int(data.get('page', 1))
             limit = int(data.get('limit', 20))
         
-            from ....db.subscribers_db import DB_PATH
+            from ....db import DB_PATH
             import aiosqlite
         
             loop = asyncio.new_event_loop()
@@ -158,7 +158,8 @@ def create_blueprint(bot_app):
         
             data = request.get_json(silent=True) or {}
         
-            from ....db.subscribers_db import get_user_by_id, get_all_subscriptions_by_user, resolve_user_by_query
+            from ....db.users_db import get_user_by_id, resolve_user_by_query
+            from ....db.subscriptions_db import get_all_subscriptions_by_user
             from ....db.payments_db import get_payments_by_user
         
             loop = asyncio.new_event_loop()
@@ -178,7 +179,7 @@ def create_blueprint(bot_app):
             current_time = int(time.time())
         
             # Форматируем подписки
-            from ....db.subscribers_db import is_subscription_active
+            from ....db.subscriptions_db import is_subscription_active
         
             formatted_subs = []
             for sub in subscriptions:
@@ -323,7 +324,7 @@ def create_blueprint(bot_app):
             
                 # Если была указана дата истечения, обновляем её
                 if expires_at:
-                    from ....db.subscribers_db import update_subscription_expiry
+                    from ....db.subscriptions_db import update_subscription_expiry
                     loop.run_until_complete(update_subscription_expiry(subscription_id, expires_at_timestamp))
                     expires_at_final = expires_at_timestamp
                     logger.info(f"Дата истечения обновлена на {expires_at_timestamp} для подписки {subscription_id}")
@@ -442,7 +443,7 @@ def create_blueprint(bot_app):
         
             data = request.get_json(silent=True) or {}
         
-            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
+            from ....db.subscriptions_db import get_subscription_by_id_only, get_subscription_servers
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -512,7 +513,8 @@ def create_blueprint(bot_app):
             if not updates:
                 return jsonify({'error': 'No fields to update'}), 400
         
-            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, update_subscription_device_limit, DB_PATH
+            from ....db import DB_PATH
+            from ....db.subscriptions_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, update_subscription_device_limit
             from ....db.notifications_db import clear_subscription_notifications
             import aiosqlite
         
@@ -673,7 +675,7 @@ def create_blueprint(bot_app):
                             # Удаляем связи подписки с серверами из БД после удаления клиентов
                             # ВАЖНО: Удаляем связи только если удаление клиентов прошло успешно
                             # или если есть частичные успехи (не все серверы недоступны)
-                            from ....db.subscribers_db import remove_subscription_server
+                            from ....db.subscriptions_db import remove_subscription_server
                             removed_connections = 0
                             failed_connections = 0
                         
@@ -846,7 +848,7 @@ def create_blueprint(bot_app):
         
             data = request.get_json(silent=True) or {}
         
-            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers
+            from ....db.subscriptions_db import get_subscription_by_id_only, get_subscription_servers
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -866,7 +868,7 @@ def create_blueprint(bot_app):
                 # Получаем user_id из подписки
                 async def get_user_id_from_sub():
                     import aiosqlite
-                    from ....db.subscribers_db import DB_PATH
+                    from ....db import DB_PATH
                     async with aiosqlite.connect(DB_PATH) as db:
                         db.row_factory = aiosqlite.Row
                         async with db.execute(
@@ -971,7 +973,8 @@ def create_blueprint(bot_app):
             if not confirm:
                 return jsonify({'error': 'Confirmation required'}), 400
         
-            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, remove_subscription_server, DB_PATH
+            from ....db import DB_PATH
+            from ....db.subscriptions_db import get_subscription_by_id_only, get_subscription_servers, remove_subscription_server
             import aiosqlite
         
             loop = asyncio.new_event_loop()
@@ -1097,7 +1100,8 @@ def create_blueprint(bot_app):
             if not confirm:
                 return jsonify({'error': 'Confirmation required'}), 400
         
-            from ....db.subscribers_db import delete_user_completely, get_all_subscriptions_by_user, get_subscription_servers
+            from ....db.users_db import delete_user_completely
+            from ....db.subscriptions_db import get_all_subscriptions_by_user, get_subscription_servers
             import aiosqlite
         
             loop = asyncio.new_event_loop()
@@ -1217,7 +1221,8 @@ def create_blueprint(bot_app):
                 logger.warning(f"Ошибка парсинга JSON в /api/admin/stats: {json_e}")
                 data = {}
         
-            from ....db.subscribers_db import DB_PATH, get_subscription_statistics
+            from ....db import DB_PATH
+            from ....db.subscriptions_db import get_subscription_statistics
             import aiosqlite
             import time
         
@@ -1349,7 +1354,7 @@ def create_blueprint(bot_app):
         
             days = int(data.get('days', 30))  # По умолчанию 30 дней
         
-            from ....db.subscribers_db import get_user_growth_data
+            from ....db.users_db import get_user_growth_data
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -1386,7 +1391,7 @@ def create_blueprint(bot_app):
         
             data = request.get_json(silent=True) or {}
         
-            from ....db.subscribers_db import get_server_load_data
+            from ....db.servers_db import get_server_load_data
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -1502,7 +1507,7 @@ def create_blueprint(bot_app):
         
             days = int(data.get('days', 30))  # По умолчанию 30 дней
         
-            from ....db.subscribers_db import get_conversion_data
+            from ....db.subscriptions_db import get_conversion_data
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -1541,7 +1546,7 @@ def create_blueprint(bot_app):
         
             days = int(data.get('days', 30))
         
-            from ....db.subscribers_db import get_revenue_trend_data
+            from ....db.subscriptions_db import get_revenue_trend_data
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -1655,8 +1660,8 @@ def create_blueprint(bot_app):
         
             days = int(data.get('days', 30))
         
-            # Импортируем функции из subscribers_db
-            from ....db.subscribers_db import (
+            # Импортируем функции из subscriptions_db
+            from ....db.subscriptions_db import (
                 get_subscription_types_statistics,
                 get_subscription_dynamics_data,
                 get_subscription_conversion_data
@@ -1781,7 +1786,7 @@ def create_blueprint(bot_app):
                 
                     # Получаем бот из приложения
                     bot = bot_app.bot
-                    from ....db.subscribers_db import get_telegram_chat_id_for_notification
+                    from ....db.users_db import get_telegram_chat_id_for_notification
                 
                     # Дедупликация по chat_id: один Telegram — одно сообщение
                     sent_chat_ids = set()
@@ -1866,7 +1871,7 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Access denied'}), 403
         
             data = request.get_json(silent=True) or {}
-            from ....db.subscribers_db import get_server_groups, add_server_group, get_group_load_statistics
+            from ....db.servers_db import get_server_groups, add_server_group, get_group_load_statistics
         
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -1906,7 +1911,7 @@ def create_blueprint(bot_app):
             group_id = data.get('id')
             if not group_id: return jsonify({'error': 'Group ID is required'}), 400
         
-            from ....db.subscribers_db import update_server_group
+            from ....db.servers_db import update_server_group
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -1935,7 +1940,7 @@ def create_blueprint(bot_app):
                 return jsonify({'error': 'Access denied'}), 403
         
             data = request.get_json(silent=True) or {}
-            from ....db.subscribers_db import get_servers_config, add_server_config
+            from ....db.servers_db import get_servers_config, add_server_config
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -1997,7 +2002,7 @@ def create_blueprint(bot_app):
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
         
-            from ....db.subscribers_db import update_server_config, get_server_by_id
+            from ....db.servers_db import update_server_config, get_server_by_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -2039,7 +2044,7 @@ def create_blueprint(bot_app):
             server_id = data.get('server_id') or data.get('id')
             if not server_id:
                 return jsonify({'error': 'server_id is required'}), 400
-            from ....db.subscribers_db import get_server_by_id
+            from ....db.servers_db import get_server_by_id
             from ....services.xui_service import X3
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -2083,7 +2088,7 @@ def create_blueprint(bot_app):
             server_id = data.get('id')
             if not server_id: return jsonify({'error': 'Server ID is required'}), 400
         
-            from ....db.subscribers_db import delete_server_config
+            from ....db.servers_db import delete_server_config
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:

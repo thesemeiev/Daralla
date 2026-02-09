@@ -71,7 +71,7 @@ async def payments_cleanup_loop():
 
 async def server_load_snapshot_loop(server_manager):
     """Периодическое сохранение снимков нагрузки на серверы для расчета средних значений"""
-    from ..db.subscribers_db import save_server_load_snapshot, cleanup_old_server_load_history
+    from ..db.servers_db import save_server_load_snapshot, cleanup_old_server_load_history
     
     # Ждем 30 секунд после запуска бота, чтобы все инициализировалось
     await asyncio.sleep(30)

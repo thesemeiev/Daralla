@@ -11,12 +11,15 @@ from ...utils import (
 )
 from ...navigation import MenuTypes
 from ...db import register_simple_user
-from ...db.subscribers_db import (
-    get_all_active_subscriptions_by_user, get_or_create_subscriber, create_subscription,
+from ...db.users_db import (
+    get_or_create_subscriber,
     link_telegram_consume_state, get_user_by_id,
     link_telegram_to_account,
     get_user_by_telegram_id_v2, create_telegram_link, update_user_telegram_id,
     generate_tg_user_id,
+)
+from ...db.subscriptions_db import (
+    get_all_active_subscriptions_by_user, create_subscription,
 )
 import time
 
@@ -129,7 +132,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 existing_subs = await get_all_active_subscriptions_by_user(user_id)
                 now = int(time.time())
                 # Фильтруем только действительно активные (используем единую функцию)
-                from ...db.subscribers_db import is_subscription_active
+                from ...db.subscriptions_db import is_subscription_active
                 active_subs = [sub for sub in existing_subs if is_subscription_active(sub)]
                 
                 # Создаем пробную подписку только если у нового пользователя нет активных подписок
@@ -172,7 +175,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             unique_email = f"{user_id}_{subscription_id}"
                             
                             # Серверы только из группы подписки
-                            from ...db.subscribers_db import get_servers_config
+                            from ...db.servers_db import get_servers_config
                             servers_in_db = await get_servers_config(
                                 group_id=subscription_group_id,
                                 only_active=True

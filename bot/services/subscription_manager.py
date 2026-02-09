@@ -11,8 +11,8 @@ import logging
 import time
 from typing import Optional, Tuple, List
 
-from ..db.subscribers_db import (
-    get_or_create_subscriber,
+from ..db.users_db import get_or_create_subscriber
+from ..db.subscriptions_db import (
     create_subscription,
     add_subscription_server,
     get_all_active_subscriptions_by_user,
@@ -97,7 +97,7 @@ class SubscriptionManager:
 
         # 1. Если group_id не указан, выбираем наименее загруженную группу
         if group_id is None:
-            from ..db.subscribers_db import get_least_loaded_group_id
+            from ..db.servers_db import get_least_loaded_group_id
             group_id = await get_least_loaded_group_id()
             logger.info(f"Автоматически выбрана группа серверов: {group_id}")
 
@@ -128,7 +128,7 @@ class SubscriptionManager:
         )
 
         # 6. Получаем созданную подписку
-        from ..db.subscribers_db import get_subscription_by_id_only
+        from ..db.subscriptions_db import get_subscription_by_id_only
         sub_dict = await get_subscription_by_id_only(subscription_id)
         
         logger.info(
@@ -504,7 +504,7 @@ class SubscriptionManager:
         all_subscriptions = await get_subscriptions_to_sync()
         
         # Получаем все серверы из конфигурации (БД)
-        from ..db.subscribers_db import get_servers_config
+        from ..db.servers_db import get_servers_config
         all_configured_servers = await get_servers_config(only_active=True)
         
         # Группируем серверы по group_id для быстрого поиска

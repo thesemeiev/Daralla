@@ -3,7 +3,7 @@
 """
 import logging
 from typing import List, Dict, Any
-from ..db.subscribers_db import get_servers_config
+from ..db.servers_db import get_servers_config
 
 logger = logging.getLogger(__name__)
 

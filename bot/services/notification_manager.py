@@ -125,7 +125,7 @@ class NotificationManager:
     async def _check_expiring_subscriptions(self):
         """Проверяет активные подписки на истечение и отправляет уведомления"""
         try:
-            from ..db.subscribers_db import get_all_active_subscriptions
+            from ..db.subscriptions_db import get_all_active_subscriptions
             subscriptions = await get_all_active_subscriptions()
             
             if not subscriptions:
@@ -180,7 +180,7 @@ class NotificationManager:
             if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
                 return False
             
-            from ..db.subscribers_db import get_telegram_chat_id_for_notification
+            from ..db.users_db import get_telegram_chat_id_for_notification
             chat_id = await get_telegram_chat_id_for_notification(user_id)
             if chat_id is None:
                 logger.debug(f"Пропуск уведомления для user_id={user_id}: нет Telegram (веб-only без привязки)")

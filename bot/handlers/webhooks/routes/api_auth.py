@@ -31,7 +31,7 @@ def create_blueprint(bot_app):
             if len(password) < 6:
                 return jsonify({'error': 'Пароль слишком короткий (минимум 6 символов)'}), 400
 
-            from ....db.subscribers_db import register_web_user
+            from ....db.users_db import register_web_user
             password_hash = generate_password_hash(password)
 
             loop = asyncio.new_event_loop()
@@ -39,7 +39,7 @@ def create_blueprint(bot_app):
             try:
                 user_id = loop.run_until_complete(register_web_user(username, password_hash))
                 token = secrets.token_hex(32)
-                from ....db.subscribers_db import update_user_auth_token
+                from ....db.users_db import update_user_auth_token
                 loop.run_until_complete(update_user_auth_token(user_id, token))
                 return jsonify({'success': True, 'token': token, 'user_id': user_id})
             finally:
@@ -61,7 +61,7 @@ def create_blueprint(bot_app):
             if not username or not password:
                 return jsonify({'error': 'Введите логин и пароль'}), 400
 
-            from ....db.subscribers_db import get_user_by_username_or_id
+            from ....db.users_db import get_user_by_username_or_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -70,7 +70,7 @@ def create_blueprint(bot_app):
                     return jsonify({'error': 'Неверный логин или пароль'}), 401
 
                 token = secrets.token_hex(32)
-                from ....db.subscribers_db import update_user_auth_token
+                from ....db.users_db import update_user_auth_token
                 loop.run_until_complete(update_user_auth_token(user['user_id'], token))
                 return jsonify({
                     'success': True,
@@ -95,7 +95,7 @@ def create_blueprint(bot_app):
             if not token:
                 return jsonify({'error': 'Token required'}), 400
 
-            from ....db.subscribers_db import get_user_by_auth_token
+            from ....db.users_db import get_user_by_auth_token
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
