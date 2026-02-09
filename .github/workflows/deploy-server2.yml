@@ -334,41 +334,8 @@ jobs:
           sudo chmod -R 666 data/*.db
           sudo chmod 755 data/
           
-          # Configure webhook URL
-          # Set WEBHOOK_DOMAIN in GitHub Secrets for your domain (e.g. daralla.ru)
-          # Check if domain is configured (Nginx with SSL)
-          echo "Checking webhook configuration..."
-          
-          # Try to detect domain from Nginx config or use provided
-          WEBHOOK_DOMAIN="${{ secrets.WEBHOOK_DOMAIN }}"
-          if [ -z "$WEBHOOK_DOMAIN" ]; then
-            # Try to detect from Nginx config
-            if [ -f "/etc/nginx/sites-enabled/ghosttunnel.space" ] || [ -f "/etc/nginx/sites-available/ghosttunnel.space" ]; then
-              WEBHOOK_DOMAIN="ghosttunnel.space"
-              echo "✅ Detected domain from Nginx config: $WEBHOOK_DOMAIN"
-            else
-              # Check for any SSL-enabled domain
-              SSL_DOMAIN=$(sudo grep -r "ssl_certificate" /etc/nginx/sites-enabled/ 2>/dev/null | head -1 | grep -oP 'ssl_certificate.*live/\K[^/]+' || echo "")
-              if [ -n "$SSL_DOMAIN" ]; then
-                WEBHOOK_DOMAIN="$SSL_DOMAIN"
-                echo "✅ Detected domain from SSL config: $WEBHOOK_DOMAIN"
-              else
-                echo "⚠️  No domain configured. Webhook URL will not be set."
-                echo "   Set WEBHOOK_DOMAIN in GitHub Secrets or configure Nginx with SSL"
-                WEBHOOK_DOMAIN=""
-              fi
-            fi
-          fi
-          
-          # Set webhook URL if domain is available
-          if [ -n "$WEBHOOK_DOMAIN" ]; then
-            WEBHOOK_URL="https://${WEBHOOK_DOMAIN}/webhook/yookassa"
-            echo "✅ Webhook URL: $WEBHOOK_URL"
-            echo "WEBHOOK_URL=$WEBHOOK_URL" | sudo tee -a .env
-          else
-            echo "⚠️  Webhook URL not set. Configure domain and SSL first."
-            echo "WEBHOOK_URL=" | sudo tee -a .env
-          fi
+          # WEBHOOK_URL и WEBAPP_URL не дописываются в .env при деплое — они должны быть в .env (или в бэкапе).
+          echo "ℹ️  WEBHOOK_URL и WEBAPP_URL берутся из .env (не изменяются при деплое)"
           
           # Return to project directory
           cd /root/Daralla
