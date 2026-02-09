@@ -511,7 +511,7 @@ def create_blueprint(bot_app):
             if not updates:
                 return jsonify({'error': 'No fields to update'}), 400
         
-            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, update_subscription_device_limit
+            from ....db.subscribers_db import get_subscription_by_id_only, get_subscription_servers, update_subscription_name, update_subscription_expiry, update_subscription_status, update_subscription_device_limit, DB_PATH
             from ....db.notifications_db import clear_subscription_notifications
             import aiosqlite
         
