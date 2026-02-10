@@ -1288,11 +1288,7 @@ h1 {
     color: #8ba3e8;
 }
 
-/* При увеличении (drag) плавно убираем цвет выделения до обычного */
-.bottom-nav--dragging .nav-item.indicator-over,
-.bottom-nav--dragging .nav-item.indicator-over svg {
-    color: rgba(255, 255, 255, 0.85);
-}
+/* При увеличении (drag) цвет иконки не трогаем — она остаётся обычной */
 
 .nav-item.active svg {
     transform: scale(1.1);

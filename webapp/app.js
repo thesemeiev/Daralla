@@ -6559,8 +6559,13 @@ function closeInstructionModal() {
         updateNavIndicatorOverItem();
         var nav = document.querySelector('.bottom-nav');
         if (nav) {
-            if (s.currentScale < 1.08) nav.classList.add('nav-indicator-has-color');
-            else nav.classList.remove('nav-indicator-has-color');
+            // Цвет выделения на иконке показываем только когда индикатор НЕ в режиме drag
+            // и практически «сдулся» (scale близок к 1)
+            if (!s.isDragging && s.currentScale < 1.08) {
+                nav.classList.add('nav-indicator-has-color');
+            } else {
+                nav.classList.remove('nav-indicator-has-color');
+            }
         }
     }
 
