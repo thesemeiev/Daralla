@@ -771,6 +771,11 @@ async function loadEvents() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (emptyEl) { emptyEl.style.display = 'block'; }
     }
+    if (typeof window.currentNavIndex !== 'undefined' && typeof moveNavIndicator === 'function') {
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () { moveNavIndicator(window.currentNavIndex); });
+        });
+    }
     try {
         var hasActiveEvents = (active || []).length > 0;
         if (hasActiveEvents && !localStorage.getItem('event_ref_modal_shown') && (tg.initData || webAuthToken)) {
@@ -6501,7 +6506,8 @@ function closeInstructionModal() {
     const SPRING_STIFFNESS = 0.048;
     const SPRING_DAMPING = 0.80;
     const DRAG_SCALE = 1.28;
-    const DRAG_CIRCLE_SIZE = 88;
+    const DRAG_PILL_WIDTH = 80;
+    const DRAG_PILL_HEIGHT = 56;
 
     function getNavIconCenterX(item, navRect) {
         const icon = item && item.querySelector('svg');
@@ -6542,7 +6548,7 @@ function closeInstructionModal() {
         const s = navIndicatorState;
         indicator.style.width = s.currentWidth + 'px';
         if (s.isDragging) {
-            indicator.style.height = s.currentWidth + 'px';
+            indicator.style.height = DRAG_PILL_HEIGHT + 'px';
         } else {
             indicator.style.height = '';
         }
@@ -6679,12 +6685,12 @@ function closeInstructionModal() {
             dragStartX = getPointerX(e);
             dragStartCenterX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
             navIndicatorState.targetScale = DRAG_SCALE;
-            navIndicatorState.targetWidth = DRAG_CIRCLE_SIZE;
-            navIndicatorState.targetX = dragStartCenterX - DRAG_CIRCLE_SIZE / 2;
+            navIndicatorState.targetWidth = DRAG_PILL_WIDTH;
+            navIndicatorState.targetX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
             if (navIndicatorMobile) {
                 navIndicatorState.currentScale = DRAG_SCALE;
-                navIndicatorState.currentWidth = DRAG_CIRCLE_SIZE;
-                navIndicatorState.currentX = dragStartCenterX - DRAG_CIRCLE_SIZE / 2;
+                navIndicatorState.currentWidth = DRAG_PILL_WIDTH;
+                navIndicatorState.currentX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
                 applyNavIndicatorPosition();
             }
             e.preventDefault();
@@ -6695,7 +6701,7 @@ function closeInstructionModal() {
             var px = getPointerX(e);
             var delta = px - dragStartX;
             var centerX = dragStartCenterX + delta;
-            navIndicatorState.targetX = centerX - DRAG_CIRCLE_SIZE / 2;
+            navIndicatorState.targetX = centerX - DRAG_PILL_WIDTH / 2;
             if (navIndicatorMobile) {
                 navIndicatorState.currentX = navIndicatorState.targetX;
                 applyNavIndicatorPosition();

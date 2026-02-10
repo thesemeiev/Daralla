@@ -224,6 +224,11 @@
     50% { transform: translateX(-50%) translateY(8px); }
 }
 
+/* Резервируем скроллбар, чтобы при загрузке контента (напр. события) не дёргался навбар */
+html {
+    overflow-y: scroll;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #1a1a1a;
@@ -405,6 +410,11 @@ h1 {
 .loading p {
     color: #8a8a8a;
     font-size: 15px;
+}
+
+/* Страница событий: стабильная высота при смене loading → empty/list, чтобы навбар не дёргался */
+#page-events {
+    min-height: 220px;
 }
 
 .error, .empty {
@@ -1187,17 +1197,21 @@ h1 {
         inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-/* Перетаскивание: круг, выходит за островок, почти прозрачно — контент внутри сильно размыт (эффект линзы) */
+/* Перетаскивание: «желе»-капсула, выходит за островок; по краям сильнее — имитация искажения линзы */
 .nav-glass-indicator.dragging {
-    border-radius: 50%;
-    opacity: 0.35;
-    background: rgba(255, 255, 255, 0.02);
-    backdrop-filter: blur(28px) saturate(150%);
-    -webkit-backdrop-filter: blur(28px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    opacity: 0.4;
+    background:
+        radial-gradient(ellipse 100% 100% at 50% 50%, transparent 35%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.06) 100%),
+        rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.06),
-        inset 0 0 20px rgba(255, 255, 255, 0.03);
+        0 0 0 1px rgba(0, 0, 0, 0.05),
+        0 0 24px rgba(255, 255, 255, 0.06),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 0 24px rgba(255, 255, 255, 0.04);
 }
 
 /* На мобильных: CSS-переход вместо RAF, меньше blur — без подвисаний */
