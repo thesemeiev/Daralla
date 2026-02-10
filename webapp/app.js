@@ -261,9 +261,18 @@ function showPage(pageName, params) {
             activeIndex = allNavItems.indexOf(adminButton);
         }
         
-        // Перемещаем индикатор к активной кнопке
+        // Перемещаем индикатор к активной кнопке после того, как layout навбара и страницы устоится
+        // (иначе при переходе на «События» и др. rects читаются до reflow — выделение съезжает)
         if (activeIndex >= 0) {
-            moveNavIndicator(activeIndex);
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    moveNavIndicator(activeIndex);
+                });
+            });
+            // Повторный пересчёт после загрузки контента (напр. список событий), чтобы не съезжало
+            setTimeout(function () {
+                if (typeof window.currentNavIndex !== 'undefined') moveNavIndicator(window.currentNavIndex);
+            }, 220);
         }
     }
     
@@ -6492,6 +6501,7 @@ function closeInstructionModal() {
     const SPRING_STIFFNESS = 0.048;
     const SPRING_DAMPING = 0.80;
     const DRAG_SCALE = 1.28;
+    const DRAG_CIRCLE_SIZE = 88;
 
     function getNavIconCenterX(item, navRect) {
         const icon = item && item.querySelector('svg');
@@ -6531,6 +6541,11 @@ function closeInstructionModal() {
         if (!indicator) return;
         const s = navIndicatorState;
         indicator.style.width = s.currentWidth + 'px';
+        if (s.isDragging) {
+            indicator.style.height = s.currentWidth + 'px';
+        } else {
+            indicator.style.height = '';
+        }
         indicator.style.transform =
             'translateX(' + (s.currentX | 0) + 'px) translateY(-50%) scale(' + s.currentScale.toFixed(3) + ')';
     }
@@ -6647,9 +6662,9 @@ function closeInstructionModal() {
             item.addEventListener('touchstart', triggerPressEffect, { passive: true });
         });
 
-        // Перетаскивание индикатора
+        // Перетаскивание индикатора (круг следует центром за пальцем)
         let dragStartX = 0;
-        let dragStartLeft = 0;
+        let dragStartCenterX = 0;
 
         function getPointerX(e) {
             return e.touches ? e.touches[0].clientX : e.clientX;
@@ -6662,10 +6677,14 @@ function closeInstructionModal() {
             navIndicatorState.isDragging = true;
             indicator.classList.add('dragging');
             dragStartX = getPointerX(e);
-            dragStartLeft = navIndicatorState.currentX;
+            dragStartCenterX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
             navIndicatorState.targetScale = DRAG_SCALE;
+            navIndicatorState.targetWidth = DRAG_CIRCLE_SIZE;
+            navIndicatorState.targetX = dragStartCenterX - DRAG_CIRCLE_SIZE / 2;
             if (navIndicatorMobile) {
                 navIndicatorState.currentScale = DRAG_SCALE;
+                navIndicatorState.currentWidth = DRAG_CIRCLE_SIZE;
+                navIndicatorState.currentX = dragStartCenterX - DRAG_CIRCLE_SIZE / 2;
                 applyNavIndicatorPosition();
             }
             e.preventDefault();
@@ -6675,9 +6694,10 @@ function closeInstructionModal() {
             if (!navIndicatorState.isDragging) return;
             var px = getPointerX(e);
             var delta = px - dragStartX;
-            navIndicatorState.targetX = dragStartLeft + delta;
+            var centerX = dragStartCenterX + delta;
+            navIndicatorState.targetX = centerX - DRAG_CIRCLE_SIZE / 2;
             if (navIndicatorMobile) {
-                navIndicatorState.currentX = dragStartLeft + delta;
+                navIndicatorState.currentX = navIndicatorState.targetX;
                 applyNavIndicatorPosition();
             }
             e.preventDefault();

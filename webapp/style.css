@@ -1132,23 +1132,22 @@ h1 {
     width: calc(100% - 32px);
     max-width: 460px;
     overflow: visible;
-    /* Полупрозрачная основа + линзовый градиент сверху, как у liquid glass */
+    /* Стекло: приглушённый тон, без стальной белизны */
     background:
-        linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.02) 100%),
-        rgba(18, 18, 22, 0.55);
-    backdrop-filter: blur(32px) saturate(200%);
-    -webkit-backdrop-filter: blur(32px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+        linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 40%, transparent 100%),
+        rgba(18, 18, 22, 0.5);
+    backdrop-filter: blur(32px) saturate(180%);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 28px;
     display: flex;
     justify-content: space-around;
     padding: 8px 0;
     z-index: 1000;
-    /* Глубина + лёгкое edge glow по низу */
     box-shadow:
-        0 16px 48px rgba(0, 0, 0, 0.45),
-        0 0 0 1px rgba(0, 0, 0, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        0 16px 48px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .nav-glass-indicator {
@@ -1159,56 +1158,46 @@ h1 {
     height: 48px;
     transform: translateY(-50%);
     transform-origin: 50% 50%;
-    /* «Линза» liquid glass: яркий верх, мягкий центр, edge glow */
+    /* Стекло: приглушённый тон, без «стальной» белизны */
     background:
-        linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.2) 35%, rgba(255,255,255,0.08) 100%),
-        radial-gradient(ellipse 80% 50% at 50% 20%, rgba(255,255,255,0.25), transparent 70%),
-        rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(20px) saturate(200%);
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.28);
+        linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 40%, rgba(248,252,255,0.03) 100%),
+        rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px;
-    /* transform и width задаются из JS (пружина «желе»), переходы только для визуала */
-    transition: background 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+    transition: background 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease, border-radius 0.25s ease;
     pointer-events: auto;
     cursor: grab;
     z-index: 3;
-    /* Тень сверху (как в shader) + edge glow + внутреннее свечение */
     box-shadow:
-        0 8px 24px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(255, 255, 255, 0.2),
-        0 0 20px rgba(255, 255, 255, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.35),
-        inset 0 0 16px rgba(255, 255, 255, 0.08);
+        0 8px 24px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 0 12px rgba(255, 255, 255, 0.04);
 }
 
 .nav-glass-indicator.pressing {
-    /* При коротком тапе чуть усиливаем свечение, не ломая позицию/анимацию JS */
     background:
-        linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.25) 35%, rgba(255,255,255,0.1) 100%),
-        radial-gradient(ellipse 80% 50% at 50% 20%, rgba(255,255,255,0.3), transparent 70%),
-        rgba(255, 255, 255, 0.16);
+        linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%),
+        rgba(255, 255, 255, 0.08);
     box-shadow:
-        0 6px 20px rgba(0, 0, 0, 0.35),
-        0 0 0 1px rgba(255, 255, 255, 0.18),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        0 6px 20px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-/* Состояние перетаскивания — линза становится крупнее и прозрачнее,
-   фон сильнее размывается, как «лупа» поверх контента */
+/* Перетаскивание: круг, выходит за островок, почти прозрачно — контент внутри сильно размыт (эффект линзы) */
 .nav-glass-indicator.dragging {
-    opacity: 0.9;
-    background:
-        radial-gradient(ellipse 100% 70% at 50% 15%, rgba(255,255,255,0.3), transparent 70%),
-        rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(32px) saturate(220%);
-    -webkit-backdrop-filter: blur(32px) saturate(220%);
+    border-radius: 50%;
+    opacity: 0.35;
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow:
-        0 18px 40px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.22),
-        0 0 30px rgba(255, 255, 255, 0.12),
-        inset 0 2px 4px rgba(255, 255, 255, 0.45),
-        inset 0 0 24px rgba(255, 255, 255, 0.16);
+        0 0 0 1px rgba(0, 0, 0, 0.06),
+        inset 0 0 20px rgba(255, 255, 255, 0.03);
 }
 
 /* На мобильных: CSS-переход вместо RAF, меньше blur — без подвисаний */
