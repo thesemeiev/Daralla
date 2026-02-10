@@ -110,6 +110,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Урезаем шум от httpx/httpcore до WARNING, чтобы логи не забивались
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 # Глобальный экземпляр менеджера серверов (подписки и выбор серверов используют его)
 server_manager = MultiServerManager()
 # Менеджер подписок

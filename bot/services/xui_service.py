@@ -1053,19 +1053,18 @@ class X3:
             return updated, errors + [str(e)]
 
     async def _list_internal(self, timeout=15, skip_health_check=False):
-        """Внутренний метод для получения списка inbounds (без retry)"""
+        """
+        Внутренний метод для получения списка inbounds (без retry).
+
+        Параметр skip_health_check используется только для того, чтобы
+        уменьшить дополнительный шум логов при быстрых health‑check запросах
+        (например, в list_quick), но саму проверку доступности мы теперь
+        делаем только по реальному API /panel/api/inbounds/list, без
+        искусственного /ping.
+        """
         await self._ensure_connected()
         try:
             url = f'{self.host}/panel/api/inbounds/list'
-            
-            # Пропускаем health check ping для быстрой проверки здоровья
-            if not skip_health_check:
-                try:
-                    health_check = await self._client.get(f'{self.host}/ping', timeout=5)
-                    logger.debug(f"Проверка доступности сервера {self.host}: {health_check.status_code}")
-                except Exception as e:
-                    logger.debug(f"Сервер {self.host} недоступен для ping: {e}")
-            
             # В httpx AsyncClient.get() нет параметра json, поэтому используем request()
             response = await self._client.request("GET", url, json=self.data, timeout=timeout)
             logger.debug(f"XUI API Response - URL: {url}, Status: {response.status_code}")

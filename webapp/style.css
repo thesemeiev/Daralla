@@ -1123,59 +1123,70 @@ h1 {
     color: #b0b0b0;
 }
 
-/* Нижняя навигация */
+/* Нижняя навигация — liquid glass (в духе bergice/liquidglass, без WebGL) */
 .bottom-nav {
     position: fixed;
     bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
     width: calc(100% - 32px);
-    max-width: 460px; /* Идеальный размер для 4-5 кнопок */
-    /* Градиентное «жидкое стекло» как в современных iOS/Telegram */
-    background: radial-gradient(circle at 10% 0%, rgba(255,255,255,0.14), rgba(255,255,255,0.04)) rgba(10, 10, 10, 0.6);
-    backdrop-filter: blur(26px) saturate(180%);
-    -webkit-backdrop-filter: blur(26px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    max-width: 460px;
+    /* Полупрозрачная основа + линзовый градиент сверху, как у liquid glass */
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.02) 100%),
+        rgba(18, 18, 22, 0.55);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 28px;
     display: flex;
     justify-content: space-around;
     padding: 8px 0;
     z-index: 1000;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    /* Глубина + лёгкое edge glow по низу */
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .nav-glass-indicator {
     position: absolute;
     top: 50%;
     left: 0;
-    width: 56px; /* Фиксированная ширина для идеальной формы */
-    height: 48px; /* Фиксированная высота */
+    width: 56px;
+    height: 48px;
     transform: translateY(-50%);
-    /* Глубокое «жидкое» стекло с лёгким свечением */
+    /* «Линза» liquid glass: яркий верх, мягкий центр, edge glow */
     background:
-        radial-gradient(circle at 20% 0%, rgba(255,255,255,0.35), transparent 55%),
-        radial-gradient(circle at 80% 100%, rgba(255,255,255,0.18), transparent 55%),
-        rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(18px) saturate(180%);
-    -webkit-backdrop-filter: blur(18px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+        linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.2) 35%, rgba(255,255,255,0.08) 100%),
+        radial-gradient(ellipse 80% 50% at 50% 20%, rgba(255,255,255,0.25), transparent 70%),
+        rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.28);
     border-radius: 18px;
-    /* Плавные, слегка «резиновые» анимации */
     transition:
         transform 0.38s cubic-bezier(0.22, 0.9, 0.25, 1.15),
         width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: none;
     z-index: 1;
-    /* Эффект жидкого стекла */
-    box-shadow: 
-        0 12px 30px rgba(0, 0, 0, 0.55),
-        0 0 0 1px rgba(255, 255, 255, 0.18),
-        inset 0 0 12px rgba(255, 255, 255, 0.08);
+    /* Тень сверху (как в shader) + edge glow + внутреннее свечение */
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.2),
+        0 0 20px rgba(255, 255, 255, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        inset 0 0 16px rgba(255, 255, 255, 0.08);
 }
 
 .nav-glass-indicator.pressing {
-    transform: translateY(-50%) scale(1.15, 0.9); /* Сплющивание как капля */
-    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-50%) scale(1.08, 0.92);
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow:
+        0 6px 20px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(255, 255, 255, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 

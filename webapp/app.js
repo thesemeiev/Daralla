@@ -6478,25 +6478,31 @@ function moveNavIndicator(index) {
     const indicator = document.querySelector('.nav-glass-indicator');
     const navItems = document.querySelectorAll('.nav-item');
     const nav = document.querySelector('.bottom-nav');
-    
+
     if (!indicator || !navItems[index] || !nav) return;
-    
-    // Сбрасываем ширину после перетаскивания, чтобы индикатор не оставался узким
-    indicator.style.width = '';
-    
+
     const targetItem = navItems[index];
-    const indicatorWidth = 56;
-    
+    // Для стабильного выравнивания по центру иконки
+    // делаем ширину индикатора пропорциональной ширине элемента навигации.
+    // Так он всегда «обнимает» иконку по центру даже на нестандартных ширинах экрана.
+
     const calculateAndSetPosition = () => {
         const navRect = nav.getBoundingClientRect();
         const itemRect = targetItem.getBoundingClientRect();
+
+        // Делаем индикатор чуть уже кнопки (например, 80%),
+        // чтобы оставались воздушные отступы и форма смотрелась аккуратно.
+        const targetWidth = itemRect.width * 0.8;
+        indicator.style.width = targetWidth + 'px';
+
         const itemCenterX = itemRect.left - navRect.left + (itemRect.width / 2);
-        let x = itemCenterX - (indicatorWidth / 2);
-        x = Math.max(0, Math.min(navRect.width - indicatorWidth, x));
+        let x = itemCenterX - (targetWidth / 2);
+        x = Math.max(0, Math.min(navRect.width - targetWidth, x));
+
         indicator.style.transform = 'translateX(' + x + 'px) translateY(-50%)';
         window.currentNavIndex = index;
     };
-    
+
     requestAnimationFrame(calculateAndSetPosition);
 }
 
