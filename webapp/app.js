@@ -6478,10 +6478,13 @@ function closeInstructionModal() {
     const navIndicatorState = {
         currentX: 0,
         currentWidth: 56,
+        currentScale: 1,
         targetX: 0,
         targetWidth: 56,
+        targetScale: 1,
         velocityX: 0,
         velocityW: 0,
+        velocityScale: 0,
         isDragging: false,
         rafId: null,
         lastTime: 0
@@ -6502,9 +6505,11 @@ function closeInstructionModal() {
         const indicator = document.querySelector('.nav-glass-indicator');
         if (!nav || !items[index] || !indicator) return;
         const navRect = nav.getBoundingClientRect();
-        const itemRect = items[index].getBoundingClientRect();
-        const iconCenterX = getNavIconCenterX(items[index], navRect);
-        const w = Math.max(48, itemRect.width * 0.8);
+        const item = items[index];
+        const icon = item.querySelector('svg');
+        const iconRect = icon ? icon.getBoundingClientRect() : item.getBoundingClientRect();
+        const iconCenterX = (iconRect.left + iconRect.right) / 2 - navRect.left;
+        const w = Math.max(40, iconRect.width * 1.5);
         navIndicatorState.targetWidth = w;
         let x = iconCenterX - w / 2;
         if (!navIndicatorState.isDragging) {
@@ -6519,7 +6524,8 @@ function closeInstructionModal() {
         if (!indicator) return;
         const s = navIndicatorState;
         indicator.style.width = s.currentWidth + 'px';
-        indicator.style.transform = 'translateX(' + (s.currentX | 0) + 'px) translateY(-50%)';
+        indicator.style.transform =
+            'translateX(' + (s.currentX | 0) + 'px) translateY(-50%) scale(' + s.currentScale.toFixed(3) + ')';
     }
 
     function navIndicatorSpringStep() {
@@ -6530,10 +6536,18 @@ function closeInstructionModal() {
         s.velocityW += (s.targetWidth - s.currentWidth) * SPRING_STIFFNESS;
         s.velocityW *= SPRING_DAMPING;
         s.currentWidth += s.velocityW;
-        if (Math.abs(s.velocityX) < 0.08 && Math.abs(s.velocityW) < 0.04) {
+        s.velocityScale += (s.targetScale - s.currentScale) * SPRING_STIFFNESS;
+        s.velocityScale *= SPRING_DAMPING;
+        s.currentScale += s.velocityScale;
+        if (
+            Math.abs(s.velocityX) < 0.08 &&
+            Math.abs(s.velocityW) < 0.04 &&
+            Math.abs(s.velocityScale) < 0.02
+        ) {
             s.currentX = s.targetX;
             s.currentWidth = s.targetWidth;
-            s.velocityX = s.velocityW = 0;
+            s.currentScale = s.targetScale;
+            s.velocityX = s.velocityW = s.velocityScale = 0;
         }
         applyNavIndicatorPosition();
     }
@@ -6575,7 +6589,8 @@ function closeInstructionModal() {
             setNavIndicatorTargetFromIndex(i);
             navIndicatorState.currentX = navIndicatorState.targetX;
             navIndicatorState.currentWidth = navIndicatorState.targetWidth;
-            navIndicatorState.velocityX = navIndicatorState.velocityW = 0;
+            navIndicatorState.currentScale = navIndicatorState.targetScale = 1;
+            navIndicatorState.velocityX = navIndicatorState.velocityW = navIndicatorState.velocityScale = 0;
             applyNavIndicatorPosition();
         }
 
@@ -6623,6 +6638,7 @@ function closeInstructionModal() {
             dragStartLeft = navIndicatorState.currentX;
             var baseW = 56;
             navIndicatorState.targetWidth = Math.min(navRect.width * 0.45, baseW * DRAG_WIDTH_MULT);
+            navIndicatorState.targetScale = 1.22;
             e.preventDefault();
         }
 
@@ -6655,6 +6671,7 @@ function closeInstructionModal() {
             const page = items[bestIdx].getAttribute('data-page');
             if (page && typeof showPage === 'function') showPage(page);
             setNavIndicatorTargetFromIndex(bestIdx);
+            navIndicatorState.targetScale = 1;
         }
 
         indicator.addEventListener('mousedown', onPointerDown);
