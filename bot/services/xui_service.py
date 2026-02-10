@@ -52,8 +52,16 @@ class X3:
                     )
                 else:
                     raise
-            logger.info(f"XUI Login Response - Status: {login_response.status_code}")
-            logger.info(f"XUI Login Response - Text: {login_response.text[:200]}...")
+            # На INFO логируем только статус, без тела ответа (может содержать чувствительные данные).
+            logger.info("XUI login: host=%s status=%s", self.host, login_response.status_code)
+            # Тело ответа используем только на DEBUG и c коротким превью.
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "XUI login response preview: host=%s len=%s body=%s",
+                    self.host,
+                    len(login_response.text or ""),
+                    (login_response.text or "")[:200].replace("\n", " "),
+                )
             if login_response.status_code != 200:
                 logger.error(f"Ошибка входа в XUI: {login_response.status_code} - {login_response.text}")
                 raise Exception(f"Login failed with status {login_response.status_code}")
@@ -186,11 +194,27 @@ class X3:
             "id": inbound_id,
             "settings": json.dumps({"clients": [client_data]})
         }
-        logger.info(f"Добавление клиента: {user_email} на сервер {self.host}, inbound_id={inbound_id}")
+        logger.info(
+            "XUI addClient: host=%s inbound_id=%s email=%s limit_ip=%s",
+            self.host,
+            inbound_id,
+            user_email,
+            limit_ip_value,
+        )
         try:
             response = await self._client.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
-            logger.info(f"XUI addClient Response - Status: {response.status_code}")
-            logger.info(f"XUI addClient Response - Text: {response.text[:200]}...")
+            logger.info(
+                "XUI addClient response: host=%s inbound_id=%s email=%s status=%s",
+                self.host,
+                inbound_id,
+                user_email,
+                response.status_code,
+            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "XUI addClient body preview: %s",
+                    (response.text or "")[:200].replace("\n", " "),
+                )
             
             # Проверяем JSON ответ на наличие поля success
             try:
@@ -213,8 +237,18 @@ class X3:
                 logger.warning("Получен пустой ответ, возможно истекла сессия. Переподключаюсь...")
                 await self._reconnect()
                 response = await self._client.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
-                logger.info(f"XUI addClient Response после переподключения - Status: {response.status_code}")
-                logger.info(f"XUI addClient Response после переподключения - Text: {response.text[:200]}...")
+                logger.info(
+                    "XUI addClient retry after reconnect: host=%s inbound_id=%s email=%s status=%s",
+                    self.host,
+                    inbound_id,
+                    user_email,
+                    response.status_code,
+                )
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "XUI addClient retry body preview: %s",
+                        (response.text or "")[:200].replace("\n", " "),
+                    )
                 
                 # Проверяем JSON ответ после переподключения
                 try:
@@ -305,12 +339,28 @@ class X3:
                 "settings": json.dumps({"clients": [client_data]})
             }
             
-            logger.info(f"Продление клиента: {user_email} на сервере {self.host} на {extend_days} дней")
+            logger.info(
+                "XUI extendClient: host=%s inbound_id=%s email=%s days=%s",
+                self.host,
+                inbound_id,
+                user_email,
+                extend_days,
+            )
             response = await self._client.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                    headers=header, json=data, timeout=timeout)
             
-            logger.info(f"XUI extendClient Response - Status: {response.status_code}")
-            logger.info(f"XUI extendClient Response - Text: {response.text[:200]}...")
+            logger.info(
+                "XUI extendClient response: host=%s inbound_id=%s email=%s status=%s",
+                self.host,
+                inbound_id,
+                user_email,
+                response.status_code,
+            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "XUI extendClient body preview: %s",
+                    (response.text or "")[:200].replace("\n", " "),
+                )
             
             # Проверяем JSON ответ на наличие поля success
             try:
@@ -330,7 +380,13 @@ class X3:
                 await self._reconnect()
                 response = await self._client.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                        headers=header, json=data, timeout=timeout)
-                logger.info(f"XUI extendClient Response после переподключения - Status: {response.status_code}")
+                logger.info(
+                    "XUI extendClient retry after reconnect: host=%s inbound_id=%s email=%s status=%s",
+                    self.host,
+                    inbound_id,
+                    user_email,
+                    response.status_code,
+                )
                 
                 # Проверяем JSON ответ после переподключения
                 try:

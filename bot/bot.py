@@ -99,11 +99,13 @@ file_handler = RotatingFileHandler(
     encoding='utf-8',
     delay=True
 )
-file_handler.setLevel(logging.WARNING)
+# Пишем в файл также INFO-сообщения, чтобы лучше видеть историю продакшена.
+file_handler.setLevel(logging.INFO)
 
+# Базовый формат логов с именем логгера — проще отлаживать и искать по модулям.
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
+    format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
     handlers=[console_handler, file_handler]
 )
 logger = logging.getLogger(__name__)
