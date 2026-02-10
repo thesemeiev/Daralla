@@ -1187,6 +1187,21 @@ h1 {
         inset 0 0 12px rgba(255, 255, 255, 0.04);
 }
 
+/* Цветовая «линза» поверх иконок: только та часть svg, что под выделением, подсвечивается сине-фиолетовым */
+.nav-glass-indicator::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    /* Цвет как у статуса «Скоро» (#8ba3e8) с лёгким фиолетовым оттенком */
+    background:
+        radial-gradient(circle at 50% 40%, rgba(139,163,232,0.85) 0%, rgba(139,163,232,0.4) 35%, transparent 70%),
+        radial-gradient(circle at 50% 120%, rgba(167,139,255,0.5) 0%, transparent 70%);
+    mix-blend-mode: screen;
+    opacity: 0.55;
+}
+
 .nav-glass-indicator.pressing {
     background:
         linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%),
@@ -1200,10 +1215,10 @@ h1 {
 /* Перетаскивание: «желе»-капсула, выходит за островок; по краям сильнее — имитация искажения линзы */
 .nav-glass-indicator.dragging {
     border-radius: 28px;
-    opacity: 0.4;
+    opacity: 0.45;
     background:
-        radial-gradient(ellipse 100% 100% at 50% 50%, transparent 35%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.06) 100%),
-        rgba(255, 255, 255, 0.02);
+        linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0.01) 100%),
+        rgba(255, 255, 255, 0.01);
     backdrop-filter: blur(24px) saturate(140%);
     -webkit-backdrop-filter: blur(24px) saturate(140%);
     border: 1px solid rgba(255, 255, 255, 0.12);
