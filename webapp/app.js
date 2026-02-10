@@ -6473,89 +6473,201 @@ function closeInstructionModal() {
     currentInstructionSteps = [];
 }
 
-// Функция для перемещения индикатора к активной кнопке
-function moveNavIndicator(index) {
-    const indicator = document.querySelector('.nav-glass-indicator');
-    const navItems = document.querySelectorAll('.nav-item');
-    const nav = document.querySelector('.bottom-nav');
-
-    if (!indicator || !navItems[index] || !nav) return;
-
-    const targetItem = navItems[index];
-    // Для стабильного выравнивания по центру иконки
-    // делаем ширину индикатора пропорциональной ширине элемента навигации.
-    // Так он всегда «обнимает» иконку по центру даже на нестандартных ширинах экрана.
-
-    const calculateAndSetPosition = () => {
-        const navRect = nav.getBoundingClientRect();
-        const itemRect = targetItem.getBoundingClientRect();
-
-        // Делаем индикатор чуть уже кнопки (например, 80%),
-        // чтобы оставались воздушные отступы и форма смотрелась аккуратно.
-        const targetWidth = itemRect.width * 0.8;
-        indicator.style.width = targetWidth + 'px';
-
-        const itemCenterX = itemRect.left - navRect.left + (itemRect.width / 2);
-        let x = itemCenterX - (targetWidth / 2);
-        x = Math.max(0, Math.min(navRect.width - targetWidth, x));
-
-        indicator.style.transform = 'translateX(' + x + 'px) translateY(-50%)';
-        window.currentNavIndex = index;
+// --- Нижняя навигация: индикатор с пружиной («желе») и перетаскиванием ---
+(function () {
+    const navIndicatorState = {
+        currentX: 0,
+        currentWidth: 56,
+        targetX: 0,
+        targetWidth: 56,
+        velocityX: 0,
+        velocityW: 0,
+        isDragging: false,
+        rafId: null,
+        lastTime: 0
     };
+    const SPRING_STIFFNESS = 0.048;
+    const SPRING_DAMPING = 0.80;
+    const DRAG_WIDTH_MULT = 1.35;
 
-    requestAnimationFrame(calculateAndSetPosition);
-}
-
-// Добавляем обработчик изменения размера окна для навбара
-window.addEventListener('resize', () => {
-    if (typeof window.currentNavIndex !== 'undefined') {
-        moveNavIndicator(window.currentNavIndex);
+    function getNavIconCenterX(item, navRect) {
+        const icon = item && item.querySelector('svg');
+        const rect = icon ? icon.getBoundingClientRect() : item.getBoundingClientRect();
+        return (rect.left + rect.right) / 2 - navRect.left;
     }
-});
 
-// Инициализация навигации с индикатором
-function initNavIndicator() {
-    const navItems = document.querySelectorAll('.nav-item');
-    const indicator = document.querySelector('.nav-glass-indicator');
-    const nav = document.querySelector('.bottom-nav');
-
-    if (!indicator || !nav || !navItems.length) return;
-
-    function setInitialPosition() {
-        const activeItem = document.querySelector('.nav-item.active');
-        if (activeItem) {
-            const activeIndex = Array.from(document.querySelectorAll('.nav-item')).indexOf(activeItem);
-            if (activeIndex >= 0) moveNavIndicator(activeIndex);
-        } else {
-            moveNavIndicator(0);
+    function setNavIndicatorTargetFromIndex(index) {
+        const nav = document.querySelector('.bottom-nav');
+        const items = document.querySelectorAll('.nav-item');
+        const indicator = document.querySelector('.nav-glass-indicator');
+        if (!nav || !items[index] || !indicator) return;
+        const navRect = nav.getBoundingClientRect();
+        const itemRect = items[index].getBoundingClientRect();
+        const iconCenterX = getNavIconCenterX(items[index], navRect);
+        const w = Math.max(48, itemRect.width * 0.8);
+        navIndicatorState.targetWidth = w;
+        let x = iconCenterX - w / 2;
+        if (!navIndicatorState.isDragging) {
+            x = Math.max(0, Math.min(navRect.width - w, x));
         }
+        navIndicatorState.targetX = x;
+        window.currentNavIndex = index;
     }
 
-    // Откладываем первый расчёт, чтобы layout навбара успел стабилизироваться
-    requestAnimationFrame(function () {
-        requestAnimationFrame(setInitialPosition);
+    function applyNavIndicatorPosition() {
+        const indicator = document.querySelector('.nav-glass-indicator');
+        if (!indicator) return;
+        const s = navIndicatorState;
+        indicator.style.width = s.currentWidth + 'px';
+        indicator.style.transform = 'translateX(' + (s.currentX | 0) + 'px) translateY(-50%)';
+    }
+
+    function navIndicatorSpringStep() {
+        const s = navIndicatorState;
+        s.velocityX += (s.targetX - s.currentX) * SPRING_STIFFNESS;
+        s.velocityX *= SPRING_DAMPING;
+        s.currentX += s.velocityX;
+        s.velocityW += (s.targetWidth - s.currentWidth) * SPRING_STIFFNESS;
+        s.velocityW *= SPRING_DAMPING;
+        s.currentWidth += s.velocityW;
+        if (Math.abs(s.velocityX) < 0.08 && Math.abs(s.velocityW) < 0.04) {
+            s.currentX = s.targetX;
+            s.currentWidth = s.targetWidth;
+            s.velocityX = s.velocityW = 0;
+        }
+        applyNavIndicatorPosition();
+    }
+
+    function navIndicatorLoop() {
+        const nav = document.querySelector('.bottom-nav');
+        const indicator = document.querySelector('.nav-glass-indicator');
+        if (!nav || !indicator || nav.style.display === 'none') {
+            navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
+            return;
+        }
+        navIndicatorSpringStep();
+        navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
+    }
+
+    function moveNavIndicator(index) {
+        setNavIndicatorTargetFromIndex(index);
+    }
+
+    window.moveNavIndicator = moveNavIndicator;
+
+    window.addEventListener('resize', function () {
+        if (typeof window.currentNavIndex !== 'undefined') {
+            setNavIndicatorTargetFromIndex(window.currentNavIndex);
+        }
     });
 
-    // Клики по пунктам навигации двигают индикатор в центр соответствующей иконки
-    navItems.forEach((item, index) => {
-        item.addEventListener('click', () => {
-            moveNavIndicator(index);
+    function initNavIndicator() {
+        const navItems = document.querySelectorAll('.nav-item');
+        const indicator = document.querySelector('.nav-glass-indicator');
+        const nav = document.querySelector('.bottom-nav');
+
+        if (!indicator || !nav || !navItems.length) return;
+
+        function setInitialPosition() {
+            const activeItem = document.querySelector('.nav-item.active');
+            const idx = activeItem ? Array.from(navItems).indexOf(activeItem) : 0;
+            const i = idx >= 0 ? idx : 0;
+            setNavIndicatorTargetFromIndex(i);
+            navIndicatorState.currentX = navIndicatorState.targetX;
+            navIndicatorState.currentWidth = navIndicatorState.targetWidth;
+            navIndicatorState.velocityX = navIndicatorState.velocityW = 0;
+            applyNavIndicatorPosition();
+        }
+
+        requestAnimationFrame(function () {
+            requestAnimationFrame(setInitialPosition);
         });
-    });
 
-    // Лёгкий эффект "жидкого стекла": короткое сплющивание при взаимодействии
-    function triggerPressEffect() {
-        indicator.classList.add('pressing');
-        setTimeout(() => {
-            indicator.classList.remove('pressing');
-        }, 180);
+        if (!navIndicatorState.rafId) {
+            navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
+        }
+
+        navItems.forEach(function (item, index) {
+            item.addEventListener('click', function () {
+                moveNavIndicator(index);
+            });
+        });
+
+        function triggerPressEffect() {
+            indicator.classList.add('pressing');
+            setTimeout(function () {
+                indicator.classList.remove('pressing');
+            }, 180);
+        }
+        navItems.forEach(function (item) {
+            item.addEventListener('mousedown', triggerPressEffect);
+            item.addEventListener('touchstart', triggerPressEffect, { passive: true });
+        });
+
+        // Перетаскивание индикатора
+        let dragStartX = 0;
+        let dragStartLeft = 0;
+
+        function getPointerX(e) {
+            return e.touches ? e.touches[0].clientX : e.clientX;
+        }
+
+        function onPointerDown(e) {
+            if (e.button !== 0 && !e.touches) return;
+            const nav = document.querySelector('.bottom-nav');
+            if (!nav || nav.style.display === 'none') return;
+            const navRect = nav.getBoundingClientRect();
+            navIndicatorState.isDragging = true;
+            indicator.classList.add('dragging');
+            dragStartX = getPointerX(e);
+            dragStartLeft = navIndicatorState.currentX;
+            var baseW = 56;
+            navIndicatorState.targetWidth = Math.min(navRect.width * 0.45, baseW * DRAG_WIDTH_MULT);
+            e.preventDefault();
+        }
+
+        function onPointerMove(e) {
+            if (!navIndicatorState.isDragging) return;
+            var px = getPointerX(e);
+            var delta = px - dragStartX;
+            navIndicatorState.targetX = dragStartLeft + delta;
+            e.preventDefault();
+        }
+
+        function onPointerUp() {
+            if (!navIndicatorState.isDragging) return;
+            navIndicatorState.isDragging = false;
+            indicator.classList.remove('dragging');
+            const nav = document.querySelector('.bottom-nav');
+            const items = document.querySelectorAll('.nav-item');
+            const navRect = nav.getBoundingClientRect();
+            const centerX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
+            let bestIdx = 0;
+            let bestDist = 1e9;
+            items.forEach(function (item, i) {
+                const iconCenter = getNavIconCenterX(item, navRect);
+                const d = Math.abs(centerX - iconCenter);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestIdx = i;
+                }
+            });
+            const page = items[bestIdx].getAttribute('data-page');
+            if (page && typeof showPage === 'function') showPage(page);
+            setNavIndicatorTargetFromIndex(bestIdx);
+        }
+
+        indicator.addEventListener('mousedown', onPointerDown);
+        indicator.addEventListener('touchstart', onPointerDown, { passive: false });
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+        document.addEventListener('touchcancel', onPointerUp);
     }
 
-    navItems.forEach((item) => {
-        item.addEventListener('mousedown', triggerPressEffect);
-        item.addEventListener('touchstart', triggerPressEffect, { passive: true });
-    });
-}
+    window.initNavIndicator = initNavIndicator;
+})();
 
 // === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
 
