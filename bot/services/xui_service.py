@@ -644,10 +644,11 @@ class X3:
     async def client_exists(self, user_email):
         """Проверяет существование клиента по email"""
         await self._ensure_connected()
-        for inbound in await self.list()['obj']:
-            settings = json.loads(inbound['settings'])
+        inbounds_list = await self.list()
+        for inbound in inbounds_list.get('obj', []):
+            settings = json.loads(inbound.get('settings', '{}'))
             for client in settings.get("clients", []):
-                if client['email'] == user_email:
+                if client.get('email') == user_email:
                     return True
         return False
 
@@ -1352,9 +1353,9 @@ class X3:
             server_name: Название сервера для tag (если не указано, используется user_id)
         """
         await self._ensure_connected()
-        inbounds_list = await self.list()['obj']
-        for inbounds in inbounds_list:
-            settings = json.loads(inbounds['settings'])
+        inbounds_list = await self.list()
+        for inbounds in inbounds_list.get('obj', []):
+            settings = json.loads(inbounds.get('settings', '{}'))
             stream = json.loads(inbounds['streamSettings'])
 
             client = next((c for c in settings.get("clients", []) if c['email'] == user_id), None)
