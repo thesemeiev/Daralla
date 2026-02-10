@@ -6607,13 +6607,6 @@ function closeInstructionModal() {
         s.velocityW += (s.targetWidth - s.currentWidth) * stiffness;
         s.velocityW *= SPRING_DAMPING;
 
-        // «Раздул и прыгнул»: targetScale=1.24 задаётся один раз при клике; по прилёту только сбрасываем в 1
-        // (не выставляем 1.24 каждый кадр, иначе при overshoot позиции scale снова раздувается и залипает)
-        if (!s.isDragging && s.lastAction === 'click') {
-            var dist = Math.abs(s.targetX - s.currentX);
-            if (dist <= 8) s.targetScale = 1;
-        }
-
         s.velocityScale += (s.targetScale - s.currentScale) * stiffness;
         s.velocityScale *= SPRING_DAMPING;
         s.currentScale += s.velocityScale;
@@ -6649,10 +6642,9 @@ function closeInstructionModal() {
     }
 
     function moveNavIndicator(index) {
-        // Ускоренное движение и «раздул и прыгнул» только при клике на невыделенную иконку
+        // Чуть быстрее движение только при клике на невыделенную иконку (без раздутия scale)
         if (index !== window.currentNavIndex) {
             navIndicatorState.lastAction = 'click';
-            navIndicatorState.targetScale = 1.24;
         }
         setNavIndicatorTargetFromIndex(index);
     }
