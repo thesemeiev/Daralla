@@ -204,15 +204,14 @@ function showPage(pageName, params) {
     var landingScroll = document.getElementById('landing-scroll');
     if (landingScroll) landingScroll.scrollTop = 0;
     
-    // Показываем нижний навбар только на главных разделах
+    // Показываем нижний навбар только на главных пользовательских разделах (не для админки)
     const bottomNav = document.querySelector('.bottom-nav');
     const isMainSectionPage = (
         pageName === 'subscriptions' ||
         pageName === 'servers' ||
         pageName === 'events' ||
         pageName === 'instructions' ||
-        pageName === 'about' ||
-        pageName === 'admin-stats'
+        pageName === 'about'
     );
     if (bottomNav) {
         bottomNav.style.display = isMainSectionPage ? 'flex' : 'none';
@@ -6513,9 +6512,9 @@ function initNavIndicator() {
     const navItems = document.querySelectorAll('.nav-item');
     const indicator = document.querySelector('.nav-glass-indicator');
     const nav = document.querySelector('.bottom-nav');
-    
-    if (!indicator || !nav) return;
-    
+
+    if (!indicator || !nav || !navItems.length) return;
+
     function setInitialPosition() {
         const activeItem = document.querySelector('.nav-item.active');
         if (activeItem) {
@@ -6525,198 +6524,31 @@ function initNavIndicator() {
             moveNavIndicator(0);
         }
     }
-    // Откладываем первый расчёт на два кадра, чтобы layout навбара успел стабилизироваться
+
+    // Откладываем первый расчёт, чтобы layout навбара успел стабилизироваться
     requestAnimationFrame(function () {
         requestAnimationFrame(setInitialPosition);
     });
-    
-    // Добавляем обработчики для перетаскивания
-    let isDragging = false;
-    let startX = 0;
-    let startTransform = 0;
-    
-    nav.addEventListener('touchstart', (e) => {
-        const touch = e.touches[0];
-        const navRect = nav.getBoundingClientRect();
-        const touchX = touch.clientX - navRect.left;
-        
-        // Проверяем, находится ли касание в области индикатора
-        const indicatorRect = indicator.getBoundingClientRect();
-        const indicatorLeft = indicatorRect.left - navRect.left;
-        const indicatorRight = indicatorRect.right - navRect.left;
-        
-        if (touchX >= indicatorLeft && touchX <= indicatorRight) {
-            isDragging = true;
-            startX = touchX;
-            const transform = indicator.style.transform;
-            startTransform = transform ? parseFloat(transform.match(/translateX\(([^)]+)\)/)?.[1] || '0') : 0;
-            indicator.style.transition = 'none';
-            indicator.classList.add('moving');
-        }
-    });
-    
-    nav.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        
-        e.preventDefault();
-        const touch = e.touches[0];
-        const navRect = nav.getBoundingClientRect();
-        const touchX = touch.clientX - navRect.left;
-        const deltaX = touchX - startX;
-        const newTransform = startTransform + deltaX;
-        
-        // Ограничиваем перемещение в пределах бара
-        const navWidth = nav.offsetWidth;
-        const itemWidth = navWidth / navItems.length;
-        const minX = 0;
-        const maxX = navWidth - itemWidth;
-        
-        const clampedX = Math.max(minX, Math.min(maxX, newTransform));
-        
-        // Обновляем ширину индикатора при перетаскивании на основе ближайшей иконки
-        const indicatorPadding = 8; // Отступ от краев островка
-        const currentItemIndex = Math.round(clampedX / itemWidth);
-        if (currentItemIndex >= 0 && currentItemIndex < navItems.length) {
-            const currentItem = navItems[currentItemIndex];
-            const currentItemRect = currentItem.getBoundingClientRect();
-            indicator.style.width = `${currentItemRect.width - (indicatorPadding * 2)}px`;
-        }
-        
-        // Добавляем отступ к позиции при перетаскивании
-        const adjustedX = clampedX + indicatorPadding;
-        indicator.style.transform = `translateX(${adjustedX}px) translateY(-50%) scale(1.05)`;
-    });
-    
-    nav.addEventListener('touchend', (e) => {
-        if (!isDragging) return;
-        
-        isDragging = false;
-        indicator.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), scale 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        
-        // "Примагничиваем" к ближайшей кнопке
-        const navRect = nav.getBoundingClientRect();
-        const touchX = e.changedTouches[0].clientX - navRect.left;
-        const navWidth = nav.offsetWidth;
-        const itemWidth = navWidth / navItems.length;
-        const nearestIndex = Math.round(touchX / itemWidth);
-        const clampedIndex = Math.max(0, Math.min(navItems.length - 1, nearestIndex));
-        
-        moveNavIndicator(clampedIndex);
-        
-        // Убираем класс moving после завершения анимации (moveNavIndicator уже добавит его снова)
-        setTimeout(() => {
-            indicator.classList.remove('moving');
-        }, 400);
-        
-        // Активируем соответствующую кнопку
-        const targetButton = navItems[clampedIndex];
-        if (targetButton && targetButton.dataset && targetButton.dataset.page) {
-            showPage(targetButton.dataset.page);
-        } else if (targetButton && targetButton.id === 'admin-nav-button') {
-            showPage('admin-stats');
-        }
-    });
-    
-    // Обработка кликов на кнопки
+
+    // Клики по пунктам навигации двигают индикатор в центр соответствующей иконки
     navItems.forEach((item, index) => {
         item.addEventListener('click', () => {
             moveNavIndicator(index);
         });
     });
-    
-    // Эффект "жидкого стекла" при удержании
-    let pressTimer = null;
-    let isPressing = false;
-    
-    // Обработчики для десктопа (mouse)
-    nav.addEventListener('mousedown', (e) => {
-        const target = e.target.closest('.nav-item');
-        if (!target) return;
-        
-        const indicatorRect = indicator.getBoundingClientRect();
-        const navRect = nav.getBoundingClientRect();
-        const mouseX = e.clientX - navRect.left;
-        
-        // Проверяем, находится ли клик в области индикатора
-        const indicatorLeft = indicatorRect.left - navRect.left;
-        const indicatorRight = indicatorRect.right - navRect.left;
-        
-        if (mouseX >= indicatorLeft && mouseX <= indicatorRight) {
-            isPressing = true;
-            pressTimer = setTimeout(() => {
-                if (isPressing) {
-                    indicator.classList.add('pressing');
-                }
-            }, 100); // Задержка перед активацией эффекта
-        }
+
+    // Лёгкий эффект "жидкого стекла": короткое сплющивание при взаимодействии
+    function triggerPressEffect() {
+        indicator.classList.add('pressing');
+        setTimeout(() => {
+            indicator.classList.remove('pressing');
+        }, 180);
+    }
+
+    navItems.forEach((item) => {
+        item.addEventListener('mousedown', triggerPressEffect);
+        item.addEventListener('touchstart', triggerPressEffect, { passive: true });
     });
-    
-    nav.addEventListener('mouseup', () => {
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-        if (isPressing) {
-            indicator.classList.remove('pressing');
-            isPressing = false;
-        }
-    });
-    
-    nav.addEventListener('mouseleave', () => {
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-        if (isPressing) {
-            indicator.classList.remove('pressing');
-            isPressing = false;
-        }
-    });
-    
-    // Обработчики для мобильных (touch)
-    let touchPressTimer = null;
-    let isTouchPressing = false;
-    
-    nav.addEventListener('touchstart', (e) => {
-        const touch = e.touches[0];
-        const navRect = nav.getBoundingClientRect();
-        const touchX = touch.clientX - navRect.left;
-        
-        const indicatorRect = indicator.getBoundingClientRect();
-        const indicatorLeft = indicatorRect.left - navRect.left;
-        const indicatorRight = indicatorRect.right - navRect.left;
-        
-        if (touchX >= indicatorLeft && touchX <= indicatorRight && !isDragging) {
-            isTouchPressing = true;
-            touchPressTimer = setTimeout(() => {
-                if (isTouchPressing) {
-                    indicator.classList.add('pressing');
-                }
-            }, 150); // Немного больше задержка для touch
-        }
-    }, { passive: true });
-    
-    nav.addEventListener('touchend', () => {
-        if (touchPressTimer) {
-            clearTimeout(touchPressTimer);
-            touchPressTimer = null;
-        }
-        if (isTouchPressing) {
-            indicator.classList.remove('pressing');
-            isTouchPressing = false;
-        }
-    }, { passive: true });
-    
-    nav.addEventListener('touchcancel', () => {
-        if (touchPressTimer) {
-            clearTimeout(touchPressTimer);
-            touchPressTimer = null;
-        }
-        if (isTouchPressing) {
-            indicator.classList.remove('pressing');
-            isTouchPressing = false;
-        }
-    }, { passive: true });
 }
 
 // === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
