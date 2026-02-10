@@ -64,7 +64,9 @@ def create_blueprint(bot_app):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                health_results = loop.run_until_complete(server_manager.check_all_servers_health(force_check=False))
+                # Для публичного API всегда делаем свежую живую проверку серверов,
+                # игнорируя кэш и Circuit Breaker, чтобы статус в UI был максимально честным.
+                health_results = loop.run_until_complete(server_manager.check_all_servers_health(force_check=True))
                 health_status = server_manager.get_server_health_status()
 
                 servers = []
