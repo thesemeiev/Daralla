@@ -1147,7 +1147,7 @@ class X3:
             logger.error(f"Ошибка получения статистики трафика для {user_email}: {e}")
             return None
     
-    async def list_quick(self, timeout=5):
+    async def list_quick(self, timeout=10):
         """
         Быстрая проверка доступности сервера без retry (для health check)
         Используется только для проверки здоровья, не для реальных операций

@@ -205,24 +205,71 @@ class MultiServerManager:
                 raise Exception("Неверный ответ от сервера")
                 
         except Exception as e:
-            # Сервер недоступен
-            self.server_health[server_name]["status"] = "offline"
-            self.server_health[server_name]["last_check"] = datetime.datetime.now()
-            self.server_health[server_name]["last_error"] = str(e)
-            self.server_health[server_name]["consecutive_failures"] += 1
-            
-            # Если сервер долго недоступен, помечаем X3 как None
-            if self.server_health[server_name]["consecutive_failures"] > 3:
-                server_info["x3"] = None
-            
-            # Обновляем кэш с отрицательным результатом
+            # Ошибка при проверке здоровья сервера
+            health_status = self.server_health.get(server_name, {
+                "status": "unknown",
+                "last_check": None,
+                "last_error": None,
+                "consecutive_failures": 0,
+                "uptime_percentage": 0.0
+            })
+
+            # Увеличиваем счётчик подряд идущих неудач
+            health_status["consecutive_failures"] = health_status.get("consecutive_failures", 0) + 1
+            health_status["last_check"] = datetime.datetime.now()
+            health_status["last_error"] = str(e)
+
+            # Порог, после которого считаем сервер реально офлайн для всех
+            FAILURE_THRESHOLD_FOR_OFFLINE = 2
+
+            if health_status["consecutive_failures"] >= FAILURE_THRESHOLD_FOR_OFFLINE:
+                # Сервер считаем недоступным
+                health_status["status"] = "offline"
+
+                # Если сервер долго недоступен, помечаем X3 как None
+                if health_status["consecutive_failures"] > 3:
+                    server_info["x3"] = None
+
+                # Обновляем кэш с отрицательным результатом
+                self._health_check_cache[server_name] = {
+                    'result': False,
+                    'timestamp': current_time,
+                    'cached': True
+                }
+
+                self.server_health[server_name] = health_status
+                logger.debug(
+                    f"Сервер {server_name} недоступен: {e} "
+                    f"(неудач подряд: {health_status['consecutive_failures']})"
+                )
+                return False
+
+            # Если неудача первая/реже порога и раньше сервер был online,
+            # считаем это временным глюком: статус оставляем online и возвращаем True,
+            # чтобы UI не скакал между online/offline.
+            if health_status.get("status") == "online":
+                self.server_health[server_name] = health_status
+                logger.debug(
+                    f"Временная ошибка проверки {server_name}: {e} "
+                    f"(неудач подряд: {health_status['consecutive_failures']}), "
+                    f"оставляем статус online"
+                )
+                return True
+
+            # Для остальных случаев (сервер уже не online) считаем его недоступным
+            health_status["status"] = "offline"
+            self.server_health[server_name] = health_status
+
             self._health_check_cache[server_name] = {
                 'result': False,
                 'timestamp': current_time,
                 'cached': True
             }
-            
-            logger.debug(f"Сервер {server_name} недоступен: {e} (неудач: {self.server_health[server_name]['consecutive_failures']})")
+
+            logger.debug(
+                f"Сервер {server_name} недоступен: {e} "
+                f"(неудач подряд: {health_status['consecutive_failures']})"
+            )
             return False
     
     async def check_all_servers_health(self, force_check=False):
