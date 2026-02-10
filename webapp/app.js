@@ -6491,7 +6491,7 @@ function closeInstructionModal() {
     };
     const SPRING_STIFFNESS = 0.048;
     const SPRING_DAMPING = 0.80;
-    const DRAG_WIDTH_MULT = 1.35;
+    const DRAG_SCALE = 1.28;
 
     function getNavIconCenterX(item, navRect) {
         const icon = item && item.querySelector('svg');
@@ -6506,10 +6506,11 @@ function closeInstructionModal() {
         if (!nav || !items[index] || !indicator) return;
         const navRect = nav.getBoundingClientRect();
         const item = items[index];
+        const itemRect = item.getBoundingClientRect();
         const icon = item.querySelector('svg');
-        const iconRect = icon ? icon.getBoundingClientRect() : item.getBoundingClientRect();
+        const iconRect = icon ? icon.getBoundingClientRect() : itemRect;
         const iconCenterX = (iconRect.left + iconRect.right) / 2 - navRect.left;
-        const w = Math.max(40, iconRect.width * 1.5);
+        const w = Math.max(56, itemRect.width * 0.8);
         navIndicatorState.targetWidth = w;
         let x = iconCenterX - w / 2;
         if (!navIndicatorState.isDragging) {
@@ -6517,6 +6518,12 @@ function closeInstructionModal() {
         }
         navIndicatorState.targetX = x;
         window.currentNavIndex = index;
+        if (navIndicatorMobile) {
+            navIndicatorState.currentX = navIndicatorState.targetX;
+            navIndicatorState.currentWidth = navIndicatorState.targetWidth;
+            navIndicatorState.currentScale = navIndicatorState.targetScale;
+            applyNavIndicatorPosition();
+        }
     }
 
     function applyNavIndicatorPosition() {
@@ -6535,7 +6542,6 @@ function closeInstructionModal() {
         s.currentX += s.velocityX;
         s.velocityW += (s.targetWidth - s.currentWidth) * SPRING_STIFFNESS;
         s.velocityW *= SPRING_DAMPING;
-        s.currentWidth += s.velocityW;
         s.velocityScale += (s.targetScale - s.currentScale) * SPRING_STIFFNESS;
         s.velocityScale *= SPRING_DAMPING;
         s.currentScale += s.velocityScale;
@@ -6552,11 +6558,17 @@ function closeInstructionModal() {
         applyNavIndicatorPosition();
     }
 
+    var navIndicatorMobile = false;
+
     function navIndicatorLoop() {
         const nav = document.querySelector('.bottom-nav');
         const indicator = document.querySelector('.nav-glass-indicator');
         if (!nav || !indicator || nav.style.display === 'none') {
             navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
+            return;
+        }
+        if (navIndicatorMobile) {
+            navIndicatorState.rafId = null;
             return;
         }
         navIndicatorSpringStep();
@@ -6570,6 +6582,17 @@ function closeInstructionModal() {
     window.moveNavIndicator = moveNavIndicator;
 
     window.addEventListener('resize', function () {
+        var mq = window.matchMedia('(max-width: 640px)');
+        var wasMobile = navIndicatorMobile;
+        navIndicatorMobile = mq.matches;
+        var ind = document.querySelector('.nav-glass-indicator');
+        if (ind) {
+            if (navIndicatorMobile) ind.classList.add('nav-indicator-mobile');
+            else ind.classList.remove('nav-indicator-mobile');
+        }
+        if (!navIndicatorMobile && !navIndicatorState.rafId) {
+            navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
+        }
         if (typeof window.currentNavIndex !== 'undefined') {
             setNavIndicatorTargetFromIndex(window.currentNavIndex);
         }
@@ -6581,6 +6604,11 @@ function closeInstructionModal() {
         const nav = document.querySelector('.bottom-nav');
 
         if (!indicator || !nav || !navItems.length) return;
+
+        navIndicatorMobile = window.matchMedia('(max-width: 640px)').matches;
+        if (navIndicatorMobile) {
+            indicator.classList.add('nav-indicator-mobile');
+        }
 
         function setInitialPosition() {
             const activeItem = document.querySelector('.nav-item.active');
@@ -6598,7 +6626,7 @@ function closeInstructionModal() {
             requestAnimationFrame(setInitialPosition);
         });
 
-        if (!navIndicatorState.rafId) {
+        if (!navIndicatorMobile && !navIndicatorState.rafId) {
             navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
         }
 
@@ -6631,14 +6659,15 @@ function closeInstructionModal() {
             if (e.button !== 0 && !e.touches) return;
             const nav = document.querySelector('.bottom-nav');
             if (!nav || nav.style.display === 'none') return;
-            const navRect = nav.getBoundingClientRect();
             navIndicatorState.isDragging = true;
             indicator.classList.add('dragging');
             dragStartX = getPointerX(e);
             dragStartLeft = navIndicatorState.currentX;
-            var baseW = 56;
-            navIndicatorState.targetWidth = Math.min(navRect.width * 0.45, baseW * DRAG_WIDTH_MULT);
-            navIndicatorState.targetScale = 1.22;
+            navIndicatorState.targetScale = DRAG_SCALE;
+            if (navIndicatorMobile) {
+                navIndicatorState.currentScale = DRAG_SCALE;
+                applyNavIndicatorPosition();
+            }
             e.preventDefault();
         }
 
@@ -6647,6 +6676,10 @@ function closeInstructionModal() {
             var px = getPointerX(e);
             var delta = px - dragStartX;
             navIndicatorState.targetX = dragStartLeft + delta;
+            if (navIndicatorMobile) {
+                navIndicatorState.currentX = dragStartLeft + delta;
+                applyNavIndicatorPosition();
+            }
             e.preventDefault();
         }
 
@@ -6658,20 +6691,27 @@ function closeInstructionModal() {
             const items = document.querySelectorAll('.nav-item');
             const navRect = nav.getBoundingClientRect();
             const centerX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
-            let bestIdx = 0;
-            let bestDist = 1e9;
+            var bestIdx = 0;
+            var bestDist = 1e9;
             items.forEach(function (item, i) {
-                const iconCenter = getNavIconCenterX(item, navRect);
-                const d = Math.abs(centerX - iconCenter);
+                var iconCenter = getNavIconCenterX(item, navRect);
+                var d = Math.abs(centerX - iconCenter);
                 if (d < bestDist) {
                     bestDist = d;
                     bestIdx = i;
                 }
             });
-            const page = items[bestIdx].getAttribute('data-page');
+            var page = items[bestIdx].getAttribute('data-page');
             if (page && typeof showPage === 'function') showPage(page);
             setNavIndicatorTargetFromIndex(bestIdx);
             navIndicatorState.targetScale = 1;
+            if (navIndicatorMobile) {
+                navIndicatorState.currentScale = 1;
+                navIndicatorState.currentX = navIndicatorState.targetX;
+                navIndicatorState.currentWidth = navIndicatorState.targetWidth;
+                navIndicatorState.velocityX = navIndicatorState.velocityW = 0;
+                applyNavIndicatorPosition();
+            }
         }
 
         indicator.addEventListener('mousedown', onPointerDown);

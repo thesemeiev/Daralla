@@ -1158,6 +1158,7 @@ h1 {
     width: 56px;
     height: 48px;
     transform: translateY(-50%);
+    transform-origin: 50% 50%;
     /* «Линза» liquid glass: яркий верх, мягкий центр, edge glow */
     background:
         linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.2) 35%, rgba(255,255,255,0.08) 100%),
@@ -1210,11 +1211,11 @@ h1 {
         inset 0 0 24px rgba(255, 255, 255, 0.16);
 }
 
-/* На мобильных уменьшаем blur/нагрузку, чтобы анимации не подвисали */
+/* На мобильных: CSS-переход вместо RAF, меньше blur — без подвисаний */
 @media (max-width: 640px) {
     .bottom-nav {
-        backdrop-filter: blur(20px) saturate(160%);
-        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        backdrop-filter: blur(16px) saturate(150%);
+        -webkit-backdrop-filter: blur(16px) saturate(150%);
         box-shadow:
             0 12px 32px rgba(0, 0, 0, 0.4),
             0 0 0 1px rgba(0, 0, 0, 0.08),
@@ -1222,13 +1223,22 @@ h1 {
     }
 
     .nav-glass-indicator {
-        backdrop-filter: blur(14px) saturate(180%);
-        -webkit-backdrop-filter: blur(14px) saturate(180%);
+        backdrop-filter: blur(12px) saturate(160%);
+        -webkit-backdrop-filter: blur(12px) saturate(160%);
+    }
+
+    .nav-glass-indicator.nav-indicator-mobile {
+        transition: transform 0.28s ease-out, width 0.28s ease-out,
+            background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+
+    .nav-glass-indicator.nav-indicator-mobile.dragging {
+        transition: none;
     }
 
     .nav-glass-indicator.dragging {
-        backdrop-filter: blur(20px) saturate(200%);
-        -webkit-backdrop-filter: blur(20px) saturate(200%);
+        backdrop-filter: blur(18px) saturate(180%);
+        -webkit-backdrop-filter: blur(18px) saturate(180%);
     }
 }
 
