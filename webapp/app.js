@@ -6500,11 +6500,13 @@ function closeInstructionModal() {
         velocityW: 0,
         velocityScale: 0,
         isDragging: false,
+        lastAction: 'idle', // 'idle' | 'click' | 'drag'
         rafId: null,
         lastTime: 0
     };
-    const SPRING_STIFFNESS = 0.048;
-    const SPRING_DAMPING = 0.80;
+    // Пружина для «желе»: чуть мягче и более плавное затухание
+    const SPRING_STIFFNESS = 0.032;
+    const SPRING_DAMPING = 0.86;
     const DRAG_SCALE = 1.28;
     const DRAG_PILL_WIDTH = 80;
     const DRAG_PILL_HEIGHT = 56;
@@ -6583,12 +6585,26 @@ function closeInstructionModal() {
 
     function navIndicatorSpringStep() {
         const s = navIndicatorState;
-        s.velocityX += (s.targetX - s.currentX) * SPRING_STIFFNESS;
+        let stiffness = SPRING_STIFFNESS;
+        // Для клика делаем движение чуть более «резким» и быстрым
+        if (!s.isDragging && s.lastAction === 'click') {
+            stiffness *= 1.7;
+        }
+
+        s.velocityX += (s.targetX - s.currentX) * stiffness;
         s.velocityX *= SPRING_DAMPING;
         s.currentX += s.velocityX;
-        s.velocityW += (s.targetWidth - s.currentWidth) * SPRING_STIFFNESS;
+        s.velocityW += (s.targetWidth - s.currentWidth) * stiffness;
         s.velocityW *= SPRING_DAMPING;
-        s.velocityScale += (s.targetScale - s.currentScale) * SPRING_STIFFNESS;
+
+        // Лёгкий «дыхательный» скейл при движении по клику
+        if (!s.isDragging && s.lastAction === 'click') {
+            const speed = Math.abs(s.velocityX);
+            const extraScale = Math.min(speed * 0.03, 0.18); // до ~1.18
+            s.targetScale = 1 + extraScale;
+        }
+
+        s.velocityScale += (s.targetScale - s.currentScale) * stiffness;
         s.velocityScale *= SPRING_DAMPING;
         s.currentScale += s.velocityScale;
         if (
@@ -6622,6 +6638,7 @@ function closeInstructionModal() {
     }
 
     function moveNavIndicator(index) {
+        navIndicatorState.lastAction = 'click';
         setNavIndicatorTargetFromIndex(index);
     }
 
@@ -6706,6 +6723,8 @@ function closeInstructionModal() {
             const nav = document.querySelector('.bottom-nav');
             if (!nav || nav.style.display === 'none') return;
             navIndicatorState.isDragging = true;
+            navIndicatorState.lastAction = 'drag';
+            nav.classList.add('bottom-nav--dragging');
             indicator.classList.add('dragging');
             dragStartX = getPointerX(e);
             dragStartCenterX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
@@ -6739,6 +6758,7 @@ function closeInstructionModal() {
             navIndicatorState.isDragging = false;
             indicator.classList.remove('dragging');
             const nav = document.querySelector('.bottom-nav');
+            if (nav) nav.classList.remove('bottom-nav--dragging');
             const items = document.querySelectorAll('.nav-item');
             const navRect = nav.getBoundingClientRect();
             const centerX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;

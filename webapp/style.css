@@ -1280,10 +1280,20 @@ h1 {
 /* Цвет иконки под выделением — сине-фиолетовый, как статус «Скоро» */
 .nav-item.indicator-over {
     color: #8ba3e8;
+    transition: color 0.25s ease;
 }
 
 .nav-item.indicator-over svg {
     color: #8ba3e8;
+    transition: color 0.25s ease;
+}
+
+.bottom-nav--dragging .nav-item.indicator-over {
+    color: rgba(139, 163, 232, 0.25);
+}
+
+.bottom-nav--dragging .nav-item.indicator-over svg {
+    color: rgba(139, 163, 232, 0.25);
 }
 
 .nav-item.active svg {
