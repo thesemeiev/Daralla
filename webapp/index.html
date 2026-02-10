@@ -411,6 +411,17 @@
                         <p><span class="about-label">Логин:</span> <span id="about-login">—</span></p>
                         <p><span class="about-label">Telegram ID:</span> <span id="about-telegram-id">—</span></p>
                     </div>
+                    <!-- Блок действий администратора: показывается только для админов -->
+                    <div id="admin-account-section" style="display: none; margin-top: 16px;">
+                        <button
+                            type="button"
+                            class="btn-primary"
+                            onclick="showPage('admin-stats')"
+                            style="width: 100%; padding: 12px; border-radius: 10px;"
+                        >
+                            Открыть админ-панель
+                        </button>
+                    </div>
                     <div class="tg-only" style="margin-top: 12px;">
                         <div id="tg-web-access-setup">
                             <p class="hint" style="margin-bottom: 12px;">Настройте web-доступ, чтобы заходить на сайт без Telegram.</p>

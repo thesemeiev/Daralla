@@ -237,11 +237,6 @@ function showPage(pageName, params) {
     
     // Активируем нужный пункт навигации (только для главных разделов)
     if (isMainSectionPage) {
-        // Убеждаемся, что кнопка админа видна, если есть права
-        if (isAdmin && !document.getElementById('admin-nav-button')) {
-            addAdminNavButton();
-        }
-        
         const navItems = document.querySelectorAll('.nav-item');
         let activeIndex = -1;
         
@@ -2252,12 +2247,8 @@ async function checkAdminAccess() {
             isAdmin = data.is_admin || false;
             
             console.log('Результат проверки прав админа:', isAdmin);
-            
-            // Добавляем кнопку "Админ-панель" в навигацию, если админ
-            if (isAdmin) {
-                console.log('Добавляем кнопку админ-панели');
-                addAdminNavButton();
-            }
+            // Обновляем UI, зависящий от прав админа (профиль и старая кнопка в навбаре)
+            updateAdminUI();
             
             return isAdmin;
         } else {
@@ -2271,53 +2262,17 @@ async function checkAdminAccess() {
     }
 }
 
-// Добавление кнопки "Админ-панель" в навигацию
-function addAdminNavButton() {
-    if (!isAdmin) return; // Не добавляем, если не админ
-    
-    const nav = document.querySelector('.bottom-nav');
-    if (!nav) {
-        console.warn('Навигация не найдена, пробуем позже...');
-        // Пробуем еще раз через небольшую задержку
-        setTimeout(() => {
-            addAdminNavButton();
-        }, 500);
-        return;
+// Обновление UI, зависящего от прав админа (профиль и старая кнопка в навбаре)
+function updateAdminUI() {
+    // Показываем/скрываем блок в профиле
+    var adminSection = document.getElementById('admin-account-section');
+    if (adminSection) {
+        adminSection.style.display = isAdmin ? 'block' : 'none';
     }
-    
-    // Проверяем, не добавлена ли уже кнопка
-    if (document.getElementById('admin-nav-button')) {
-        console.log('Кнопка админ-панели уже добавлена');
-        return;
-    }
-    
-    console.log('Добавляем кнопку админ-панели в навигацию');
-    
-    const adminButton = document.createElement('button');
-    adminButton.id = 'admin-nav-button';
-    adminButton.className = 'nav-item';
-    adminButton.setAttribute('data-page', 'admin-stats');
-    adminButton.onclick = () => {
-        console.log('Переход в админ-панель');
-        showPage('admin-stats');
-    };
-    adminButton.innerHTML = `
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L4 5V11C4 16.55 7.16 21.74 12 23C16.84 21.74 20 16.55 20 11V5L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M12 8V12M12 16H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-    `;
-    
-    nav.appendChild(adminButton);
-    console.log('Кнопка админ-панели успешно добавлена');
-    
-    // Если мы уже на странице админа, нужно обновить индикатор
-    if (currentPage === 'admin-stats') {
-        const allNavItems = document.querySelectorAll('.nav-item');
-        const index = Array.from(allNavItems).indexOf(adminButton);
-        if (index >= 0) {
-            moveNavIndicator(index);
-        }
+    // На всякий случай удаляем старую кнопку админ-панели из нижней навигации, если она уже существует
+    var legacyAdminButton = document.getElementById('admin-nav-button');
+    if (legacyAdminButton && legacyAdminButton.parentNode) {
+        legacyAdminButton.parentNode.removeChild(legacyAdminButton);
     }
 }
 
