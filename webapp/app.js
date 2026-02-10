@@ -6616,6 +6616,7 @@ function closeInstructionModal() {
             s.currentWidth = s.targetWidth;
             s.currentScale = s.targetScale;
             s.velocityX = s.velocityW = s.velocityScale = 0;
+            s.lastAction = 'idle';
         }
         applyNavIndicatorPosition();
     }
@@ -6638,7 +6639,10 @@ function closeInstructionModal() {
     }
 
     function moveNavIndicator(index) {
-        navIndicatorState.lastAction = 'click';
+        // Ускоренное движение и «дыхание» только при клике на невыделенную иконку
+        if (index !== window.currentNavIndex) {
+            navIndicatorState.lastAction = 'click';
+        }
         setNavIndicatorTargetFromIndex(index);
     }
 

@@ -1288,12 +1288,13 @@ h1 {
     transition: color 0.25s ease;
 }
 
+/* При увеличении выделения плавно убираем цвет выделения до обычного (без затемнения) */
 .bottom-nav--dragging .nav-item.indicator-over {
-    color: rgba(139, 163, 232, 0.25);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .bottom-nav--dragging .nav-item.indicator-over svg {
-    color: rgba(139, 163, 232, 0.25);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .nav-item.active svg {
