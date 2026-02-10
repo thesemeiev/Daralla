@@ -218,13 +218,13 @@ class SubscriptionManager:
             client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
             
             # Проверяем существование клиента
-            if xui.client_exists(client_email):
+            if await xui.client_exists(client_email):
                 logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
                 
                 # Проверяем и синхронизируем время истечения
                 # ВАЖНО: БД - источник истины. Мы синхронизируем серверы С БД, но НЕ изменяем БД на основе данных с сервера
                 try:
-                    server_expiry = xui.get_client_expiry_time(client_email)
+                    server_expiry = await xui.get_client_expiry_time(client_email)
                     current_time = int(time.time())
                     
                     # Допустимая разница в секундах (5 минут) - чтобы не синхронизировать из-за небольших расхождений
@@ -245,7 +245,7 @@ class SubscriptionManager:
                                         f"Синхронизация времени истечения на сервере {server_name}: "
                                         f"добавляем {days_to_add} дней (сервер: {server_expiry}, БД: {expires_at})"
                                     )
-                                    response = xui.extendClient(client_email, days_to_add, flow=client_flow)
+                                    response = await xui.extendClient(client_email, days_to_add, flow=client_flow)
                                     if response and response.status_code == 200:
                                         try:
                                             response_json = response.json()
@@ -264,7 +264,7 @@ class SubscriptionManager:
                                     f"устанавливаем точное время из БД (сервер: {server_expiry}, БД: {expires_at})"
                                 )
                                 try:
-                                    response = xui.setClientExpiry(client_email, expires_at, flow=client_flow)
+                                    response = await xui.setClientExpiry(client_email, expires_at, flow=client_flow)
                                     if response and response.status_code == 200:
                                         try:
                                             response_json = response.json()
@@ -287,7 +287,7 @@ class SubscriptionManager:
                 
                 # Проверяем и синхронизируем limitIp
                 try:
-                    client_info = xui.get_client_info(client_email)
+                    client_info = await xui.get_client_info(client_email)
                     if client_info:
                         # Получаем текущий limitIp (если не установлен, получаем None, а не 0)
                         # Это важно, чтобы правильно определить, нужно ли устанавливать limitIp
@@ -300,7 +300,7 @@ class SubscriptionManager:
                                 f"{current_limit_display} -> {device_limit}"
                             )
                             try:
-                                xui.updateClientLimitIp(client_email, device_limit, flow=client_flow)
+                                await xui.updateClientLimitIp(client_email, device_limit, flow=client_flow)
                                 logger.info(f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}")
                             except Exception as update_e:
                                 logger.error(f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}")
@@ -320,7 +320,7 @@ class SubscriptionManager:
                 server_config = self.server_manager.get_server_config(server_name)
                 logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
                 client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
-                response = xui.addClient(
+                response = await xui.addClient(
                     day=days_remaining,
                     tg_id=user_id,
                     user_email=client_email,
@@ -341,7 +341,7 @@ class SubscriptionManager:
                             # Поэтому после создания устанавливаем точное время из expires_at
                             try:
                                 logger.info(f"Установка точного времени истечения для клиента {client_email} на сервере {server_name}: {expires_at}")
-                                expiry_response = xui.setClientExpiry(client_email, expires_at, flow=client_flow)
+                                expiry_response = await xui.setClientExpiry(client_email, expires_at, flow=client_flow)
                                 if expiry_response and expiry_response.status_code == 200:
                                     try:
                                         expiry_json = expiry_response.json()
@@ -373,7 +373,7 @@ class SubscriptionManager:
                         # Все равно пытаемся установить точное время истечения
                         try:
                             logger.info(f"Установка точного времени истечения для клиента {client_email} на сервере {server_name}: {expires_at}")
-                            expiry_response = xui.setClientExpiry(client_email, expires_at, flow=client_flow)
+                            expiry_response = await xui.setClientExpiry(client_email, expires_at, flow=client_flow)
                             if expiry_response and expiry_response.status_code == 200:
                                 logger.info(f"Точное время истечения установлено для клиента {client_email} на сервере {server_name}")
                         except Exception as set_expiry_e:
@@ -429,7 +429,7 @@ class SubscriptionManager:
                 # Передаём client_flow: X-UI часто не добавляет flow в URL подписки — без него VPN-клиент не парсит flow.
                 try:
                     client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
-                    xui_links = xui.get_subscription_links(client_email, server_name=display_name, flow_override=client_flow)
+                    xui_links = await xui.get_subscription_links(client_email, server_name=display_name, flow_override=client_flow)
                     if xui_links:
                         # Дедупликация: добавляем только уникальные ссылки (по части без tag)
                         for link in xui_links:
@@ -452,7 +452,7 @@ class SubscriptionManager:
                             resolved_name,
                             client_email,
                         )
-                        vless_link = xui.link(client_email, server_name=display_name)
+                        vless_link = await xui.link(client_email, server_name=display_name)
                         if vless_link and vless_link != 'Клиент не найден.':
                             plain = _normalize_subscription_link(vless_link)
                             link_without_tag = plain.split('#')[0] if '#' in plain else plain
@@ -608,7 +608,7 @@ class SubscriptionManager:
                         # Также удаляем клиента с сервера, если он там есть
                         xui, _ = self.server_manager.get_server_by_name(server_name)
                         if xui:
-                            xui.deleteClient(client_email)
+                            await xui.deleteClient(client_email)
                     except Exception as e:
                         logger.error(f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}")
             except Exception as e:

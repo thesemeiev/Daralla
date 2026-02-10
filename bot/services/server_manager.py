@@ -109,14 +109,14 @@ class MultiServerManager:
                     return server.get("config", {})
         return {}
     
-    def check_server_health(self, server_name, force_check=False):
+    async def check_server_health(self, server_name, force_check=False):
         """
         Проверяет здоровье конкретного сервера с кэшированием и Circuit Breaker
-        
+
         Args:
             server_name: Имя сервера
             force_check: Если True, игнорирует кэш и Circuit Breaker (для принудительной проверки)
-        
+
         Returns:
             bool: True если сервер доступен, False если недоступен
         """
@@ -182,7 +182,7 @@ class MultiServerManager:
             
             # Проверяем доступность API (используем быструю проверку без retry)
             try:
-                response = server_info["x3"].list_quick(timeout=5)  # Быстрая проверка без retry
+                response = await server_info["x3"].list_quick(timeout=5)  # Быстрая проверка без retry
             except Exception as quick_check_error:
                 # Если быстрая проверка не удалась, это нормально - сервер недоступен
                 raise quick_check_error
@@ -225,20 +225,20 @@ class MultiServerManager:
             logger.debug(f"Сервер {server_name} недоступен: {e} (неудач: {self.server_health[server_name]['consecutive_failures']})")
             return False
     
-    def check_all_servers_health(self, force_check=False):
+    async def check_all_servers_health(self, force_check=False):
         """
         Проверяет здоровье всех серверов с кэшированием
-        
+
         Args:
             force_check: Если True, игнорирует кэш (для принудительной проверки)
-        
+
         Returns:
             dict: {server_name: bool} - результаты проверки
         """
         results = {}
         for server in self.servers:
             server_name = server["name"]
-            results[server_name] = self.check_server_health(server_name, force_check=force_check)
+            results[server_name] = await self.check_server_health(server_name, force_check=force_check)
         return results
     
     def get_server_health_status(self):

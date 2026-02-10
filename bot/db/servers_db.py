@@ -235,7 +235,7 @@ async def get_server_load_data():
 
         try:
             logger.debug(f"Получение данных о нагрузке с сервера {server_name}")
-            total_active, online_count, offline_count = xui.get_online_clients_count()
+            total_active, online_count, offline_count = await xui.get_online_clients_count()
 
             logger.info(f"Сервер {server_name}: активных={total_active}, онлайн={online_count}, офлайн={offline_count}")
 

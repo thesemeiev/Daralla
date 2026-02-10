@@ -108,7 +108,7 @@ async def server_load_snapshot_loop(server_manager):
                 
                 try:
                     # Получаем текущую нагрузку на сервер
-                    total_active, online_count, offline_count = xui.get_online_clients_count()
+                    total_active, online_count, offline_count = await xui.get_online_clients_count()
                     
                     # Сохраняем снимок
                     await save_server_load_snapshot(

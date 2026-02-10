@@ -1,13 +1,12 @@
 """
-Сервис для работы с X-UI API
+Сервис для работы с X-UI API (async httpx)
 """
 import base64
 import logging
 import json
 import uuid
 import datetime
-import requests
-import urllib3
+import httpx
 from typing import List
 from urllib.parse import quote, urlparse
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -15,9 +14,14 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 logger = logging.getLogger(__name__)
 
 
+def _verify_from_host(host: str) -> bool:
+    """True if HTTPS, False for HTTP."""
+    return host.startswith("https://")
+
+
 class X3:
-    """Класс для работы с X-UI панелью управления VPN"""
-    
+    """Класс для работы с X-UI панелью управления VPN (async)"""
+
     def __init__(self, login, password, host, vpn_host=None, subscription_port=2096, subscription_url=None):
         self.login = login
         self.password = password
@@ -25,89 +29,68 @@ class X3:
         self.vpn_host = vpn_host  # IP/домен VPN сервера (если отличается от панели)
         self.subscription_port = subscription_port if subscription_port is not None else 2096
         self.subscription_url = (subscription_url or "").strip() or None  # Базовый URL подписки (порт 2096 и т.п.)
-        self.ses = requests.Session()
-        
-        # Определяем протокол и настраиваем SSL соответственно
-        if host.startswith('https://'):
-            self.ses.verify = True
-        else:
-            self.ses.verify = False
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        
-        # Увеличиваем таймауты для лучшей стабильности
-        self.ses.timeout = (30, 30)  # (connect timeout, read timeout)
-        
+        self._client: httpx.AsyncClient | None = None
         self.data = {"username": self.login, "password": self.password}
         self._logged_in = False
-        # Полностью ленивая инициализация - НЕ подключаемся при создании объекта
-        # Подключение произойдет только при первом реальном использовании через _ensure_connected()
-        # Это позволяет боту запускаться мгновенно даже если серверы недоступны
+        self._verify = _verify_from_host(host)
         logger.debug(f"XUI объект создан для {host} (подключение будет выполнено при первом использовании)")
-        
-    
-    def _login(self):
+
+    async def _login(self):
         """Выполняет вход в XUI панель"""
         try:
-            # Пробуем сначала с текущими настройками
             try:
-                login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=30)
-            except requests.exceptions.SSLError:
-                # Если получили ошибку SSL, пробуем без проверки сертификата
-                logger.warning(f"SSL ошибка при подключении к {self.host}, пробуем без проверки сертификата")
-                self.ses.verify = False
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                login_response = self.ses.post(f"{self.host}/login", data=self.data, timeout=30)
-            
+                login_response = await self._client.post(
+                    f"{self.host}/login", data=self.data, timeout=30.0
+                )
+            except (httpx.ConnectError, httpx.ConnectTimeout, Exception) as e:
+                if "ssl" in str(e).lower() or "certificate" in str(e).lower():
+                    logger.warning(f"SSL ошибка при подключении к {self.host}, пробуем без проверки сертификата")
+                    await self._client.aclose()
+                    self._client = httpx.AsyncClient(verify=False, timeout=30.0)
+                    login_response = await self._client.post(
+                        f"{self.host}/login", data=self.data, timeout=30.0
+                    )
+                else:
+                    raise
             logger.info(f"XUI Login Response - Status: {login_response.status_code}")
             logger.info(f"XUI Login Response - Text: {login_response.text[:200]}...")
-            
             if login_response.status_code != 200:
                 logger.error(f"Ошибка входа в XUI: {login_response.status_code} - {login_response.text}")
                 raise Exception(f"Login failed with status {login_response.status_code}")
-            
-            # Проверяем, что мы действительно вошли (обычно в ответе есть что-то, указывающее на успешный вход)
             if "error" in login_response.text.lower() or "invalid" in login_response.text.lower():
                 logger.error(f"Ошибка аутентификации: {login_response.text[:200]}")
                 raise Exception("Authentication failed")
-                
         except Exception as e:
             logger.error(f"Ошибка при подключении к XUI серверу {self.host}: {e}")
             raise
 
-    def _ensure_connected(self):
+    async def _ensure_connected(self):
         """Проверяет подключение и подключается при необходимости"""
         if not self._logged_in:
+            if self._client is None:
+                self._client = httpx.AsyncClient(verify=self._verify, timeout=30.0)
             try:
                 logger.info(f"Попытка подключения к XUI серверу: {self.host}")
-                self._login()
+                await self._login()
                 self._logged_in = True
             except Exception as e:
                 logger.error(f"Ошибка подключения к XUI серверу {self.host}: {e}")
                 raise
-    
-    def _reconnect(self):
+
+    async def _reconnect(self):
         """Переподключается к серверу при истечении сессии"""
         logger.info(f"Переподключение к серверу {self.host}")
-        self.ses = requests.Session()
-        
-        # Восстанавливаем настройки SSL
-        if self.host.startswith('https://'):
-            self.ses.verify = True
-        else:
-            self.ses.verify = False
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        
-        # Восстанавливаем увеличенные таймауты
-        self.ses.timeout = (30, 30)
-        
-        self._login()
+        if self._client is not None:
+            await self._client.aclose()
+        self._client = httpx.AsyncClient(verify=self._verify, timeout=30.0)
+        await self._login()
         self._logged_in = True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name="", inbound_id=None, limit_ip=None, flow=None):
+    async def addClient(self, day, tg_id, user_email, timeout=15, hours=None, key_name="", inbound_id=None, limit_ip=None, flow=None):
         """
         Добавляет нового клиента на сервер
-        
+
         Args:
             day: Количество дней действия ключа
             tg_id: Telegram ID пользователя
@@ -119,15 +102,11 @@ class X3:
             limit_ip: Лимит IP-адресов (если None, используется 1)
             flow: Flow для VLESS (например xtls-rprx-vision), если нужен; None — не передавать
         """
-        """Добавляет нового клиента на сервер"""
-        self._ensure_connected()
-        
-        # Определяем протокол и inbound_id
+        await self._ensure_connected()
         protocol = None
-        # Если inbound_id не указан, получаем первый доступный inbound
         if inbound_id is None:
             try:
-                inbounds_list = self.list(timeout=timeout)
+                inbounds_list = await self.list(timeout=timeout)
                 if not inbounds_list.get('success', False) or not inbounds_list.get('obj'):
                     raise Exception("Не удалось получить список inbounds или список пуст")
                 
@@ -145,9 +124,8 @@ class X3:
                 protocol = 'vless'  # По умолчанию VLESS
                 logger.warning(f"Используется fallback inbound_id=1, protocol={protocol}")
         else:
-            # Если inbound_id указан, получаем протокол из inbound'а
             try:
-                inbounds_list = self.list(timeout=timeout)
+                inbounds_list = await self.list(timeout=timeout)
                 if inbounds_list.get('success', False) and inbounds_list.get('obj'):
                     for inbound in inbounds_list['obj']:
                         if inbound.get('id') == inbound_id:
@@ -210,7 +188,7 @@ class X3:
         }
         logger.info(f"Добавление клиента: {user_email} на сервер {self.host}, inbound_id={inbound_id}")
         try:
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
+            response = await self._client.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
             logger.info(f"XUI addClient Response - Status: {response.status_code}")
             logger.info(f"XUI addClient Response - Text: {response.text[:200]}...")
             
@@ -231,12 +209,10 @@ class X3:
                 if response.status_code != 200:
                     raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
             
-            # Проверяем, не истекла ли сессия
             if response.status_code == 200 and not response.text.strip():
                 logger.warning("Получен пустой ответ, возможно истекла сессия. Переподключаюсь...")
-                self._reconnect()
-                # Повторяем запрос после переподключения
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
+                await self._reconnect()
+                response = await self._client.post(f'{self.host}/panel/api/inbounds/addClient', headers=header, json=data1, timeout=timeout)
                 logger.info(f"XUI addClient Response после переподключения - Status: {response.status_code}")
                 logger.info(f"XUI addClient Response после переподключения - Text: {response.text[:200]}...")
                 
@@ -257,7 +233,7 @@ class X3:
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def extendClient(self, user_email, extend_days, timeout=15, flow=None):
+    async def extendClient(self, user_email, extend_days, timeout=15, flow=None):
         """
         Продлевает срок действия ключа клиента
         :param user_email: Email клиента
@@ -266,10 +242,10 @@ class X3:
         :param flow: Flow для VLESS (сохраняется при обновлении), None — не менять
         :return: Response объект
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
             # Сначала получаем информацию о клиенте
-            inbounds_data = self.list(timeout=timeout)
+            inbounds_data = await self.list(timeout=timeout)
             if not inbounds_data.get('success', False):
                 raise Exception("Не удалось получить список клиентов")
             
@@ -330,7 +306,7 @@ class X3:
             }
             
             logger.info(f"Продление клиента: {user_email} на сервере {self.host} на {extend_days} дней")
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
+            response = await self._client.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                    headers=header, json=data, timeout=timeout)
             
             logger.info(f"XUI extendClient Response - Status: {response.status_code}")
@@ -351,8 +327,8 @@ class X3:
             # Проверяем, не истекла ли сессия
             if response.status_code == 200 and not response.text.strip():
                 logger.warning("Получен пустой ответ при продлении, переподключаюсь...")
-                self._reconnect()
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
+                await self._reconnect()
+                response = await self._client.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                        headers=header, json=data, timeout=timeout)
                 logger.info(f"XUI extendClient Response после переподключения - Status: {response.status_code}")
                 
@@ -374,11 +350,11 @@ class X3:
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def get_client_count(self, timeout=15):
+    async def get_client_count(self, timeout=15):
         """Подсчитывает общее количество клиентов на сервере"""
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            response_data = self.list(timeout=timeout)
+            response_data = await self.list(timeout=timeout)
             logger.info(f"XUI list response: {response_data}")
             if 'obj' not in response_data:
                 logger.error(f"Неожиданный формат ответа XUI: {response_data}")
@@ -393,10 +369,10 @@ class X3:
             logger.error(f"Ошибка при подсчете клиентов на {self.host}: {e}")
             return 0
 
-    def get_clients_status_count(self, timeout=15):
+    async def get_clients_status_count(self, timeout=15):
         """Подсчитывает количество клиентов по статусу (активные/истекшие)"""
         try:
-            response_data = self.list(timeout=timeout)
+            response_data = await self.list(timeout=timeout)
             if 'obj' not in response_data:
                 logger.error(f"Неожиданный формат ответа XUI: {response_data}")
                 return 0, 0, 0
@@ -425,7 +401,7 @@ class X3:
             logger.error(f"Ошибка при подсчете статуса клиентов на {self.host}: {e}")
             return 0, 0, 0
     
-    def get_client_ips(self, client_id, inbound_id, timeout=15):
+    async def get_client_ips(self, client_id, inbound_id, timeout=15):
         """
         Получает список IP-адресов подключенных клиентов через API 3x-ui
         Если у клиента есть активные IP-адреса, значит он онлайн
@@ -438,7 +414,7 @@ class X3:
         Returns:
             list: Список IP-адресов или пустой список
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
             # Пробуем разные варианты endpoint'ов
             endpoints = [
@@ -449,7 +425,7 @@ class X3:
             
             for url in endpoints:
                 try:
-                    response = self.ses.get(url, timeout=timeout)
+                    response = await self._client.get(url, timeout=timeout)
                     if response.status_code == 200:
                         data = response.json()
                         # Разные форматы ответа
@@ -489,7 +465,7 @@ class X3:
         # Если есть upload или download, клиент нагружает канал
         return upload > 0 or download > 0
     
-    def get_online_clients_ids(self, timeout=15):
+    async def get_online_clients_ids(self, timeout=15):
         """
         Получает список ID клиентов, которые сейчас онлайн через API X-UI
         
@@ -498,10 +474,10 @@ class X3:
         Returns:
             tuple: (online_ids: set, success: bool) - множество ID клиентов и флаг успешности
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
             url = f'{self.host}/panel/api/inbounds/onlines'
-            response = self.ses.post(url, timeout=timeout)
+            response = await self._client.post(url, timeout=timeout)
             
             if response.status_code != 200:
                 logger.warning(f"Ошибка получения онлайн клиентов: HTTP {response.status_code}")
@@ -537,7 +513,7 @@ class X3:
             logger.warning(f"Ошибка получения онлайн клиентов через API: {e}")
             return set(), False
     
-    def get_online_clients_count(self, timeout=15):
+    async def get_online_clients_count(self, timeout=15):
         """
         Подсчитывает количество клиентов, которые сейчас онлайн (нагружают канал)
         
@@ -558,7 +534,7 @@ class X3:
         """
         try:
             logger.debug(f"Получение списка клиентов с сервера {self.host}")
-            response_data = self.list(timeout=timeout)
+            response_data = await self.list(timeout=timeout)
             
             if not response_data:
                 logger.warning(f"Пустой ответ от сервера {self.host}")
@@ -581,7 +557,7 @@ class X3:
             current_time = int(datetime.datetime.now().timestamp() * 1000)
             
             # Получаем список онлайн клиентов через API (единственный метод)
-            online_client_ids, api_available = self.get_online_clients_ids(timeout=timeout)
+            online_client_ids, api_available = await self.get_online_clients_ids(timeout=timeout)
             
             if not api_available:
                 logger.warning(f"API /onlines недоступен на сервере {self.host}, возвращаем 0 онлайн клиентов")
@@ -665,10 +641,10 @@ class X3:
             return 0, 0, 0
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def client_exists(self, user_email):
+    async def client_exists(self, user_email):
         """Проверяет существование клиента по email"""
-        self._ensure_connected()
-        for inbound in self.list()['obj']:
+        await self._ensure_connected()
+        for inbound in await self.list()['obj']:
             settings = json.loads(inbound['settings'])
             for client in settings.get("clients", []):
                 if client['email'] == user_email:
@@ -676,16 +652,16 @@ class X3:
         return False
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def get_client_expiry_time(self, user_email, timeout=15):
+    async def get_client_expiry_time(self, user_email, timeout=15):
         """
         Получает время истечения клиента по email.
         
         Returns:
             int: Unix timestamp в секундах, или None если клиент не найден
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            inbounds_list = self.list(timeout=timeout)
+            inbounds_list = await self.list(timeout=timeout)
             if inbounds_list.get('success', False) and inbounds_list.get('obj'):
                 for inbound in inbounds_list['obj']:
                     settings = json.loads(inbound.get('settings', '{}'))
@@ -702,16 +678,16 @@ class X3:
             logger.error(f"Ошибка получения времени истечения клиента {user_email}: {e}")
             return None
 
-    def get_client_info(self, user_email, timeout=15):
+    async def get_client_info(self, user_email, timeout=15):
         """
         Получает полную информацию о клиенте по email.
         
         Returns:
             dict: Информация о клиенте (client_data, inbound_id, protocol) или None
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            inbounds_list = self.list(timeout=timeout)
+            inbounds_list = await self.list(timeout=timeout)
             if inbounds_list.get('success', False) and inbounds_list.get('obj'):
                 for inbound in inbounds_list['obj']:
                     settings = json.loads(inbound.get('settings', '{}'))
@@ -729,7 +705,7 @@ class X3:
             logger.error(f"Ошибка получения информации о клиенте {user_email}: {e}")
             return None
     
-    def get_clients_by_tg_id(self, tg_id, timeout=15):
+    async def get_clients_by_tg_id(self, tg_id, timeout=15):
         """
         Получает список всех клиентов для указанного Telegram ID.
         
@@ -740,10 +716,10 @@ class X3:
             list: Список словарей с информацией о клиентах:
                   [{'email': str, 'client': dict, 'inbound_id': str, 'protocol': str}, ...]
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         clients_list = []
         try:
-            inbounds_list = self.list(timeout=timeout)
+            inbounds_list = await self.list(timeout=timeout)
             if inbounds_list.get('success', False) and inbounds_list.get('obj'):
                 for inbound in inbounds_list['obj']:
                     settings = json.loads(inbound.get('settings', '{}'))
@@ -765,7 +741,7 @@ class X3:
             return []
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def setClientExpiry(self, user_email, expiry_timestamp, timeout=15, flow=None):
+    async def setClientExpiry(self, user_email, expiry_timestamp, timeout=15, flow=None):
         """
         Устанавливает точное время истечения клиента.
         
@@ -778,9 +754,9 @@ class X3:
         Returns:
             Response объект или None если клиент не найден
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            client_info = self.get_client_info(user_email, timeout=timeout)
+            client_info = await self.get_client_info(user_email, timeout=timeout)
             if not client_info:
                 logger.warning(f"Клиент {user_email} не найден для установки времени истечения")
                 return None
@@ -821,7 +797,7 @@ class X3:
                 "settings": json.dumps({"clients": [client_data]})
             }
             
-            response = self.ses.post(
+            response = await self._client.post(
                 f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                 headers=header,
                 json=data,
@@ -843,8 +819,8 @@ class X3:
             # Проверяем, не истекла ли сессия
             if response.status_code == 200 and not response.text.strip():
                 logger.warning("Получен пустой ответ при установке времени истечения, переподключаюсь...")
-                self._reconnect()
-                response = self.ses.post(
+                await self._reconnect()
+                response = await self._client.post(
                     f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                     headers=header,
                     json=data,
@@ -868,7 +844,7 @@ class X3:
             logger.error(f"Ошибка при установке времени истечения клиента {user_email}: {e}")
             raise
 
-    def updateClientLimitIp(self, user_email, limit_ip, timeout=15, flow=None):
+    async def updateClientLimitIp(self, user_email, limit_ip, timeout=15, flow=None):
         """
         Обновляет limitIp клиента.
         
@@ -881,9 +857,9 @@ class X3:
         Returns:
             Response объект или None если клиент не найден
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            client_info = self.get_client_info(user_email, timeout=timeout)
+            client_info = await self.get_client_info(user_email, timeout=timeout)
             if not client_info:
                 logger.warning(f"Клиент {user_email} не найден для обновления limitIp")
                 return None
@@ -926,7 +902,7 @@ class X3:
                 "settings": json.dumps({"clients": [client_data]})
             }
             
-            response = self.ses.post(
+            response = await self._client.post(
                 f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                 headers=header,
                 json=data,
@@ -951,7 +927,7 @@ class X3:
             logger.error(f"Ошибка при обновлении limitIp клиента {user_email}: {e}")
             raise
 
-    def sync_flow_for_all_clients(self, flow_value: str, timeout=15) -> tuple:
+    async def sync_flow_for_all_clients(self, flow_value: str, timeout=15) -> tuple:
         """
         Обновляет flow у всех VLESS-клиентов на сервере.
         
@@ -962,11 +938,11 @@ class X3:
         Returns:
             (updated_count, error_messages): количество обновлённых клиентов и список ошибок.
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         updated = 0
         errors = []
         try:
-            inbounds_list = self.list(timeout=timeout)
+            inbounds_list = await self.list(timeout=timeout)
             if not inbounds_list.get('success', False) or not inbounds_list.get('obj'):
                 return 0, ["Не удалось получить список inbounds"]
             flow_val = (flow_value or "").strip() or None
@@ -996,7 +972,7 @@ class X3:
                             "id": inbound_id,
                             "settings": json.dumps({"clients": [client_data]})
                         }
-                        resp = self.ses.post(
+                        resp = await self._client.post(
                             f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}',
                             headers=header, json=data, timeout=timeout
                         )
@@ -1019,21 +995,21 @@ class X3:
             logger.error(f"Ошибка sync_flow_for_all_clients: {e}")
             return updated, errors + [str(e)]
 
-    def _list_internal(self, timeout=15, skip_health_check=False):
+    async def _list_internal(self, timeout=15, skip_health_check=False):
         """Внутренний метод для получения списка inbounds (без retry)"""
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
             url = f'{self.host}/panel/api/inbounds/list'
             
             # Пропускаем health check ping для быстрой проверки здоровья
             if not skip_health_check:
                 try:
-                    health_check = self.ses.get(f'{self.host}/ping', timeout=5)
+                    health_check = await self._client.get(f'{self.host}/ping', timeout=5)
                     logger.debug(f"Проверка доступности сервера {self.host}: {health_check.status_code}")
                 except Exception as e:
                     logger.debug(f"Сервер {self.host} недоступен для ping: {e}")
             
-            response = self.ses.get(url, json=self.data, timeout=timeout)
+            response = await self._client.get(url, json=self.data, timeout=timeout)
             logger.debug(f"XUI API Response - URL: {url}, Status: {response.status_code}")
             if not skip_health_check:
                 logger.info(f"XUI API Response - URL: {url}")
@@ -1059,9 +1035,9 @@ class X3:
                 # Если получили HTML вместо JSON, возможно сессия истекла
                 if "<html" in response.text.lower() or "login" in response.text.lower():
                     logger.warning("Обнаружена истекшая сессия, переподключаюсь...")
-                    self._reconnect()
+                    await self._reconnect()
                     # Повторяем запрос после переподключения
-                    response = self.ses.get(f'{self.host}/panel/api/inbounds/list', json=self.data, timeout=timeout)
+                    response = await self._client.get(f'{self.host}/panel/api/inbounds/list', json=self.data, timeout=timeout)
                     logger.info(f"XUI API Response после переподключения - Status: {response.status_code}")
                     logger.info(f"XUI API Response после переподключения - Text: {response.text[:500]}...")
                     
@@ -1090,11 +1066,11 @@ class X3:
         stop=stop_after_attempt(3),
         wait=wait_fixed(2)
     )
-    def list(self, timeout=15):
+    async def list(self, timeout=15):
         """Получает список всех inbounds и клиентов (с retry для надежности)"""
-        return self._list_internal(timeout=timeout, skip_health_check=False)
+        return await self._list_internal(timeout=timeout, skip_health_check=False)
     
-    def get_client_traffic(self, user_email: str, timeout=15):
+    async def get_client_traffic(self, user_email: str, timeout=15):
         """
         Получает статистику трафика клиента из 3x-ui
         
@@ -1105,14 +1081,14 @@ class X3:
         Returns:
             dict с полями: upload (bytes), download (bytes), total (bytes) или None если не найдено
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
             # Пробуем получить статистику через API 3x-ui
             # 3x-ui может предоставлять статистику через разные endpoints
             # Попробуем несколько вариантов
             
             # Вариант 1: Через /panel/api/inbounds/list (может содержать статистику в clientStats)
-            inbounds_list = self.list(timeout=timeout)
+            inbounds_list = await self.list(timeout=timeout)
             if inbounds_list.get('success', False) and inbounds_list.get('obj'):
                 for inbound in inbounds_list['obj']:
                     settings = json.loads(inbound.get('settings', '{}'))
@@ -1164,18 +1140,18 @@ class X3:
             logger.error(f"Ошибка получения статистики трафика для {user_email}: {e}")
             return None
     
-    def list_quick(self, timeout=5):
+    async def list_quick(self, timeout=5):
         """
         Быстрая проверка доступности сервера без retry (для health check)
         Используется только для проверки здоровья, не для реальных операций
         """
-        return self._list_internal(timeout=timeout, skip_health_check=True)
+        return await self._list_internal(timeout=timeout, skip_health_check=True)
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def deleteClient(self, user_email, timeout=15):
+    async def deleteClient(self, user_email, timeout=15):
         """Удаляет клиента по email"""
         try:
-            inbounds_list = self.list(timeout=timeout)
+            inbounds_list = await self.list(timeout=timeout)
             
             # Проверяем структуру ответа
             if not isinstance(inbounds_list, dict):
@@ -1238,7 +1214,7 @@ class X3:
                     
                     url = f"{self.host}/panel/api/inbounds/{inbound_id}/delClient/{client_id}"
                     logger.info(f"Удаляю {protocol.upper()} клиента: inbound_id={inbound_id}, client_id={client_id}, email={user_email}")
-                    result = self.ses.post(url, timeout=timeout)
+                    result = await self._client.post(url, timeout=timeout)
                     logger.info(f"Ответ XUI: status_code={getattr(result, 'status_code', None)}, text={getattr(result, 'text', None)[:200] if hasattr(result, 'text') else None}")
                     if getattr(result, 'status_code', None) == 200:
                         logger.info(f"Клиент успешно удалён: {user_email} (протокол: {protocol})")
@@ -1259,7 +1235,7 @@ class X3:
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def updateClientName(self, user_email, new_name, timeout=15):
+    async def updateClientName(self, user_email, new_name, timeout=15):
         """
         Обновляет имя ключа (сохраняет в поле subId)
         :param user_email: Email клиента
@@ -1267,10 +1243,10 @@ class X3:
         :param timeout: Таймаут запроса
         :return: Response объект
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
             # Сначала получаем информацию о клиенте
-            inbounds_data = self.list(timeout=timeout)
+            inbounds_data = await self.list(timeout=timeout)
             if not inbounds_data.get('success', False):
                 raise Exception("Не удалось получить список клиентов")
             
@@ -1319,7 +1295,7 @@ class X3:
                 "settings": json.dumps({"clients": [client_data]})
             }
             
-            response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', headers=header, json=data, timeout=timeout)
+            response = await self._client.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', headers=header, json=data, timeout=timeout)
             logger.info(f"XUI updateClientName Response - Status: {response.status_code}")
             logger.info(f"XUI updateClientName Response - Text: {response.text[:200]}...")
             
@@ -1338,8 +1314,8 @@ class X3:
             # Проверяем, не истекла ли сессия
             if response.status_code == 200 and not response.text.strip():
                 logger.warning("Получен пустой ответ при обновлении имени, переподключаюсь...")
-                self._reconnect()
-                response = self.ses.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
+                await self._reconnect()
+                response = await self._client.post(f'{self.host}/panel/api/inbounds/updateClient/{client_identifier}', 
                                        headers=header, json=data, timeout=timeout)
                 logger.info(f"XUI updateClientName Response после переподключения - Status: {response.status_code}")
                 
@@ -1361,7 +1337,7 @@ class X3:
             logger.error(f"Ошибка при обновлении имени ключа {user_email}: {e}")
             raise
 
-    def link(self, user_id: str, server_name: str = None):
+    async def link(self, user_id: str, server_name: str = None):
         """
         Генерирует ссылку для клиента (VLESS или TROJAN в зависимости от протокола inbound'а)
         
@@ -1369,8 +1345,8 @@ class X3:
             user_id: Email клиента
             server_name: Название сервера для tag (если не указано, используется user_id)
         """
-        self._ensure_connected()
-        inbounds_list = self.list()['obj']
+        await self._ensure_connected()
+        inbounds_list = await self.list()['obj']
         for inbounds in inbounds_list:
             settings = json.loads(inbounds['settings'])
             stream = json.loads(inbounds['streamSettings'])
@@ -1506,7 +1482,7 @@ class X3:
 
         return 'Клиент не найден.'
     
-    def get_subscription_link(self, user_email: str) -> str:
+    async def get_subscription_link(self, user_email: str) -> str:
         """
         Получает подписочную ссылку (sub link) для клиента из X-UI
         
@@ -1520,9 +1496,9 @@ class X3:
             Подписочная ссылка вида http://host:port/sub/<subId>
             или пустая строка, если клиент не найден
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            inbounds_list = self.list()
+            inbounds_list = await self.list()
             if not inbounds_list.get('success', False):
                 logger.warning(f"Не удалось получить список inbounds для подписочной ссылки")
                 return ""
@@ -1554,7 +1530,7 @@ class X3:
             logger.error(f"Ошибка получения подписочной ссылки для {user_email}: {e}")
             return ""
     
-    def get_subscription_links(self, user_email: str, server_name: str = None, flow_override: str = None) -> List[str]:
+    async def get_subscription_links(self, user_email: str, server_name: str = None, flow_override: str = None) -> List[str]:
         """
         Получает VLESS ссылки напрямую из X-UI subscription endpoint.
         
@@ -1568,9 +1544,9 @@ class X3:
         Returns:
             Список VLESS ссылок из X-UI subscription endpoint (с обновленным tag и при необходимости flow)
         """
-        self._ensure_connected()
+        await self._ensure_connected()
         try:
-            inbounds_list = self.list()
+            inbounds_list = await self.list()
             if not inbounds_list.get('success', False):
                 logger.warning(f"Не удалось получить список inbounds для subscription links")
                 return []
@@ -1599,7 +1575,7 @@ class X3:
                         # Получаем ссылки из X-UI subscription endpoint
                         try:
                             # Используем сессию без авторизации для публичного endpoint
-                            response = requests.get(subscription_url, timeout=10, verify=False)
+                            response = await self._client.get(subscription_url, timeout=10)
                             if response.status_code == 200:
                                 # X-UI может возвращать тело подписки в base64 (стандартный формат) или plain text
                                 text = response.text.strip()

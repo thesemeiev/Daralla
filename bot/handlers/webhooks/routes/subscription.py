@@ -138,7 +138,7 @@ def create_blueprint(bot_app):
                         try:
                             xui, resolved_name = server_manager.get_server_by_name(server_name)
                             if xui:
-                                traffic_stats = xui.get_client_traffic(client_email)
+                                traffic_stats = loop.run_until_complete(xui.get_client_traffic(client_email))
                                 if traffic_stats:
                                     total_upload += traffic_stats.get("upload", 0)
                                     total_download += traffic_stats.get("download", 0)

@@ -64,7 +64,7 @@ def create_blueprint(bot_app):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                health_results = server_manager.check_all_servers_health(force_check=False)
+                health_results = loop.run_until_complete(server_manager.check_all_servers_health(force_check=False))
                 health_status = server_manager.get_server_health_status()
 
                 servers = []

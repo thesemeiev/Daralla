@@ -6,7 +6,6 @@ import asyncio
 import json
 import datetime
 import time
-import concurrent.futures
 from flask import Blueprint, request, jsonify, Response
 import aiosqlite
 
@@ -631,16 +630,8 @@ def create_blueprint(bot_app):
                                     try:
                                         xui, _ = server_manager.get_server_by_name(server_name)
                                         if xui:
-                                            # Выполняем удаление в отдельной задаче с таймаутом
                                             try:
-                                                # Используем ThreadPoolExecutor для выполнения синхронного deleteClient
-                                                # Это предотвращает проблемы с переиспользованием default executor
-                                                import concurrent.futures
-                                                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                                                    future = executor.submit(xui.deleteClient, client_email, 5)
-                                                    # Обертываем future в asyncio.Future для использования с await
-                                                    asyncio_future = asyncio.wrap_future(future, loop=executor_loop)
-                                                    await asyncio.wait_for(asyncio_future, timeout=8.0)
+                                                await asyncio.wait_for(xui.deleteClient(client_email, 5), timeout=8.0)
                                                 logger.info(f"✅ Удален клиент {client_email} с сервера {server_name} (подписка {sub_id}, статус изменен на {new_status})")
                                                 deleted_count += 1
                                             except asyncio.TimeoutError:
@@ -737,12 +728,12 @@ def create_blueprint(bot_app):
                                         # Обновляем время истечения
                                         if 'expires_at' in updates:
                                             import time
-                                            xui.setClientExpiry(client_email, new_expires_at, flow=client_flow)
+                                            await xui.setClientExpiry(client_email, new_expires_at, flow=client_flow)
                                             logger.debug(f"Обновлено время истечения для {client_email} на {server_name}: {new_expires_at}")
                                     
                                         # Обновляем лимит устройств
                                         if 'device_limit' in updates:
-                                            xui.updateClientLimitIp(client_email, new_device_limit, flow=client_flow)
+                                            await xui.updateClientLimitIp(client_email, new_device_limit, flow=client_flow)
                                             logger.debug(f"Обновлен лимит устройств для {client_email} на {server_name}: {new_device_limit}")
                                 except Exception as e:
                                     logger.error(f"Ошибка обновления клиента {client_email} на сервере {server_name}: {e}")
@@ -908,7 +899,7 @@ def create_blueprint(bot_app):
                             if xui:
                                 try:
                                     # Проверяем текущее имя на сервере
-                                    client_info = xui.get_client_info(client_email)
+                                    client_info = await xui.get_client_info(client_email)
                                     if client_info:
                                         current_sub_id = client_info['client'].get('subId', '')
                                         # Если имя отличается, синхронизируем
@@ -917,7 +908,7 @@ def create_blueprint(bot_app):
                                                 f"Синхронизация имени подписки на сервере {server_name}: "
                                                 f"'{current_sub_id}' -> '{subscription_name}'"
                                             )
-                                            xui.updateClientName(client_email, subscription_name)
+                                            await xui.updateClientName(client_email, subscription_name)
                                             logger.info(f"Имя подписки синхронизировано на сервере {server_name}")
                                         else:
                                             logger.debug(f"Имя подписки на сервере {server_name} уже совпадает: '{subscription_name}'")
@@ -1004,15 +995,7 @@ def create_blueprint(bot_app):
                             try:
                                 xui, _ = server_manager.get_server_by_name(server_name)
                                 if xui:
-                                    # Используем run_in_executor для предотвращения блокировки
-                                    import concurrent.futures
-                                    loop = asyncio.get_event_loop()
-                                    result = await loop.run_in_executor(
-                                        None,
-                                        lambda: xui.deleteClient(client_email, timeout=30)
-                                    )
-                                
-                                    # Проверяем результат удаления
+                                    result = await xui.deleteClient(client_email, timeout=30)
                                     if result is not None:
                                         status_code = getattr(result, 'status_code', None)
                                         if status_code == 200:
@@ -1134,13 +1117,7 @@ def create_blueprint(bot_app):
                                 try:
                                     xui, _ = server_manager.get_server_by_name(server_name)
                                     if xui:
-                                        import concurrent.futures
-                                        loop = asyncio.get_event_loop()
-                                        result = await loop.run_in_executor(
-                                            None,
-                                            lambda: xui.deleteClient(client_email, timeout=30)
-                                        )
-                                    
+                                        result = await xui.deleteClient(client_email, timeout=30)
                                         if result is not None:
                                             status_code = getattr(result, 'status_code', None)
                                             if status_code == 200:

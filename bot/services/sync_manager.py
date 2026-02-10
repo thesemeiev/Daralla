@@ -258,7 +258,7 @@ class SyncManager:
                 try:
                     xui, _ = self.server_manager.get_server_by_name(server_name)
                     if xui:
-                        xui.deleteClient(client_email)
+                        await xui.deleteClient(client_email)
                         logger.debug(f"Удален клиент {client_email} с сервера {server_name}")
                 except Exception as e:
                     logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
@@ -347,7 +347,7 @@ class SyncManager:
             
             try:
                 # Получаем всех клиентов на сервере
-                response = xui.list()
+                response = await xui.list()
                 if 'obj' not in response:
                     logger.warning(f"Неожиданный формат ответа XUI для сервера {server_name}")
                     continue
@@ -372,7 +372,7 @@ class SyncManager:
                             reason = "Клиент не найден в БД (сиротский клиент - нет в active или expired подписках)"
                             
                             try:
-                                xui.deleteClient(client_email)
+                                await xui.deleteClient(client_email)
                                 stats['deleted_count'] += 1
                                 stats['details'].append({
                                     'server': server_name,

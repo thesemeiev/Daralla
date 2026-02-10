@@ -64,7 +64,7 @@ async def server_health_monitor(app, server_manager, admin_ids):
     
     while True:
         try:
-            health_results = server_manager.check_all_servers_health(force_check=False)
+            health_results = await server_manager.check_all_servers_health(force_check=False)
             
             if not health_results:
                 await asyncio.sleep(300)
