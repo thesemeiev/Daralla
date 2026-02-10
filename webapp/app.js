@@ -6554,6 +6554,31 @@ function closeInstructionModal() {
         }
         indicator.style.transform =
             'translateX(' + (s.currentX | 0) + 'px) translateY(-50%) scale(' + s.currentScale.toFixed(3) + ')';
+        updateNavIndicatorOverItem();
+    }
+
+    function updateNavIndicatorOverItem() {
+        const nav = document.querySelector('.bottom-nav');
+        const items = document.querySelectorAll('.nav-item');
+        if (!nav || !items.length) return;
+        const navRect = nav.getBoundingClientRect();
+        const s = navIndicatorState;
+        const indicatorCenterX = s.currentX + s.currentWidth / 2;
+        const halfW = s.currentWidth / 2;
+        var bestIdx = -1;
+        var bestDist = 1e9;
+        items.forEach(function (item, i) {
+            var iconCenterX = getNavIconCenterX(item, navRect);
+            var d = Math.abs(iconCenterX - indicatorCenterX);
+            if (d < halfW + 20 && d < bestDist) {
+                bestDist = d;
+                bestIdx = i;
+            }
+        });
+        items.forEach(function (item, i) {
+            if (i === bestIdx) item.classList.add('indicator-over');
+            else item.classList.remove('indicator-over');
+        });
     }
 
     function navIndicatorSpringStep() {
