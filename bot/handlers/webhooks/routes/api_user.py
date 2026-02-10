@@ -552,13 +552,18 @@ def create_blueprint(bot_app):
 
     @bp.route('/api/user/avatar', methods=['GET', 'OPTIONS'])
     def api_user_avatar():
-        """Проксирует аватар пользователя из Telegram (getUserProfilePhotos). Только для пользователей с привязанным telegram_id."""
+        """Проксирует аватар пользователя из Telegram (getUserProfilePhotos). Только для пользователей с привязанным telegram_id.
+        Использует синхронные HTTP-запросы к Telegram API, чтобы не зависеть от event loop бота (избегаем Event loop is closed / bound to different loop).
+        """
         if request.method == 'OPTIONS':
             return ('', 200, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "*"})
         try:
             user_id = authenticate_request()
             if not user_id:
                 return Response(status=401)
+            token = os.getenv("TELEGRAM_TOKEN")
+            if not token:
+                return Response(status=500)
             from ....db.users_db import get_user_by_id
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -569,35 +574,36 @@ def create_blueprint(bot_app):
                 tid = user.get('telegram_id')
                 if not tid:
                     return Response(status=404)
-                bot = bot_app.bot
-                async def fetch_avatar():
-                    try:
-                        photos = await bot.get_user_profile_photos(user_id=int(tid), limit=1)
-                        if not photos or not photos.photos:
-                            return None
-                        largest = photos.photos[-1][-1]
-                        tg_file = await bot.get_file(largest.file_id)
-                        return tg_file.file_path
-                    except Exception as e:
-                        logger.warning(f"get_user_profile_photos/get_file: {e}")
-                        return None
-                file_path = loop.run_until_complete(fetch_avatar())
-                if not file_path:
-                    return Response(status=404)
-                token = os.getenv("TELEGRAM_TOKEN")
-                if not token:
-                    return Response(status=500)
-                url = f"https://api.telegram.org/file/bot{token}/{file_path}"
-                r = requests_lib.get(url, timeout=5)
-                if not r.ok:
-                    return Response(status=502)
-                return Response(
-                    r.content,
-                    mimetype='image/jpeg',
-                    headers={'Cache-Control': 'private, max-age=3600'}
-                )
             finally:
                 loop.close()
+            # Синхронные запросы к Telegram Bot API — не используем async bot, чтобы избежать конфликта event loop
+            base = f"https://api.telegram.org/bot{token}"
+            photos_r = requests_lib.get(f"{base}/getUserProfilePhotos", params={"user_id": int(tid), "limit": 1}, timeout=10)
+            if not photos_r.ok:
+                logger.warning("getUserProfilePhotos: %s %s", photos_r.status_code, photos_r.text[:200])
+                return Response(status=502)
+            data = photos_r.json()
+            if not data.get("ok") or not data.get("result", {}).get("photos"):
+                return Response(status=404)
+            file_id = data["result"]["photos"][0][-1]["file_id"]
+            file_r = requests_lib.get(f"{base}/getFile", params={"file_id": file_id}, timeout=10)
+            if not file_r.ok:
+                logger.warning("getFile: %s %s", file_r.status_code, file_r.text[:200])
+                return Response(status=502)
+            file_data = file_r.json()
+            if not file_data.get("ok"):
+                return Response(status=404)
+            file_path = file_data["result"].get("file_path")
+            if not file_path:
+                return Response(status=404)
+            r = requests_lib.get(f"https://api.telegram.org/file/bot{token}/{file_path}", timeout=10)
+            if not r.ok:
+                return Response(status=502)
+            return Response(
+                r.content,
+                mimetype='image/jpeg',
+                headers={'Cache-Control': 'private, max-age=3600'}
+            )
         except Exception as e:
             logger.error(f"Ошибка /api/user/avatar: {e}", exc_info=True)
             return Response(status=500)

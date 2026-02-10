@@ -6607,10 +6607,11 @@ function closeInstructionModal() {
         s.velocityW += (s.targetWidth - s.currentWidth) * stiffness;
         s.velocityW *= SPRING_DAMPING;
 
-        // «Раздул и прыгнул»: при клике на другую иконку — сначала раздуть, по прилёту уменьшить
+        // «Раздул и прыгнул»: targetScale=1.24 задаётся один раз при клике; по прилёту только сбрасываем в 1
+        // (не выставляем 1.24 каждый кадр, иначе при overshoot позиции scale снова раздувается и залипает)
         if (!s.isDragging && s.lastAction === 'click') {
             var dist = Math.abs(s.targetX - s.currentX);
-            if (dist > 6) s.targetScale = 1.24; else s.targetScale = 1;
+            if (dist <= 8) s.targetScale = 1;
         }
 
         s.velocityScale += (s.targetScale - s.currentScale) * stiffness;

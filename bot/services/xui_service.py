@@ -1,6 +1,7 @@
 """
 Сервис для работы с X-UI API (async httpx)
 """
+import asyncio
 import base64
 import logging
 import json
@@ -30,6 +31,7 @@ class X3:
         self.subscription_port = subscription_port if subscription_port is not None else 2096
         self.subscription_url = (subscription_url or "").strip() or None  # Базовый URL подписки (порт 2096 и т.п.)
         self._client: httpx.AsyncClient | None = None
+        self._client_loop = None  # event loop, на котором создан _client (для sync Flask: каждый запрос — новый loop)
         self.data = {"username": self.login, "password": self.password}
         self._logged_in = False
         self._verify = _verify_from_host(host)
@@ -73,10 +75,26 @@ class X3:
             raise
 
     async def _ensure_connected(self):
-        """Проверяет подключение и подключается при необходимости"""
+        """Проверяет подключение и подключается при необходимости.
+        Если текущий event loop отличается от того, на котором создан _client (типично при sync Flask),
+        пересоздаём клиент, чтобы избежать «Event loop is closed» / «bound to a different event loop».
+        """
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if self._client is not None and self._client_loop is not None and self._client_loop != running:
+            try:
+                await self._client.aclose()
+            except Exception:
+                pass
+            self._client = None
+            self._client_loop = None
+            self._logged_in = False
         if not self._logged_in:
             if self._client is None:
                 self._client = httpx.AsyncClient(verify=self._verify, timeout=30.0)
+                self._client_loop = asyncio.get_running_loop() if running is None else running
             try:
                 logger.info(f"Попытка подключения к XUI серверу: {self.host}")
                 await self._login()
@@ -90,7 +108,13 @@ class X3:
         logger.info(f"Переподключение к серверу {self.host}")
         if self._client is not None:
             await self._client.aclose()
+        self._client = None
+        self._client_loop = None
         self._client = httpx.AsyncClient(verify=self._verify, timeout=30.0)
+        try:
+            self._client_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._client_loop = None
         await self._login()
         self._logged_in = True
 
