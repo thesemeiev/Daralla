@@ -6557,6 +6557,11 @@ function closeInstructionModal() {
         indicator.style.transform =
             'translateX(' + (s.currentX | 0) + 'px) translateY(-50%) scale(' + s.currentScale.toFixed(3) + ')';
         updateNavIndicatorOverItem();
+        var nav = document.querySelector('.bottom-nav');
+        if (nav) {
+            if (s.currentScale < 1.08) nav.classList.add('nav-indicator-has-color');
+            else nav.classList.remove('nav-indicator-has-color');
+        }
     }
 
     function updateNavIndicatorOverItem() {
@@ -6597,11 +6602,10 @@ function closeInstructionModal() {
         s.velocityW += (s.targetWidth - s.currentWidth) * stiffness;
         s.velocityW *= SPRING_DAMPING;
 
-        // Лёгкий «дыхательный» скейл при движении по клику
+        // «Раздул и прыгнул»: при клике на другую иконку — сначала раздуть, по прилёту уменьшить
         if (!s.isDragging && s.lastAction === 'click') {
-            const speed = Math.abs(s.velocityX);
-            const extraScale = Math.min(speed * 0.03, 0.18); // до ~1.18
-            s.targetScale = 1 + extraScale;
+            var dist = Math.abs(s.targetX - s.currentX);
+            if (dist > 6) s.targetScale = 1.24; else s.targetScale = 1;
         }
 
         s.velocityScale += (s.targetScale - s.currentScale) * stiffness;
@@ -6639,9 +6643,10 @@ function closeInstructionModal() {
     }
 
     function moveNavIndicator(index) {
-        // Ускоренное движение и «дыхание» только при клике на невыделенную иконку
+        // Ускоренное движение и «раздул и прыгнул» только при клике на невыделенную иконку
         if (index !== window.currentNavIndex) {
             navIndicatorState.lastAction = 'click';
+            navIndicatorState.targetScale = 1.24;
         }
         setNavIndicatorTargetFromIndex(index);
     }

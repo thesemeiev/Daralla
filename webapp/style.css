@@ -1277,22 +1277,19 @@ h1 {
     color: rgba(255, 255, 255, 0.95);
 }
 
-/* Цвет иконки под выделением — сине-фиолетовый, как статус «Скоро» */
-.nav-item.indicator-over {
-    color: #8ba3e8;
-    transition: color 0.25s ease;
-}
-
+/* Иконка под выделением по умолчанию обычная; цвет выделения только когда индикатор уменьшился */
+.nav-item.indicator-over,
 .nav-item.indicator-over svg {
-    color: #8ba3e8;
     transition: color 0.25s ease;
 }
 
-/* При увеличении выделения плавно убираем цвет выделения до обычного (без затемнения) */
-.bottom-nav--dragging .nav-item.indicator-over {
-    color: rgba(255, 255, 255, 0.85);
+.bottom-nav.nav-indicator-has-color .nav-item.indicator-over,
+.bottom-nav.nav-indicator-has-color .nav-item.indicator-over svg {
+    color: #8ba3e8;
 }
 
+/* При увеличении (drag) плавно убираем цвет выделения до обычного */
+.bottom-nav--dragging .nav-item.indicator-over,
 .bottom-nav--dragging .nav-item.indicator-over svg {
     color: rgba(255, 255, 255, 0.85);
 }
