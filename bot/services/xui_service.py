@@ -1009,7 +1009,8 @@ class X3:
                 except Exception as e:
                     logger.debug(f"Сервер {self.host} недоступен для ping: {e}")
             
-            response = await self._client.get(url, json=self.data, timeout=timeout)
+            # В httpx AsyncClient.get() нет параметра json, поэтому используем request()
+            response = await self._client.request("GET", url, json=self.data, timeout=timeout)
             logger.debug(f"XUI API Response - URL: {url}, Status: {response.status_code}")
             if not skip_health_check:
                 logger.info(f"XUI API Response - URL: {url}")
@@ -1037,7 +1038,12 @@ class X3:
                     logger.warning("Обнаружена истекшая сессия, переподключаюсь...")
                     await self._reconnect()
                     # Повторяем запрос после переподключения
-                    response = await self._client.get(f'{self.host}/panel/api/inbounds/list', json=self.data, timeout=timeout)
+                    response = await self._client.request(
+                        "GET",
+                        f'{self.host}/panel/api/inbounds/list',
+                        json=self.data,
+                        timeout=timeout,
+                    )
                     logger.info(f"XUI API Response после переподключения - Status: {response.status_code}")
                     logger.info(f"XUI API Response после переподключения - Text: {response.text[:500]}...")
                     
