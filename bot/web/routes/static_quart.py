@@ -24,13 +24,19 @@ async def root_index():
         base_dir = _webapp_base_dir()
         webapp_path = os.path.join(base_dir, "webapp", "index.html")
         if os.path.exists(webapp_path):
-            with open(webapp_path, "r", encoding="utf-8") as f:
-                return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
+            with open(webapp_path, "rb") as f:
+                body = f.read()
+            return Response(
+                body,
+                status=200,
+                mimetype="text/html",
+                charset="utf-8",
+            )
         logger.warning("Web app not found at: %s", webapp_path)
-        return "Web app not found", 404
+        return Response("Web app not found", status=404, mimetype="text/plain")
     except Exception as e:
         logger.error("Ошибка при загрузке webapp: %s", e, exc_info=True)
-        return "Error loading web app", 500
+        return Response("Error loading web app", status=500, mimetype="text/plain")
 
 
 @bp.route("/<path:filename>", methods=["GET"])
