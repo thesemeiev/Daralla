@@ -30,8 +30,7 @@ async def root_index():
             return Response(
                 body,
                 status=200,
-                mimetype="text/html",
-                charset="utf-8",
+                content_type="text/html; charset=utf-8",
             )
         logger.warning("Web app not found at: %s", webapp_path)
         return Response("Web app not found", status=404, mimetype="text/plain")
