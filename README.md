@@ -74,16 +74,18 @@ python -m bot.bot
 
 ```
 Daralla/
-├── bot/                    # Ядро бота
-│   ├── bot.py              # Точка входа
-│   ├── core/               # Старт, мониторинг
-│   ├── db/                 # Работа с БД (daralla.db). Модули: config, users, servers, subscriptions, promo, payments, notifications — см. [bot/db/README.md](bot/db/README.md)
-│   ├── handlers/           # Команды, webhooks, API
-│   ├── services/           # Subscription, Server, Sync
-│   └── utils/              # UI, helpers, validators
-├── webapp/                 # Веб‑приложение (HTML/CSS/JS)
-├── images/                 # Изображения для меню
-├── data/                   # БД, логи (создаётся при запуске)
+├── bot/                    # Ядро бота и бэкенд
+│   ├── bot.py              # Точка входа (Telegram + Quart/Hypercorn)
+│   ├── core/                # Старт, фоновые задачи, мониторинг
+│   ├── db/                  # БД daralla.db — users, subscriptions, servers, payments и др. ([bot/db/README.md](bot/db/README.md))
+│   ├── events/              # Модуль событий (рефералы, рейтинги), опционально
+│   ├── handlers/            # Команды, колбэки, auth и обработка платежей
+│   ├── services/            # Subscription, Server, Sync, X-UI
+│   ├── utils/               # UI, helpers, validators
+│   └── web/                 # Веб-сервер (Quart): app_quart.py, routes/*
+├── webapp/                  # Фронтенд (HTML/CSS/JS)
+├── docs/                    # Документация (migration-quart.md, roadmap.md)
+├── tests/
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
@@ -91,7 +93,8 @@ Daralla/
 
 ## Документация
 
-- [docs/migration-quart.md](docs/migration-quart.md) — веб-сервер на Quart/Hypercorn, что перенесено, админка, запуск.
+- [docs/migration-quart.md](docs/migration-quart.md) — веб-сервер на Quart/Hypercorn, маршруты, запуск.
+- [docs/roadmap.md](docs/roadmap.md) — структура проекта и что делать дальше (чистота, именование, тесты).
 - [docs/migration-py3xui.md](docs/migration-py3xui.md) — интеграция с X-UI через py3xui.
 
 ## API

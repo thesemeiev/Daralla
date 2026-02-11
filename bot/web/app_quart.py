@@ -1,11 +1,6 @@
 """
-Quart application for handling HTTP API and webhooks.
-
-This is the async counterpart to `bot.handlers.webhooks.webhook_app.create_webhook_app`.
-At this initial step it:
-- creates a Quart app
-- registers a simple `/health` endpoint
-- optionally registers all existing blueprints if `bot_app` is provided
+Quart application for HTTP API and webhooks (заменяет прежнее Flask webhook app).
+Создаёт Quart app, /health и регистрирует все blueprints (payment, subscription, api_*, admin*, events*, static).
 """
 
 import logging
@@ -17,12 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_quart_app(bot_app=None) -> Quart:
-    """
-    Creates a Quart application for HTTP API and webhooks.
-
-    Mirrors the signature of `create_webhook_app(bot_app)` so it can be
-    gradually adopted without breaking existing call sites.
-    """
+    """Создаёт Quart-приложение для HTTP API и webhook'ов (payment, subscription, api, admin, events, static)."""
     app = Quart(__name__)
 
     @app.route("/health", methods=["GET"])
@@ -47,9 +37,15 @@ def create_quart_app(bot_app=None) -> Quart:
             from bot.web.routes.admin_charts_quart import create_blueprint as create_admin_charts_quart_blueprint
             from bot.web.routes.admin_broadcast_quart import create_blueprint as create_admin_broadcast_quart_blueprint
             from bot.web.routes.admin_servers_quart import create_blueprint as create_admin_servers_quart_blueprint
-            from bot.handlers.webhooks.routes import register_all_blueprints
 
             app.register_blueprint(create_payment_quart_blueprint(bot_app))
+            try:
+                from bot.events import EVENTS_MODULE_ENABLED
+                if EVENTS_MODULE_ENABLED:
+                    from bot.web.routes.events_quart import create_blueprint as create_events_quart_blueprint
+                    app.register_blueprint(create_events_quart_blueprint())
+            except ImportError:
+                pass
             app.register_blueprint(create_subscription_blueprint(bot_app))
             app.register_blueprint(create_api_public_quart_blueprint(bot_app))
             app.register_blueprint(create_api_auth_quart_blueprint(bot_app))
@@ -61,16 +57,10 @@ def create_quart_app(bot_app=None) -> Quart:
             app.register_blueprint(create_admin_charts_quart_blueprint(bot_app))
             app.register_blueprint(create_admin_broadcast_quart_blueprint(bot_app))
             app.register_blueprint(create_admin_servers_quart_blueprint(bot_app))
-            register_all_blueprints(
-                app, bot_app,
-                skip_payment=True, skip_subscription=True, skip_api_public=True,
-                skip_api_auth=True, skip_api_user=True,
-                skip_api_admin=True, skip_static=True,
-            )
             app.register_blueprint(static_quart_bp)
             logger.info(
                 "Registered webhook blueprints on Quart app "
-                "(payment, subscription, api_public, api_auth, api_user, admin*, static=async)"
+                "(payment, subscription, api_public, api_auth, api_user, admin*, events*, static=async)"
             )
         except Exception as e:  # pragma: no cover - defensive logging
             logger.error("Failed to register blueprints on Quart app: %s", e, exc_info=True)

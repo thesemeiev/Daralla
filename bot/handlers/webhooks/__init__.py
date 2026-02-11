@@ -1,9 +1,6 @@
 """
-Обработчики webhook'ов от YooKassa
+Обработчики webhook'ов (HTTP API и YooKassa).
+Веб-сервер — Quart (bot.web.app_quart.create_quart_app).
 """
-from .webhook_app import create_webhook_app
-
-__all__ = [
-    'create_webhook_app',
-]
+__all__ = []
 

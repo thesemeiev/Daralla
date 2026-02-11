@@ -1,29 +1,30 @@
 # Миграция на Quart (ASGI)
 
-Веб-сервер переведён с Flask (WSGI) на **Quart** (ASGI) и запускается через **Hypercorn**. Это даёт нативную асинхронность для API и webhook'ов.
+Веб-сервер полностью на **Quart** (ASGI) и запускается через **Hypercorn**. Flask удалён.
 
 ## Текущее состояние
 
-| Компонент | Реализация | Файл |
-|-----------|------------|------|
-| Payment (YooKassa webhook) | Quart (async) | `bot/web/routes/payment_quart.py` |
-| Subscription (`/sub/<token>`) | Quart (async) | `bot/web/routes/subscription_quart.py` |
-| API Public (`/api/prices`, `/api/servers`) | Quart (async) | `bot/web/routes/api_public_quart.py` |
-| API Auth (register, login, verify) | Quart (async) | `bot/web/routes/api_auth_quart.py` |
-| API User (подписки, платежи, профиль) | Quart (async) | `bot/web/routes/api_user_quart.py` |
-| Статика (/, /index.html, webapp) | Quart (async) | `bot/web/routes/static_quart.py` |
-| **API Admin** (`/api/admin/*`) | Quart (async) | `bot/web/routes/admin_*_quart.py` (check, users, subscriptions, stats, charts, broadcast, servers) |
-| Events API | Не на Quart | При включённом модуле — только Flask |
+| Компонент | Файл |
+|-----------|------|
+| Payment (YooKassa webhook) | `bot/web/routes/payment_quart.py` |
+| Subscription (`/sub/<token>`) | `bot/web/routes/subscription_quart.py` |
+| API Public (`/api/prices`, `/api/servers`) | `bot/web/routes/api_public_quart.py` |
+| API Auth (register, login, verify) | `bot/web/routes/api_auth_quart.py` |
+| API User (подписки, платежи, профиль) | `bot/web/routes/api_user_quart.py` |
+| Events API (`/api/events/*`) | `bot/web/routes/events_quart.py` |
+| Статика (/, webapp) | `bot/web/routes/static_quart.py` |
+| API Admin (`/api/admin/*`) | `bot/web/routes/admin_*_quart.py` (check, users, subscriptions, stats, charts, broadcast, servers) |
+
+Все маршруты — async, аутентификация через `bot/handlers/webhooks/webhook_auth.py` (`authenticate_request_async`, `check_admin_access_async`).
 
 ## Запуск
 
-- **Продакшен**: `python -m bot.bot` — поднимает Telegram polling и веб-сервер **Quart + Hypercorn** на порту из `WEBHOOK_PORT` (по умолчанию 5000).
-- **Порт**: задаётся переменной `WEBHOOK_PORT` в `.env` (см. `.env.example`).
-- **Локальная проверка только веб-части**: `python -m bot.web.app_quart` — только Quart, без бота (есть `/health` и статика; полные API требуют `bot_app`).
+- **Продакшен**: `python -m bot.bot` — Telegram polling + веб-сервер Quart/Hypercorn на порту `WEBHOOK_PORT` (по умолчанию 5000).
+- **Локально только веб**: `python -m bot.web.app_quart` — только Quart (`/health`, статика; полные API требуют `bot_app`).
 
 ## Админ-панель
 
-Маршруты `/api/admin/*` работают на Quart и регистрируются в `app_quart.py`: общий модуль `admin_common.py` (CORS, `require_admin`), синие принты `admin_check_quart`, `admin_users_quart`, `admin_subscriptions_quart`, `admin_stats_quart`, `admin_charts_quart`, `admin_broadcast_quart`, `admin_servers_quart`. Flask-версия `api_admin.py` при запуске через Quart не регистрируется (`skip_api_admin=True`).
+Маршруты `/api/admin/*` в `app_quart.py`: общий модуль `admin_common.py` (CORS, `require_admin`), blueprints `admin_check_quart`, `admin_users_quart`, `admin_subscriptions_quart`, `admin_stats_quart`, `admin_charts_quart`, `admin_broadcast_quart`, `admin_servers_quart`.
 
 ## Безопасность
 

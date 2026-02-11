@@ -144,7 +144,6 @@ async def init_server_managers():
     except Exception as e:
         logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
 
-from .handlers.webhooks import create_webhook_app
 from .web.app_quart import create_quart_app
 
 

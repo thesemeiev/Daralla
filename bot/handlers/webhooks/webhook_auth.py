@@ -1,58 +1,10 @@
 """
-Общая аутентификация и проверка прав для webhook API.
+Аутентификация и проверка прав для веб-API (Quart).
+Используется из bot.web.routes.* через authenticate_request_async и check_admin_access_async.
 """
-import asyncio
 import logging
-from flask import request
 
 logger = logging.getLogger(__name__)
-
-
-def authenticate_request():
-    """Универсальная функция аутентификации (TG initData или Web Token)"""
-    # 1. Проверяем заголовок Authorization (Web Token)
-    web_token = request.headers.get('Authorization')
-    if web_token and web_token.startswith('Bearer '):
-        token = web_token.split(' ')[1]
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            from ...db.users_db import get_user_by_auth_token
-            user = loop.run_until_complete(get_user_by_auth_token(token))
-            if user:
-                logger.info(f"Успешная веб-аутентификация для user_id={user['user_id']}")
-                return user['user_id']
-            else:
-                logger.warning(f"Веб-токен не найден в БД: {token[:10]}...")
-        finally:
-            loop.close()
-
-    # 2. Проверяем initData (Telegram) - в URL или в теле JSON
-    init_data = request.args.get('initData')
-    if not init_data and request.is_json:
-        try:
-            data = request.get_json(silent=True)
-            if data:
-                init_data = data.get('initData')
-        except Exception:
-            pass
-
-    if init_data:
-        tg_user_id = verify_telegram_init_data(init_data)
-        if not tg_user_id:
-            return None
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            from ...db.users_db import get_user_by_telegram_id_v2
-            user = loop.run_until_complete(get_user_by_telegram_id_v2(tg_user_id, use_fallback=True))
-            if user:
-                return user['user_id']
-            return None
-        finally:
-            loop.close()
-
-    return None
 
 
 async def authenticate_request_async(headers, args, body):
@@ -162,39 +114,6 @@ def verify_telegram_init_data(init_data: str):
     except Exception as e:
         logger.error(f"Ошибка при проверке initData: {e}", exc_info=True)
         return None
-
-
-def check_admin_access(user_id: str) -> bool:
-    """Проверяет, является ли пользователь админом. Учитывает и user_id, и привязанный telegram_id."""
-    try:
-        from ... import bot as bot_module
-        from ...db.users_db import get_user_by_id
-        ADMIN_IDS = getattr(bot_module, 'ADMIN_IDS', [])
-
-        user_id_str = str(user_id)
-        admin_set = {str(a) for a in ADMIN_IDS}
-
-        if user_id_str in admin_set:
-            logger.info(f"Пользователь {user_id} является админом (по user_id)")
-            return True
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            user = loop.run_until_complete(get_user_by_id(user_id))
-            if user:
-                tid = user.get('telegram_id')
-                if tid and str(tid) in admin_set:
-                    logger.info(f"Пользователь {user_id} является админом (по telegram_id={tid})")
-                    return True
-        finally:
-            loop.close()
-
-        logger.info(f"Пользователь {user_id} НЕ является админом")
-        return False
-    except Exception as e:
-        logger.error(f"Ошибка при проверке прав админа: {e}", exc_info=True)
-        return False
 
 
 async def check_admin_access_async(user_id: str) -> bool:
