@@ -273,6 +273,14 @@ class X3:
         await self._api.client.add(int(inbound_id), [new_client])
         return type("Response", (), {"status_code": 200, "text": "{}"})()
 
+    @staticmethod
+    def _ensure_client_id_for_update(c: Any) -> Any:
+        """Панель 3x-ui для VLESS ожидает в теле update поле id = UUID. get_by_email возвращает id как число — подставляем uuid."""
+        uuid_val = getattr(c, "uuid", None)
+        if uuid_val and isinstance(getattr(c, "id", None), int):
+            c.id = uuid_val
+        return c
+
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def extendClient(
         self,
@@ -292,6 +300,7 @@ class X3:
         c.expiry_time = new_ms
         if flow is not None and str(flow).strip():
             c.flow = str(flow).strip()
+        self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
         return None
 
@@ -310,6 +319,7 @@ class X3:
         c.expiry_time = expiry_timestamp * 1000
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
+        self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
         return None
 
@@ -327,6 +337,7 @@ class X3:
         c.limit_ip = limit_ip
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
+        self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
         return None
 
@@ -341,6 +352,7 @@ class X3:
         if c is None:
             raise Exception(f"Клиент с email {user_email} не найден")
         c.sub_id = new_name
+        self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
         return type("Response", (), {"status_code": 200, "text": "{}"})()
 
@@ -483,6 +495,7 @@ class X3:
                     else:
                         if hasattr(c, "flow"):
                             c.flow = ""
+                    self._ensure_client_id_for_update(c)
                     await self._api.client.update(c.id, c)
                     updated += 1
                 except Exception as e:

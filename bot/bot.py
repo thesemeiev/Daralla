@@ -217,7 +217,9 @@ if __name__ == '__main__':
         from hypercorn.asyncio import serve
         config = Config()
         config.bind = [f"0.0.0.0:{webhook_port}"]
-        asyncio.run(serve(quart_app, config))
+        # shutdown_trigger prevents Hypercorn from installing signal handlers (which only work in main thread)
+        shutdown_trigger = lambda: asyncio.Future()
+        asyncio.run(serve(quart_app, config, shutdown_trigger=shutdown_trigger))
 
     webhook_thread = threading.Thread(target=run_webhook, daemon=True)
     webhook_thread.start()
