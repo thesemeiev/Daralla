@@ -280,7 +280,8 @@ class X3:
                 kwargs["flow"] = str(flow).strip()
             new_client = Py3xuiClient(**kwargs)
         await self._api.client.add(int(inbound_id), [new_client])
-        return type("Response", (), {"status_code": 200, "text": "{}"})()
+        # Заглушка с .json() чтобы subscription_manager мог вызвать response.json() без ошибки
+        return type("Response", (), {"status_code": 200, "text": "{}", "json": lambda self: {"success": True}})()
 
     @staticmethod
     def _ensure_client_id_for_update(c: Any) -> Any:
@@ -612,9 +613,17 @@ class X3:
                 return []
             base_url = self.subscription_url
             if not base_url and self.host:
-                host_part = self.host.split("//")[-1].split("/panel")[0]
                 scheme = "https" if self.host.startswith("https") else "http"
-                base_url = f"{scheme}://{host_part}:{self.subscription_port}"
+                host_part = self.host.split("//")[-1].split("/panel")[0]
+                # Убираем порт панели (59580), чтобы подставить только subscription_port (2096)
+                if ":" in host_part:
+                    host_only = host_part.rsplit(":", 1)[0]
+                else:
+                    host_only = host_part
+                host_for_sub = (self.vpn_host or host_only).strip()
+                if host_for_sub and ":" in host_for_sub:
+                    host_for_sub = host_for_sub.rsplit(":", 1)[0]
+                base_url = f"{scheme}://{host_for_sub}:{self.subscription_port}"
             client = await self._api.client.get_by_email(user_email)
             if not client:
                 return []

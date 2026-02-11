@@ -208,7 +208,7 @@ def create_blueprint(bot_app):
                 created_datetime = datetime.datetime.fromtimestamp(sub["created_at"])
                 formatted_subs.append({
                     "id": sub["id"],
-                    "name": sub.get("name", f"Подписка {sub['id']}"),
+                    "name": (sub.get("name") or "").strip() or f"Подписка {sub['id']}",
                     "status": "active" if is_active else ("expired" if is_expired else sub["status"]),
                     "period": sub["period"],
                     "device_limit": sub["device_limit"],

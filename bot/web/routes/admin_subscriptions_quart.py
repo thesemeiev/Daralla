@@ -46,7 +46,7 @@ def create_blueprint(bot_app):
                 "success": True,
                 "subscription": {
                     "id": sub["id"],
-                    "name": sub.get("name", f"Подписка {sub['id']}"),
+                    "name": (sub.get("name") or "").strip() or f"Подписка {sub['id']}",
                     "status": sub["status"],
                     "period": sub["period"],
                     "device_limit": sub["device_limit"],
@@ -237,7 +237,7 @@ def create_blueprint(bot_app):
                 "success": True,
                 "subscription": {
                     "id": updated_sub["id"],
-                    "name": updated_sub.get("name", f"Подписка {updated_sub['id']}"),
+                    "name": (updated_sub.get("name") or "").strip() or f"Подписка {updated_sub['id']}",
                     "status": updated_sub["status"],
                     "period": updated_sub["period"],
                     "device_limit": updated_sub["device_limit"],
@@ -297,7 +297,7 @@ def create_blueprint(bot_app):
                             token=sub["subscription_token"],
                             device_limit=sub["device_limit"],
                         )
-                        subscription_name = sub.get("name", sub["subscription_token"])
+                        subscription_name = (sub.get("name") or "").strip() or sub["subscription_token"]
                         xui, _ = subscription_manager.server_manager.get_server_by_name(server_name)
                         if xui:
                             try:

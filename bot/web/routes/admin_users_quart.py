@@ -106,7 +106,7 @@ def create_blueprint(bot_app):
                 expires_at = sub["expires_at"]
                 formatted_subs.append({
                     "id": sub["id"],
-                    "name": sub.get("name", f"Подписка {sub['id']}"),
+                    "name": (sub.get("name") or "").strip() or f"Подписка {sub['id']}",
                     "status": sub["status"],
                     "is_active": is_subscription_active(sub),
                     "period": sub["period"],
@@ -259,7 +259,7 @@ def create_blueprint(bot_app):
                 "success": True,
                 "subscription": {
                     "id": subscription_id,
-                    "name": sub_dict.get("name", f"Подписка {subscription_id}"),
+                    "name": (sub_dict.get("name") or "").strip() or f"Подписка {subscription_id}",
                     "status": sub_dict["status"],
                     "period": period,
                     "device_limit": device_limit,
