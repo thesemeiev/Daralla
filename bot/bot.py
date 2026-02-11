@@ -145,6 +145,7 @@ async def init_server_managers():
         logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
 
 from .handlers.webhooks import create_webhook_app
+from .web.app_quart import create_quart_app
 
 
 
@@ -201,21 +202,26 @@ if __name__ == '__main__':
     # Сохраняем app в глобальную переменную для доступа из других модулей
     import sys
     sys.modules[__name__].app = app
-    
-    # Создаем Flask приложение для webhook'ов
-    webhook_app = create_webhook_app(app)
-    
-    # Запускаем webhook сервер в отдельном потоке
-    def run_webhook():
-        webhook_app.run(host='0.0.0.0', port=5000, debug=False)
-    
-    webhook_thread = threading.Thread(target=run_webhook, daemon=True)
-    webhook_thread.start()
-    logger.info("Webhook сервер запущен на порту 5000")
-    
-    # Сохраняем модуль как bot.bot для доступа из других модулей (get_globals, WEBAPP_URL и т.д.)
+
+    # Сохраняем модуль как bot.bot до старта веб-сервера (нужно для get_bot_module в роутах)
     if 'bot.bot' not in sys.modules or sys.modules['bot.bot'] is not sys.modules[__name__]:
         sys.modules['bot.bot'] = sys.modules[__name__]
+
+    # Quart + Hypercorn (ASGI) вместо Flask
+    quart_app = create_quart_app(app)
+    webhook_port = int(os.getenv("WEBHOOK_PORT", "5000"))
+
+    def run_webhook():
+        import asyncio
+        from hypercorn.config import Config
+        from hypercorn.asyncio import serve
+        config = Config()
+        config.bind = [f"0.0.0.0:{webhook_port}"]
+        asyncio.run(serve(quart_app, config))
+
+    webhook_thread = threading.Thread(target=run_webhook, daemon=True)
+    webhook_thread.start()
+    logger.info("Webhook сервер (Quart + Hypercorn) запущен на порту %s", webhook_port)
     
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)

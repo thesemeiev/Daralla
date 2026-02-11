@@ -55,6 +55,33 @@ def authenticate_request():
     return None
 
 
+async def authenticate_request_async(headers, args, body):
+    """
+    Async auth for Quart. Call with:
+      body = await request.get_json(silent=True) or {}
+      user_id = await authenticate_request_async(request.headers, request.args, body)
+    """
+    from ...db.users_db import get_user_by_auth_token, get_user_by_telegram_id_v2
+
+    web_token = headers.get("Authorization") if headers else None
+    if web_token and web_token.startswith("Bearer "):
+        token = web_token.split(" ")[1]
+        user = await get_user_by_auth_token(token)
+        if user:
+            logger.info("Успешная веб-аутентификация для user_id=%s", user["user_id"])
+            return user["user_id"]
+        logger.warning("Веб-токен не найден в БД: %s...", token[:10])
+
+    init_data = (args.get("initData") if args else None) or (body.get("initData") if body else None)
+    if init_data:
+        tg_user_id = verify_telegram_init_data(init_data)
+        if tg_user_id:
+            user = await get_user_by_telegram_id_v2(str(tg_user_id), use_fallback=True)
+            if user:
+                return user["user_id"]
+    return None
+
+
 def verify_telegram_init_data(init_data: str):
     """
     Проверяет initData от Telegram Web App и возвращает user_id если валидно.
@@ -167,6 +194,37 @@ def check_admin_access(user_id: str) -> bool:
         return False
     except Exception as e:
         logger.error(f"Ошибка при проверке прав админа: {e}", exc_info=True)
+        return False
+
+
+async def check_admin_access_async(user_id: str) -> bool:
+    """
+    Async-версия проверки прав админа для Quart. Та же логика, что check_admin_access:
+    user_id в ADMIN_IDS или у пользователя telegram_id в ADMIN_IDS.
+    """
+    try:
+        from ... import bot as bot_module
+        from ...db.users_db import get_user_by_id
+        ADMIN_IDS = getattr(bot_module, "ADMIN_IDS", [])
+
+        user_id_str = str(user_id)
+        admin_set = {str(a) for a in ADMIN_IDS}
+
+        if user_id_str in admin_set:
+            logger.info("Пользователь %s является админом (по user_id)", user_id)
+            return True
+
+        user = await get_user_by_id(user_id)
+        if user:
+            tid = user.get("telegram_id")
+            if tid and str(tid) in admin_set:
+                logger.info("Пользователь %s является админом (по telegram_id=%s)", user_id, tid)
+                return True
+
+        logger.info("Пользователь %s НЕ является админом", user_id)
+        return False
+    except Exception as e:
+        logger.error("Ошибка при проверке прав админа: %s", e, exc_info=True)
         return False
 
 

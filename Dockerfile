@@ -26,8 +26,8 @@ USER app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Открываем порт для webhook'ов
+# Открываем порт для webhook'ов (Quart + Hypercorn)
 EXPOSE 5000
 
-# Запускаем бота
+# Запускаем бота (Telegram polling + веб-сервер Quart/Hypercorn на 5000)
 CMD ["python", "-m", "bot.bot"]

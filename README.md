@@ -22,7 +22,7 @@
 | Компонент | Стек |
 |-----------|------|
 | Бот | Python 3.11, python-telegram-bot |
-| Веб/API | Flask |
+| Веб/API | Quart (ASGI), Hypercorn |
 | База данных | SQLite (aiosqlite) |
 | Платежи | YooKassa |
 | Инфраструктура | Docker, Docker Compose |
@@ -50,6 +50,7 @@ cp .env.example .env
 | `YOOKASSA_SHOP_ID` | ID магазина YooKassa |
 | `YOOKASSA_SECRET_KEY` | Секретный ключ YooKassa |
 | `WEBHOOK_URL` | URL с SSL для webhook (напр. `https://example.com/webhook/yookassa`) |
+| `WEBHOOK_PORT` | Порт веб‑сервера (по умолчанию 5000) |
 | `WEBSITE_URL` | URL веб‑сайта (опционально) |
 
 Серверы X-UI настраиваются через админ‑панель после запуска.
@@ -60,7 +61,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Приложение будет доступно на порту **5000**.
+Веб‑сервер будет доступен на порту **5000** (или на `WEBHOOK_PORT` из `.env`).
 
 ### Запуск локально
 
@@ -87,6 +88,11 @@ Daralla/
 ├── Dockerfile
 └── requirements.txt
 ```
+
+## Документация
+
+- [docs/migration-quart.md](docs/migration-quart.md) — веб-сервер на Quart/Hypercorn, что перенесено, админка, запуск.
+- [docs/migration-py3xui.md](docs/migration-py3xui.md) — интеграция с X-UI через py3xui.
 
 ## API
 
