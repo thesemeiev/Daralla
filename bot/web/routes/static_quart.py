@@ -12,8 +12,9 @@ bp = Blueprint("static", __name__)
 
 
 def _webapp_base_dir():
-    """Project root (parent of bot/)."""
-    return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    """Project root: parent of bot/ (в Docker /app, локально — корень репозитория)."""
+    # __file__ = .../bot/web/routes/static_quart.py → 4 уровня вверх = корень (где лежат bot/ и webapp/)
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 
 @bp.route("/", methods=["GET"])
