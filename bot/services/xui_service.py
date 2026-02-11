@@ -140,9 +140,18 @@ class X3:
         return await self.list(timeout=timeout)
 
     async def client_exists(self, user_email: str) -> bool:
+        """Проверяет наличие клиента по email. При ошибке «Inbound Not Found» считаем, что клиента нет."""
         await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        return c is not None
+        try:
+            c = await self._api.client.get_by_email(user_email)
+            return c is not None
+        except Exception as e:
+            # Панель возвращает "Inbound Not Found For Email" когда клиента ещё нет — не исключение, а норма
+            msg = str(e).lower()
+            if "not found" in msg or "inbound not found" in msg or "error getting traffics" in msg:
+                logger.debug("Клиент %s не найден на панели (ожидаемо при создании): %s", user_email, e)
+                return False
+            raise
 
     async def get_client_expiry_time(self, user_email: str, timeout: int = 15) -> Optional[int]:
         await self._ensure_login()
