@@ -380,6 +380,8 @@ class X3:
         if inbound_id is None:
             logger.warning("Не удалось определить inbound_id для клиента %s", user_email)
             return None
+        # Панель 3x-ui при delete ожидает client id в том же формате, что и при update (UUID для VLESS)
+        self._ensure_client_id_for_update(c)
         await self._api.client.delete(int(inbound_id), c.id)
         logger.info("Клиент удалён: %s (inbound_id=%s)", user_email, inbound_id)
         return type("Response", (), {"status_code": 200})()
