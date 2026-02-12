@@ -1,7 +1,6 @@
 """
 Quart Blueprint: POST /api/admin/stats (dashboard statistics).
 """
-import json
 import logging
 import time
 
@@ -31,43 +30,6 @@ async def _get_user_stats():
         return total_users, new_users_30d
 
 
-async def _get_payment_stats():
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT COUNT(*) as count FROM payments") as cur:
-            row = await cur.fetchone()
-            total_payments = row["count"] if row else 0
-        async with db.execute(
-            "SELECT COUNT(*) as count FROM payments WHERE status = 'succeeded'"
-        ) as cur:
-            row = await cur.fetchone()
-            succeeded_payments = row["count"] if row else 0
-        async with db.execute(
-            "SELECT meta FROM payments WHERE status = 'succeeded'"
-        ) as cur:
-            rows = await cur.fetchall()
-            total_revenue = 0
-            for row in rows:
-                if row["meta"]:
-                    try:
-                        meta = (
-                            json.loads(row["meta"])
-                            if isinstance(row["meta"], str)
-                            else row["meta"]
-                        )
-                        amount = meta.get("amount") or meta.get("price", 0)
-                        if isinstance(amount, str):
-                            try:
-                                amount = float(amount)
-                            except (ValueError, TypeError):
-                                amount = 0
-                        if isinstance(amount, (int, float)) and amount > 0:
-                            total_revenue += amount
-                    except Exception as e:
-                        logger.debug("Ошибка парсинга meta платежа для дохода: %s", e)
-            return total_payments, succeeded_payments, total_revenue
-
-
 def create_blueprint(bot_app):
     bp = Blueprint("admin_stats", __name__)
 
@@ -86,7 +48,6 @@ def create_blueprint(bot_app):
 
             stats = await get_subscription_statistics()
             total_users, new_users_30d = await _get_user_stats()
-            total_payments, succeeded_payments, total_revenue = await _get_payment_stats()
 
             return jsonify({
                 "success": True,
@@ -98,16 +59,6 @@ def create_blueprint(bot_app):
                         "expired": stats.get("expired", stats.get("expired_subscriptions", 0)),
                         "deleted": stats.get("deleted", stats.get("deleted_subscriptions", 0)),
                         "trial": stats.get("trial", 0),
-                    },
-                    "payments": {
-                        "total": total_payments,
-                        "succeeded": succeeded_payments,
-                        "revenue": round(total_revenue, 2),
-                    },
-                    "business": {
-                        "mrr": stats.get("mrr", 0),
-                        "mrr_change": stats.get("mrr_change", 0),
-                        "mrr_change_percent": stats.get("mrr_change_percent", 0),
                     },
                 },
             }), 200, _cors_headers()

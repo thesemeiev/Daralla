@@ -423,8 +423,8 @@ def create_blueprint(bot_app):
             init_data = data.get("initData")
             if not init_data:
                 return jsonify({"error": "Telegram data required"}), 400
-            user_id = verify_telegram_init_data(init_data)
-            if not user_id:
+            telegram_id = verify_telegram_init_data(init_data)
+            if not telegram_id:
                 return jsonify({"error": "Invalid authentication"}), 401
             username = (data.get("username") or "").strip().lower()
             password = (data.get("password") or "").strip()
@@ -433,15 +433,16 @@ def create_blueprint(bot_app):
             if len(password) < 6:
                 return jsonify({"error": "Пароль слишком короткий (мин. 6 символов)"}), 400
             from bot.db.users_db import (
-                get_user_by_id,
+                get_user_by_telegram_id_v2,
                 username_available,
                 update_user_username,
                 update_user_password,
             )
 
-            user = await get_user_by_id(user_id)
+            user = await get_user_by_telegram_id_v2(str(telegram_id), use_fallback=True)
             if not user:
                 return jsonify({"error": "Пользователь не найден"}), 404
+            user_id = user["user_id"]
             ok = await username_available(username, user_id)
             if not ok:
                 return jsonify({"error": "Этот логин уже занят"}), 409

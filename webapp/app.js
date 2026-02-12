@@ -99,7 +99,7 @@ var ROUTE_PAGE_NAMES = new Set([
     'landing', 'login', 'register',
     'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'payment',
     'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
-    'admin-stats', 'admin-users-analytics', 'admin-servers-analytics', 'admin-finance',
+    'admin-stats', 'admin-users-analytics', 'admin-servers-analytics',
     'admin-notifications', 'admin-subscriptions', 'admin-users', 'admin-broadcast',
     'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
     'admin-events'
@@ -321,8 +321,6 @@ function showPage(pageName, params) {
         loadUsersAnalyticsPage();
     } else if (pageName === 'admin-servers-analytics') {
         loadServersAnalyticsPage();
-    } else if (pageName === 'admin-finance') {
-        loadFinancePage();
     } else if (pageName === 'admin-notifications') {
         loadNotificationStats();
     } else if (pageName === 'admin-subscriptions') {
@@ -3312,62 +3310,9 @@ async function loadServersAnalyticsPage() {
     }
 }
 
-// Загрузка страницы «Финансы»
-async function loadFinancePage() {
-    try {
-        const loadingEl = document.getElementById('admin-finance-loading');
-        const errorEl = document.getElementById('admin-finance-error');
-        const contentEl = document.getElementById('admin-finance-content');
-        if (loadingEl) loadingEl.style.display = 'block';
-        if (errorEl) errorEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'none';
-        
-        const response = await apiFetch('/api/admin/stats', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        if (!response.ok) throw new Error('Ошибка загрузки финансов');
-        
-        const data = await response.json();
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'block';
-        
-        const revEl = document.getElementById('finance-revenue');
-        const payEl = document.getElementById('finance-succeeded-payments');
-        if (revEl) revEl.textContent = (data.stats.payments.revenue || 0).toLocaleString('ru-RU') + ' ₽';
-        if (payEl) payEl.textContent = data.stats.payments.succeeded || 0;
-        
-        const mrr = data.stats.business?.mrr || 0;
-        const mrrChange = data.stats.business?.mrr_change || 0;
-        const mrrChangePercent = data.stats.business?.mrr_change_percent || 0;
-        const mrrEl = document.getElementById('finance-mrr');
-        const mrrChangeValEl = document.getElementById('finance-mrr-change-value');
-        const mrrChangePctEl = document.getElementById('finance-mrr-change-percent');
-        const mrrChangeEl = document.getElementById('finance-mrr-change');
-        if (mrrEl) mrrEl.textContent = mrr.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
-        if (mrrChangeValEl) mrrChangeValEl.textContent = (mrrChange >= 0 ? '+' : '') + mrrChange.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
-        if (mrrChangePctEl) mrrChangePctEl.textContent = (mrrChange >= 0 ? '+' : '') + (mrrChangePercent || 0).toFixed(1) + '%';
-        if (mrrChangeEl) {
-            if (mrrChange > 0) mrrChangeEl.style.color = '#4caf50';
-            else if (mrrChange < 0) mrrChangeEl.style.color = '#f44336';
-            else mrrChangeEl.style.color = '#999';
-        }
-        
-        const periodEl = document.getElementById('finance-revenue-trend-period');
-        const days = periodEl ? parseInt(periodEl.value) || 30 : 30;
-        await loadRevenueTrendChart(days, 'finance-revenue-trend-chart');
-    } catch (error) {
-        console.error('Ошибка загрузки финансов:', error);
-        const loadingEl = document.getElementById('admin-finance-loading');
-        if (loadingEl) loadingEl.style.display = 'none';
-        showError('admin-finance-error', 'Ошибка загрузки финансов');
-    }
-}
-
 // Переменные для хранения экземпляров графиков
 let userGrowthChart = null;
 let conversionChart = null;
-let revenueTrendChart = null;
 let notificationDeliveryChart = null;
 let subscriptionDynamicsChart = null;
 let subscriptionConversionChart = null;
@@ -3642,174 +3587,6 @@ function changeConversionPeriod() {
     const select = document.getElementById('conversion-period');
     const days = parseInt(select.value);
     loadConversionChart(days);
-}
-
-// Загрузка графика динамики дохода (chartCanvasId — id canvas, для страницы «Финансы» передать 'finance-revenue-trend-chart')
-async function loadRevenueTrendChart(days = 30, chartCanvasId) {
-    const canvasId = chartCanvasId || 'revenue-trend-chart';
-    try {
-        const response = await apiFetch('/api/admin/charts/revenue-trend', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ days: days })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки данных графика');
-        }
-        
-        const result = await response.json();
-        if (!result.success || !result.data) {
-            return;
-        }
-        
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) {
-            return;
-        }
-        
-        // Уничтожаем предыдущий график, если он существует
-        if (revenueTrendChart) {
-            revenueTrendChart.destroy();
-        }
-        
-        // Подготавливаем данные
-        const labels = result.data.map(item => {
-            const date = new Date(item.date + 'T00:00:00');
-            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-        });
-        const revenues = result.data.map(item => item.revenue || 0);
-        const paymentsCounts = result.data.map(item => item.payments_count || 0);
-        
-        // Создаем комбинированный график
-        revenueTrendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Доход (₽)',
-                        data: revenues,
-                        borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        tension: 0.4,
-                        fill: true,
-                        yAxisID: 'y',
-                        pointRadius: 3,
-                        pointHoverRadius: 5
-                    },
-                    {
-                        label: 'Количество платежей',
-                        data: paymentsCounts,
-                        type: 'bar',
-                        backgroundColor: 'rgba(255, 206, 86, 0.5)',
-                        borderColor: 'rgba(255, 206, 86, 1)',
-                        borderWidth: 1,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return value.toLocaleString('ru-RU') + ' ₽';
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)',
-                            drawOnChartArea: true
-                        },
-                        title: {
-                            display: true,
-                            text: 'Доход (₽)',
-                            color: 'rgb(75, 192, 192)'
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.05)',
-                            drawOnChartArea: false
-                        },
-                        title: {
-                            display: true,
-                            text: 'Количество платежей',
-                            color: 'rgb(255, 206, 86)'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom',
-                        align: 'start',
-                        labels: {
-                            boxWidth: 12,
-                            boxHeight: 12,
-                            padding: 8,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const index = context.dataIndex;
-                                const item = result.data[index];
-                                if (context.datasetIndex === 0) {
-                                    return `Доход: ${item.revenue.toLocaleString('ru-RU')} ₽ (${item.payments_count} платежей)`;
-                                } else {
-                                    return `Платежей: ${item.payments_count}`;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Ошибка загрузки графика динамики дохода:', error);
-    }
-}
-
-// Изменение периода для графика динамики дохода (основная статистика)
-function changeRevenueTrendPeriod() {
-    const select = document.getElementById('revenue-trend-period');
-    const days = parseInt(select.value);
-    loadRevenueTrendChart(days);
-}
-
-// Изменение периода для графика динамики дохода на странице «Финансы»
-function changeFinanceRevenueTrendPeriod() {
-    const select = document.getElementById('finance-revenue-trend-period');
-    const days = select ? parseInt(select.value) || 30 : 30;
-    loadRevenueTrendChart(days, 'finance-revenue-trend-chart');
 }
 
 // Загрузка списка нагрузки на серверы (карточки с progress bar)

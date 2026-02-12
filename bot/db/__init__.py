@@ -76,7 +76,6 @@ from .subscriptions_db import (
     get_subscription_types_statistics,
     get_subscription_dynamics_data,
     get_subscription_conversion_data,
-    get_revenue_trend_data,
     get_conversion_data,
 )
 from .notifications_db import (
@@ -135,7 +134,7 @@ __all__ = [
     'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
     'get_subscription_statistics', 'get_subscription_types_statistics',
     'get_subscription_dynamics_data', 'get_subscription_conversion_data',
-    'get_revenue_trend_data', 'get_conversion_data',
+    'get_conversion_data',
     'init_servers_db', 'get_servers_config', 'get_server_by_id', 'get_server_groups',
     'get_least_loaded_group_id', 'check_and_run_initial_migration',
     'save_server_load_snapshot', 'get_server_load_averages', 'cleanup_old_server_load_history',

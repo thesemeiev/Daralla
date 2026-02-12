@@ -378,7 +378,6 @@
                 </div>
                 
                 <div class="about-section">
-                    <h3>Ссылки</h3>
                     <p class="about-link-caption">Разработчик</p>
                     <a href="https://t.me/thesemeiev" class="link-button" target="_blank">
                         <span>@thesemeiev</span>
@@ -474,10 +473,6 @@
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-notifications')">
                             <span class="admin-panel-row-label">Уведомления</span>
-                            <span class="admin-panel-row-chevron">›</span>
-                        </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-finance')">
-                            <span class="admin-panel-row-label">Финансы</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-servers-analytics')">
@@ -662,61 +657,6 @@
             <div id="admin-servers-analytics-content" class="admin-page-content" style="display: none;">
                 <h2 style="margin: 0 0 16px 0;">Нагрузка на канал серверов</h2>
                 <div id="servers-load-list" class="servers-load-list"></div>
-            </div>
-        </div>
-
-        <!-- АДМИН-ПАНЕЛЬ: Раздел Финансы -->
-        <div id="page-admin-finance" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-            </header>
-            
-            <div id="admin-finance-loading" class="loading">
-                <div class="spinner"></div>
-                <p>Загрузка финансов...</p>
-            </div>
-            
-            <div id="admin-finance-error" class="error" style="display: none;">
-                <p>Ошибка загрузки данных</p>
-                <button onclick="loadFinancePage()">Повторить</button>
-            </div>
-            
-            <div id="admin-finance-content" class="admin-page-content" style="display: none;">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-title">Доход</div>
-                        <div class="stat-card-value revenue" id="finance-revenue">0 ₽</div>
-                        <div class="stat-card-subtitle">Успешных платежей: <span id="finance-succeeded-payments">0</span></div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">MRR</div>
-                        <div class="stat-card-value revenue" id="finance-mrr">0 ₽</div>
-                        <div class="stat-card-subtitle" id="finance-mrr-change">Изменение: <span id="finance-mrr-change-value">0 ₽</span> (<span id="finance-mrr-change-percent">0%</span>)</div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Динамика дохода</h2>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="finance-revenue-trend-period" onchange="changeFinanceRevenueTrendPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                <option value="7">7 дней</option>
-                                <option value="14">14 дней</option>
-                                <option value="30" selected>30 дней</option>
-                                <option value="90">90 дней</option>
-                            </select>
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('finance-revenue-trend-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="finance-revenue-trend-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 

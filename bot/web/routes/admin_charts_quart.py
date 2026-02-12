@@ -1,5 +1,5 @@
 """
-Quart Blueprint: POST /api/admin/charts/* (user-growth, server-load, conversion, revenue-trend, notifications, subscriptions).
+Quart Blueprint: POST /api/admin/charts/* (user-growth, server-load, conversion, notifications, subscriptions).
 """
 import logging
 
@@ -10,7 +10,6 @@ from bot.db.users_db import get_user_growth_data
 from bot.db.servers_db import get_server_load_data
 from bot.db.subscriptions_db import (
     get_conversion_data,
-    get_revenue_trend_data,
     get_subscription_types_statistics,
     get_subscription_dynamics_data,
     get_subscription_conversion_data,
@@ -134,22 +133,6 @@ def create_blueprint(bot_app):
             return jsonify({"success": True, "data": conversion_data}), 200, _cors_headers()
         except Exception as e:
             logger.error("Ошибка в /api/admin/charts/conversion: %s", e, exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500, _cors_headers()
-
-    @bp.route("/api/admin/charts/revenue-trend", methods=["POST", "OPTIONS"])
-    async def api_admin_charts_revenue_trend():
-        if request.method == "OPTIONS":
-            return "", 200, CORS_HEADERS
-        try:
-            _, err = await require_admin(request)
-            if err:
-                return err
-            data = await request.get_json(silent=True) or {}
-            days = int(data.get("days", 30))
-            revenue_data = await get_revenue_trend_data(days)
-            return jsonify({"success": True, "data": revenue_data}), 200, _cors_headers()
-        except Exception as e:
-            logger.error("Ошибка в /api/admin/charts/revenue-trend: %s", e, exc_info=True)
             return jsonify({"error": "Internal server error"}), 500, _cors_headers()
 
     @bp.route("/api/admin/charts/notifications", methods=["POST", "OPTIONS"])
