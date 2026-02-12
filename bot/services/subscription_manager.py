@@ -16,6 +16,7 @@ from ..db.subscriptions_db import (
     create_subscription,
     add_subscription_server,
     get_all_active_subscriptions_by_user,
+    get_subscription_by_id_only,
     get_subscription_servers,
     remove_subscription_server,
     get_all_active_subscriptions,
@@ -397,6 +398,11 @@ class SubscriptionManager:
         Возвращает список VLESS ссылок для всех серверов, привязанных к подписке (без дубликатов).
         """
         servers = await get_subscription_servers(subscription_id)
+        # Токен подписки: при создании клиента через API панель 3x-ui может не сохранить subId (issue #3237),
+        # поэтому передаём token в get_subscription_links как fallback для URL /sub/{token}.
+        sub_record = await get_subscription_by_id_only(subscription_id)
+        subscription_token = (sub_record or {}).get("subscription_token") or None
+
         links: List[str] = []
         seen_links = set()  # Для дедупликации ссылок (без tag)
 
@@ -429,7 +435,12 @@ class SubscriptionManager:
                 # Передаём client_flow: X-UI часто не добавляет flow в URL подписки — без него VPN-клиент не парсит flow.
                 try:
                     client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
-                    xui_links = await xui.get_subscription_links(client_email, server_name=display_name, flow_override=client_flow)
+                    xui_links = await xui.get_subscription_links(
+                        client_email,
+                        server_name=display_name,
+                        flow_override=client_flow,
+                        subscription_token=subscription_token,
+                    )
                     if xui_links:
                         # Дедупликация: добавляем только уникальные ссылки (по части без tag)
                         for link in xui_links:

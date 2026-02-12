@@ -2,6 +2,7 @@
 Сервис для работы с X-UI API через библиотеку py3xui (AsyncApi).
 Сохраняет прежний публичный интерфейс класса X3 для совместимости с кодом проекта.
 """
+import base64
 import datetime
 import json
 import logging
@@ -331,7 +332,7 @@ class X3:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
-        return None
+        return type("Response", (), {"status_code": 200, "text": "{}", "json": lambda self: {"success": True}})()
 
     async def updateClientLimitIp(
         self,
@@ -605,7 +606,13 @@ class X3:
         user_email: str,
         server_name: Optional[str] = None,
         flow_override: Optional[str] = None,
+        subscription_token: Optional[str] = None,
     ) -> List[str]:
+        """
+        Получает ссылки подписки с endpoint панели /sub/{sub_id}.
+        subscription_token: токен подписки из БД; используется как fallback для sub_id,
+        если панель не сохранила subId при создании клиента через API (баг 3x-ui #3237).
+        """
         await self._ensure_login()
         try:
             data = await self.list()
@@ -626,22 +633,44 @@ class X3:
                 base_url = f"{scheme}://{host_for_sub}:{self.subscription_port}"
             client = await self._api.client.get_by_email(user_email)
             if not client:
+                logger.debug("get_subscription_links: клиент не найден email=%s", user_email)
                 return []
-            sub_id = getattr(client, "sub_id", None) or getattr(client, "subId", "") or ""
+            # sub_id с панели; при создании через API панель может не сохранить subId (3x-ui #3237)
+            sub_id = getattr(client, "sub_id", None) or getattr(client, "subId", None)
+            if not sub_id and hasattr(client, "model_dump"):
+                d = (client.model_dump() or {})
+                sub_id = d.get("sub_id") or d.get("subId")
+            if not sub_id and subscription_token:
+                sub_id = subscription_token
+                logger.debug("get_subscription_links: используем subscription_token как sub_id для email=%s", user_email)
             if not sub_id:
+                logger.debug("get_subscription_links: sub_id пустой у клиента email=%s", user_email)
                 return []
             sub_url = f"{base_url.rstrip('/')}/sub/{sub_id}"
             try:
                 async with httpx.AsyncClient(verify=False, timeout=15.0) as hc:
                     r = await hc.get(sub_url)
                     if r.status_code != 200:
+                        logger.debug(
+                            "Subscription endpoint вернул не 200: url=%s status=%s body_len=%s",
+                            sub_url, r.status_code, len(r.text or ""),
+                        )
                         return []
                     text = r.text
             except Exception as e:
                 logger.warning("Ошибка запроса subscription URL %s: %s", sub_url, e)
                 return []
+            # Некоторые панели отдают подписку в base64 (одна строка)
+            raw = (text or "").strip()
+            if raw and "vless://" not in raw and "vmess://" not in raw and "trojan://" not in raw:
+                try:
+                    decoded = base64.standard_b64decode(raw).decode("utf-8", errors="replace")
+                    if decoded.strip():
+                        raw = decoded.strip()
+                except Exception:
+                    pass
             links = []
-            for line in text.strip().splitlines():
+            for line in raw.splitlines():
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
@@ -660,6 +689,11 @@ class X3:
                         pre, _, frag = line.partition("#")
                         line = f"{pre}#{quote(server_name, safe='')}"
                     links.append(line)
+            if not links and raw:
+                logger.debug(
+                    "Subscription endpoint вернул тело без vless/vmess/trojan: url=%s body_len=%s",
+                    sub_url, len(raw),
+                )
             return links
         except Exception as e:
             logger.error("Ошибка get_subscription_links для %s: %s", user_email, e)
