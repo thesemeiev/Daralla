@@ -53,7 +53,7 @@ def create_subscription_blueprint(bot_app):
         logger.info("Входящий запрос subscription: token=%s, method=%s", token, request.method)
 
         try:
-            from bot.handlers.webhooks.webhook_auth import get_subscription_manager
+            from bot.handlers.api_support.webhook_auth import get_subscription_manager
 
             subscription_manager = get_subscription_manager()
             if not subscription_manager:
@@ -99,7 +99,7 @@ def create_subscription_blueprint(bot_app):
                     logger.warning("  - %s: %s", s["server_name"], s["client_email"])
                 return "No servers available", 503
 
-            from bot.handlers.webhooks.webhook_auth import get_bot_module
+            from bot.handlers.api_support.webhook_auth import get_bot_module
 
             bot_module = get_bot_module()
             vpn_brand_name = (
@@ -134,7 +134,7 @@ def create_subscription_blueprint(bot_app):
             )
 
             try:
-                from bot.handlers.webhooks.webhook_auth import get_server_manager
+                from bot.handlers.api_support.webhook_auth import get_server_manager
 
                 server_manager = get_server_manager()
                 if server_manager and servers:

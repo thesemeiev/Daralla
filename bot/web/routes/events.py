@@ -48,7 +48,7 @@ def create_blueprint():
             return jsonify({"events": [], "active": [], "upcoming": [], "ended": []}), 200, _CORS
 
     async def _admin_check():
-        from bot.handlers.webhooks.webhook_auth import authenticate_request_async, check_admin_access_async
+        from bot.handlers.api_support.webhook_auth import authenticate_request_async, check_admin_access_async
         body = await request.get_json(silent=True) or {}
         args = request.args if request.args else {}
         user_id = await authenticate_request_async(request.headers, args, body)
@@ -147,7 +147,7 @@ def create_blueprint():
 
     @bp.route("/my-code", methods=["GET"])
     async def public_my_code():
-        from bot.handlers.webhooks.webhook_auth import authenticate_request_async
+        from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
         user_id = await authenticate_request_async(request.headers, request.args or {}, body)
         if not user_id:
@@ -162,7 +162,7 @@ def create_blueprint():
 
     @bp.route("/am-i-referred", methods=["GET"])
     async def public_am_i_referred():
-        from bot.handlers.webhooks.webhook_auth import authenticate_request_async
+        from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
         user_id = await authenticate_request_async(request.headers, request.args or {}, body)
         if not user_id:
@@ -183,7 +183,7 @@ def create_blueprint():
     async def public_record_ref_by_code():
         if request.method == "OPTIONS":
             return "", 200, _CORS
-        from bot.handlers.webhooks.webhook_auth import authenticate_request_async
+        from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
         user_id = await authenticate_request_async(request.headers, request.args or {}, body)
         if not user_id:
@@ -252,7 +252,7 @@ def create_blueprint():
 
     @bp.route("/<int:event_id>/my-place", methods=["GET"])
     async def public_my_place(event_id):
-        from bot.handlers.webhooks.webhook_auth import authenticate_request_async
+        from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
         user_id = await authenticate_request_async(request.headers, request.args or {}, body)
         if not user_id:

@@ -13,7 +13,7 @@ from bot.db import (
     get_or_create_subscriber,
     get_payment_by_id,
 )
-from bot.handlers.webhooks.payment_processors import process_payment_webhook
+from bot.handlers.api_support.payment_processors import process_payment_webhook
 from bot.services.server_manager import MultiServerManager
 from bot.services.subscription_manager import SubscriptionManager
 
@@ -67,7 +67,7 @@ async def test_process_payment_webhook_idempotent(db_with_server, mock_bot_app, 
     await add_payment(payment_id, user_id, "succeeded", meta=meta)
 
     with patch(
-        "bot.handlers.webhooks.payment_processors.get_globals",
+        "bot.handlers.api_support.payment_processors.get_globals",
         return_value=mock_managers,
     ):
         await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
@@ -96,7 +96,7 @@ async def test_process_payment_webhook_new_purchase_creates_subscription(
     await add_payment(payment_id, user_id, "succeeded", meta=meta)
 
     with patch(
-        "bot.handlers.webhooks.payment_processors.get_globals",
+        "bot.handlers.api_support.payment_processors.get_globals",
         return_value=mock_managers,
     ):
         await process_payment_webhook(mock_bot_app, payment_id, "succeeded")

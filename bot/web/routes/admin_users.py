@@ -17,7 +17,7 @@ from bot.db.payments_db import get_payments_by_user
 from bot.db.subscriptions_db import update_subscription_expiry
 from bot.db.users_db import delete_user_completely
 from bot.db.subscriptions_db import get_subscription_servers
-from bot.handlers.webhooks.webhook_auth import get_server_manager, get_subscription_manager
+from bot.handlers.api_support.webhook_auth import get_server_manager, get_subscription_manager
 
 logger = logging.getLogger(__name__)
 

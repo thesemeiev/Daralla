@@ -15,7 +15,7 @@
 | Статика (/, webapp) | `bot/web/routes/static.py` |
 | API Admin (`/api/admin/*`) | `bot/web/routes/admin_*.py` (check, users, subscriptions, stats, charts, broadcast, servers) |
 
-Все маршруты — async, аутентификация через `bot/handlers/webhooks/webhook_auth.py` (`authenticate_request_async`, `check_admin_access_async`).
+Все маршруты — async, аутентификация через `bot/handlers/api_support/webhook_auth.py` (`authenticate_request_async`, `check_admin_access_async`).
 
 ## Запуск
 

@@ -4,7 +4,7 @@ Quart Blueprint: POST /api/admin/check (admin rights check).
 from quart import Blueprint, jsonify
 
 from bot.web.routes.admin_common import _cors_headers, admin_route
-from bot.handlers.webhooks.webhook_auth import check_admin_access_async
+from bot.handlers.api_support.webhook_auth import check_admin_access_async
 
 
 def create_blueprint(bot_app):

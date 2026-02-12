@@ -7,7 +7,7 @@ import logging
 
 from quart import Blueprint, request, jsonify
 
-from bot.handlers.webhooks.payment_processors import process_payment_webhook
+from bot.handlers.api_support.payment_processors import process_payment_webhook
 
 logger = logging.getLogger(__name__)
 

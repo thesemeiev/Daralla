@@ -15,7 +15,7 @@ from bot.db.subscriptions_db import (
     get_subscription_conversion_data,
 )
 from bot.db.notifications_db import get_notification_stats, get_daily_notification_stats
-from bot.handlers.webhooks.webhook_auth import get_server_manager
+from bot.handlers.api_support.webhook_auth import get_server_manager
 
 logger = logging.getLogger(__name__)
 

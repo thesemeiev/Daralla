@@ -85,8 +85,6 @@ from .notifications_db import (
     is_subscription_notification_sent, mark_subscription_notification_sent,
     clear_subscription_notifications
 )
-from .promo_db import init_promo_db
-
 async def init_all_db():
     """Инициализирует все таблицы в единой базе данных"""
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -98,7 +96,6 @@ async def init_all_db():
     await init_users_db()
     await init_servers_db()
     await init_subscriptions_db()
-    await init_promo_db()
     await init_payments_db()
     await init_notifications_db()
     
@@ -106,7 +103,7 @@ async def init_all_db():
 
 __all__ = [
     'init_all_db', 'DB_PATH', 'DATA_DIR',
-    'init_config_db', 'init_users_db', 'init_servers_db', 'init_subscriptions_db', 'init_promo_db',
+    'init_config_db', 'init_users_db', 'init_servers_db', 'init_subscriptions_db',
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
     'get_payments_by_user',

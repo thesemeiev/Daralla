@@ -6,7 +6,7 @@ from functools import wraps
 
 from quart import request, jsonify
 
-from bot.handlers.webhooks.webhook_auth import authenticate_request_async, check_admin_access_async
+from bot.handlers.api_support.webhook_auth import authenticate_request_async, check_admin_access_async
 
 logger = logging.getLogger(__name__)
 

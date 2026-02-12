@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Это временное решение до полного рефакторинга
 def get_globals():
     """Получает глобальные переменные из bot.py через общий хелпер."""
-    from ..webhooks.webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
+    from ..api_support.webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
     bot_module = get_bot_module()
     return {
         'server_manager': get_server_manager(),

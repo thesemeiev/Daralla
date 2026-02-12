@@ -10,7 +10,7 @@ from quart import Blueprint, request, jsonify
 from bot.web.routes.admin_common import _cors_headers, admin_route
 from bot.db import get_all_user_ids
 from bot.db.users_db import get_telegram_chat_id_for_notification
-from bot.handlers.webhooks.webhook_auth import get_bot_module
+from bot.handlers.api_support.webhook_auth import get_bot_module
 from bot.utils import UIButtons
 
 logger = logging.getLogger(__name__)

@@ -20,8 +20,8 @@ from bot.db.subscriptions_db import (
     remove_subscription_server,
 )
 from bot.db.notifications_db import clear_subscription_notifications
-from bot.handlers.webhooks.webhook_auth import get_server_manager, get_subscription_manager
-from bot.handlers.webhooks.payment_processors import get_globals
+from bot.handlers.api_support.webhook_auth import get_server_manager, get_subscription_manager
+from bot.handlers.api_support.payment_processors import get_globals
 
 logger = logging.getLogger(__name__)
 

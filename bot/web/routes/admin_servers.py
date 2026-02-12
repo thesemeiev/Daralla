@@ -20,7 +20,7 @@ from bot.db.servers_db import (
 )
 from bot.services.server_provider import ServerProvider
 from bot.services.xui_service import X3
-from bot.handlers.webhooks.webhook_auth import get_bot_module
+from bot.handlers.api_support.webhook_auth import get_bot_module
 
 logger = logging.getLogger(__name__)
 

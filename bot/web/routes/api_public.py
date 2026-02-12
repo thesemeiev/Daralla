@@ -6,7 +6,7 @@ import logging
 
 from quart import Blueprint, request, jsonify
 
-from bot.handlers.webhooks.webhook_auth import authenticate_request_async
+from bot.handlers.api_support.webhook_auth import authenticate_request_async
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401, CORS_HEADERS
 
-            from bot.handlers.webhooks.webhook_auth import get_server_manager
+            from bot.handlers.api_support.webhook_auth import get_server_manager
             server_manager = get_server_manager()
             if not server_manager:
                 return jsonify({"error": "Server manager not available"}), 503, CORS_HEADERS

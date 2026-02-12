@@ -538,10 +538,6 @@ async def merge_user_into_target(source_user_id: str, target_user_id: str) -> bo
                 (target_user_id, source_user_id),
             )
             await db.execute(
-                "UPDATE promo_code_uses SET user_id = ? WHERE user_id = ?",
-                (target_user_id, source_user_id),
-            )
-            await db.execute(
                 "UPDATE sent_notifications SET user_id = ? WHERE user_id = ?",
                 (target_user_id, source_user_id),
             )
@@ -645,10 +641,6 @@ async def rename_user_id(old_user_id: str, new_user_id: str) -> bool:
                 (new_user_id, old_user_id)
             )
             await db.execute(
-                "UPDATE promo_code_uses SET user_id = ? WHERE user_id = ?",
-                (new_user_id, old_user_id)
-            )
-            await db.execute(
                 "UPDATE telegram_links SET user_id = ? WHERE user_id = ?",
                 (new_user_id, old_user_id)
             )
@@ -698,7 +690,6 @@ async def delete_user_completely(user_id: str) -> dict:
             'subscriptions_deleted': 0,
             'subscription_servers_deleted': 0,
             'payments_deleted': 0,
-            'promo_uses_deleted': 0,
             'user_deleted': False,
             'user_internal_id': None
         }
@@ -737,12 +728,6 @@ async def delete_user_completely(user_id: str) -> dict:
                     stats['payments_deleted'] = cur.rowcount
 
                 async with db.execute(
-                    "DELETE FROM promo_code_uses WHERE user_id = ?",
-                    (user_id,)
-                ) as cur:
-                    stats['promo_uses_deleted'] = cur.rowcount
-
-                async with db.execute(
                     "DELETE FROM users WHERE id = ?",
                     (user_internal_id,)
                 ) as cur:
@@ -754,8 +739,7 @@ async def delete_user_completely(user_id: str) -> dict:
                     f"Пользователь {user_id} полностью удален: "
                     f"{stats['subscriptions_deleted']} подписок, "
                     f"{stats['subscription_servers_deleted']} связей с серверами, "
-                    f"{stats['payments_deleted']} платежей, "
-                    f"{stats['promo_uses_deleted']} использований промокодов"
+                    f"{stats['payments_deleted']} платежей"
                 )
         except Exception as e:
             logger.error(f"Ошибка удаления пользователя {user_id}: {e}", exc_info=True)

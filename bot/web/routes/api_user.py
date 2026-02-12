@@ -12,7 +12,7 @@ import requests as requests_lib
 from quart import Blueprint, request, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from bot.handlers.webhooks.webhook_auth import authenticate_request_async, verify_telegram_init_data
+from bot.handlers.api_support.webhook_auth import authenticate_request_async, verify_telegram_init_data
 from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ def create_blueprint(bot_app):
                         )
                         trial_created = True
                         logger.info("Пробная подписка создана: subscription_id=%s", subscription_id)
-                        from bot.handlers.webhooks.webhook_auth import (
+                        from bot.handlers.api_support.webhook_auth import (
                             get_server_manager,
                             get_subscription_manager,
                         )
@@ -371,7 +371,7 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401
             from bot.db.users_db import get_user_server_usage
-            from bot.handlers.webhooks.webhook_auth import get_server_manager
+            from bot.handlers.api_support.webhook_auth import get_server_manager
 
             server_usage = await get_user_server_usage(user_id)
             server_manager = get_server_manager()

@@ -1,4 +1,4 @@
-"""Unit tests for Telegram initData verification (webhook_auth.verify_telegram_init_data)."""
+"""Unit tests for Telegram initData verification (api_support.webhook_auth.verify_telegram_init_data)."""
 import hmac
 import hashlib
 import json
@@ -8,7 +8,7 @@ import urllib.parse
 
 import pytest
 
-from bot.handlers.webhooks.webhook_auth import verify_telegram_init_data
+from bot.handlers.api_support.webhook_auth import verify_telegram_init_data
 
 
 def _build_valid_init_data(telegram_user_id: int, auth_date: int = None) -> str:
