@@ -92,11 +92,11 @@ async def test_post_api_admin_check_with_admin_token_returns_200_and_is_admin(qu
     token = reg_data.get("token")
     user_id = reg_data.get("user_id")
     assert token and user_id
-    # Patch async admin check where used: admin_common and admin_check_quart
+    # Patch async admin check where used: admin_common and admin_check
     async def mock_admin_async(*args, **kwargs):
         return True
     with patch("bot.web.routes.admin_common.check_admin_access_async", side_effect=mock_admin_async), patch(
-        "bot.web.routes.admin_check_quart.check_admin_access_async", side_effect=mock_admin_async
+        "bot.web.routes.admin_check.check_admin_access_async", side_effect=mock_admin_async
     ):
         response = await client.post(
             "/api/admin/check",

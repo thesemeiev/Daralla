@@ -2,6 +2,7 @@
 Shared CORS and admin auth for Quart admin blueprints.
 """
 import logging
+from functools import wraps
 
 from quart import request, jsonify
 
@@ -9,9 +10,10 @@ from bot.handlers.webhooks.webhook_auth import authenticate_request_async, check
 
 logger = logging.getLogger(__name__)
 
+# Единый источник CORS для всех маршрутов (включая GET для api_user и events)
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "*",
 }
 
@@ -32,3 +34,24 @@ async def require_admin(request):
     if not await check_admin_access_async(user_id):
         return None, (jsonify({"error": "Access denied"}), 403, _cors_headers())
     return user_id, None
+
+
+def admin_route(f):
+    """
+    Декоратор для админ-роутов: обрабатывает OPTIONS, проверяет require_admin,
+    оборачивает вызов в try/except с 500 при необработанном исключении.
+    Обработчик получает (request, admin_id, *args, **kwargs), где *args — path-параметры роута.
+    """
+    @wraps(f)
+    async def wrapped(*args, **kwargs):
+        if request.method == "OPTIONS":
+            return "", 200, _cors_headers()
+        admin_id, err = await require_admin(request)
+        if err:
+            return err
+        try:
+            return await f(request, admin_id, *args, **kwargs)
+        except Exception as e:
+            logger.exception("Admin route error: %s", e)
+            return jsonify({"error": "Internal server error"}), 500, _cors_headers()
+    return wrapped

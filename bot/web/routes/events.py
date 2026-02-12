@@ -7,13 +7,11 @@ import time
 
 from quart import Blueprint, request, jsonify
 
+from bot.web.routes.admin_common import CORS_HEADERS
+
 logger = logging.getLogger(__name__)
 
-_CORS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "*",
-}
+_CORS = CORS_HEADERS
 
 # Кеш для GET /api/events/ (TTL 60 сек)
 _events_cache = None

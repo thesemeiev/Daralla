@@ -21,43 +21,43 @@ def create_quart_app(bot_app=None) -> Quart:
         return {"status": "ok"}, 200
 
     # Optionally register all existing blueprints. Use skip_subscription=True
-    # so the async subscription blueprint (subscription_quart) is used instead.
+    # so the async subscription blueprint (subscription) is used instead.
     if bot_app is not None:
         try:
             from bot.web.routes import create_subscription_blueprint
-            from bot.web.routes.api_auth_quart import create_blueprint as create_api_auth_quart_blueprint
-            from bot.web.routes.api_user_quart import create_blueprint as create_api_user_quart_blueprint
-            from bot.web.routes.payment_quart import create_blueprint as create_payment_quart_blueprint
-            from bot.web.routes.api_public_quart import create_blueprint as create_api_public_quart_blueprint
-            from bot.web.routes.static_quart import bp as static_quart_bp
-            from bot.web.routes.admin_check_quart import create_blueprint as create_admin_check_quart_blueprint
-            from bot.web.routes.admin_users_quart import create_blueprint as create_admin_users_quart_blueprint
-            from bot.web.routes.admin_subscriptions_quart import create_blueprint as create_admin_subscriptions_quart_blueprint
-            from bot.web.routes.admin_stats_quart import create_blueprint as create_admin_stats_quart_blueprint
-            from bot.web.routes.admin_charts_quart import create_blueprint as create_admin_charts_quart_blueprint
-            from bot.web.routes.admin_broadcast_quart import create_blueprint as create_admin_broadcast_quart_blueprint
-            from bot.web.routes.admin_servers_quart import create_blueprint as create_admin_servers_quart_blueprint
+            from bot.web.routes.api_auth import create_blueprint as create_api_auth_blueprint
+            from bot.web.routes.api_user import create_blueprint as create_api_user_blueprint
+            from bot.web.routes.payment import create_blueprint as create_payment_blueprint
+            from bot.web.routes.api_public import create_blueprint as create_api_public_blueprint
+            from bot.web.routes.static import bp as static_bp
+            from bot.web.routes.admin_check import create_blueprint as create_admin_check_blueprint
+            from bot.web.routes.admin_users import create_blueprint as create_admin_users_blueprint
+            from bot.web.routes.admin_subscriptions import create_blueprint as create_admin_subscriptions_blueprint
+            from bot.web.routes.admin_stats import create_blueprint as create_admin_stats_blueprint
+            from bot.web.routes.admin_charts import create_blueprint as create_admin_charts_blueprint
+            from bot.web.routes.admin_broadcast import create_blueprint as create_admin_broadcast_blueprint
+            from bot.web.routes.admin_servers import create_blueprint as create_admin_servers_blueprint
 
-            app.register_blueprint(create_payment_quart_blueprint(bot_app))
+            app.register_blueprint(create_payment_blueprint(bot_app))
             try:
                 from bot.events import EVENTS_MODULE_ENABLED
                 if EVENTS_MODULE_ENABLED:
-                    from bot.web.routes.events_quart import create_blueprint as create_events_quart_blueprint
-                    app.register_blueprint(create_events_quart_blueprint())
+                    from bot.web.routes.events import create_blueprint as create_events_blueprint
+                    app.register_blueprint(create_events_blueprint())
             except ImportError:
                 pass
             app.register_blueprint(create_subscription_blueprint(bot_app))
-            app.register_blueprint(create_api_public_quart_blueprint(bot_app))
-            app.register_blueprint(create_api_auth_quart_blueprint(bot_app))
-            app.register_blueprint(create_api_user_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_check_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_users_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_subscriptions_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_stats_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_charts_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_broadcast_quart_blueprint(bot_app))
-            app.register_blueprint(create_admin_servers_quart_blueprint(bot_app))
-            app.register_blueprint(static_quart_bp)
+            app.register_blueprint(create_api_public_blueprint(bot_app))
+            app.register_blueprint(create_api_auth_blueprint(bot_app))
+            app.register_blueprint(create_api_user_blueprint(bot_app))
+            app.register_blueprint(create_admin_check_blueprint(bot_app))
+            app.register_blueprint(create_admin_users_blueprint(bot_app))
+            app.register_blueprint(create_admin_subscriptions_blueprint(bot_app))
+            app.register_blueprint(create_admin_stats_blueprint(bot_app))
+            app.register_blueprint(create_admin_charts_blueprint(bot_app))
+            app.register_blueprint(create_admin_broadcast_blueprint(bot_app))
+            app.register_blueprint(create_admin_servers_blueprint(bot_app))
+            app.register_blueprint(static_bp)
             logger.info(
                 "Registered webhook blueprints on Quart app "
                 "(payment, subscription, api_public, api_auth, api_user, admin*, events*, static=async)"

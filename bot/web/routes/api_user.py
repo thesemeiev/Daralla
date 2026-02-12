@@ -13,18 +13,9 @@ from quart import Blueprint, request, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from bot.handlers.webhooks.webhook_auth import authenticate_request_async, verify_telegram_init_data
+from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
 
 logger = logging.getLogger(__name__)
-
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "*",
-}
-
-
-def _cors_headers():
-    return {**CORS_HEADERS, "Content-Type": "application/json"}
 
 
 def create_blueprint(bot_app):

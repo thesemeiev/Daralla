@@ -32,7 +32,7 @@ Daralla/
 │   ├── prices_config.py
 │   └── web/                      # Веб-сервер (Quart)
 │       ├── app_quart.py          # Создание приложения, регистрация blueprints
-│       └── routes/               # Все HTTP-маршруты (*_quart.py, events_quart.py, static_quart.py)
+│       └── routes/               # Все HTTP-маршруты (admin_*.py, api_*.py, payment, subscription, events, static)
 ├── webapp/                       # Фронтенд (HTML/CSS/JS)
 ├── tests/
 ├── docs/
@@ -51,7 +51,7 @@ Daralla/
 
 1. **Quart вместо Flask** — весь HTTP API на Quart, Flask удалён из кода и из `requirements.txt`.
 2. **Один веб-сервер** — только `create_quart_app()` в `bot/web/app_quart.py`; маршруты только в `bot/web/routes/`.
-3. **Events как часть приложения** — API событий в `events_quart.py`, без отдельного Flask-модуля.
+3. **Events как часть приложения** — API событий в `routes/events.py`, без отдельного Flask-модуля.
 4. **Одна БД** — `daralla.db`; модуль events использует `bot.db.DB_PATH` и свои таблицы (инициализация в `core/startup.py`).
 
 ---
@@ -72,17 +72,16 @@ Daralla/
 
 ### 3. Консистентность кода
 
-- **CORS** — во многих маршрутах повторяется один и тот же словарь CORS. Имеет смысл вынести общий CORS в `admin_common.py` или в `bot/web/common.py` и использовать везде один источник.
-- **OPTIONS** — много маршрутов начинаются с `if request.method == "OPTIONS": return "", 200, _CORS`. Можно вынести в декоратор или middleware (например, Quart after_request), чтобы не дублировать.
- - **X-UI слой (X3)** — зафиксирован единый контракт:
+- **CORS и админ-роуты** — CORS вынесен в `admin_common.py` (единый `CORS_HEADERS` и `_cors_headers()`); все админ-маршруты, включая broadcast, используют декоратор `@admin_route` (OPTIONS + `require_admin` + общий try/except с 500). User API и events используют тот же `CORS_HEADERS` из `admin_common`.
+- **X-UI слой (X3)** — зафиксирован единый контракт:
    - информационные методы (`client_exists`, `get_client_expiry_time`, `get_client_info`, `list` и т.п.) возвращают значения/`None` и не бросают исключения в «нормальных» ситуациях (например, клиент не найден);
    - методы, меняющие состояние (`addClient`, `extendClient`, `setClientExpiry`, `updateClientLimitIp`, `updateClientName`, `deleteClient`) сигнализируют об успехе отсутствием исключения; там, где важно различать «нашли/не нашли» (`setClientExpiry`, `updateClientLimitIp`, `deleteClient`), возвращается `bool` (`True` — изменение выполнено, `False` — клиент не найден/не изменён);
    - код, который раньше проверял `response.status_code` / `response.json()`, упрощён и полагается на этот контракт.
 
 ### 4. Документация и конфиг
 
-- **Переменные окружения** — собрать в одном месте (например, в `docs/config.md` или в README) полный список: `TELEGRAM_TOKEN`, `ADMIN_ID(S)`, `WEBHOOK_PORT`, `YOOKASSA_*`, `WEBHOOK_URL`, `WEBSITE_URL`, `DARALLA_TEST_DB` для тестов и т.д.
-- **Events** — в README или в `docs/roadmap.md` кратко описать: как включить (`EVENTS_MODULE_ENABLED`), какие эндпоинты даёт (`/api/events/*`), что хранится в БД (таблицы из `bot/events/db/migrations.py`).
+- **Переменные окружения и чек-лист** — см. `docs/config.md`: полный список env (`TELEGRAM_TOKEN`, `ADMIN_ID(S)`, `YOOKASSA_*`, `WEBHOOK_URL`, `WEBSITE_URL`, `EVENTS_MODULE_ENABLED`, `DARALLA_TEST_DB` и др.) и краткий чек-лист «как поднять проект на новом сервере».
+- **Events** — в `docs/config.md` описано: включение через `EVENTS_MODULE_ENABLED`, эндпоинты `/api/events/*`, таблицы в БД (`bot/events/db/migrations.py`).
 
 ### 5. Дальнейшие улучшения (когда будет время)
 

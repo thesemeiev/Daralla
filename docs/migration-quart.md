@@ -6,14 +6,14 @@
 
 | Компонент | Файл |
 |-----------|------|
-| Payment (YooKassa webhook) | `bot/web/routes/payment_quart.py` |
-| Subscription (`/sub/<token>`) | `bot/web/routes/subscription_quart.py` |
-| API Public (`/api/prices`, `/api/servers`) | `bot/web/routes/api_public_quart.py` |
-| API Auth (register, login, verify) | `bot/web/routes/api_auth_quart.py` |
-| API User (подписки, платежи, профиль) | `bot/web/routes/api_user_quart.py` |
-| Events API (`/api/events/*`) | `bot/web/routes/events_quart.py` |
-| Статика (/, webapp) | `bot/web/routes/static_quart.py` |
-| API Admin (`/api/admin/*`) | `bot/web/routes/admin_*_quart.py` (check, users, subscriptions, stats, charts, broadcast, servers) |
+| Payment (YooKassa webhook) | `bot/web/routes/payment.py` |
+| Subscription (`/sub/<token>`) | `bot/web/routes/subscription.py` |
+| API Public (`/api/prices`, `/api/servers`) | `bot/web/routes/api_public.py` |
+| API Auth (register, login, verify) | `bot/web/routes/api_auth.py` |
+| API User (подписки, платежи, профиль) | `bot/web/routes/api_user.py` |
+| Events API (`/api/events/*`) | `bot/web/routes/events.py` |
+| Статика (/, webapp) | `bot/web/routes/static.py` |
+| API Admin (`/api/admin/*`) | `bot/web/routes/admin_*.py` (check, users, subscriptions, stats, charts, broadcast, servers) |
 
 Все маршруты — async, аутентификация через `bot/handlers/webhooks/webhook_auth.py` (`authenticate_request_async`, `check_admin_access_async`).
 
@@ -24,7 +24,7 @@
 
 ## Админ-панель
 
-Маршруты `/api/admin/*` в `app_quart.py`: общий модуль `admin_common.py` (CORS, `require_admin`), blueprints `admin_check_quart`, `admin_users_quart`, `admin_subscriptions_quart`, `admin_stats_quart`, `admin_charts_quart`, `admin_broadcast_quart`, `admin_servers_quart`.
+Маршруты `/api/admin/*` в `app_quart.py`: общий модуль `admin_common.py` (CORS, `@admin_route`), blueprints `admin_check`, `admin_users`, `admin_subscriptions`, `admin_stats`, `admin_charts`, `admin_broadcast`, `admin_servers`.
 
 ## Безопасность
 

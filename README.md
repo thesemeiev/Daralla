@@ -72,6 +72,8 @@ python -m bot.bot
 
 ## Структура проекта
 
+Веб-сервер — только **Quart** (Flask не используется). Все HTTP-маршруты в `bot/web/`: приложение в `app_quart.py`, маршруты в `routes/` (admin_*, api_*, payment, subscription, events, static).
+
 ```
 Daralla/
 ├── bot/                    # Ядро бота и бэкенд
@@ -82,9 +84,9 @@ Daralla/
 │   ├── handlers/            # Команды, колбэки, auth и обработка платежей
 │   ├── services/            # Subscription, Server, Sync, X-UI
 │   ├── utils/               # UI, helpers, validators
-│   └── web/                 # Веб-сервер (Quart): app_quart.py, routes/*
+│   └── web/                 # Веб-сервер (Quart): app_quart.py, routes/
 ├── webapp/                  # Фронтенд (HTML/CSS/JS)
-├── docs/                    # Документация (migration-quart.md, roadmap.md)
+├── docs/                    # Документация (roadmap.md, config.md и др.)
 ├── tests/
 ├── docker-compose.yml
 ├── Dockerfile
@@ -93,8 +95,9 @@ Daralla/
 
 ## Документация
 
-- [docs/migration-quart.md](docs/migration-quart.md) — веб-сервер на Quart/Hypercorn, маршруты, запуск.
+- [docs/config.md](docs/config.md) — переменные окружения, чек-лист запуска на новом сервере, модуль Events.
 - [docs/roadmap.md](docs/roadmap.md) — структура проекта и что делать дальше (чистота, именование, тесты).
+- [docs/migration-quart.md](docs/migration-quart.md) — веб-сервер на Quart/Hypercorn, маршруты, запуск.
 - [docs/migration-py3xui.md](docs/migration-py3xui.md) — интеграция с X-UI через py3xui.
 
 ## API
