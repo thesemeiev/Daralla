@@ -17,6 +17,9 @@ COPY images/ ./images/
 # Копируем веб-приложение
 COPY webapp/ ./webapp/
 
+# Копируем скрипты (миграции и т.д.)
+COPY scripts/ ./scripts/
+
 # Создаем пользователя для безопасности
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app
