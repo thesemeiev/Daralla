@@ -149,6 +149,10 @@ def create_blueprint(bot_app):
     @bp.route("/api/admin/user/<user_id_param>/create-subscription", methods=["POST", "OPTIONS"])
     @admin_route
     async def api_admin_user_create_subscription(request, admin_id, user_id_param):
+        user = await resolve_user_by_query(user_id_param)
+        if not user:
+            return jsonify({"error": "User not found"}), 404, _cors_headers()
+        user_id_resolved = user["user_id"]
         data = await request.get_json(silent=True) or {}
         period = data.get("period", "month")
         device_limit = int(data.get("device_limit", 1))
@@ -169,7 +173,7 @@ def create_blueprint(bot_app):
             expires_at_timestamp = int(time.time()) + days * 24 * 60 * 60
         price = 0.0
         sub_dict, token = await subscription_manager.create_subscription_for_user(
-                user_id=user_id_param,
+                user_id=user_id_resolved,
                 period=period,
                 device_limit=device_limit,
                 price=price,
@@ -182,7 +186,7 @@ def create_blueprint(bot_app):
             logger.info("Дата истечения обновлена на %s для подписки %s", expires_at_timestamp, subscription_id)
         else:
             expires_at_final = sub_dict["expires_at"]
-        logger.info("Подписка создана в БД: subscription_id=%s, user_id=%s, period=%s", subscription_id, user_id_param, period)
+        logger.info("Подписка создана в БД: subscription_id=%s, user_id=%s, period=%s", subscription_id, user_id_resolved, period)
         group_id = sub_dict.get("group_id")
         servers_for_group = server_manager.get_servers_by_group(group_id)
         all_configured_servers = [s["name"] for s in servers_for_group if s.get("x3") is not None]
@@ -190,7 +194,7 @@ def create_blueprint(bot_app):
         failed_servers = []
 
         if all_configured_servers:
-            unique_email = f"{user_id_param}_{subscription_id}"
+            unique_email = f"{user_id_resolved}_{subscription_id}"
             logger.info("Создание клиентов на %s серверах для подписки %s", len(all_configured_servers), subscription_id)
 
             async def attach_servers_and_create_clients():
@@ -214,7 +218,7 @@ def create_blueprint(bot_app):
                             subscription_id=subscription_id,
                             server_name=server_name,
                             client_email=unique_email,
-                            user_id=user_id_param,
+                            user_id=user_id_resolved,
                             expires_at=expires_at_final,
                             token=token,
                             device_limit=device_limit,
@@ -250,9 +254,13 @@ def create_blueprint(bot_app):
             "failed_servers": failed_servers,
         }), 200, _cors_headers()
 
-    @bp.route("/api/admin/user/<user_id>/delete", methods=["POST", "OPTIONS"])
+    @bp.route("/api/admin/user/<user_id_param>/delete", methods=["POST", "OPTIONS"])
     @admin_route
-    async def api_admin_user_delete(request, admin_id, user_id):
+    async def api_admin_user_delete(request, admin_id, user_id_param):
+        user = await resolve_user_by_query(user_id_param)
+        if not user:
+            return jsonify({"error": "User not found"}), 404, _cors_headers()
+        user_id = user["user_id"]
         data = await request.get_json(silent=True) or {}
         confirm = data.get("confirm", False)
         if not confirm:

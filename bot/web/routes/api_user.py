@@ -42,12 +42,13 @@ def create_blueprint(bot_app):
             from bot.db import is_known_user, register_simple_user
             from bot.db.users_db import (
                 get_or_create_subscriber,
+                get_user_by_id,
                 is_known_telegram_id,
                 mark_telegram_id_known,
                 get_user_by_telegram_id_v2,
                 create_telegram_link,
                 update_user_telegram_id,
-                generate_tg_user_id,
+                generate_user_id,
             )
             from bot.db.subscriptions_db import (
                 get_all_active_subscriptions_by_user,
@@ -63,7 +64,7 @@ def create_blueprint(bot_app):
                 if _existing:
                     user_id = _existing["user_id"]
                 else:
-                    user_id = generate_tg_user_id()
+                    user_id = generate_user_id()
                     await register_simple_user(user_id)
                     await create_telegram_link(_tg_str, user_id)
                     await update_user_telegram_id(user_id, _tg_str)
@@ -75,7 +76,8 @@ def create_blueprint(bot_app):
                     )
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401
-            is_web = user_id.startswith("web_")
+            _user = await get_user_by_id(user_id)
+            is_web = bool(_user.get("is_web", 0)) if _user else False
             was_known_user = await is_known_user(user_id)
             if tg_user_id:
                 was_known_user = was_known_user or await is_known_telegram_id(str(tg_user_id))
@@ -486,8 +488,8 @@ def create_blueprint(bot_app):
                 return jsonify({"error": "Пользователь не найден"}), 404
             uid = user.get("user_id")
             tid = user.get("telegram_id")
-            is_web = uid and isinstance(uid, str) and uid.startswith("web_")
-            is_tg_first = uid and isinstance(uid, str) and (uid.isdigit() or uid.startswith("tg_"))
+            is_web = bool(user.get("is_web", 0))
+            is_tg_first = not is_web
             telegram_linked = is_tg_first or (is_web and bool(tid))
             display_tid = tid or (uid if (uid and uid.isdigit()) else None)
             username = user.get("username") or uid or ""
@@ -672,10 +674,12 @@ def create_blueprint(bot_app):
                 _chat_id = await get_telegram_chat_id_for_notification(user_id)
                 if _chat_id is not None:
                     telegram_id = str(_chat_id)
-            is_tg_first = user_id.startswith("tg_") or user_id.isdigit()
+            # Старые tg_/numeric пользователи при отвязке переименовываются в web_username.
+            # Новые usr_ пользователи не переименовываются — логин уже в users.username.
+            is_legacy_tg_format = user_id.startswith("tg_") or user_id.isdigit()
             if not telegram_id:
                 return jsonify({"error": "Telegram не привязан к этому аккаунту"}), 400
-            if is_tg_first:
+            if is_legacy_tg_format:
                 username = user.get("username")
                 if not username:
                     return jsonify({

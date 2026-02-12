@@ -24,8 +24,7 @@ from bot.db import (
 @pytest.mark.asyncio
 async def test_get_user_by_auth_token_found(db):
     """get_user_by_auth_token returns user when token exists."""
-    await register_web_user("testuser", "hash123")
-    user_id = "web_testuser"
+    user_id = await register_web_user("testuser", "hash123")
     await update_user_auth_token(user_id, "secret_token_xyz")
     user = await get_user_by_auth_token("secret_token_xyz")
     assert user is not None
@@ -52,9 +51,10 @@ async def test_get_or_create_subscriber_idempotent(db):
 
 @pytest.mark.asyncio
 async def test_register_web_user_success(db):
-    """register_web_user creates user and returns user_id web_<username>."""
+    """register_web_user creates user and returns user_id в едином формате usr_xxx."""
     user_id = await register_web_user("newuser", "passhash")
-    assert user_id == "web_newuser"
+    assert user_id.startswith("usr_")
+    assert len(user_id) == 16  # usr_ + 12 hex
 
 
 @pytest.mark.asyncio
@@ -69,8 +69,7 @@ async def test_register_web_user_duplicate_raises(db):
 @pytest.mark.asyncio
 async def test_get_user_by_telegram_id_v2_via_links(db):
     """get_user_by_telegram_id_v2 returns user when telegram_links exists."""
-    await register_web_user("linkuser", "hash")
-    user_id = "web_linkuser"
+    user_id = await register_web_user("linkuser", "hash")
     await create_telegram_link("999888777", user_id)
     user = await get_user_by_telegram_id_v2("999888777", use_fallback=False)
     assert user is not None

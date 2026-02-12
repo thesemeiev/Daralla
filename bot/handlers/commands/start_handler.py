@@ -16,7 +16,7 @@ from ...db.users_db import (
     link_telegram_consume_state, get_user_by_id,
     link_telegram_to_account,
     get_user_by_telegram_id_v2, create_telegram_link, update_user_telegram_id,
-    generate_tg_user_id,
+    generate_user_id,
 )
 from ...db.subscriptions_db import (
     get_all_active_subscriptions_by_user, create_subscription,
@@ -115,7 +115,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = existing_user["user_id"]
         was_known_user = True
     else:
-        user_id = generate_tg_user_id()
+        user_id = generate_user_id()
         was_known_user = False
         await register_simple_user(user_id)
         await create_telegram_link(telegram_id, user_id)

@@ -66,9 +66,17 @@ async def init_users_db():
         await db.commit()
 
 
+USER_ID_HEX_LEN = 12  # usr_ + 12 hex для единого формата
+
+
+def generate_user_id() -> str:
+    """Генерирует уникальный user_id в едином формате (usr_ + 12 hex). Для TG и веб."""
+    return f"usr_{uuid.uuid4().hex[:USER_ID_HEX_LEN]}"
+
+
 def generate_tg_user_id() -> str:
-    """Генерирует уникальный короткий user_id для TG-first пользователя (tg_ + 12 hex)."""
-    return f"tg_{uuid.uuid4().hex[:TG_USER_ID_HEX_LEN]}"
+    """Legacy: использует единый формат. Для обратной совместимости."""
+    return generate_user_id()
 
 
 async def get_or_create_subscriber(user_id: str) -> int:
@@ -195,7 +203,7 @@ async def get_user_by_telegram_id_v2(telegram_id: str, use_fallback: bool = True
 
 async def resolve_user_by_query(query: str):
     """
-    Находит пользователя по любому идентификатору: Telegram ID, user_id (tg_/web_) или логин.
+    Находит пользователя по любому идентификатору: Telegram ID, user_id (usr_) или логин.
     Возвращает dict пользователя или None.
     """
     if not query or not query.strip():
@@ -207,12 +215,12 @@ async def resolve_user_by_query(query: str):
             return user
         user = await get_user_by_id(q)
         return user
-    if q.startswith("tg_") or q.startswith("web_"):
+    if q.startswith("usr_"):
         return await get_user_by_id(q)
     user = await get_user_by_username(q)
     if user:
         return user
-    return await get_user_by_id(f"web_{q.lower()}")
+    return await get_user_by_id(q)
 
 
 async def get_user_growth_data(days: int = 30):
@@ -288,15 +296,21 @@ async def get_user_server_usage(user_id: str):
 
 
 async def register_web_user(username: str, password_hash: str):
-    """Регистрирует нового веб-пользователя"""
+    """Регистрирует нового веб-пользователя (user_id в едином формате usr_xxx)."""
     now = int(datetime.datetime.now().timestamp())
-    user_id = f"web_{username.lower()}"
+    uname = username.strip().lower()
+    if not uname:
+        raise ValueError("Логин не может быть пустым")
+    existing = await get_user_by_username(uname)
+    if existing:
+        raise Exception("Пользователь с таким логином уже существует")
+    user_id = generate_user_id()
     async with aiosqlite.connect(DB_PATH) as db:
         try:
             await db.execute(
                 """INSERT INTO users (user_id, username, password_hash, is_web, first_seen, last_seen) 
                    VALUES (?, ?, ?, 1, ?, ?)""",
-                (user_id, username.lower(), password_hash, now, now)
+                (user_id, uname, password_hash, now, now)
             )
             await db.commit()
             return user_id
