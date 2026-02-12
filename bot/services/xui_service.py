@@ -281,8 +281,8 @@ class X3:
                 kwargs["flow"] = str(flow).strip()
             new_client = Py3xuiClient(**kwargs)
         await self._api.client.add(int(inbound_id), [new_client])
-        # Заглушка с .json() чтобы subscription_manager мог вызвать response.json() без ошибки
-        return type("Response", (), {"status_code": 200, "text": "{}", "json": lambda self: {"success": True}})()
+        # Успех сигнализируется отсутствием исключения
+        return True
 
     @staticmethod
     def _ensure_client_id_for_update(c: Any) -> Any:
@@ -313,7 +313,8 @@ class X3:
             c.flow = str(flow).strip()
         self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
-        return None
+        # Успех сигнализируется отсутствием исключения
+        return True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def setClientExpiry(
@@ -326,13 +327,15 @@ class X3:
         await self._ensure_login()
         c = await self._api.client.get_by_email(user_email)
         if c is None:
-            return None
+            # Клиент не найден — считаем, что нечего обновлять
+            return False
         c.expiry_time = expiry_timestamp * 1000
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
-        return type("Response", (), {"status_code": 200, "text": "{}", "json": lambda self: {"success": True}})()
+        # True — время истечения обновлено
+        return True
 
     async def updateClientLimitIp(
         self,
@@ -344,13 +347,14 @@ class X3:
         await self._ensure_login()
         c = await self._api.client.get_by_email(user_email)
         if c is None:
-            return None
+            # Клиент не найден — limitIp обновлять нечему
+            return False
         c.limit_ip = limit_ip
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
-        return None
+        return True
 
     async def updateClientName(
         self,
@@ -365,26 +369,29 @@ class X3:
         c.sub_id = new_name
         self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
-        return type("Response", (), {"status_code": 200, "text": "{}"})()
+        # Успех — отсутствие исключения
+        return True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    async def deleteClient(self, user_email: str, timeout: int = 15) -> Optional[Any]:
+    async def deleteClient(self, user_email: str, timeout: int = 15) -> bool:
         await self._ensure_login()
         c = await self._api.client.get_by_email(user_email)
         if c is None:
             logger.warning("Клиент с email=%s не найден для удаления", user_email)
-            return None
+            # False — клиента по этому email нет на панели
+            return False
         inbound_id = getattr(c, "inbound_id", None)
         if inbound_id is None:
             inbound_id = await self._find_inbound_id_for_client(user_email)
         if inbound_id is None:
             logger.warning("Не удалось определить inbound_id для клиента %s", user_email)
-            return None
+            return False
         # Панель 3x-ui при delete ожидает client id в том же формате, что и при update (UUID для VLESS)
         self._ensure_client_id_for_update(c)
         await self._api.client.delete(int(inbound_id), c.id)
         logger.info("Клиент удалён: %s (inbound_id=%s)", user_email, inbound_id)
-        return type("Response", (), {"status_code": 200})()
+        # True — один клиент с таким email был удалён
+        return True
 
     async def get_online_clients_ids(self, timeout: int = 15) -> tuple:
         """Возвращает (set of email/ids, success)."""

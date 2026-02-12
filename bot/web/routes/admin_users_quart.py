@@ -302,16 +302,16 @@ def create_blueprint(bot_app):
                             try:
                                 xui, _ = server_manager.get_server_by_name(server_name)
                                 if xui:
-                                    result = await xui.deleteClient(client_email, timeout=30)
-                                    if result is not None:
-                                        status_code = getattr(result, "status_code", None)
-                                        if status_code == 200:
-                                            if server_name not in deleted:
-                                                deleted.append(server_name)
-                                            logger.info("Удален клиент %s с сервера %s при удалении пользователя %s", client_email, server_name, user_id)
-                                        else:
-                                            if server_name not in failed:
-                                                failed.append(server_name)
+                                    deleted_ok = await xui.deleteClient(client_email, timeout=30)
+                                    if deleted_ok:
+                                        if server_name not in deleted:
+                                            deleted.append(server_name)
+                                        logger.info(
+                                            "Удален клиент %s с сервера %s при удалении пользователя %s",
+                                            client_email,
+                                            server_name,
+                                            user_id,
+                                        )
                                     else:
                                         if server_name not in failed:
                                             failed.append(server_name)

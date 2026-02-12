@@ -74,6 +74,10 @@ Daralla/
 
 - **CORS** — во многих маршрутах повторяется один и тот же словарь CORS. Имеет смысл вынести общий CORS в `admin_common.py` или в `bot/web/common.py` и использовать везде один источник.
 - **OPTIONS** — много маршрутов начинаются с `if request.method == "OPTIONS": return "", 200, _CORS`. Можно вынести в декоратор или middleware (например, Quart after_request), чтобы не дублировать.
+ - **X-UI слой (X3)** — зафиксирован единый контракт:
+   - информационные методы (`client_exists`, `get_client_expiry_time`, `get_client_info`, `list` и т.п.) возвращают значения/`None` и не бросают исключения в «нормальных» ситуациях (например, клиент не найден);
+   - методы, меняющие состояние (`addClient`, `extendClient`, `setClientExpiry`, `updateClientLimitIp`, `updateClientName`, `deleteClient`) сигнализируют об успехе отсутствием исключения; там, где важно различать «нашли/не нашли» (`setClientExpiry`, `updateClientLimitIp`, `deleteClient`), возвращается `bool` (`True` — изменение выполнено, `False` — клиент не найден/не изменён);
+   - код, который раньше проверял `response.status_code` / `response.json()`, упрощён и полагается на этот контракт.
 
 ### 4. Документация и конфиг
 

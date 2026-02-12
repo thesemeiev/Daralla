@@ -347,13 +347,9 @@ def create_blueprint(bot_app):
                         try:
                             xui, _ = server_manager.get_server_by_name(server_name)
                             if xui:
-                                result = await xui.deleteClient(client_email, timeout=30)
-                                if result is not None:
-                                    status_code = getattr(result, "status_code", None)
-                                    if status_code == 200:
-                                        deleted.append(server_name)
-                                    else:
-                                        failed.append(server_name)
+                                deleted_ok = await xui.deleteClient(client_email, timeout=30)
+                                if deleted_ok:
+                                    deleted.append(server_name)
                                 else:
                                     failed.append(server_name)
                             else:
