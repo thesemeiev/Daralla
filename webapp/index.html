@@ -81,6 +81,7 @@
                         <input type="checkbox" id="login-remember" checked onclick="event.stopPropagation()">
                         <label for="login-remember">Запомнить меня</label>
                     </div>
+                    <div id="login-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Войти</button>
                         <button type="button" class="btn-secondary" onclick="showPage('register')">Создать аккаунт</button>
@@ -110,6 +111,7 @@
                         <label>Повторите пароль</label>
                         <input type="password" id="register-confirm" required placeholder="Повторите пароль — да, мы не доверяем памяти">
                     </div>
+                    <div id="register-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Зарегистрироваться</button>
                         <button type="button" class="btn-secondary" onclick="showPage('login')">Уже есть аккаунт?</button>
@@ -174,7 +176,7 @@
             <header>
                 <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
             </header>
-            
+            <div id="subscription-detail-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
             <div id="subscription-detail-content"></div>
         </div>
 
@@ -245,6 +247,7 @@
             </header>
             
             <div id="payment-content" style="padding: 24px;">
+                <div id="payment-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                 <div class="detail-card">
                     <div class="detail-header">
                         <div class="detail-status active">Ожидает оплаты</div>
@@ -403,6 +406,7 @@
                 <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
             </header>
             <div class="about-content about-content-account">
+                <div id="account-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                 <div class="about-section">
                     <h3>Данные аккаунта</h3>
                     <div class="about-account-info">
@@ -1374,6 +1378,7 @@
         <div class="modal-content">
             <h2>Тебя пригласили?</h2>
             <p class="hint" style="margin-bottom: 20px;">Введи код пригласившего. Оформи подписку — и твой пригласивший получит +1 в рейтинге события.</p>
+            <div id="event-referral-code-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
             <div class="form-group">
                 <input type="text" id="event-referral-code-input" placeholder="Например X7K2M" maxlength="8" />
             </div>

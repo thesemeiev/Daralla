@@ -76,6 +76,41 @@ function logout() {
     showPage('login');
 }
 
+/**
+ * Показывает сообщение об ошибке или успехе в блоке формы (вместо alert).
+ * @param {string|HTMLElement} containerOrId - ID элемента или сам контейнер с блоком .form-message
+ * @param {string} type - 'error' | 'success'
+ * @param {string} text - текст сообщения
+ */
+function showFormMessage(containerOrId, type, text) {
+    var el = typeof containerOrId === 'string' ? document.getElementById(containerOrId) : containerOrId;
+    if (!el) return;
+    var box = el.classList && el.classList.contains('form-message') ? el : el.querySelector('.form-message');
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'form-message';
+        box.setAttribute('role', 'alert');
+        box.setAttribute('aria-live', 'polite');
+        el.appendChild(box);
+    }
+    box.textContent = text || '';
+    box.className = 'form-message form-message--' + (type === 'success' ? 'success' : 'error');
+    box.style.display = text ? 'block' : 'none';
+}
+
+/**
+ * Скрывает сообщение формы (при открытии страницы логина/регистрации и т.д.)
+ */
+function hideFormMessage(containerOrId) {
+    var el = typeof containerOrId === 'string' ? document.getElementById(containerOrId) : containerOrId;
+    if (!el) return;
+    var box = el.classList && el.classList.contains('form-message') ? el : el.querySelector('.form-message');
+    if (box) {
+        box.textContent = '';
+        box.style.display = 'none';
+    }
+}
+
 // Инициализация Telegram Web App
 if (tg.initData) {
     tg.ready();
@@ -280,6 +315,8 @@ function showPage(pageName, params) {
     
     // Анимация появления формы при открытии входа/регистрации
     if (pageName === 'login' || pageName === 'register') {
+        if (pageName === 'login') hideFormMessage('login-form-message');
+        if (pageName === 'register') hideFormMessage('register-form-message');
         const formId = pageName === 'login' ? 'login-form' : 'register-form';
         const successId = pageName === 'login' ? 'login-success-msg' : 'register-success-msg';
         const form = document.getElementById(formId);
@@ -331,6 +368,8 @@ function showPage(pageName, params) {
         loadServerManagement();
     } else if (pageName === 'admin-events') {
         loadAdminEventsPage();
+    } else if (pageName === 'buy-subscription' || pageName === 'extend-subscription') {
+        loadPrices();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
@@ -813,7 +852,7 @@ async function submitReferralCode() {
     if (!input || !modal) return;
     var code = (input.value || '').trim();
     if (!code) {
-        alert('Введите код');
+        showFormMessage('event-referral-code-message', 'error', 'Введите код');
         return;
     }
     try {
@@ -824,14 +863,14 @@ async function submitReferralCode() {
         });
         var data = await r.json().catch(function () { return {}; });
         if (r.ok && data.success) {
-            modal.style.display = 'none';
+            showFormMessage('event-referral-code-message', 'success', 'Записали');
             localStorage.setItem('event_ref_modal_shown', '1');
-            alert('Записали');
+            setTimeout(function () { modal.style.display = 'none'; }, 800);
         } else {
-            alert(data.error || 'Ошибка');
+            showFormMessage('event-referral-code-message', 'error', data.error || 'Ошибка');
         }
     } catch (e) {
-        alert('Ошибка сети');
+        showFormMessage('event-referral-code-message', 'error', 'Ошибка сети');
     }
 }
 
@@ -1989,7 +2028,7 @@ async function createPayment(period, subscriptionId = null) {
             paymentButton.textContent = 'Перейти к оплате';
         }
         
-        alert('Ошибка создания платежа: ' + error.message);
+        showFormMessage('payment-form-message', 'error', 'Ошибка создания платежа: ' + error.message);
         
         // Возвращаемся назад при ошибке
         goBackFromPayment();
@@ -1998,6 +2037,7 @@ async function createPayment(period, subscriptionId = null) {
 
 // Функция показа страницы оплаты
 function showPaymentPage() {
+    hideFormMessage('payment-form-message');
     // Показываем страницу
     showPage('payment');
     
@@ -2055,11 +2095,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 const finalData = await finalResponse.json();
                 if (finalData.success && finalData.status === 'pending') {
                     // Платеж все еще pending - возможно, пользователь не оплатил
-                    if (!isWebMode && tg?.showAlert) {
-                        tg.showAlert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
-                    } else {
-                        alert('Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
-                    }
+                    showFormMessage('payment-form-message', 'error', 'Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
                     goBackFromPayment();
                 }
             }
@@ -2087,11 +2123,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
                 
                 if (isOnPaymentPage) {
-                    if (!isWebMode && tg?.showAlert) {
-                        tg.showAlert('Подписка успешно активирована!');
-                    } else {
-                        alert('Подписка успешно активирована!');
-                    }
+                    showFormMessage('payment-form-message', 'success', 'Подписка успешно активирована!');
                 }
                 
                 // Обновляем список подписок
@@ -2108,11 +2140,7 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 const statusText = data.status === 'canceled' ? 'отменен' : 
                                  data.status === 'refunded' ? 'возвращен' : 'не прошел';
                 
-                if (!isWebMode && tg?.showAlert) {
-                    tg.showAlert(`Платеж ${statusText}. Вы можете попробовать оплатить снова.`);
-                } else {
-                    alert(`Платеж ${statusText}. Вы можете попробовать оплатить снова.`);
-                }
+                showFormMessage('payment-form-message', 'error', 'Платеж ' + statusText + '. Вы можете попробовать оплатить снова.');
                 
                 // Возвращаемся на предыдущую страницу
                 goBackFromPayment();
@@ -2156,11 +2184,7 @@ async function renameSubscription(subId, newName) {
         document.getElementById('subscription-name-display').textContent = escapeHtml(newName);
         
         // Показываем уведомление об успехе
-        if (!isWebMode && tg?.showAlert) {
-            tg.showAlert('Подписка успешно переименована');
-        } else {
-            alert('Подписка успешно переименована');
-        }
+        showFormMessage('subscription-detail-message', 'success', 'Подписка успешно переименована');
         
         // Обновляем список подписок, если он открыт
         if (document.getElementById('page-subscriptions').classList.contains('active')) {
@@ -2169,7 +2193,7 @@ async function renameSubscription(subId, newName) {
         
     } catch (error) {
         console.error('Ошибка переименования подписки:', error);
-        alert('Ошибка переименования: ' + error.message);
+        showFormMessage('subscription-detail-message', 'error', 'Ошибка переименования: ' + error.message);
     }
 }
 
@@ -4475,16 +4499,27 @@ document.addEventListener('focusin', function (e) {
 
 // Загружаем цены с сервера и обновляем отображение (публичный API, без авторизации)
 async function loadPrices() {
+    var placeholders = document.querySelectorAll('.plan-price');
+    placeholders.forEach(function (el) { el.textContent = '— ₽'; });
     try {
-        const res = await fetch('/api/prices');
+        var res = await fetch('/api/prices');
         if (res.ok) {
-            const data = await res.json();
-            const prices = data.prices || { month: 150, '3month': 350 };
-            document.querySelectorAll('.plan-price[data-period="month"]').forEach(el => { el.textContent = (prices.month || 150) + '₽'; });
-            document.querySelectorAll('.plan-price[data-period="3month"]').forEach(el => { el.textContent = (prices['3month'] || 350) + '₽'; });
+            var data = await res.json();
+            var prices = data.prices || { month: 150, '3month': 350 };
+            document.querySelectorAll('.plan-price[data-period="month"]').forEach(function (el) { el.textContent = (prices.month || 150) + '₽'; });
+            document.querySelectorAll('.plan-price[data-period="3month"]').forEach(function (el) { el.textContent = (prices['3month'] || 350) + '₽'; });
+        } else {
+            placeholders.forEach(function (el) {
+                var period = el.getAttribute('data-period');
+                el.textContent = (period === '3month' ? 350 : 150) + '₽';
+            });
         }
     } catch (e) {
         console.warn('Не удалось загрузить цены, используются значения по умолчанию', e);
+        placeholders.forEach(function (el) {
+            var period = el.getAttribute('data-period');
+            el.textContent = (period === '3month' ? 350 : 150) + '₽';
+        });
     }
 }
 
@@ -4686,7 +4721,7 @@ async function handleWebLogin(event) {
                 loginForm.classList.add('form-shake');
                 setTimeout(function () { loginForm.classList.remove('form-shake'); }, 400);
             }
-            alert(result.error || 'Ошибка входа');
+            showFormMessage('login-form-message', 'error', result.error || 'Ошибка входа');
         }
     } catch (e) {
         var loginForm = document.getElementById('login-form');
@@ -4696,7 +4731,7 @@ async function handleWebLogin(event) {
             loginForm.classList.add('form-shake');
             setTimeout(function () { loginForm.classList.remove('form-shake'); }, 400);
         }
-        alert('Ошибка сети');
+        showFormMessage('login-form-message', 'error', 'Ошибка сети');
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;
@@ -4717,7 +4752,7 @@ async function handleWebRegister(event) {
             registerForm.classList.add('form-shake');
             setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
         }
-        alert('Пароли не совпадают');
+        showFormMessage('register-form-message', 'error', 'Пароли не совпадают');
         return;
     }
 
@@ -4767,7 +4802,7 @@ async function handleWebRegister(event) {
                 registerForm.classList.add('form-shake');
                 setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
             }
-            alert(result.error || 'Ошибка регистрации');
+            showFormMessage('register-form-message', 'error', result.error || 'Ошибка регистрации');
         }
     } catch (e) {
         var registerForm = document.getElementById('register-form');
@@ -4777,7 +4812,7 @@ async function handleWebRegister(event) {
             registerForm.classList.add('form-shake');
             setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
         }
-        alert('Ошибка сети');
+        showFormMessage('register-form-message', 'error', 'Ошибка сети');
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;
@@ -4952,9 +4987,9 @@ async function handleLinkTelegram(event) {
             window.location.href = data.link;
             return;
         }
-        alert(data.error || 'Ошибка привязки');
+        showFormMessage('account-form-message', 'error', data.error || 'Ошибка привязки');
     } catch (e) {
-        alert('Ошибка сети');
+        showFormMessage('account-form-message', 'error', 'Ошибка сети');
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
@@ -4970,8 +5005,8 @@ async function handleChangeLogin(event) {
     if (!current || !newLogin) return;
     var cur = (current.value || '').trim();
     var neu = (newLogin.value || '').trim().toLowerCase();
-    if (!cur) { alert('Введите текущий пароль'); return; }
-    if (neu.length < 3) { alert('Логин слишком короткий (минимум 3 символа)'); return; }
+    if (!cur) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
+    if (neu.length < 3) { showFormMessage('account-form-message', 'error', 'Логин слишком короткий (минимум 3 символа)'); return; }
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
         var r = await apiFetch('/api/user/change-login', {
@@ -4985,12 +5020,12 @@ async function handleChangeLogin(event) {
             newLogin.value = '';
             closeModal('change-login-modal');
             refreshAboutAccount();
-            alert(data.message || 'Логин изменён');
+            showFormMessage('account-form-message', 'success', data.message || 'Логин изменён');
         } else {
-            alert(data.error || 'Ошибка смены логина');
+            showFormMessage('account-form-message', 'error', data.error || 'Ошибка смены логина');
         }
     } catch (e) {
-        alert('Ошибка сети');
+        showFormMessage('account-form-message', 'error', 'Ошибка сети');
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Сменить логин'; }
     }
@@ -5008,9 +5043,9 @@ async function handleChangePassword(event) {
     var cur = (current.value || '').trim();
     var neu = (newPw.value || '').trim();
     var conf = (confirm.value || '').trim();
-    if (!cur) { alert('Введите текущий пароль'); return; }
-    if (neu.length < 6) { alert('Новый пароль слишком короткий (минимум 6 символов)'); return; }
-    if (neu !== conf) { alert('Пароли не совпадают'); return; }
+    if (!cur) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
+    if (neu.length < 6) { showFormMessage('account-form-message', 'error', 'Новый пароль слишком короткий (минимум 6 символов)'); return; }
+    if (neu !== conf) { showFormMessage('account-form-message', 'error', 'Пароли не совпадают'); return; }
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
         var r = await apiFetch('/api/user/change-password', {
@@ -5024,12 +5059,12 @@ async function handleChangePassword(event) {
             newPw.value = '';
             confirm.value = '';
             closeModal('change-password-modal');
-            alert(data.message || 'Пароль изменён');
+            showFormMessage('account-form-message', 'success', data.message || 'Пароль изменён');
         } else {
-            alert(data.error || 'Ошибка смены пароля');
+            showFormMessage('account-form-message', 'error', data.error || 'Ошибка смены пароля');
         }
     } catch (e) {
-        alert('Ошибка сети');
+        showFormMessage('account-form-message', 'error', 'Ошибка сети');
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Сменить пароль'; }
     }
@@ -5043,7 +5078,7 @@ async function handleUnlinkTelegram(event) {
     var password = document.getElementById('unlink-telegram-password');
     if (!password) return;
     var pwd = (password.value || '').trim();
-    if (!pwd) { alert('Введите текущий пароль'); return; }
+    if (!pwd) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
         var r = await apiFetch('/api/user/unlink-telegram', {
@@ -5056,12 +5091,12 @@ async function handleUnlinkTelegram(event) {
             password.value = '';
             closeModal('unlink-telegram-modal');
             refreshAboutAccount();
-            alert(data.message || 'Telegram успешно отвязан');
+            showFormMessage('account-form-message', 'success', data.message || 'Telegram успешно отвязан');
         } else {
-            alert(data.error || 'Ошибка отвязки Telegram');
+            showFormMessage('account-form-message', 'error', data.error || 'Ошибка отвязки Telegram');
         }
     } catch (e) {
-        alert('Ошибка сети');
+        showFormMessage('account-form-message', 'error', 'Ошибка сети');
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Отвязать'; }
     }

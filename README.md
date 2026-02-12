@@ -19,20 +19,20 @@
 
 ## Технологии
 
-| Компонент | Стек |
-|-----------|------|
-| Бот | Python 3.11, python-telegram-bot |
-| Веб/API | Quart (ASGI), Hypercorn |
-| База данных | SQLite (aiosqlite) |
-| Платежи | YooKassa |
-| Инфраструктура | Docker, Docker Compose |
+| Компонент   | Стек                          |
+|------------|-------------------------------|
+| Бот        | Python 3.11, python-telegram-bot |
+| Веб/API    | Quart (ASGI), Hypercorn       |
+| База данных | SQLite (aiosqlite)          |
+| Платежи    | YooKassa                      |
+| Инфраструктура | Docker, Docker Compose    |
 
 ## Быстрый старт
 
 ### Требования
 
 - Python 3.11 или Docker
-- Telegram Bot Token (от [@BotFather](https://t.me/BotFather))
+- Токен бота Telegram ([@BotFather](https://t.me/BotFather))
 - Аккаунт YooKassa
 
 ### Конфигурация
@@ -41,7 +41,7 @@
 cp .env.example .env
 ```
 
-Заполните `.env`:
+Заполните `.env` (основные переменные):
 
 | Переменная | Описание |
 |------------|----------|
@@ -49,11 +49,12 @@ cp .env.example .env
 | `ADMIN_ID` | ID администратора(ов) через запятую |
 | `YOOKASSA_SHOP_ID` | ID магазина YooKassa |
 | `YOOKASSA_SECRET_KEY` | Секретный ключ YooKassa |
-| `WEBHOOK_URL` | URL с SSL для webhook (напр. `https://example.com/webhook/yookassa`) |
+| `WEBHOOK_URL` | URL с SSL для webhook (например `https://example.com/webhook/yookassa`) |
 | `WEBHOOK_PORT` | Порт веб‑сервера (по умолчанию 5000) |
+| `WEBAPP_URL` | URL мини‑приложения для кнопок «Открыть в приложении» |
 | `WEBSITE_URL` | URL веб‑сайта (опционально) |
 
-Серверы X-UI настраиваются через админ‑панель после запуска.
+Серверы X-UI настраиваются через админ‑панель после запуска. Полный список переменных — в `.env.example`.
 
 ### Запуск через Docker
 
@@ -72,33 +73,26 @@ python -m bot.bot
 
 ## Структура проекта
 
-Веб-сервер — только **Quart** (Flask не используется). Все HTTP-маршруты в `bot/web/`: приложение в `app_quart.py`, маршруты в `routes/` (admin_*, api_*, payment, subscription, events, static).
+Веб‑сервер — **Quart**. HTTP‑маршруты в `bot/web/`: приложение в `app_quart.py`, маршруты в `routes/` (admin_*, api_*, payment, subscription, events, static).
 
 ```
 Daralla/
 ├── bot/                    # Ядро бота и бэкенд
 │   ├── bot.py              # Точка входа (Telegram + Quart/Hypercorn)
-│   ├── core/                # Старт, фоновые задачи, мониторинг
-│   ├── db/                  # БД daralla.db — users, subscriptions, servers, payments и др. ([bot/db/README.md](bot/db/README.md))
-│   ├── events/              # Модуль событий (рефералы, рейтинги), опционально
-│   ├── handlers/            # Команды, колбэки, auth и обработка платежей
-│   ├── services/            # Subscription, Server, Sync, X-UI
-│   ├── utils/               # UI, helpers, validators
-│   └── web/                 # Веб-сервер (Quart): app_quart.py, routes/
-├── webapp/                  # Фронтенд (HTML/CSS/JS)
-├── docs/                    # Документация (roadmap.md, config.md и др.)
-├── tests/
+│   ├── core/               # Старт, фоновые задачи
+│   ├── db/                 # Единая БД daralla.db (users, subscriptions, servers, payments и др.)
+│   ├── events/             # Модуль событий (рефералы, рейтинги), опционально
+│   ├── handlers/           # Команды, колбэки, auth, обработка платежей
+│   ├── services/           # Subscription, Server, Sync, X-UI
+│   ├── utils/              # UI, helpers, validators
+│   └── web/                # Веб‑сервер Quart: app_quart.py, routes/
+├── webapp/                 # Фронтенд (HTML/CSS/JS), PWA
+├── tests/                  # Unit и интеграционные тесты
+├── images/                 # Изображения для бота (меню, уведомления)
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
 ```
-
-## Документация
-
-- [docs/config.md](docs/config.md) — переменные окружения, чек-лист запуска на новом сервере, модуль Events.
-- [docs/roadmap.md](docs/roadmap.md) — структура проекта и что делать дальше (чистота, именование, тесты).
-- [docs/migration-quart.md](docs/migration-quart.md) — веб-сервер на Quart/Hypercorn, маршруты, запуск.
-- [docs/migration-py3xui.md](docs/migration-py3xui.md) — интеграция с X-UI через py3xui.
 
 ## API
 
@@ -109,14 +103,15 @@ Daralla/
 | `/api/auth/register` | POST | — | Регистрация |
 | `/api/auth/login` | POST | — | Вход |
 | `/api/auth/verify` | POST | — | Проверка токена |
+| `/health` | GET | — | Проверка доступности сервиса |
 | `/webhook/yookassa` | POST | — | Webhook YooKassa |
 
 ## CI/CD
 
 - **main** — деплой на production при push
-- **test** — деплой на тестовый сервер
-- **Ежедневный бэкап** — cron в 03:00 UTC
-- **Проверки** — flake8, pytest
+- **test** — деплой на тестовый сервер (workflow `deploy-server2.yml`)
+- **Ежедневный бэкап** — workflow `backup.yml`, 03:00 UTC
+- **Проверки** — flake8, pytest перед деплоем
 
 ## Лицензия
 
