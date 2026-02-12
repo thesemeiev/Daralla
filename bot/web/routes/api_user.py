@@ -492,7 +492,8 @@ def create_blueprint(bot_app):
             is_tg_first = not is_web
             telegram_linked = is_tg_first or (is_web and bool(tid))
             display_tid = tid or (uid if (uid and uid.isdigit()) else None)
-            username = user.get("username") or uid or ""
+            # Логин показываем только если пользователь настроил веб-доступ (указал логин)
+            username = (user.get("username") or "").strip() or None
             web_access_enabled = bool(user.get("password_hash"))
             return jsonify({
                 "success": True,

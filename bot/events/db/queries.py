@@ -279,19 +279,27 @@ def _event_row_to_dict(row, now_iso: str | None = None) -> dict:
 
 # --- Рейтинг по событию (event_counted_payments + event_referrals) ---
 
+def _display_name(row) -> str:
+    """Для рейтинга: логин если есть, иначе user_id."""
+    uid = row.get("referrer_user_id") or ""
+    username = (row.get("username") or "").strip()
+    return username if username else uid
+
+
 async def get_leaderboard(event_id: int, limit: int = 10) -> list:
     """
     Топ рефереров по событию: по event_counted_payments считаем засчитанные оплаты
     приглашённых, группируем по referrer (через event_referrals). Возвращает список
-    { referrer_user_id, count, place } с place 1, 2, 3, ... (без учёта ничьих).
+    { referrer_user_id, account_id, count, place }. account_id — логин или user_id для отображения.
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """
-            SELECT er.referrer_user_id, COUNT(ecp.id) AS cnt
+            SELECT er.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
             FROM event_counted_payments ecp
             JOIN event_referrals er ON er.referred_user_id = ecp.referred_user_id AND er.event_id = ecp.event_id
+            LEFT JOIN users u ON u.user_id = er.referrer_user_id
             WHERE ecp.event_id = ?
             GROUP BY er.referrer_user_id
             ORDER BY cnt DESC
@@ -305,7 +313,7 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
             uid = r["referrer_user_id"] or ""
             result.append({
                 "referrer_user_id": uid,
-                "account_id": uid,  # id аккаунта для отображения
+                "account_id": _display_name(dict(r)),
                 "count": r["cnt"],
                 "place": i
             })
@@ -315,15 +323,16 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
 async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
     """
     Топ рефереров с учётом ничьих: одинаковый count = одинаковое place.
-    Возвращает список { referrer_user_id, count, place }.
+    Возвращает список { referrer_user_id, account_id, count, place }. account_id — логин или user_id.
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """
-            SELECT er.referrer_user_id, COUNT(ecp.id) AS cnt
+            SELECT er.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
             FROM event_counted_payments ecp
             JOIN event_referrals er ON er.referred_user_id = ecp.referred_user_id AND er.event_id = ecp.event_id
+            LEFT JOIN users u ON u.user_id = er.referrer_user_id
             WHERE ecp.event_id = ?
             GROUP BY er.referrer_user_id
             ORDER BY cnt DESC
@@ -341,7 +350,12 @@ async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
             if prev_count is not None and cnt < prev_count:
                 place = len(result) + 1
             prev_count = cnt
-            result.append({"referrer_user_id": uid, "account_id": uid, "count": cnt, "place": place})
+            result.append({
+                "referrer_user_id": uid,
+                "account_id": _display_name(dict(r)),
+                "count": cnt,
+                "place": place
+            })
         return result
 
 
