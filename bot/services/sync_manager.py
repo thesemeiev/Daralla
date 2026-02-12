@@ -368,24 +368,61 @@ class SyncManager:
                                 logger.debug(f"Клиент {client_email} найден в БД для сервера {server_name}, оставляем")
                                 continue
                             
-                            # Клиента нет в БД - это сиротский клиент, удаляем
+                            # Клиента нет в БД - это сиротский клиент, удаляем.
+                            # ВАЖНО: на панели могут быть дубликаты одного и того же email в разных inbound'ах.
+                            # deleteClient(email) удаляет только ОДНОГО клиента, поэтому вызываем её несколько раз,
+                            # пока она реально что-то удаляет (resp.status_code == 200), либо не вернет None.
                             reason = "Клиент не найден в БД (сиротский клиент - нет в active или expired подписках)"
                             
-                            try:
-                                await xui.deleteClient(client_email)
-                                stats['deleted_count'] += 1
-                                stats['details'].append({
-                                    'server': server_name,
-                                    'email': client_email,
-                                    'subscription_id': None,
-                                    'reason': reason,
-                                    'status': 'orphaned'
-                                })
-                                logger.info(f"Удален сиротский клиент {client_email} с сервера {server_name}: {reason}")
-                            except Exception as e:
-                                error_msg = f"Ошибка удаления сиротского клиента {client_email} с {server_name}: {e}"
-                                logger.error(error_msg)
-                                stats['errors'].append(error_msg)
+                            max_delete_attempts = 5
+                            for attempt in range(max_delete_attempts):
+                                try:
+                                    resp = await xui.deleteClient(client_email)
+                                except Exception as e:
+                                    error_msg = (
+                                        f"Ошибка удаления сиротского клиента {client_email} с {server_name} "
+                                        f"(попытка {attempt + 1}/{max_delete_attempts}): {e}"
+                                    )
+                                    logger.error(error_msg)
+                                    stats['errors'].append(error_msg)
+                                    # При ошибке не продолжаем попытки, чтобы избежать бесконечных циклов
+                                    break
+                                
+                                # deleteClient вернет None, если клиент (по этому email) больше не найден на панели
+                                if resp is None:
+                                    if attempt == 0:
+                                        # Нечего удалять — клиент уже исчез или не найден
+                                        logger.debug(
+                                            f"Сиротский клиент {client_email} на сервере {server_name} "
+                                            f"не найден при попытке удаления"
+                                        )
+                                    break
+                                
+                                status_code = getattr(resp, "status_code", None)
+                                if status_code == 200:
+                                    stats['deleted_count'] += 1
+                                    stats['details'].append({
+                                        'server': server_name,
+                                        'email': client_email,
+                                        'subscription_id': None,
+                                        'reason': reason,
+                                        'status': 'orphaned'
+                                    })
+                                    logger.info(
+                                        f"Удален сиротский клиент {client_email} с сервера {server_name} "
+                                        f"(попытка {attempt + 1}/{max_delete_attempts}): {reason}"
+                                    )
+                                    # Пытаемся удалить возможные дубликаты с тем же email на других inbound'ах
+                                    continue
+                                else:
+                                    error_msg = (
+                                        f"Неожиданный статус при удалении сиротского клиента {client_email} "
+                                        f"с {server_name}: HTTP {status_code}"
+                                    )
+                                    logger.error(error_msg)
+                                    stats['errors'].append(error_msg)
+                                    # При некорректном статусе дальнейшие попытки по этому email бессмысленны
+                                    break
                     
                     except json.JSONDecodeError as e:
                         logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id', 'unknown')} на сервере {server_name}: {e}")
