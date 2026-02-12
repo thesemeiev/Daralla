@@ -76,8 +76,12 @@ function logout() {
     showPage('login');
 }
 
+/** Таймаут автоскрытия сообщения формы (мс). 0 = не скрывать автоматически. */
+var FORM_MESSAGE_AUTO_HIDE_MS = 6000;
+
 /**
  * Показывает сообщение об ошибке или успехе в блоке формы (вместо alert).
+ * Через FORM_MESSAGE_AUTO_HIDE_MS секунд сообщение автоматически скрывается.
  * @param {string|HTMLElement} containerOrId - ID элемента или сам контейнер с блоком .form-message
  * @param {string} type - 'error' | 'success'
  * @param {string} text - текст сообщения
@@ -93,9 +97,20 @@ function showFormMessage(containerOrId, type, text) {
         box.setAttribute('aria-live', 'polite');
         el.appendChild(box);
     }
+    if (box._formMessageHideTimer) {
+        clearTimeout(box._formMessageHideTimer);
+        box._formMessageHideTimer = null;
+    }
     box.textContent = text || '';
     box.className = 'form-message form-message--' + (type === 'success' ? 'success' : 'error');
     box.style.display = text ? 'block' : 'none';
+    if (text && FORM_MESSAGE_AUTO_HIDE_MS > 0) {
+        box._formMessageHideTimer = setTimeout(function () {
+            box._formMessageHideTimer = null;
+            box.textContent = '';
+            box.style.display = 'none';
+        }, FORM_MESSAGE_AUTO_HIDE_MS);
+    }
 }
 
 /**
@@ -106,6 +121,10 @@ function hideFormMessage(containerOrId) {
     if (!el) return;
     var box = el.classList && el.classList.contains('form-message') ? el : el.querySelector('.form-message');
     if (box) {
+        if (box._formMessageHideTimer) {
+            clearTimeout(box._formMessageHideTimer);
+            box._formMessageHideTimer = null;
+        }
         box.textContent = '';
         box.style.display = 'none';
     }
@@ -339,7 +358,12 @@ function showPage(pageName, params) {
         loadSubscriptions();
         refreshAboutAccount();
     } else if (pageName === 'account') {
+        hideFormMessage('account-form-message');
         refreshAboutAccount();
+    } else if (pageName === 'subscription-detail') {
+        hideFormMessage('subscription-detail-message');
+    } else if (pageName === 'payment') {
+        hideFormMessage('payment-form-message');
     } else if (pageName === 'servers') {
         loadServers();
     } else if (pageName === 'events') {
@@ -834,6 +858,7 @@ function showEventReferralCodeModal() {
     var input = document.getElementById('event-referral-code-input');
     if (modal && input) {
         input.value = '';
+        hideFormMessage('event-referral-code-message');
         modal.style.display = 'flex';
     }
 }
