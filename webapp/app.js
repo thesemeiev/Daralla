@@ -1381,7 +1381,6 @@ class CustomGlobe {
             { name: 'Stockholm', lat: 59.3293, lng: 18.0686 },
             { name: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
             { name: 'Oslo', lat: 59.9139, lng: 10.7522 },
-            { name: 'Helsinki', lat: 60.1699, lng: 24.9384 },
             { name: 'Dublin', lat: 53.3498, lng: -6.2603 },
             { name: 'Lisbon', lat: 38.7223, lng: -9.1393 },
             { name: 'Athens', lat: 37.9838, lng: 23.7275 },
