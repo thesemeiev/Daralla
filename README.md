@@ -68,8 +68,12 @@ docker compose up -d
 
 ```bash
 pip install -r requirements.txt
-python -m bot.bot
+# Из корня проекта (каталог Daralla):
+python bot/bot.py
 ```
+
+На Windows при необходимости задайте `PYTHONPATH` в корень проекта: `set PYTHONPATH=.`  
+На Linux/macOS: `export PYTHONPATH=.`
 
 ## Структура проекта
 

@@ -3326,12 +3326,10 @@ async function loadUsersAnalyticsPage() {
         if (totalEl) totalEl.textContent = data.stats?.users?.total ?? 0;
         if (newEl) newEl.textContent = data.stats?.users?.new_30d ?? 0;
         
-        const growthPeriodEl = document.getElementById('users-analytics-growth-period');
-        const convPeriodEl = document.getElementById('users-analytics-conversion-period');
-        const growthDays = growthPeriodEl ? parseInt(growthPeriodEl.value) || 30 : 30;
-        const convDays = convPeriodEl ? parseInt(convPeriodEl.value) || 30 : 30;
-        await loadUserGrowthChart(growthDays, 'users-analytics-growth-chart');
-        await loadConversionChart(convDays, 'users-analytics-conversion-chart');
+        const periodEl = document.getElementById('users-analytics-period');
+        const days = periodEl ? parseInt(periodEl.value) || 30 : 30;
+        await loadUserGrowthChart(days, 'users-analytics-growth-chart');
+        await loadConversionChart(days, 'users-analytics-conversion-chart');
     } catch (error) {
         console.error('Ошибка загрузки аналитики пользователей:', error);
         const loadingEl = document.getElementById('admin-users-analytics-loading');
@@ -3340,15 +3338,10 @@ async function loadUsersAnalyticsPage() {
     }
 }
 
-function changeUsersAnalyticsGrowthPeriod() {
-    const el = document.getElementById('users-analytics-growth-period');
+function changeUsersAnalyticsPeriod() {
+    const el = document.getElementById('users-analytics-period');
     const days = el ? parseInt(el.value) || 30 : 30;
     loadUserGrowthChart(days, 'users-analytics-growth-chart');
-}
-
-function changeUsersAnalyticsConversionPeriod() {
-    const el = document.getElementById('users-analytics-conversion-period');
-    const days = el ? parseInt(el.value) || 30 : 30;
     loadConversionChart(days, 'users-analytics-conversion-chart');
 }
 
@@ -4113,7 +4106,11 @@ function preventCloseOnScroll() {
 }
 
 // Загрузка статистики уведомлений
-async function loadNotificationStats(days = 7) {
+async function loadNotificationStats(days) {
+    if (days == null) {
+        const el = document.getElementById('notifications-period');
+        days = el ? parseInt(el.value) || 7 : 7;
+    }
     try {
         document.getElementById('admin-notifications-loading').style.display = 'block';
         document.getElementById('admin-notifications-error').style.display = 'none';
@@ -5252,7 +5249,11 @@ async function handleUnlinkTelegram(event) {
 }
 
 // Загрузка статистики подписок
-async function loadSubscriptionStats(days = 30) {
+async function loadSubscriptionStats(days) {
+    if (days == null) {
+        const el = document.getElementById('subscriptions-period');
+        days = el ? parseInt(el.value) || 30 : 30;
+    }
     try {
         document.getElementById('admin-subscriptions-loading').style.display = 'block';
         document.getElementById('admin-subscriptions-error').style.display = 'none';
@@ -5572,10 +5573,10 @@ function changeSubscriptionsPeriod() {
     loadSubscriptionStats(days);
 }
 
-// Изменение периода для конверсии подписок
+// Изменение периода для конверсии подписок (использует общий селект subscriptions-period)
 function changeConversionSubscriptionsPeriod() {
-    const select = document.getElementById('conversion-subscriptions-period');
-    const days = parseInt(select.value);
+    const select = document.getElementById('subscriptions-period');
+    const days = select ? parseInt(select.value) || 30 : 30;
     loadSubscriptionStats(days);
 }
 

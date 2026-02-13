@@ -485,11 +485,11 @@
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-subscriptions')">
-                            <span class="admin-panel-row-label">Подписки</span>
+                            <span class="admin-panel-row-label">Аналитика подписок</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-notifications')">
-                            <span class="admin-panel-row-label">Уведомления</span>
+                            <span class="admin-panel-row-label">Аналитика уведомлений</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-servers-analytics')">
@@ -511,11 +511,11 @@
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-broadcast')">
-                            <span class="admin-panel-row-label">Рассылка</span>
+                            <span class="admin-panel-row-label">Управление рассылкой</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-events')">
-                            <span class="admin-panel-row-label">События</span>
+                            <span class="admin-panel-row-label">Управление событиями</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                     </div>
@@ -606,18 +606,21 @@
                         <div class="stat-card-subtitle">Новых за 30 дней: <span id="users-analytics-new-30d">0</span></div>
                     </div>
                 </div>
+                <div style="margin-top: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #a0a0a0;">Период:</span>
+                    <select id="users-analytics-period" onchange="changeUsersAnalyticsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                        <option value="1">24 часа</option>
+                        <option value="7">7 дней</option>
+                        <option value="14">14 дней</option>
+                        <option value="30" selected>30 дней</option>
+                        <option value="90">90 дней</option>
+                    </select>
+                </div>
                 
                 <div style="margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Новых пользователей</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="users-analytics-growth-period" onchange="changeUsersAnalyticsGrowthPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                <option value="1">24 часа</option>
-                                <option value="7">7 дней</option>
-                                <option value="14">14 дней</option>
-                                <option value="30" selected>30 дней</option>
-                                <option value="90">90 дней</option>
-                            </select>
                             <button class="fullscreen-btn" onclick="toggleFullscreen('users-analytics-growth-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                 <span>⛶</span>
                             </button>
@@ -633,13 +636,6 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h2 style="margin: 0;">Конверсия новых пользователей</h2>
                             <div style="display: flex; gap: 8px; align-items: center;">
-                                <select id="users-analytics-conversion-period" onchange="changeUsersAnalyticsConversionPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                    <option value="1">24 часа</option>
-                                    <option value="7">7 дней</option>
-                                    <option value="14">14 дней</option>
-                                    <option value="30" selected>30 дней</option>
-                                    <option value="90">90 дней</option>
-                                </select>
                                 <button class="fullscreen-btn" onclick="toggleFullscreen('users-analytics-conversion-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                     <span>⛶</span>
                                 </button>
@@ -694,6 +690,14 @@
             </div>
             
             <div id="admin-notifications-content" class="admin-page-content" style="display: none;">
+                <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #a0a0a0;">Период:</span>
+                    <select id="notifications-period" onchange="changeNotificationsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                        <option value="7" selected>7 дней</option>
+                        <option value="14">14 дней</option>
+                        <option value="30">30 дней</option>
+                    </select>
+                </div>
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Всего отправлено</div>
@@ -718,11 +722,6 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Доставка уведомлений</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="notifications-period" onchange="changeNotificationsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                <option value="7" selected>7 дней</option>
-                                <option value="14">14 дней</option>
-                                <option value="30">30 дней</option>
-                            </select>
                             <button class="fullscreen-btn" onclick="toggleFullscreen('notification-delivery-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                 <span>⛶</span>
                             </button>
@@ -791,17 +790,19 @@
                         <div class="stat-card-subtitle">Подписок</div>
                     </div>
                 </div>
+                <div style="margin-top: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #a0a0a0;">Период:</span>
+                    <select id="subscriptions-period" onchange="changeSubscriptionsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+                        <option value="7">7 дней</option>
+                        <option value="14">14 дней</option>
+                        <option value="30" selected>30 дней</option>
+                    </select>
+                </div>
                 
                 <div style="margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Динамика подписок</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="subscriptions-period" onchange="changeSubscriptionsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                <option value="7">7 дней</option>
-                                <option value="14">14 дней</option>
-                                <option value="30" selected>30 дней</option>
-                                <option value="90">90 дней</option>
-                            </select>
                             <button class="fullscreen-btn" onclick="toggleFullscreen('subscription-dynamics-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                 <span>⛶</span>
                             </button>
@@ -818,12 +819,6 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="margin: 0;">Конверсия пробных подписок</h2>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="conversion-subscriptions-period" onchange="changeConversionSubscriptionsPeriod()" style="padding: 8px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
-                                <option value="7">7 дней</option>
-                                <option value="14">14 дней</option>
-                                <option value="30" selected>30 дней</option>
-                                <option value="90">90 дней</option>
-                            </select>
                             <button class="fullscreen-btn" onclick="toggleFullscreen('subscription-conversion-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
                                 <span>⛶</span>
                             </button>
