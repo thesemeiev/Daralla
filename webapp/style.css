@@ -2758,6 +2758,24 @@ h1 {
     color: #6a6a6a;
 }
 
+/* Единая строка выбора периода во всех разделах аналитики */
+.analytics-period-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.analytics-period-row .analytics-period-label {
+    color: #a0a0a0;
+}
+.analytics-period-row select {
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #fff;
+}
+
 /* Админ-панель: главный экран — минимализм, ровные строки */
 .admin-panel-content {
     padding: calc(36px + env(safe-area-inset-top, 0px)) 0 16px 0;

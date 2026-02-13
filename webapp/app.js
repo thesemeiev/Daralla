@@ -3423,9 +3423,10 @@ async function loadUserGrowthChart(days = 30, chartCanvasId) {
             return;
         }
         
-        // Уничтожаем предыдущий график, если он существует
-        if (userGrowthChart) {
+        // Уничтожаем предыдущий график только если он на этом же canvas (чтобы период переключал графики)
+        if (userGrowthChart && userGrowthChart.canvas === ctx) {
             userGrowthChart.destroy();
+            userGrowthChart = null;
         }
         
         // Подготавливаем данные
@@ -3531,9 +3532,10 @@ async function loadConversionChart(days = 30, chartCanvasId) {
             return;
         }
         
-        // Уничтожаем предыдущий график, если он существует
-        if (conversionChart) {
+        // Уничтожаем предыдущий график только если он на этом же canvas (чтобы период переключал графики)
+        if (conversionChart && conversionChart.canvas === ctx) {
             conversionChart.destroy();
+            conversionChart = null;
         }
         
         // Подготавливаем данные
