@@ -1,5 +1,5 @@
-// Telegram Web App API — безопасная инициализация (не падаем, если API ещё не готов или открыто не из Telegram)
-const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : {
+// Telegram Web App API — заглушка, если скрипт не загрузился (например, telegram.org заблокирован)
+var TG_STUB = {
     initData: '',
     initDataUnsafe: { user: {} },
     ready: function() {},
@@ -18,6 +18,8 @@ const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp 
         enable: function() {}
     }
 };
+// Скрипт telegram-web-app.js подключается с async — при загрузке страницы обновим tg в DOMContentLoaded
+var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
 
 // Глобальные переменные для веб-авторизации
 let webAuthToken = null;
@@ -130,20 +132,7 @@ function hideFormMessage(containerOrId) {
     }
 }
 
-// Инициализация Telegram Web App
-if (tg.initData) {
-    tg.ready();
-    tg.expand();
-}
-
-// Отключаем вертикальные свайпы для закрытия приложения (предотвращает закрытие при скролле вверх)
-if (tg.disableVerticalSwipes) {
-    tg.disableVerticalSwipes();
-}
-
-// Устанавливаем цветовую схему
-tg.setHeaderColor('#1a1a1a');
-tg.setBackgroundColor('#1a1a1a');
+// Инициализация tg.ready/expand/цветов выполняется в DOMContentLoaded после waitForTelegram
 
 // Текущая страница
 let currentPage = 'subscriptions';
@@ -4518,8 +4507,45 @@ async function loadPrices() {
     }
 }
 
+// Ждём появления Telegram Web App API (скрипт загружается с async) или таймаут — чтобы Mini App успел инициализироваться
+function waitForTelegram(maxMs) {
+    return new Promise(function (resolve) {
+        if (window.Telegram && window.Telegram.WebApp) {
+            resolve();
+            return;
+        }
+        var deadline = Date.now() + maxMs;
+        function check() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                resolve();
+                return;
+            }
+            if (Date.now() < deadline) {
+                requestAnimationFrame(check);
+            } else {
+                resolve();
+            }
+        }
+        requestAnimationFrame(check);
+    });
+}
+
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
+    // Даём время подгрузиться telegram-web-app.js (важно при открытии из Mini App и при блокировке telegram.org)
+    await waitForTelegram(400);
+    tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+    isWebMode = !tg.initData;
+    if (tg.initData) {
+        tg.ready();
+        tg.expand();
+    }
+    if (tg.disableVerticalSwipes) {
+        tg.disableVerticalSwipes();
+    }
+    tg.setHeaderColor('#1a1a1a');
+    tg.setBackgroundColor('#1a1a1a');
+
     // Загружаем цены
     loadPrices();
     // Включаем защиту от закрытия при скролле вверх
