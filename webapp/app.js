@@ -139,7 +139,7 @@ function ensureChartJs() {
     if (chartJsLoadPromise) return chartJsLoadPromise;
     chartJsLoadPromise = new Promise(function (resolve, reject) {
         var script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+        script.src = '/vendor/chart.umd.min.js';
         script.async = true;
         script.onload = function () { resolve(); };
         script.onerror = function () {
