@@ -21,6 +21,27 @@ CORS_OPTIONS_HEADERS = {
 }
 
 
+def _build_servers_response(servers_list, health_results, health_status):
+    """Собирает список серверов для ответа API из списка серверов и статусов."""
+    servers = []
+    for server in servers_list:
+        server_name = server["name"]
+        is_healthy = health_results.get(server_name, False)
+        status_info = health_status.get(server_name, {})
+        last_check = None
+        if status_info.get("last_check"):
+            if isinstance(status_info["last_check"], (int, float)):
+                last_check = datetime.datetime.fromtimestamp(status_info["last_check"]).strftime("%d.%m.%Y %H:%M")
+            else:
+                last_check = str(status_info["last_check"])
+        servers.append({
+            "name": server_name,
+            "status": "online" if is_healthy else "offline",
+            "last_check": last_check,
+        })
+    return servers
+
+
 def create_blueprint(bot_app):
     bp = Blueprint("api_public", __name__)
 
@@ -58,30 +79,26 @@ def create_blueprint(bot_app):
 
             health_results = await server_manager.check_all_servers_health(force_check=True)
             health_status = server_manager.get_server_health_status()
-
-            servers = []
-            for server in server_manager.servers:
-                server_name = server["name"]
-                is_healthy = health_results.get(server_name, False)
-                status_info = health_status.get(server_name, {})
-
-                last_check = None
-                if status_info.get("last_check"):
-                    if isinstance(status_info["last_check"], (int, float)):
-                        last_check = datetime.datetime.fromtimestamp(status_info["last_check"]).strftime("%d.%m.%Y %H:%M")
-                    else:
-                        last_check = str(status_info["last_check"])
-
-                servers.append({
-                    "name": server_name,
-                    "status": "online" if is_healthy else "offline",
-                    "last_check": last_check,
-                })
-
+            servers = _build_servers_response(server_manager.servers, health_results, health_status)
             return jsonify({"success": True, "servers": servers}), 200, CORS_HEADERS
 
         except Exception as e:
             logger.error("Ошибка в API /api/servers: %s", e, exc_info=True)
+            # При любой ошибке отдаём частичный ответ из последних известных статусов
+            server_manager = None
+            try:
+                from bot.handlers.api_support.webhook_auth import get_server_manager
+                server_manager = get_server_manager()
+            except Exception:
+                pass
+            if server_manager and getattr(server_manager, "servers", None):
+                health_status = server_manager.get_server_health_status()
+                servers = _build_servers_response(
+                    server_manager.servers,
+                    {},  # нет результатов проверки — все offline
+                    health_status,
+                )
+                return jsonify({"success": True, "servers": servers}), 200, CORS_HEADERS
             return jsonify({"error": "Internal server error"}), 500, CORS_HEADERS
 
     return bp

@@ -274,18 +274,17 @@ class MultiServerManager:
     
     async def check_all_servers_health(self, force_check=False):
         """
-        Проверяет здоровье всех серверов с кэшированием
-
-        Args:
-            force_check: Если True, игнорирует кэш (для принудительной проверки)
-
-        Returns:
-            dict: {server_name: bool} - результаты проверки
+        Проверяет здоровье всех серверов с кэшированием.
+        Ошибка проверки одного сервера не прерывает проверку остальных.
         """
         results = {}
         for server in self.servers:
             server_name = server["name"]
-            results[server_name] = await self.check_server_health(server_name, force_check=force_check)
+            try:
+                results[server_name] = await self.check_server_health(server_name, force_check=force_check)
+            except Exception as e:
+                logger.warning("Проверка здоровья сервера %s не удалась: %s", server_name, e)
+                results[server_name] = False
         return results
     
     def get_server_health_status(self):
