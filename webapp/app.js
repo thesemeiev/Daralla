@@ -132,6 +132,33 @@ function hideFormMessage(containerOrId) {
     }
 }
 
+// Lazy load Chart.js — только при переходе в админ-панель с графиками (не блокирует страницу при недоступности CDN)
+var chartJsLoadPromise = null;
+function ensureChartJs() {
+    if (typeof Chart !== 'undefined') return Promise.resolve();
+    if (chartJsLoadPromise) return chartJsLoadPromise;
+    chartJsLoadPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+        script.async = true;
+        script.onload = function () { resolve(); };
+        script.onerror = function () {
+            chartJsLoadPromise = null;
+            reject(new Error('Chart.js не загружен'));
+        };
+        document.head.appendChild(script);
+    });
+    return chartJsLoadPromise;
+}
+
+function showChartFallback(containerOrCanvasId) {
+    var el = document.getElementById(containerOrCanvasId);
+    var container = el ? (el.tagName === 'CANVAS' ? el.parentElement : el) : null;
+    if (container) {
+        container.innerHTML = '<p style="text-align:center;color:#999;padding:20px;">Графики недоступны. Проверьте сеть или попробуйте с VPN.</p>';
+    }
+}
+
 // Инициализация tg.ready/expand/цветов выполняется в DOMContentLoaded после waitForTelegram
 
 // Текущая страница
@@ -3328,6 +3355,13 @@ let subscriptionConversionChart = null;
 async function loadUserGrowthChart(days = 30, chartCanvasId) {
     const canvasId = chartCanvasId || 'user-growth-chart';
     try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback(canvasId);
+        return;
+    }
+    try {
         const response = await apiFetch('/api/admin/charts/user-growth', {
             method: 'POST',
             headers: {
@@ -3428,6 +3462,13 @@ async function loadUserGrowthChart(days = 30, chartCanvasId) {
 // Загрузка графика конверсии (chartCanvasId — для страницы «Аналитика пользователей»: 'users-analytics-conversion-chart')
 async function loadConversionChart(days = 30, chartCanvasId) {
     const canvasId = chartCanvasId || 'conversion-chart';
+    try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback(canvasId);
+        return;
+    }
     try {
         const response = await apiFetch('/api/admin/charts/conversion', {
             method: 'POST',
@@ -4083,6 +4124,13 @@ async function loadNotificationStats(days = 7) {
 // Загрузка графика доставки уведомлений
 async function loadNotificationDeliveryChart(dailyData) {
     try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback('notification-delivery-chart');
+        return;
+    }
+    try {
         const ctx = document.getElementById('notification-delivery-chart');
         if (!ctx) {
             return;
@@ -4224,6 +4272,13 @@ async function loadNotificationDeliveryChart(dailyData) {
 // Загрузка графика процента успешности (удалена - объединена с доставкой)
 async function loadNotificationSuccessRateChart(dailyData) {
     try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback('notification-success-rate-chart');
+        return;
+    }
+    try {
         const ctx = document.getElementById('notification-success-rate-chart');
         if (!ctx) {
             return;
@@ -4293,6 +4348,13 @@ async function loadNotificationSuccessRateChart(dailyData) {
 // Загрузка графика заблокированных пользователей
 async function loadNotificationBlockedChart(dailyData) {
     try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback('notification-blocked-chart');
+        return;
+    }
+    try {
         const ctx = document.getElementById('notification-blocked-chart');
         if (!ctx) {
             return;
@@ -4360,6 +4422,13 @@ async function loadNotificationBlockedChart(dailyData) {
 
 // Загрузка графика по типам уведомлений
 async function loadNotificationTypesChart(byTypeData) {
+    try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback('notification-types-chart');
+        return;
+    }
     try {
         const ctx = document.getElementById('notification-types-chart');
         if (!ctx) {
@@ -5190,6 +5259,13 @@ async function loadSubscriptionStats(days = 30) {
 // Загрузка графика динамики подписок
 async function loadSubscriptionDynamicsChart(dynamicsData) {
     try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback('subscription-dynamics-chart');
+        return;
+    }
+    try {
         const ctx = document.getElementById('subscription-dynamics-chart');
         if (!ctx) {
             return;
@@ -5288,6 +5364,13 @@ async function loadSubscriptionDynamicsChart(dynamicsData) {
 
 // Загрузка графика конверсии
 async function loadSubscriptionConversionChart(conversionData) {
+    try {
+        await ensureChartJs();
+    } catch (e) {
+        console.error(e.message);
+        showChartFallback('subscription-conversion-chart');
+        return;
+    }
     try {
         const ctx = document.getElementById('subscription-conversion-chart');
         if (!ctx) {
