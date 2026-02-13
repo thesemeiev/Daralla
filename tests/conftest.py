@@ -28,5 +28,10 @@ async def db():
     """Initialize test database and yield. All bot.db modules use DARALLA_TEST_DB."""
     from bot.db import init_all_db
     await init_all_db()
+    try:
+        from bot.events.db.migrations import init_events_tables
+        await init_events_tables()
+    except Exception:
+        pass
     yield
     # Temp file is left for next run; optional: os.unlink(_test_db_path) in a finalizer

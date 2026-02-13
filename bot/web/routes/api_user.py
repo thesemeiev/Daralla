@@ -237,8 +237,18 @@ def create_blueprint(bot_app):
             data = await request.get_json(silent=True) or {}
             period = data.get("period")
             subscription_id = data.get("subscription_id")
+            referrer_code = (data.get("referrer_code") or "").strip()
             if not period or period not in ("month", "3month"):
                 return jsonify({"error": 'Invalid period. Use "month" or "3month"'}), 400
+            referrer_user_id = None
+            if referrer_code:
+                try:
+                    from bot.events.db.queries import get_user_id_by_code
+                    referrer_user_id = await get_user_id_by_code(referrer_code)
+                    if referrer_user_id and referrer_user_id == user_id:
+                        return jsonify({"error": "Нельзя использовать свой код"}), 400
+                except Exception:
+                    referrer_user_id = None
             from bot.prices_config import PRICES
             from yookassa import Payment
             from bot.db import add_payment, DB_PATH
@@ -285,6 +295,8 @@ def create_blueprint(bot_app):
             }
             if subscription_id:
                 payment_meta["extension_subscription_id"] = int(subscription_id)
+            if referrer_user_id:
+                payment_meta["referrer_user_id"] = referrer_user_id
             await add_payment(
                 payment_id=payment.id,
                 user_id=user_id,

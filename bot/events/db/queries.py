@@ -17,33 +17,6 @@ def _now_iso():
     return datetime.utcnow().isoformat() + "Z"
 
 
-async def record_referral(referrer_user_id: str, referred_user_id: str, event_id: int) -> bool:
-    """
-    Записывает реферальную связь в рамках события. Первый реферер выигрывает: если для
-    (referred_user_id, event_id) уже есть запись, вставка не выполняется (UNIQUE).
-    event_id обязателен — глобальные рефералы не поддерживаются.
-    Возвращает True если запись добавлена, False если уже существовала.
-    """
-    if not referrer_user_id or not referred_user_id or event_id is None or referrer_user_id == referred_user_id:
-        return False
-    now = _now_iso()
-    async with aiosqlite.connect(DB_PATH) as db:
-        try:
-            await db.execute(
-                """
-                INSERT INTO event_referrals (event_id, referrer_user_id, referred_user_id, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (event_id, referrer_user_id, referred_user_id, now),
-            )
-            await db.commit()
-            return True
-        except aiosqlite.IntegrityError:
-            # UNIQUE(referred_user_id, event_id) — уже есть запись
-            await db.rollback()
-            return False
-
-
 def _generate_referral_code(length: int = 6) -> str:
     """Генерирует случайный код из A-Z, 0-9."""
     chars = string.ascii_uppercase + string.digits
@@ -106,19 +79,6 @@ async def get_user_first_seen(user_id: str) -> int | None:
             return row[0] if row else None
     except Exception:
         return None
-
-
-async def is_user_already_referred(user_id: str) -> bool:
-    """Проверяет, есть ли user_id в event_referrals как referred_user_id (в любом событии)."""
-    if not user_id:
-        return False
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "SELECT 1 FROM event_referrals WHERE referred_user_id = ? LIMIT 1",
-            (user_id,),
-        )
-        row = await cursor.fetchone()
-        return row is not None
 
 
 # --- CRUD событий ---
@@ -242,10 +202,9 @@ async def update_event(event_id: int, name: str | None = None, description: str 
 
 
 async def delete_event(event_id: int) -> bool:
-    """Удаляет событие по id и все связанные записи (рефералы, оплаты, награды). Возвращает True если удалено."""
+    """Удаляет событие по id и все связанные записи (оплаты, награды). Возвращает True если удалено."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM event_counted_payments WHERE event_id = ?", (event_id,))
-        await db.execute("DELETE FROM event_referrals WHERE event_id = ?", (event_id,))
         await db.execute("DELETE FROM event_rewards_granted WHERE event_id = ?", (event_id,))
         cursor = await db.execute("DELETE FROM events WHERE id = ?", (event_id,))
         await db.commit()
@@ -277,7 +236,7 @@ def _event_row_to_dict(row, now_iso: str | None = None) -> dict:
     return d
 
 
-# --- Рейтинг по событию (event_counted_payments + event_referrals) ---
+# --- Рейтинг по событию (event_counted_payments) ---
 
 def _display_name(row) -> str:
     """Для рейтинга: логин если есть, иначе user_id."""
@@ -288,20 +247,18 @@ def _display_name(row) -> str:
 
 async def get_leaderboard(event_id: int, limit: int = 10) -> list:
     """
-    Топ рефереров по событию: по event_counted_payments считаем засчитанные оплаты
-    приглашённых, группируем по referrer (через event_referrals). Возвращает список
-    { referrer_user_id, account_id, count, place }. account_id — логин или user_id для отображения.
+    Топ рефереров по событию: по event_counted_payments считаем оплаты с кодом.
+    Возвращает список { referrer_user_id, account_id, count, place }.
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """
-            SELECT er.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
+            SELECT ecp.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
             FROM event_counted_payments ecp
-            JOIN event_referrals er ON er.referred_user_id = ecp.referred_user_id AND er.event_id = ecp.event_id
-            LEFT JOIN users u ON u.user_id = er.referrer_user_id
+            LEFT JOIN users u ON u.user_id = ecp.referrer_user_id
             WHERE ecp.event_id = ?
-            GROUP BY er.referrer_user_id
+            GROUP BY ecp.referrer_user_id
             ORDER BY cnt DESC
             LIMIT ?
             """,
@@ -323,18 +280,16 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
 async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
     """
     Топ рефереров с учётом ничьих: одинаковый count = одинаковое place.
-    Возвращает список { referrer_user_id, account_id, count, place }. account_id — логин или user_id.
     """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """
-            SELECT er.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
+            SELECT ecp.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
             FROM event_counted_payments ecp
-            JOIN event_referrals er ON er.referred_user_id = ecp.referred_user_id AND er.event_id = ecp.event_id
-            LEFT JOIN users u ON u.user_id = er.referrer_user_id
+            LEFT JOIN users u ON u.user_id = ecp.referrer_user_id
             WHERE ecp.event_id = ?
-            GROUP BY er.referrer_user_id
+            GROUP BY ecp.referrer_user_id
             ORDER BY cnt DESC
             LIMIT ?
             """,
@@ -392,34 +347,17 @@ async def get_my_place(event_id: int, user_id: str) -> dict | None:
 
 # --- Засчёт оплаты для рейтинга (on_payment_success) ---
 
-async def get_active_event_ids_for_referred_user(referred_user_id: str) -> list:
-    """Список id активных событий, в которых referred_user_id участвует как приглашённый."""
-    now = _now_iso()
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            """
-            SELECT DISTINCT er.event_id FROM event_referrals er
-            JOIN events e ON e.id = er.event_id
-            WHERE er.referred_user_id = ? AND er.event_id IS NOT NULL
-              AND e.start_at <= ? AND e.end_at >= ? AND e.status != 'draft'
-            """,
-            (referred_user_id, now, now),
-        )
-        rows = await cursor.fetchall()
-        return [r[0] for r in rows] if rows else []
-
-
-async def add_counted_payment(event_id: int, referred_user_id: str) -> None:
+async def add_counted_payment(event_id: int, referrer_user_id: str, payment_id: str) -> None:
     """Добавляет одну запись в event_counted_payments (идемпотентно: INSERT OR IGNORE по UNIQUE)."""
     now = _now_iso()
     async with aiosqlite.connect(DB_PATH) as db:
         try:
             await db.execute(
                 """
-                INSERT OR IGNORE INTO event_counted_payments (event_id, referred_user_id, paid_at)
-                VALUES (?, ?, ?)
+                INSERT OR IGNORE INTO event_counted_payments (event_id, referrer_user_id, payment_id, paid_at)
+                VALUES (?, ?, ?, ?)
                 """,
-                (event_id, referred_user_id, now),
+                (event_id, referrer_user_id, payment_id, now),
             )
             await db.commit()
         except Exception:

@@ -20,7 +20,7 @@ _EVENTS_CACHE_TTL = 60
 
 
 def create_blueprint():
-    """Создаёт Quart blueprint событий (health, my-code, record-ref-by-code, public list, admin CRUD)."""
+    """Создаёт Quart blueprint событий (health, my-code, public list, admin CRUD)."""
     bp = Blueprint("events", __name__, url_prefix="/api/events")
 
     @bp.route("/health", methods=["GET"])
@@ -158,67 +158,6 @@ def create_blueprint():
             return jsonify({"code": code}), 200, _CORS
         except Exception as e:
             logger.warning("events my-code: %s", e)
-            return jsonify({"error": str(e)}), 500
-
-    @bp.route("/am-i-referred", methods=["GET"])
-    async def public_am_i_referred():
-        from bot.handlers.api_support.webhook_auth import authenticate_request_async
-        body = await request.get_json(silent=True) or {}
-        user_id = await authenticate_request_async(request.headers, request.args or {}, body)
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
-        try:
-            from bot.events.db.queries import is_user_already_referred, get_user_first_seen
-            referred = await is_user_already_referred(user_id)
-            first_seen = await get_user_first_seen(user_id)
-            now = int(time.time())
-            age_seconds = (now - first_seen) if first_seen else 0
-            show_modal = not referred and (first_seen is None or age_seconds < 30 * 86400)
-            return jsonify({"referred": referred, "show_modal": show_modal}), 200, _CORS
-        except Exception as e:
-            logger.warning("events am-i-referred: %s", e)
-            return jsonify({"error": str(e)}), 500
-
-    @bp.route("/record-ref-by-code", methods=["POST", "OPTIONS"])
-    async def public_record_ref_by_code():
-        if request.method == "OPTIONS":
-            return "", 200, _CORS
-        from bot.handlers.api_support.webhook_auth import authenticate_request_async
-        body = await request.get_json(silent=True) or {}
-        user_id = await authenticate_request_async(request.headers, request.args or {}, body)
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
-        code = (body.get("code") or "").strip()
-        if not code:
-            return jsonify({"error": "code required"}), 400
-        event_id = body.get("event_id")
-        try:
-            event_id = int(event_id) if event_id is not None else None
-        except (TypeError, ValueError):
-            event_id = None
-        try:
-            from bot.events.db.queries import (
-                get_user_id_by_code,
-                is_user_already_referred,
-                list_events_active,
-            )
-            from bot.events.services.referral_service import record_visit
-            referrer_user_id = await get_user_id_by_code(code)
-            if not referrer_user_id:
-                return jsonify({"error": "Код не найден"}), 400
-            if referrer_user_id == user_id:
-                return jsonify({"error": "Нельзя использовать свой код"}), 400
-            if await is_user_already_referred(user_id):
-                return jsonify({"error": "Вы уже записаны по приглашению"}), 400
-            if event_id is None:
-                active = await list_events_active()
-                if not active:
-                    return jsonify({"error": "Сейчас нет активных событий"}), 400
-                event_id = active[0]["id"]
-            ok = await record_visit(referrer_user_id, user_id, event_id)
-            return jsonify({"success": True, "recorded": ok}), 200, _CORS
-        except Exception as e:
-            logger.warning("events record-ref-by-code: %s", e)
             return jsonify({"error": str(e)}), 500
 
     @bp.route("/<int:event_id>", methods=["GET"])

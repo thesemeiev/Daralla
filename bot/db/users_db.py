@@ -564,33 +564,11 @@ async def merge_user_into_target(source_user_id: str, target_user_id: str) -> bo
                 (source_user_id,),
             )
             async with db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_referrals'"
-            ) as cur:
-                if await cur.fetchone():
-                    await db.execute(
-                        "UPDATE event_referrals SET referrer_user_id = ? WHERE referrer_user_id = ?",
-                        (target_user_id, source_user_id),
-                    )
-                    await db.execute(
-                        """DELETE FROM event_referrals WHERE referred_user_id = ? AND event_id IN
-                           (SELECT event_id FROM event_referrals WHERE referred_user_id = ?)""",
-                        (source_user_id, target_user_id),
-                    )
-                    await db.execute(
-                        "UPDATE event_referrals SET referred_user_id = ? WHERE referred_user_id = ?",
-                        (target_user_id, source_user_id),
-                    )
-            async with db.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_counted_payments'"
             ) as cur:
                 if await cur.fetchone():
                     await db.execute(
-                        """DELETE FROM event_counted_payments WHERE referred_user_id = ? AND event_id IN
-                           (SELECT event_id FROM event_counted_payments WHERE referred_user_id = ?)""",
-                        (source_user_id, target_user_id),
-                    )
-                    await db.execute(
-                        "UPDATE event_counted_payments SET referred_user_id = ? WHERE referred_user_id = ?",
+                        "UPDATE event_counted_payments SET referrer_user_id = ? WHERE referrer_user_id = ?",
                         (target_user_id, source_user_id),
                     )
             async with db.execute(
@@ -659,23 +637,11 @@ async def rename_user_id(old_user_id: str, new_user_id: str) -> bool:
                 (new_user_id, old_user_id)
             )
             async with db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_referrals'"
-            ) as cur:
-                if await cur.fetchone():
-                    await db.execute(
-                        "UPDATE event_referrals SET referrer_user_id = ? WHERE referrer_user_id = ?",
-                        (new_user_id, old_user_id)
-                    )
-                    await db.execute(
-                        "UPDATE event_referrals SET referred_user_id = ? WHERE referred_user_id = ?",
-                        (new_user_id, old_user_id)
-                    )
-            async with db.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_counted_payments'"
             ) as cur:
                 if await cur.fetchone():
                     await db.execute(
-                        "UPDATE event_counted_payments SET referred_user_id = ? WHERE referred_user_id = ?",
+                        "UPDATE event_counted_payments SET referrer_user_id = ? WHERE referrer_user_id = ?",
                         (new_user_id, old_user_id)
                     )
             async with db.execute(

@@ -267,7 +267,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             try:
                 from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
                 if EVENTS_MODULE_ENABLED:
-                    await events_on_payment_success(user_id)
+                    await events_on_payment_success(user_id, payment_id, meta)
             except Exception as events_e:
                 logger.debug("events.on_payment_success (extension): %s", events_e)
             
@@ -566,7 +566,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         try:
             from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
             if EVENTS_MODULE_ENABLED:
-                await events_on_payment_success(user_id)
+                await events_on_payment_success(user_id, payment_id, meta)
         except Exception as events_e:
             logger.debug("events.on_payment_success (new purchase): %s", events_e)
         

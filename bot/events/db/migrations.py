@@ -25,24 +25,16 @@ async def init_events_tables():
                 created_at TEXT NOT NULL
             )
         """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS event_referrals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_id INTEGER,
-                referrer_user_id TEXT NOT NULL,
-                referred_user_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                UNIQUE(referred_user_id, event_id),
-                FOREIGN KEY (event_id) REFERENCES events(id)
-            )
-        """)
+        await db.execute("DROP TABLE IF EXISTS event_referrals")
+        await db.execute("DROP TABLE IF EXISTS event_counted_payments")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS event_counted_payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL,
-                referred_user_id TEXT NOT NULL,
+                referrer_user_id TEXT NOT NULL,
+                payment_id TEXT NOT NULL,
                 paid_at TEXT NOT NULL,
-                UNIQUE(event_id, referred_user_id),
+                UNIQUE(event_id, payment_id),
                 FOREIGN KEY (event_id) REFERENCES events(id)
             )
         """)
@@ -61,4 +53,4 @@ async def init_events_tables():
             )
         """)
         await db.commit()
-    logger.info("Таблицы модуля событий инициализированы: events, event_referrals, event_counted_payments, event_rewards_granted, user_referral_codes")
+    logger.info("Таблицы модуля событий инициализированы: events, event_counted_payments, event_rewards_granted, user_referral_codes")

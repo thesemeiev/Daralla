@@ -207,6 +207,12 @@
                         <button class="btn-primary" onclick="createPayment('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                 </div>
+                <div id="buy-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
+                    <label class="form-group" style="margin-bottom: 0;">
+                        <span style="color: #999; font-size: 14px;">Реферальный код (необязательно)</span>
+                        <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -236,6 +242,12 @@
                         </div>
                         <button class="btn-primary" onclick="createPayment('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
+                </div>
+                <div id="extend-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
+                    <label class="form-group" style="margin-bottom: 0;">
+                        <span style="color: #999; font-size: 14px;">Реферальный код (необязательно)</span>
+                        <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
+                    </label>
                 </div>
             </div>
         </div>
@@ -1370,22 +1382,6 @@
                     <button type="submit" class="btn-primary" style="flex: 1;">Сменить пароль</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <!-- Модальное окно: Ввод реферального кода (первый заход на вкладку События) -->
-    <div id="event-referral-code-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h2>Тебя пригласили?</h2>
-            <p class="hint" style="margin-bottom: 20px;">Введи код пригласившего. Оформи подписку — и твой пригласивший получит +1 в рейтинге события.</p>
-            <div id="event-referral-code-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
-            <div class="form-group">
-                <input type="text" id="event-referral-code-input" placeholder="Например X7K2M" maxlength="8" />
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn-secondary" onclick="skipReferralCodeModal()">Пропустить</button>
-                <button type="button" class="btn-primary" onclick="submitReferralCode()">ОК</button>
-            </div>
         </div>
     </div>
 

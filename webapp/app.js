@@ -394,6 +394,7 @@ function showPage(pageName, params) {
         loadAdminEventsPage();
     } else if (pageName === 'buy-subscription' || pageName === 'extend-subscription') {
         loadPrices();
+        updateReferralCodeBlockVisibility();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
@@ -837,66 +838,6 @@ async function loadEvents() {
             requestAnimationFrame(function () { moveNavIndicator(window.currentNavIndex); });
         });
     }
-    try {
-        var hasActiveEvents = (active || []).length > 0;
-        if (hasActiveEvents && !localStorage.getItem('event_ref_modal_shown') && (tg.initData || webAuthToken)) {
-            var amResp = await apiFetch('/api/events/am-i-referred');
-            if (amResp.ok) {
-                var amData = await amResp.json();
-                if (amData.referred) {
-                    localStorage.setItem('event_ref_modal_shown', '1');
-                } else if (amData.show_modal) {
-                    showEventReferralCodeModal();
-                }
-            }
-        }
-    } catch (e) {}
-}
-
-function showEventReferralCodeModal() {
-    var modal = document.getElementById('event-referral-code-modal');
-    var input = document.getElementById('event-referral-code-input');
-    if (modal && input) {
-        input.value = '';
-        hideFormMessage('event-referral-code-message');
-        modal.style.display = 'flex';
-    }
-}
-
-function skipReferralCodeModal() {
-    var modal = document.getElementById('event-referral-code-modal');
-    if (modal) {
-        modal.style.display = 'none';
-        localStorage.setItem('event_ref_modal_shown', '1');
-    }
-}
-
-async function submitReferralCode() {
-    var input = document.getElementById('event-referral-code-input');
-    var modal = document.getElementById('event-referral-code-modal');
-    if (!input || !modal) return;
-    var code = (input.value || '').trim();
-    if (!code) {
-        showFormMessage('event-referral-code-message', 'error', 'Введите код');
-        return;
-    }
-    try {
-        var r = await apiFetch('/api/events/record-ref-by-code', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: code })
-        });
-        var data = await r.json().catch(function () { return {}; });
-        if (r.ok && data.success) {
-            showFormMessage('event-referral-code-message', 'success', 'Записали');
-            localStorage.setItem('event_ref_modal_shown', '1');
-            setTimeout(function () { modal.style.display = 'none'; }, 800);
-        } else {
-            showFormMessage('event-referral-code-message', 'error', data.error || 'Ошибка');
-        }
-    } catch (e) {
-        showFormMessage('event-referral-code-message', 'error', 'Ошибка сети');
-    }
 }
 
 var eventDetailLeaderboardTimer = null;
@@ -1010,7 +951,7 @@ function loadEventDetail(eventId) {
         }
         if (live) {
             html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
-            html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дай другу свой код. Когда он оформит или продлит подписку, твой рейтинг вырастет.</p>';
+            html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дай другу свой код. Когда он введёт его при покупке или продлении, твой рейтинг вырастет.</p>';
             if (myCode) {
                 html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;background:#2a2a2a;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
                 html += '<span style="color:#999;font-size:14px;">Твой код:</span>';
@@ -2003,9 +1944,41 @@ function openPaymentLink() {
     checkPaymentStatus(currentPaymentData.payment_id, currentExtendSubscriptionId);
 }
 
+async function updateReferralCodeBlockVisibility() {
+    var buyBlock = document.getElementById('buy-referral-code-block');
+    var extendBlock = document.getElementById('extend-referral-code-block');
+    if (!buyBlock && !extendBlock) return;
+    try {
+        var r = await apiFetch('/api/events/');
+        if (!r.ok) return;
+        var data = await r.json();
+        var hasActive = (data.active || []).length > 0;
+        if (buyBlock) buyBlock.style.display = hasActive ? 'block' : 'none';
+        if (extendBlock) extendBlock.style.display = hasActive ? 'block' : 'none';
+    } catch (e) {
+        if (buyBlock) buyBlock.style.display = 'none';
+        if (extendBlock) extendBlock.style.display = 'none';
+    }
+}
+
+function getReferralCodeFromCurrentPage() {
+    var buyPage = document.getElementById('page-buy-subscription');
+    var extendPage = document.getElementById('page-extend-subscription');
+    var isBuyVisible = buyPage && buyPage.style.display !== 'none';
+    var block = isBuyVisible
+        ? document.getElementById('buy-referral-code-block')
+        : document.getElementById('extend-referral-code-block');
+    if (!block || block.style.display === 'none') return '';
+    var input = block.querySelector('.referral-code-input');
+    return input ? (input.value || '').trim() : '';
+}
+
 // Функция создания платежа
 async function createPayment(period, subscriptionId = null) {
     try {
+        var referrerCode = getReferralCodeFromCurrentPage();
+        var body = { period: period, subscription_id: subscriptionId };
+        if (referrerCode) body.referrer_code = referrerCode;
         // Показываем страницу оплаты с индикатором загрузки
         currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
         showPaymentPage();
@@ -2015,10 +1988,7 @@ async function createPayment(period, subscriptionId = null) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                period,
-                subscription_id: subscriptionId
-            })
+            body: JSON.stringify(body)
         });
         
         if (!response.ok) {
