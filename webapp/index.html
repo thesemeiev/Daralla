@@ -11,13 +11,14 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
     <link rel="stylesheet" href="/style.css">
-    <script src="https://telegram.org/js/telegram-web-app.js" async></script>
+    <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body style="background:#1a1a2e;color:#e0e0e0">
     <div class="container">
         <!-- Лендинг до входа (Веб) — о сервисе, fullscreen, scroll-snap -->
-        <div id="page-landing" class="page landing-fullscreen" style="display: none;">
+        <!-- По умолчанию виден лендинг — нет белого экрана до загрузки JS -->
+        <div id="page-landing" class="page landing-fullscreen">
             <div class="landing-scroll" id="landing-scroll">
                 <section class="landing-section" id="landing-hero">
                     <div class="landing-section-content">

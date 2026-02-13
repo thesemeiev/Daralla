@@ -4507,32 +4507,40 @@ async function loadPrices() {
     }
 }
 
-// Ждём появления Telegram Web App API (скрипт загружается с async) или таймаут — чтобы Mini App успел инициализироваться
-function waitForTelegram(maxMs) {
+// Подгружаем скрипт Telegram с таймаутом. Если telegram.org недоступен — не блокируем открытие страницы.
+function loadTelegramScript(timeoutMs) {
     return new Promise(function (resolve) {
         if (window.Telegram && window.Telegram.WebApp) {
             resolve();
             return;
         }
-        var deadline = Date.now() + maxMs;
-        function check() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                resolve();
-                return;
-            }
-            if (Date.now() < deadline) {
-                requestAnimationFrame(check);
-            } else {
-                resolve();
-            }
+        var resolved = false;
+        function done() {
+            if (resolved) return;
+            resolved = true;
+            resolve();
         }
-        requestAnimationFrame(check);
+        var script = document.createElement('script');
+        script.src = 'https://telegram.org/js/telegram-web-app.js';
+        script.async = true;
+        script.onload = done;
+        script.onerror = done;
+        document.head.appendChild(script);
+        setTimeout(done, timeoutMs);
     });
+}
+
+// Ждём появления Telegram Web App API (после loadTelegramScript) или таймаут
+function waitForTelegram(maxMs) {
+    return loadTelegramScript(maxMs);
 }
 
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
-    // Даём время подгрузиться telegram-web-app.js (важно при открытии из Mini App и при блокировке telegram.org)
+    // Сразу показываем лендинг (на случай если в HTML по умолчанию не он), чтобы не было белого экрана
+    var landingEl = document.getElementById('page-landing');
+    if (landingEl) landingEl.style.display = '';
+    // Подгружаем Telegram в фоне; короткий таймаут — не блокируем отрисовку надолго
     await waitForTelegram(400);
     tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
     isWebMode = !tg.initData;

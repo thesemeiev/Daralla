@@ -1,5 +1,5 @@
 /* PWA Service Worker: cache static assets, offline fallback */
-var CACHE_VERSION = 'daralla-static-v1';
+var CACHE_VERSION = 'daralla-static-v2';
 var STATIC_URLS = [
   '/',
   '/index.html',
