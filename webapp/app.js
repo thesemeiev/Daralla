@@ -1,3 +1,40 @@
+// Парсим initData из URL hash (Telegram передаёт tgWebAppData в hash при открытии Mini App).
+// Работает без скрипта telegram.org — когда он заблокирован.
+function parseInitDataFromHash() {
+    var hash = (window.location.hash || '').replace(/^#/, '');
+    if (!hash || hash.indexOf('tgWebAppData') === -1) return null;
+    var queryPart = hash;
+    var qIdx = hash.indexOf('?');
+    if (qIdx >= 0) queryPart = hash.substr(qIdx + 1);
+    var params = {};
+    queryPart.split('&').forEach(function (p) {
+        var eq = p.indexOf('=');
+        if (eq >= 0) {
+            params[decodeURIComponent(p.substr(0, eq))] = decodeURIComponent(p.substr(eq + 1));
+        }
+    });
+    var raw = params.tgWebAppData;
+    if (!raw) return null;
+    var unsafe = { user: {} };
+    raw.split('&').forEach(function (p) {
+        var eq = p.indexOf('=');
+        if (eq >= 0) {
+            var k = decodeURIComponent(p.substr(0, eq));
+            var v = decodeURIComponent(p.substr(eq + 1));
+            try {
+                if ((v.charAt(0) === '{' && v.slice(-1) === '}') || (v.charAt(0) === '[' && v.slice(-1) === ']')) {
+                    v = JSON.parse(v);
+                }
+            } catch (e) {}
+            unsafe[k] = v;
+        }
+    });
+    if (unsafe.user && typeof unsafe.user === 'object') {
+        unsafe.user = unsafe.user;
+    }
+    return { initData: raw, initDataUnsafe: unsafe };
+}
+
 // Telegram Web App API — заглушка, если скрипт не загрузился (например, telegram.org заблокирован)
 var TG_STUB = {
     initData: '',
@@ -4617,9 +4654,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Сразу показываем лендинг (на случай если в HTML по умолчанию не он), чтобы не было белого экрана
     var landingEl = document.getElementById('page-landing');
     if (landingEl) landingEl.style.display = '';
-    // Подгружаем Telegram в фоне; короткий таймаут — не блокируем отрисовку надолго
-    await waitForTelegram(400);
-    tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+    // Сначала пробуем достать initData из URL hash — Telegram передаёт tgWebAppData при открытии Mini App.
+    // Работает без скрипта telegram.org (когда он заблокирован).
+    var hashInit = parseInitDataFromHash();
+    if (hashInit && hashInit.initData) {
+        tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
+    } else {
+        await waitForTelegram(400);
+        tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+    }
     isWebMode = !tg.initData;
     if (tg.initData) {
         tg.ready();
