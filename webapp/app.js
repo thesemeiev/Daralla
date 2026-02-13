@@ -4577,8 +4577,8 @@ async function loadPrices() {
 }
 
 // Подгружаем скрипт Telegram с таймаутом. Если telegram.org недоступен — не блокируем открытие страницы.
-// В обычном браузере (не Telegram) скрипт не грузим — telegram.org может быть заблокирован,
-// а для веб-режима достаточно TG_STUB. Mini App в Telegram имеет User-Agent с "Telegram".
+// В обычном браузере (не Telegram) скрипт не грузим — telegram.org может быть заблокирован.
+// Грузим скрипт, если: уже загружен; User-Agent содержит "telegram"; или страница в iframe (Mini App).
 function loadTelegramScript(timeoutMs) {
     return new Promise(function (resolve) {
         if (window.Telegram && window.Telegram.WebApp) {
@@ -4586,7 +4586,8 @@ function loadTelegramScript(timeoutMs) {
             return;
         }
         var ua = (navigator.userAgent || '').toLowerCase();
-        if (ua.indexOf('telegram') === -1) {
+        var inIframe = window.self !== window.top;
+        if (ua.indexOf('telegram') === -1 && !inIframe) {
             resolve();
             return;
         }
