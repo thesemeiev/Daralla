@@ -4577,9 +4577,16 @@ async function loadPrices() {
 }
 
 // Подгружаем скрипт Telegram с таймаутом. Если telegram.org недоступен — не блокируем открытие страницы.
+// В обычном браузере (не Telegram) скрипт не грузим — telegram.org может быть заблокирован,
+// а для веб-режима достаточно TG_STUB. Mini App в Telegram имеет User-Agent с "Telegram".
 function loadTelegramScript(timeoutMs) {
     return new Promise(function (resolve) {
         if (window.Telegram && window.Telegram.WebApp) {
+            resolve();
+            return;
+        }
+        var ua = (navigator.userAgent || '').toLowerCase();
+        if (ua.indexOf('telegram') === -1) {
             resolve();
             return;
         }
