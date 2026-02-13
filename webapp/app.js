@@ -3338,11 +3338,20 @@ async function loadUsersAnalyticsPage() {
     }
 }
 
-function changeUsersAnalyticsPeriod() {
+async function changeUsersAnalyticsPeriod() {
     const el = document.getElementById('users-analytics-period');
-    const days = el ? parseInt(el.value) || 30 : 30;
-    loadUserGrowthChart(days, 'users-analytics-growth-chart');
-    loadConversionChart(days, 'users-analytics-conversion-chart');
+    if (!el) return;
+    const days = parseInt(el.value, 10) || 30;
+    const prevDisabled = el.disabled;
+    el.disabled = true;
+    try {
+        await loadUserGrowthChart(days, 'users-analytics-growth-chart');
+        await loadConversionChart(days, 'users-analytics-conversion-chart');
+    } catch (e) {
+        console.error('Ошибка обновления графиков по периоду:', e);
+    } finally {
+        el.disabled = prevDisabled;
+    }
 }
 
 // Загрузка страницы «Аналитика серверов»
