@@ -187,10 +187,20 @@
             </header>
             
             <div class="buy-subscription-content">
-                <div class="payment-gateway-choice" style="margin-bottom: 16px;">
-                    <span style="color: #999; font-size: 14px;">Способ оплаты:</span>
-                    <label style="display: inline-flex; align-items: center; margin-right: 16px; margin-top: 8px;"><input type="radio" name="payment-gateway" value="yookassa" checked> Картой (YooKassa)</label>
-                    <label style="display: inline-flex; align-items: center; margin-top: 8px;"><input type="radio" name="payment-gateway" value="cryptocloud"> Криптой (CryptoCloud)</label>
+                <p class="payment-method-title">Способ оплаты</p>
+                <div class="payment-method-choices" role="group" aria-label="Выберите способ оплаты">
+                    <label class="payment-method-card">
+                        <input type="radio" name="payment-gateway" value="yookassa" checked class="payment-method-input" aria-label="Оплатить картой">
+                        <span class="payment-method-icon" aria-hidden="true">💳</span>
+                        <span class="payment-method-label">Картой</span>
+                        <span class="payment-method-hint">Visa, Mastercard, МИР</span>
+                    </label>
+                    <label class="payment-method-card">
+                        <input type="radio" name="payment-gateway" value="cryptocloud" class="payment-method-input" aria-label="Оплатить криптой">
+                        <span class="payment-method-icon" aria-hidden="true">₿</span>
+                        <span class="payment-method-label">Криптой</span>
+                        <span class="payment-method-hint">USDT, BTC, TON и др.</span>
+                    </label>
                 </div>
                 <div class="subscription-plans">
                     <div class="plan-card">
@@ -228,10 +238,20 @@
             </header>
             
             <div class="buy-subscription-content">
-                <div class="payment-gateway-choice" style="margin-bottom: 16px;">
-                    <span style="color: #999; font-size: 14px;">Способ оплаты:</span>
-                    <label style="display: inline-flex; align-items: center; margin-right: 16px; margin-top: 8px;"><input type="radio" name="payment-gateway" value="yookassa" checked> Картой (YooKassa)</label>
-                    <label style="display: inline-flex; align-items: center; margin-top: 8px;"><input type="radio" name="payment-gateway" value="cryptocloud"> Криптой (CryptoCloud)</label>
+                <p class="payment-method-title">Способ оплаты</p>
+                <div class="payment-method-choices" role="group" aria-label="Выберите способ оплаты">
+                    <label class="payment-method-card">
+                        <input type="radio" name="payment-gateway" value="yookassa" checked class="payment-method-input" aria-label="Оплатить картой">
+                        <span class="payment-method-icon" aria-hidden="true">💳</span>
+                        <span class="payment-method-label">Картой</span>
+                        <span class="payment-method-hint">Visa, Mastercard, МИР</span>
+                    </label>
+                    <label class="payment-method-card">
+                        <input type="radio" name="payment-gateway" value="cryptocloud" class="payment-method-input" aria-label="Оплатить криптой">
+                        <span class="payment-method-icon" aria-hidden="true">₿</span>
+                        <span class="payment-method-label">Криптой</span>
+                        <span class="payment-method-hint">USDT, BTC, TON и др.</span>
+                    </label>
                 </div>
                 <div class="subscription-plans">
                     <div class="plan-card">
@@ -288,9 +308,9 @@
                     </div>
                     
                     <div class="detail-actions">
-                        <a id="payment-link-button" href="#" target="_blank" rel="noopener noreferrer" class="action-button" onclick="handlePaymentLinkClick(event)" style="display:inline-block; text-align:center; text-decoration:none; color:#fff; background:#4a9eff;">
+                        <button type="button" id="payment-link-button" class="action-button" onclick="openPaymentUrl()" style="background:#4a9eff; color:#fff; cursor:pointer; border:none;">
                             Перейти к оплате
-                        </a>
+                        </button>
                     </div>
                     
                     <p class="hint" style="margin-top: 16px; text-align: center; color: #999; font-size: 14px;">

@@ -1944,19 +1944,19 @@ function goBackFromPayment() {
     }
 }
 
-// Обработчик клика по ссылке «Перейти к оплате».
-// Всегда открываем URL из ответа API (currentPaymentData.payment_url), не полагаясь на href в DOM.
-// В Telegram — tg.openLink() во внешнем браузере (на ПК иначе WebView и редирект на наш сайт).
-// В браузере — window.open() в новой вкладке, при блокировке попапа — переход в текущей.
-function handlePaymentLinkClick(e) {
-    e.preventDefault();
+/**
+ * Открывает ссылку на оплату (YooKassa или CryptoCloud).
+ * URL берётся только из currentPaymentData.payment_url (ответ API).
+ * — В Telegram: tg.openLink(url) — во внешнем браузере (ПК и телефон).
+ * — В браузере: window.open(url) или location.href при блокировке попапа.
+ */
+function openPaymentUrl() {
     if (!currentPaymentData || !currentPaymentData.payment_url) {
         alert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    var url = currentPaymentData.payment_url;
-    // Только полные внешние ссылки (защита от случайного перехода на наш сайт)
-    if (typeof url !== 'string' || !url.startsWith('http')) {
+    var url = String(currentPaymentData.payment_url).trim();
+    if (!url || url.indexOf('http') !== 0) {
         alert('Ошибка: неверная ссылка на оплату');
         return;
     }
@@ -2048,12 +2048,10 @@ async function createPayment(period, subscriptionId = null) {
     } catch (error) {
         console.error('Ошибка создания платежа:', error);
         
-        // Восстанавливаем ссылку при ошибке
-        const paymentLink = document.getElementById('payment-link-button');
-        if (paymentLink) {
-            paymentLink.href = '#';
-            paymentLink.style.pointerEvents = 'auto';
-            paymentLink.textContent = 'Перейти к оплате';
+        var btn = document.getElementById('payment-link-button');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Перейти к оплате';
         }
         
         showFormMessage('payment-form-message', 'error', 'Ошибка создания платежа: ' + error.message);
@@ -2066,32 +2064,23 @@ async function createPayment(period, subscriptionId = null) {
 // Функция показа страницы оплаты
 function showPaymentPage() {
     hideFormMessage('payment-form-message');
-    // Показываем страницу
     showPage('payment');
-    
-    var paymentLink = document.getElementById('payment-link-button');
+    var btn = document.getElementById('payment-link-button');
     if (!currentPaymentData) {
-        // Если данных еще нет, показываем индикатор загрузки
         document.getElementById('payment-period').textContent = 'Загрузка...';
         document.getElementById('payment-amount').textContent = 'Загрузка...';
-        if (paymentLink) {
-            paymentLink.href = '#';
-            paymentLink.style.pointerEvents = 'none';
-            paymentLink.textContent = 'Создание платежа...';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Создание платежа...';
         }
         return;
     }
-    
-    // Обновляем информацию на странице оплаты
-    const periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
+    var periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
     document.getElementById('payment-period').textContent = periodText;
     document.getElementById('payment-amount').textContent = currentPaymentData.amount + '₽';
-    
-    // Ссылка на оплату — открывается по клику (YooKassa или CryptoCloud)
-    if (paymentLink) {
-        paymentLink.href = currentPaymentData.payment_url;
-        paymentLink.style.pointerEvents = 'auto';
-        paymentLink.textContent = 'Перейти к оплате';
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Перейти к оплате';
     }
 }
 
