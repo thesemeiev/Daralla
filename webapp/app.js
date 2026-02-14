@@ -2069,7 +2069,7 @@ function syncChoosePaymentMethodSelection() {
     if (!container) return;
     var switchEl = container.querySelector('.payment-method-switch');
     if (!switchEl) return;
-    var input = switchEl.querySelector('input[name="payment-gateway"]');
+    var input = container.querySelector('input[name="payment-gateway"]');
     var segments = switchEl.querySelectorAll('.payment-method-segment');
     if (!input || !segments.length) return;
     function selectGateway(gateway) {
