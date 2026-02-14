@@ -189,14 +189,9 @@
             <div class="buy-subscription-content">
                 <p class="payment-method-title">Способ оплаты</p>
                 <div class="payment-method-switch" role="group" aria-label="Выберите способ оплаты">
-                    <label class="payment-method-segment">
-                        <input type="radio" name="payment-gateway" value="yookassa" checked class="payment-method-input" aria-label="Оплатить картой">
-                        <span class="payment-method-segment-inner"><span class="payment-method-icon">💳</span> Картой</span>
-                    </label>
-                    <label class="payment-method-segment">
-                        <input type="radio" name="payment-gateway" value="cryptocloud" class="payment-method-input" aria-label="Оплатить криптой">
-                        <span class="payment-method-segment-inner"><span class="payment-method-icon">₿</span> Криптой</span>
-                    </label>
+                    <input type="hidden" name="payment-gateway" value="yookassa">
+                    <button type="button" class="payment-method-segment payment-method-segment-selected" data-gateway="yookassa" aria-pressed="true"><span class="payment-method-icon">💳</span> Картой</button>
+                    <button type="button" class="payment-method-segment" data-gateway="cryptocloud" aria-pressed="false"><span class="payment-method-icon">₿</span> Криптой</button>
                 </div>
                 <div class="subscription-plans">
                     <div class="plan-card">
@@ -236,14 +231,9 @@
             <div class="buy-subscription-content">
                 <p class="payment-method-title">Способ оплаты</p>
                 <div class="payment-method-switch" role="group" aria-label="Выберите способ оплаты">
-                    <label class="payment-method-segment">
-                        <input type="radio" name="payment-gateway" value="yookassa" checked class="payment-method-input" aria-label="Оплатить картой">
-                        <span class="payment-method-segment-inner"><span class="payment-method-icon">💳</span> Картой</span>
-                    </label>
-                    <label class="payment-method-segment">
-                        <input type="radio" name="payment-gateway" value="cryptocloud" class="payment-method-input" aria-label="Оплатить криптой">
-                        <span class="payment-method-segment-inner"><span class="payment-method-icon">₿</span> Криптой</span>
-                    </label>
+                    <input type="hidden" name="payment-gateway" value="yookassa">
+                    <button type="button" class="payment-method-segment payment-method-segment-selected" data-gateway="yookassa" aria-pressed="true"><span class="payment-method-icon">💳</span> Картой</button>
+                    <button type="button" class="payment-method-segment" data-gateway="cryptocloud" aria-pressed="false"><span class="payment-method-icon">₿</span> Криптой</button>
                 </div>
                 <div class="subscription-plans">
                     <div class="plan-card">
@@ -300,7 +290,7 @@
                     </div>
                     
                     <div class="detail-actions">
-                        <button type="button" id="payment-link-button" class="action-button" onclick="(window.openPaymentUrl||openPaymentUrl)()" style="background:#4a9eff; color:#fff; cursor:pointer; border:none;">
+                        <button type="button" id="payment-link-button" class="action-button" style="background:#4a9eff; color:#fff; cursor:pointer; border:none;">
                             Перейти к оплате
                         </button>
                     </div>

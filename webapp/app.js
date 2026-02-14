@@ -1970,6 +1970,15 @@ function openPaymentUrl() {
     if (paymentId) checkPaymentStatus(paymentId, currentExtendSubscriptionId);
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
+function bindPaymentLinkButton() {
+    var btn = document.getElementById('payment-link-button');
+    if (btn && !btn._paymentUrlBound) {
+        btn._paymentUrlBound = true;
+        btn.addEventListener('click', function () { openPaymentUrl(); });
+    }
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindPaymentLinkButton);
+else bindPaymentLinkButton();
 
 async function updateReferralCodeBlockVisibility() {
     var buyBlock = document.getElementById('buy-referral-code-block');
@@ -2000,28 +2009,31 @@ function getReferralCodeFromCurrentPage() {
     return input ? (input.value || '').trim() : '';
 }
 
-/** Синхронизирует класс выбранного сегмента способа оплаты (работает без :has() на ПК/старых WebView). */
+/** Вешает клики на переключатель способа оплаты: скрытый input + кнопки без радио. */
 function syncPaymentMethodSegmentSelection() {
     var buyPage = document.getElementById('page-buy-subscription');
     var extendPage = document.getElementById('page-extend-subscription');
     [buyPage, extendPage].forEach(function (container) {
         if (!container) return;
-        var segments = container.querySelectorAll('.payment-method-segment');
-        function updateSelectedClass() {
-            segments.forEach(function (s) {
-                var inp = s.querySelector('.payment-method-input');
-                if (inp && inp.checked) s.classList.add('payment-method-segment-selected');
-                else s.classList.remove('payment-method-segment-selected');
+        var switchEl = container.querySelector('.payment-method-switch');
+        if (!switchEl) return;
+        var input = switchEl.querySelector('input[name="payment-gateway"]');
+        var segments = switchEl.querySelectorAll('.payment-method-segment');
+        if (!input || !segments.length) return;
+        function selectGateway(gateway) {
+            input.value = gateway;
+            segments.forEach(function (btn) {
+                var isSelected = btn.dataset.gateway === gateway;
+                btn.classList.toggle('payment-method-segment-selected', isSelected);
+                btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
             });
         }
-        updateSelectedClass();
-        segments.forEach(function (seg) {
-            var input = seg.querySelector('.payment-method-input');
-            if (!input) return;
-            input.removeEventListener('change', seg._paymentSegmentChange);
-            seg._paymentSegmentChange = updateSelectedClass;
-            input.addEventListener('change', seg._paymentSegmentChange);
+        segments.forEach(function (btn) {
+            btn.removeEventListener('click', btn._paymentSegmentClick);
+            btn._paymentSegmentClick = function () { selectGateway(btn.dataset.gateway); };
+            btn.addEventListener('click', btn._paymentSegmentClick);
         });
+        selectGateway(input.value);
     });
 }
 
@@ -2032,8 +2044,8 @@ async function createPayment(period, subscriptionId = null) {
         var buyPage = document.getElementById('page-buy-subscription');
         var extendPage = document.getElementById('page-extend-subscription');
         var container = (buyPage && buyPage.style.display !== 'none') ? buyPage : (extendPage || buyPage);
-        var gatewayEl = container ? container.querySelector('input[name="payment-gateway"]:checked') : null;
-        var gateway = gatewayEl ? gatewayEl.value : 'yookassa';
+        var gatewayInput = container ? container.querySelector('input[name="payment-gateway"]') : null;
+        var gateway = gatewayInput ? gatewayInput.value : 'yookassa';
         var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
         if (referrerCode) body.referrer_code = referrerCode;
         // Показываем страницу оплаты с индикатором загрузки
