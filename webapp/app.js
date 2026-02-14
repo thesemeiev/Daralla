@@ -1996,7 +1996,12 @@ function getReferralCodeFromCurrentPage() {
 async function createPayment(period, subscriptionId = null) {
     try {
         var referrerCode = getReferralCodeFromCurrentPage();
-        var body = { period: period, subscription_id: subscriptionId };
+        var buyPage = document.getElementById('page-buy-subscription');
+        var extendPage = document.getElementById('page-extend-subscription');
+        var container = (buyPage && buyPage.style.display !== 'none') ? buyPage : (extendPage || buyPage);
+        var gatewayEl = container ? container.querySelector('input[name="payment-gateway"]:checked') : null;
+        var gateway = gatewayEl ? gatewayEl.value : 'yookassa';
+        var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
         if (referrerCode) body.referrer_code = referrerCode;
         // Показываем страницу оплаты с индикатором загрузки
         currentPaymentData = null; // Сбрасываем, чтобы показать загрузку

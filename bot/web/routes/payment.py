@@ -1,10 +1,12 @@
 """
-Quart Blueprint: POST /webhook/yookassa (YooKassa webhook).
+Quart Blueprint: POST /webhook/yookassa (YooKassa), POST /webhook/cryptocloud (CryptoCloud).
 Async: respond 200 immediately, process payment in background task.
 """
 import asyncio
 import logging
+import os
 
+import jwt
 from quart import Blueprint, request, jsonify
 
 from bot.handlers.api_support.payment_processors import process_payment_webhook
@@ -14,6 +16,43 @@ logger = logging.getLogger(__name__)
 
 def create_blueprint(bot_app):
     bp = Blueprint("payment", __name__)
+
+    async def _cryptocloud_postback():
+        try:
+            data = await request.get_json(silent=True)
+            if not data:
+                return jsonify({"status": "error"}), 400
+            token_str = data.get("token")
+            status = data.get("status")
+            invoice_info = data.get("invoice_info") or {}
+            invoice_uuid = invoice_info.get("uuid") or data.get("invoice_id")
+            if not invoice_uuid:
+                logger.warning("CryptoCloud postback: missing invoice uuid/invoice_id")
+                return jsonify({"status": "ok"}), 200
+            secret = os.getenv("CRYPTOCLOUD_WEBHOOK_SECRET")
+            if secret and token_str:
+                try:
+                    jwt.decode(token_str, secret, algorithms=["HS256"])
+                except jwt.InvalidTokenError:
+                    logger.warning("CryptoCloud postback: invalid JWT for uuid=%s", invoice_uuid)
+                    return jsonify({"status": "error"}), 401
+            elif not secret:
+                logger.warning("CryptoCloud postback: CRYPTOCLOUD_WEBHOOK_SECRET not set")
+            if status == "success":
+                asyncio.create_task(_process_webhook(bot_app, invoice_uuid, "succeeded"))
+            return jsonify({"status": "ok"}), 200
+        except Exception as e:
+            logger.error("CryptoCloud webhook error: %s", e, exc_info=True)
+            return jsonify({"status": "error"}), 500
+
+    @bp.route("/webhook/cryptocloud", methods=["POST"])
+    async def cryptocloud_webhook():
+        return await _cryptocloud_postback()
+
+    @bp.route("/callback", methods=["POST"])
+    async def cryptocloud_callback():
+        """Тот же постбэк CryptoCloud — для случая, когда в ЛК указан URL https://daralla.ru/callback."""
+        return await _cryptocloud_postback()
 
     @bp.route("/webhook/yookassa", methods=["POST"])
     async def yookassa_webhook():

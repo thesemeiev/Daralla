@@ -238,6 +238,7 @@ def create_blueprint(bot_app):
             period = data.get("period")
             subscription_id = data.get("subscription_id")
             referrer_code = (data.get("referrer_code") or "").strip()
+            gateway = (data.get("gateway") or "yookassa").strip().lower()
             if not period or period not in ("month", "3month"):
                 return jsonify({"error": 'Invalid period. Use "month" or "3month"'}), 400
             referrer_user_id = None
@@ -250,7 +251,6 @@ def create_blueprint(bot_app):
                 except Exception:
                     referrer_user_id = None
             from bot.prices_config import PRICES
-            from yookassa import Payment
             from bot.db import add_payment, DB_PATH
             import aiosqlite
 
@@ -261,10 +261,75 @@ def create_blueprint(bot_app):
                     ("canceled", user_id, "pending"),
                 )
                 await db.commit()
-            now = int(datetime.datetime.now().timestamp())
+
             subscription_uuid = str(uuid.uuid4())
             unique_email = f"{user_id}_{subscription_uuid}"
             payment_period = f"extend_sub_{period}" if subscription_id else period
+            payment_meta_base = {
+                "price": price,
+                "type": payment_period,
+                "unique_email": unique_email,
+                "message_id": None,
+            }
+            if subscription_id:
+                payment_meta_base["extension_subscription_id"] = int(subscription_id)
+            if referrer_user_id:
+                payment_meta_base["referrer_user_id"] = referrer_user_id
+
+            if gateway == "cryptocloud":
+                api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
+                shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
+                if not api_token or not shop_id:
+                    return jsonify({"error": "CryptoCloud payment is not configured"}), 503
+                amount_rub = PRICES[period]
+                order_id = f"{user_id}_{int(time.time() * 1000)}"
+                payload = {
+                    "shop_id": shop_id,
+                    "amount": amount_rub,
+                    "currency": "RUB",
+                    "order_id": order_id,
+                }
+                add_fields = {"cryptocurrency": "USDT_TRC20"}
+                payload["add_fields"] = add_fields
+                import httpx
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(
+                        "https://api.cryptocloud.plus/v2/invoice/create",
+                        headers={
+                            "Authorization": f"Token {api_token}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                if resp.status_code != 200:
+                    logger.warning("CryptoCloud invoice create failed: %s %s", resp.status_code, resp.text)
+                    return jsonify({"error": "Failed to create crypto invoice"}), 502
+                body = resp.json()
+                if body.get("status") != "success" or "result" not in body:
+                    logger.warning("CryptoCloud invoice create error: %s", body)
+                    return jsonify({"error": "Failed to create crypto invoice"}), 502
+                result = body["result"]
+                invoice_uuid = result.get("uuid")
+                payment_link = result.get("link")
+                if not invoice_uuid or not payment_link:
+                    logger.warning("CryptoCloud missing uuid/link: %s", result)
+                    return jsonify({"error": "Invalid crypto invoice response"}), 502
+                payment_meta_base["gateway"] = "cryptocloud"
+                await add_payment(
+                    payment_id=invoice_uuid,
+                    user_id=user_id,
+                    status="pending",
+                    meta=payment_meta_base,
+                )
+                return jsonify({
+                    "success": True,
+                    "payment_id": invoice_uuid,
+                    "payment_url": payment_link,
+                    "amount": price,
+                    "period": period,
+                }), 200, _cors_headers()
+
+            from yookassa import Payment
             payment = Payment.create({
                 "amount": {"value": price, "currency": "RUB"},
                 "confirmation": {"type": "redirect", "return_url": f"https://t.me/{user_id}"},
@@ -287,21 +352,11 @@ def create_blueprint(bot_app):
                     }],
                 },
             })
-            payment_meta = {
-                "price": price,
-                "type": payment_period,
-                "unique_email": unique_email,
-                "message_id": None,
-            }
-            if subscription_id:
-                payment_meta["extension_subscription_id"] = int(subscription_id)
-            if referrer_user_id:
-                payment_meta["referrer_user_id"] = referrer_user_id
             await add_payment(
                 payment_id=payment.id,
                 user_id=user_id,
                 status="pending",
-                meta=payment_meta,
+                meta=payment_meta_base,
             )
             return jsonify({
                 "success": True,
