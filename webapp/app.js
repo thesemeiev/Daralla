@@ -2344,6 +2344,8 @@ function showPaymentPage() {
             delete btn.dataset.paymentUrl;
             delete btn.dataset.paymentId;
             btn.onclick = null;
+            if (platform.isTelegram()) btn.style.display = 'none';
+            else btn.style.display = '';
         }
         platform.mainButton.hide();
         return;
@@ -2365,12 +2367,30 @@ function showPaymentPage() {
             openPaymentUrl();
             return false;
         };
+        if (platform.isTelegram()) btn.style.display = 'none';
+        else btn.style.display = '';
     }
     platform.mainButton.show('Перейти к оплате', function () {
         openPaymentUrl();
         platform.mainButton.hide();
     });
 }
+
+// При возврате в Mini App (visibilitychange) снова показываем MainButton на странице оплаты
+function bindPaymentPageVisibilityRestore() {
+    if (document.body._paymentVisibilityBound) return;
+    document.body._paymentVisibilityBound = true;
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible' || !platform.isTelegram()) return;
+        if (currentPage !== 'payment') return;
+        if (!currentPaymentData || !currentPaymentData.payment_url || String(currentPaymentData.payment_url).indexOf('http') !== 0) return;
+        platform.mainButton.show('Перейти к оплате', function () {
+            openPaymentUrl();
+            platform.mainButton.hide();
+        });
+    });
+}
+bindPaymentPageVisibilityRestore();
 
 // Функция проверки статуса платежа
 // Примечание: основная обработка платежа идет через вебхук от YooKassa (/webhook/yookassa)
