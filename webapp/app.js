@@ -56,6 +56,11 @@ var TG_STUB = {
     }
 };
 
+var MINI_APP_HOST = 'app.daralla.ru';
+function isMiniAppHost() {
+    return typeof window !== 'undefined' && window.location && (window.location.hostname || '').toLowerCase() === MINI_APP_HOST;
+}
+
 // Адаптер платформы: веб vs Telegram Mini App. Вся логика различий сосредоточена здесь.
 var platform = (function () {
     var _tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
@@ -74,6 +79,11 @@ var platform = (function () {
 
     return {
         init: function () {
+            if (!isMiniAppHost()) {
+                _isTelegram = false;
+                _tg = TG_STUB;
+                return Promise.resolve();
+            }
             var hashInit = parseInitDataFromHash();
             if (hashInit && hashInit.initData) {
                 _tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
@@ -3719,18 +3729,10 @@ async function loadPrices() {
     }
 }
 
-// Подгружаем скрипт Telegram с таймаутом. Если telegram.org недоступен — не блокируем открытие страницы.
-// В обычном браузере (не Telegram) скрипт не грузим — telegram.org может быть заблокирован.
-// Грузим скрипт, если: уже загружен; User-Agent содержит "telegram"; или страница в iframe (Mini App).
+// Подгружаем скрипт Telegram с таймаутом. Вызывается только с хоста Mini App (app.daralla.ru).
 function loadTelegramScript(timeoutMs) {
     return new Promise(function (resolve) {
         if (window.Telegram && window.Telegram.WebApp) {
-            resolve();
-            return;
-        }
-        var ua = (navigator.userAgent || '').toLowerCase();
-        var inIframe = window.self !== window.top;
-        if (ua.indexOf('telegram') === -1 && !inIframe) {
             resolve();
             return;
         }
