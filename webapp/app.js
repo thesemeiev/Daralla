@@ -1974,9 +1974,8 @@ function goBackFromPayment() {
 }
 
 /**
- * Открывает ссылку на оплату. В Telegram — через tg.openLink,
- * в вебе — window.open или location.href при блокировке попапа.
- * URL берётся из currentPaymentData, data-атрибутов или href ссылки.
+ * Открывает ссылку на оплату. В Telegram — через openLink (внешний браузер),
+ * в вебе — только window.open в новой вкладке (текущая вкладка не меняется).
  */
 function openPaymentUrl() {
     var btn = document.getElementById('payment-link-button');
@@ -1984,21 +1983,22 @@ function openPaymentUrl() {
         ? String(currentPaymentData.payment_url).trim()
         : '';
     var paymentId = currentPaymentData && currentPaymentData.payment_id;
-    if (!url && btn) {
-        if (btn.dataset.paymentUrl) {
-            url = String(btn.dataset.paymentUrl).trim();
-            paymentId = btn.dataset.paymentId || paymentId;
-        } else if (btn.href && btn.href.indexOf('http') === 0) {
-            url = btn.href;
-            paymentId = btn.dataset.paymentId || paymentId;
-        }
+    if (!url && btn && btn.dataset.paymentUrl) {
+        url = String(btn.dataset.paymentUrl).trim();
+        paymentId = btn.dataset.paymentId || paymentId;
     }
     if (!url || url.indexOf('http') !== 0) {
         if (typeof alert === 'function') alert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    if (tg && tg.initData && typeof tg.openLink === 'function') {
-        tg.openLink(url);
+    var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : tg;
+    if (webApp && webApp.initData && typeof webApp.openLink === 'function') {
+        try {
+            webApp.openLink(url);
+        } catch (err) {
+            var w = window.open(url, '_blank', 'noopener,noreferrer');
+            if (!w) window.location.href = url;
+        }
     } else {
         var w = window.open(url, '_blank', 'noopener,noreferrer');
         if (!w) window.location.href = url;
@@ -2007,18 +2007,26 @@ function openPaymentUrl() {
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
 
-/** Делегирование клика по кнопке «Перейти к оплате». Capture-фаза и stopPropagation — чтобы ссылка не срабатывала по умолчанию (нет двойного перехода в вебе). */
+/** Обработчик клика по кнопке «Перейти к оплате» (кнопка, не ссылка — нет двойного перехода в вебе). */
 function bindPaymentLinkButton() {
     if (document.body._paymentLinkDelegationBound) return;
     document.body._paymentLinkDelegationBound = true;
-    document.body.addEventListener('click', function (e) {
+    function handlePaymentLinkClick(e) {
         var btn = document.getElementById('payment-link-button');
         if (!btn || (e.target !== btn && !btn.contains(e.target))) return;
         e.preventDefault();
         e.stopPropagation();
         if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
         openPaymentUrl();
-    }, true);
+    }
+    document.body.addEventListener('click', handlePaymentLinkClick, true);
+    document.body.addEventListener('touchend', function (e) {
+        var btn = document.getElementById('payment-link-button');
+        if (!btn || (e.target !== btn && !btn.contains(e.target))) return;
+        if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
+        e.preventDefault();
+        openPaymentUrl();
+    }, { passive: false, capture: true });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindPaymentLinkButton);
 else bindPaymentLinkButton();
@@ -2169,7 +2177,6 @@ async function createPayment(period, subscriptionId = null) {
         
         var btn = document.getElementById('payment-link-button');
         if (btn) {
-            btn.href = '#';
             btn.textContent = 'Перейти к оплате';
             btn.classList.remove('payment-link-disabled');
             btn.setAttribute('aria-disabled', 'false');
@@ -2191,7 +2198,6 @@ function showPaymentPage() {
         document.getElementById('payment-period').textContent = 'Загрузка...';
         document.getElementById('payment-amount').textContent = 'Загрузка...';
         if (btn) {
-            btn.href = '#';
             btn.textContent = 'Создание платежа...';
             btn.classList.add('payment-link-disabled');
             btn.setAttribute('aria-disabled', 'true');
@@ -2204,22 +2210,11 @@ function showPaymentPage() {
     document.getElementById('payment-period').textContent = periodText;
     document.getElementById('payment-amount').textContent = currentPaymentData.amount + '₽';
     if (btn) {
-        var payUrl = String(currentPaymentData.payment_url || '').trim();
-        btn.href = payUrl && payUrl.indexOf('http') === 0 ? payUrl : '#';
         btn.textContent = 'Перейти к оплате';
         btn.classList.remove('payment-link-disabled');
         btn.setAttribute('aria-disabled', 'false');
         btn.dataset.paymentUrl = currentPaymentData.payment_url;
         btn.dataset.paymentId = currentPaymentData.payment_id;
-        if (!btn._paymentLinkDirectBound) {
-            btn._paymentLinkDirectBound = true;
-            btn.addEventListener('click', function (ev) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
-                openPaymentUrl();
-            });
-        }
     }
 }
 

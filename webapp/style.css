@@ -1061,16 +1061,13 @@ h1 {
     pointer-events: none;
 }
 
-/* Ссылка «Перейти к оплате» — выглядит как кнопка, href ставится при готовности платежа */
-.payment-link-anchor {
+/* Кнопка «Перейти к оплате» (не ссылка — избегаем двойного перехода в вебе) */
+.payment-link-button {
     width: 100%;
     padding: 12px;
     border-radius: 10px;
     font-size: 15px;
     font-weight: 500;
-}
-.payment-link-anchor[href="#"] {
-    pointer-events: none;
 }
 
 /* Выбор способа оплаты — две кнопки и скрытый input (без радио).
