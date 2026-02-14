@@ -1950,15 +1950,18 @@ function openPaymentLink() {
         alert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    
-    // Открываем ссылку на оплату через Telegram Mini App API
-    if (tg && tg.openLink) {
-        tg.openLink(currentPaymentData.payment_url);
+    var url = currentPaymentData.payment_url;
+    // В Telegram Mini App открываем через openLink; в браузере (веб-режим) — через window.open
+    if (tg && tg.initData && typeof tg.openLink === 'function') {
+        tg.openLink(url);
     } else {
-        // Fallback для обычных браузеров
-        window.open(currentPaymentData.payment_url, '_blank');
+        var w = window.open(url, '_blank', 'noopener,noreferrer');
+        if (!w && typeof tg !== 'undefined' && tg.showAlert) {
+            tg.showAlert('Разрешите открытие ссылок в настройках браузера или скопируйте ссылку из адресной строки после перехода.');
+        } else if (!w) {
+            window.location.href = url;
+        }
     }
-    
     // Начинаем проверку статуса платежа
     checkPaymentStatus(currentPaymentData.payment_id, currentExtendSubscriptionId);
 }
