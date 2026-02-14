@@ -1946,19 +1946,22 @@ function goBackFromPayment() {
 }
 
 /**
- * Открывает ссылку на оплату. В Telegram — через tg.openLink (внешний браузер/встроенный),
+ * Открывает ссылку на оплату. В Telegram — через tg.openLink,
  * в вебе — window.open или location.href при блокировке попапа.
- * URL берётся из currentPaymentData или с кнопки (data-payment-url).
+ * URL берётся из currentPaymentData, data-атрибутов или href ссылки.
  */
 function openPaymentUrl() {
+    var btn = document.getElementById('payment-link-button');
     var url = (currentPaymentData && currentPaymentData.payment_url)
         ? String(currentPaymentData.payment_url).trim()
         : '';
     var paymentId = currentPaymentData && currentPaymentData.payment_id;
-    if (!url) {
-        var btn = document.getElementById('payment-link-button');
-        if (btn && btn.dataset.paymentUrl) {
+    if (!url && btn) {
+        if (btn.dataset.paymentUrl) {
             url = String(btn.dataset.paymentUrl).trim();
+            paymentId = btn.dataset.paymentId || paymentId;
+        } else if (btn.href && btn.href.indexOf('http') === 0) {
+            url = btn.href;
             paymentId = btn.dataset.paymentId || paymentId;
         }
     }
@@ -1975,12 +1978,18 @@ function openPaymentUrl() {
     if (paymentId) checkPaymentStatus(paymentId, currentExtendSubscriptionId);
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
+
+/** Делегирование клика по кнопке «Перейти к оплате» — работает даже если страница была скрыта при загрузке. */
 function bindPaymentLinkButton() {
-    var btn = document.getElementById('payment-link-button');
-    if (btn && !btn._paymentUrlBound) {
-        btn._paymentUrlBound = true;
-        btn.addEventListener('click', function () { openPaymentUrl(); });
-    }
+    if (document.body._paymentLinkDelegationBound) return;
+    document.body._paymentLinkDelegationBound = true;
+    document.body.addEventListener('click', function (e) {
+        var btn = document.getElementById('payment-link-button');
+        if (!btn || (e.target !== btn && !btn.contains(e.target))) return;
+        e.preventDefault();
+        if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
+        openPaymentUrl();
+    });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindPaymentLinkButton);
 else bindPaymentLinkButton();
@@ -2092,8 +2101,10 @@ async function createPayment(period, subscriptionId = null) {
         
         var btn = document.getElementById('payment-link-button');
         if (btn) {
-            btn.disabled = false;
+            btn.href = '#';
             btn.textContent = 'Перейти к оплате';
+            btn.classList.remove('payment-link-disabled');
+            btn.setAttribute('aria-disabled', 'false');
         }
         
         showFormMessage('payment-form-message', 'error', 'Ошибка создания платежа: ' + error.message);
@@ -2112,8 +2123,10 @@ function showPaymentPage() {
         document.getElementById('payment-period').textContent = 'Загрузка...';
         document.getElementById('payment-amount').textContent = 'Загрузка...';
         if (btn) {
-            btn.disabled = true;
+            btn.href = '#';
             btn.textContent = 'Создание платежа...';
+            btn.classList.add('payment-link-disabled');
+            btn.setAttribute('aria-disabled', 'true');
             delete btn.dataset.paymentUrl;
             delete btn.dataset.paymentId;
         }
@@ -2123,8 +2136,11 @@ function showPaymentPage() {
     document.getElementById('payment-period').textContent = periodText;
     document.getElementById('payment-amount').textContent = currentPaymentData.amount + '₽';
     if (btn) {
-        btn.disabled = false;
+        var payUrl = String(currentPaymentData.payment_url || '').trim();
+        btn.href = payUrl && payUrl.indexOf('http') === 0 ? payUrl : '#';
         btn.textContent = 'Перейти к оплате';
+        btn.classList.remove('payment-link-disabled');
+        btn.setAttribute('aria-disabled', 'false');
         btn.dataset.paymentUrl = currentPaymentData.payment_url;
         btn.dataset.paymentId = currentPaymentData.payment_id;
     }

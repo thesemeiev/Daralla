@@ -1054,13 +1054,27 @@ h1 {
     background: #353535;
 }
 
-.action-button:disabled {
+.action-button:disabled,
+.action-button.payment-link-disabled {
     opacity: 0.7;
     cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Ссылка «Перейти к оплате» — выглядит как кнопка, href ставится при готовности платежа */
+.payment-link-anchor {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+}
+.payment-link-anchor[href="#"] {
+    pointer-events: none;
 }
 
 /* Выбор способа оплаты — две кнопки и скрытый input (без радио).
-   Явные тёмные стили для веба и десктопного TG, чтобы переключатель не становился «белым». */
+   Специфичные селекторы по ID страниц, чтобы в вебе и десктопном TG стили не перебивались. */
 .payment-method-title {
     margin: 0 0 10px 0;
     font-size: 14px;
@@ -1077,7 +1091,9 @@ h1 {
     color-scheme: dark;
 }
 .buy-subscription-content .payment-method-switch,
-.page .payment-method-switch {
+.page .payment-method-switch,
+#page-buy-subscription .payment-method-switch,
+#page-extend-subscription .payment-method-switch {
     background: #2a2a2a !important;
 }
 .payment-method-segment {
@@ -1101,16 +1117,22 @@ h1 {
     appearance: none;
 }
 .buy-subscription-content .payment-method-segment,
-.page .payment-method-segment {
+.page .payment-method-segment,
+#page-buy-subscription .payment-method-segment,
+#page-extend-subscription .payment-method-segment {
     color: #999 !important;
     background-color: #2a2a2a !important;
 }
-.payment-method-segment:hover {
+.payment-method-segment:hover,
+#page-buy-subscription .payment-method-segment:hover,
+#page-extend-subscription .payment-method-segment:hover {
     color: #ccc !important;
     background-color: #333 !important;
 }
 .payment-method-segment-selected,
-.payment-method-segment.payment-method-segment-selected {
+.payment-method-segment.payment-method-segment-selected,
+#page-buy-subscription .payment-method-segment-selected,
+#page-extend-subscription .payment-method-segment-selected {
     background-color: #4a9eff !important;
     color: #fff !important;
 }
