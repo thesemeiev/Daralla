@@ -119,7 +119,8 @@ var platform = (function () {
         getTgUser: function () { return _tg && _tg.initDataUnsafe && _tg.initDataUnsafe.user ? _tg.initDataUnsafe.user : null; },
         openExternalUrl: function (url) {
             if (!url || String(url).indexOf('http') !== 0) return;
-            if (_isTelegram && _tg && typeof _tg.openLink === 'function') {
+            var hasRealOpenLink = _tg && typeof _tg.openLink === 'function' && _tg.openLink !== TG_STUB.openLink;
+            if (_isTelegram && hasRealOpenLink) {
                 try { _tg.openLink(url); } catch (err) { window.location.href = url; }
             } else if (_isTelegram) {
                 window.location.href = url;
@@ -2317,7 +2318,7 @@ function showPaymentPage() {
             btn.setAttribute('aria-disabled', 'true');
             delete btn.dataset.paymentUrl;
             delete btn.dataset.paymentId;
-            if (btn.href !== undefined) btn.href = '#';
+            btn.onclick = null;
         }
         platform.mainButton.hide();
         return;
@@ -2331,7 +2332,13 @@ function showPaymentPage() {
         btn.setAttribute('aria-disabled', 'false');
         btn.dataset.paymentUrl = currentPaymentData.payment_url;
         btn.dataset.paymentId = currentPaymentData.payment_id;
-        if (btn.href !== undefined) btn.href = (currentPaymentData.payment_url || '').indexOf('http') === 0 ? currentPaymentData.payment_url : '#';
+        btn.onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
+            openPaymentUrl();
+            return false;
+        };
     }
     platform.mainButton.show('Перейти к оплате', function () {
         openPaymentUrl();
