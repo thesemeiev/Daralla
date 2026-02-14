@@ -1946,31 +1946,30 @@ function goBackFromPayment() {
 }
 
 /**
- * Открывает ссылку на оплату (YooKassa или CryptoCloud).
- * URL только из currentPaymentData.payment_url.
- * — В Telegram на телефоне: tg.openLink(url).
- * — В Telegram на ПК и в браузере: window.open(url), при блокировке — location.href.
+ * Открывает ссылку на оплату. Один и тот же код для Web, Telegram, ПК и мобильных.
+ * URL берётся из currentPaymentData или с кнопки (data-payment-url).
  */
 function openPaymentUrl() {
-    if (!currentPaymentData || !currentPaymentData.payment_url) {
-        alert('Ошибка: ссылка на оплату не найдена');
-        return;
+    var url = (currentPaymentData && currentPaymentData.payment_url)
+        ? String(currentPaymentData.payment_url).trim()
+        : '';
+    var paymentId = currentPaymentData && currentPaymentData.payment_id;
+    if (!url) {
+        var btn = document.getElementById('payment-link-button');
+        if (btn && btn.dataset.paymentUrl) {
+            url = String(btn.dataset.paymentUrl).trim();
+            paymentId = btn.dataset.paymentId || paymentId;
+        }
     }
-    var url = String(currentPaymentData.payment_url).trim();
     if (!url || url.indexOf('http') !== 0) {
-        alert('Ошибка: неверная ссылка на оплату');
+        if (typeof alert === 'function') alert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    var inTelegram = !!(tg && tg.initData);
-    var isWideScreen = typeof window !== 'undefined' && window.innerWidth >= 640;
-    if (inTelegram && !isWideScreen && typeof tg.openLink === 'function') {
-        tg.openLink(url);
-    } else {
-        var w = window.open(url, '_blank', 'noopener,noreferrer');
-        if (!w) window.location.href = url;
-    }
-    checkPaymentStatus(currentPaymentData.payment_id, currentExtendSubscriptionId);
+    var w = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!w) window.location.href = url;
+    if (paymentId) checkPaymentStatus(paymentId, currentExtendSubscriptionId);
 }
+if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
 
 async function updateReferralCodeBlockVisibility() {
     var buyBlock = document.getElementById('buy-referral-code-block');
@@ -2098,6 +2097,8 @@ function showPaymentPage() {
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'Создание платежа...';
+            delete btn.dataset.paymentUrl;
+            delete btn.dataset.paymentId;
         }
         return;
     }
@@ -2107,6 +2108,8 @@ function showPaymentPage() {
     if (btn) {
         btn.disabled = false;
         btn.textContent = 'Перейти к оплате';
+        btn.dataset.paymentUrl = currentPaymentData.payment_url;
+        btn.dataset.paymentId = currentPaymentData.payment_id;
     }
 }
 
