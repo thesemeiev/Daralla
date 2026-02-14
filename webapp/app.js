@@ -119,14 +119,22 @@ var platform = (function () {
         getTgUser: function () { return _tg && _tg.initDataUnsafe && _tg.initDataUnsafe.user ? _tg.initDataUnsafe.user : null; },
         openExternalUrl: function (url) {
             if (!url || String(url).indexOf('http') !== 0) return;
-            var hasRealOpenLink = _tg && typeof _tg.openLink === 'function' && _tg.openLink !== TG_STUB.openLink;
-            if (_isTelegram && hasRealOpenLink) {
-                try { _tg.openLink(url); } catch (err) { window.location.href = url; }
-            } else if (_isTelegram) {
-                window.location.href = url;
+            if (_isTelegram) {
+                var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : _tg;
+                if (webApp && typeof webApp.openLink === 'function' && webApp.openLink !== TG_STUB.openLink) {
+                    try {
+                        webApp.openLink(url);
+                    } catch (err) {
+                        platform.showAlert('Не удалось открыть ссылку. Скопируйте её из сообщения или откройте вручную.');
+                    }
+                } else {
+                    platform.showAlert('Откройте ссылку на оплату в браузере. Если не открылось — скопируйте ссылку из уведомления.');
+                }
             } else {
                 var w = window.open(url, '_blank', 'noopener,noreferrer');
-                if (!w) window.location.href = url;
+                if (!w) {
+                    platform.showAlert('Включите всплывающие окна для этого сайта или откройте ссылку вручную в новой вкладке.');
+                }
             }
         },
         getDefaultPage: function () {
@@ -2129,6 +2137,7 @@ function bindPaymentLinkButton() {
     function handlePaymentLinkClick(e) {
         var btn = document.getElementById('payment-link-button');
         if (!btn || (e.target !== btn && !btn.contains(e.target))) return;
+        if (btn.onclick) return;
         e.preventDefault();
         e.stopPropagation();
         if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
@@ -2138,6 +2147,7 @@ function bindPaymentLinkButton() {
     document.body.addEventListener('touchend', function (e) {
         var btn = document.getElementById('payment-link-button');
         if (!btn || (e.target !== btn && !btn.contains(e.target))) return;
+        if (btn.onclick) return;
         if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
         e.preventDefault();
         openPaymentUrl();
@@ -2335,6 +2345,7 @@ function showPaymentPage() {
         btn.onclick = function (e) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
             if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
             openPaymentUrl();
             return false;
