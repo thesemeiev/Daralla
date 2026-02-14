@@ -296,6 +296,12 @@ function showPage(pageName, params) {
         bottomNav.style.display = isMainSectionPage ? 'flex' : 'none';
     }
 
+    // В Telegram скрываем MainButton при уходе со страницы оплаты
+    if (pageName !== 'payment') {
+        var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
+        if (w && w.MainButton) w.MainButton.hide();
+    }
+
     // Скрываем все страницы
     document.querySelectorAll('.page').forEach(page => {
         page.style.display = 'none';
@@ -1964,6 +1970,8 @@ function goBackFromChoosePayment() {
 // Функция возврата с страницы оплаты (на страницу выбора способа оплаты, чтобы можно было выбрать другой способ)
 function goBackFromPayment() {
     currentPaymentData = null;
+    var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
+    if (w && w.MainButton) w.MainButton.hide();
     if (currentPaymentPeriod) {
         showPage('choose-payment-method');
     } else if (currentExtendSubscriptionId) {
@@ -2204,6 +2212,8 @@ function showPaymentPage() {
             delete btn.dataset.paymentUrl;
             delete btn.dataset.paymentId;
         }
+        var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
+        if (w && w.MainButton) w.MainButton.hide();
         return;
     }
     var periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
@@ -2215,6 +2225,19 @@ function showPaymentPage() {
         btn.setAttribute('aria-disabled', 'false');
         btn.dataset.paymentUrl = currentPaymentData.payment_url;
         btn.dataset.paymentId = currentPaymentData.payment_id;
+    }
+    var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : tg;
+    if (webApp && webApp.initData && webApp.MainButton) {
+        try {
+            webApp.MainButton.setText('Перейти к оплате');
+            webApp.MainButton.onClick(function () {
+                openPaymentUrl();
+                webApp.MainButton.hide();
+            });
+            webApp.MainButton.show();
+        } catch (e) {
+            console.warn('MainButton error:', e);
+        }
     }
 }
 
