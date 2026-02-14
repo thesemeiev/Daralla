@@ -3632,6 +3632,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     var hashInit = parseInitDataFromHash();
     if (hashInit && hashInit.initData) {
         tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
+        // Подгружаем скрипт в фоне без await — при блокировке telegram.org в РФ приложение откроется сразу.
+        // Когда скрипт загрузится (например с VPN), подменим tg на полный WebApp с openLink.
+        loadTelegramScript(400).then(function () {
+            if (window.Telegram && window.Telegram.WebApp) {
+                tg = window.Telegram.WebApp;
+            }
+        });
     } else {
         await waitForTelegram(400);
         tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
