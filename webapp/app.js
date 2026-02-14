@@ -414,6 +414,7 @@ function showPage(pageName, params) {
     } else if (pageName === 'buy-subscription' || pageName === 'extend-subscription') {
         loadPrices();
         updateReferralCodeBlockVisibility();
+        syncPaymentMethodSegmentSelection();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
@@ -1946,9 +1947,9 @@ function goBackFromPayment() {
 
 /**
  * Открывает ссылку на оплату (YooKassa или CryptoCloud).
- * URL берётся только из currentPaymentData.payment_url (ответ API).
- * — В Telegram: tg.openLink(url) — во внешнем браузере (ПК и телефон).
- * — В браузере: window.open(url) или location.href при блокировке попапа.
+ * URL только из currentPaymentData.payment_url.
+ * — В Telegram на телефоне: tg.openLink(url).
+ * — В Telegram на ПК и в браузере: window.open(url), при блокировке — location.href.
  */
 function openPaymentUrl() {
     if (!currentPaymentData || !currentPaymentData.payment_url) {
@@ -1960,13 +1961,13 @@ function openPaymentUrl() {
         alert('Ошибка: неверная ссылка на оплату');
         return;
     }
-    if (tg && tg.initData && typeof tg.openLink === 'function') {
+    var inTelegram = !!(tg && tg.initData);
+    var isWideScreen = typeof window !== 'undefined' && window.innerWidth >= 640;
+    if (inTelegram && !isWideScreen && typeof tg.openLink === 'function') {
         tg.openLink(url);
     } else {
         var w = window.open(url, '_blank', 'noopener,noreferrer');
-        if (!w) {
-            window.location.href = url;
-        }
+        if (!w) window.location.href = url;
     }
     checkPaymentStatus(currentPaymentData.payment_id, currentExtendSubscriptionId);
 }
@@ -1998,6 +1999,31 @@ function getReferralCodeFromCurrentPage() {
     if (!block || block.style.display === 'none') return '';
     var input = block.querySelector('.referral-code-input');
     return input ? (input.value || '').trim() : '';
+}
+
+/** Синхронизирует класс выбранного сегмента способа оплаты (работает без :has() на ПК/старых WebView). */
+function syncPaymentMethodSegmentSelection() {
+    var buyPage = document.getElementById('page-buy-subscription');
+    var extendPage = document.getElementById('page-extend-subscription');
+    [buyPage, extendPage].forEach(function (container) {
+        if (!container) return;
+        var segments = container.querySelectorAll('.payment-method-segment');
+        function updateSelectedClass() {
+            segments.forEach(function (s) {
+                var inp = s.querySelector('.payment-method-input');
+                if (inp && inp.checked) s.classList.add('payment-method-segment-selected');
+                else s.classList.remove('payment-method-segment-selected');
+            });
+        }
+        updateSelectedClass();
+        segments.forEach(function (seg) {
+            var input = seg.querySelector('.payment-method-input');
+            if (!input) return;
+            input.removeEventListener('change', seg._paymentSegmentChange);
+            seg._paymentSegmentChange = updateSelectedClass;
+            input.addEventListener('change', seg._paymentSegmentChange);
+        });
+    });
 }
 
 // Функция создания платежа
