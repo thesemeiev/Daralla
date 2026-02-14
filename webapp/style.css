@@ -1059,7 +1059,8 @@ h1 {
     cursor: not-allowed;
 }
 
-/* Выбор способа оплаты — две кнопки и скрытый input (без радио, одинаково везде) */
+/* Выбор способа оплаты — две кнопки и скрытый input (без радио).
+   Явные тёмные стили для веба и десктопного TG, чтобы переключатель не становился «белым». */
 .payment-method-title {
     margin: 0 0 10px 0;
     font-size: 14px;
@@ -1069,10 +1070,15 @@ h1 {
 .payment-method-switch {
     display: flex;
     margin-bottom: 20px;
-    background: #2a2a2a;
+    background: #2a2a2a !important;
     border-radius: 12px;
     padding: 4px;
     border: 1px solid #333;
+    color-scheme: dark;
+}
+.buy-subscription-content .payment-method-switch,
+.page .payment-method-switch {
+    background: #2a2a2a !important;
 }
 .payment-method-segment {
     flex: 1;
@@ -1086,20 +1092,27 @@ h1 {
     border-radius: 10px;
     font-size: 15px;
     font-weight: 500;
-    color: #999;
-    background: transparent;
+    color: #999 !important;
+    background-color: #2a2a2a !important;
     cursor: pointer;
-    transition: color 0.2s, background 0.2s;
+    transition: color 0.2s, background-color 0.2s;
     font-family: inherit;
     -webkit-appearance: none;
     appearance: none;
 }
-.payment-method-segment:hover {
-    color: #ccc;
+.buy-subscription-content .payment-method-segment,
+.page .payment-method-segment {
+    color: #999 !important;
+    background-color: #2a2a2a !important;
 }
-.payment-method-segment-selected {
-    background: #4a9eff;
-    color: #fff;
+.payment-method-segment:hover {
+    color: #ccc !important;
+    background-color: #333 !important;
+}
+.payment-method-segment-selected,
+.payment-method-segment.payment-method-segment-selected {
+    background-color: #4a9eff !important;
+    color: #fff !important;
 }
 .payment-method-segment .payment-method-icon {
     font-size: 18px;

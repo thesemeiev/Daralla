@@ -1946,7 +1946,8 @@ function goBackFromPayment() {
 }
 
 /**
- * Открывает ссылку на оплату. Один и тот же код для Web, Telegram, ПК и мобильных.
+ * Открывает ссылку на оплату. В Telegram — через tg.openLink (внешний браузер/встроенный),
+ * в вебе — window.open или location.href при блокировке попапа.
  * URL берётся из currentPaymentData или с кнопки (data-payment-url).
  */
 function openPaymentUrl() {
@@ -1965,8 +1966,12 @@ function openPaymentUrl() {
         if (typeof alert === 'function') alert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    var w = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!w) window.location.href = url;
+    if (tg && tg.initData && typeof tg.openLink === 'function') {
+        tg.openLink(url);
+    } else {
+        var w = window.open(url, '_blank', 'noopener,noreferrer');
+        if (!w) window.location.href = url;
+    }
     if (paymentId) checkPaymentStatus(paymentId, currentExtendSubscriptionId);
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
@@ -2147,19 +2152,17 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
             if (checkCount > maxChecks) {
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
-                
-            // Конечная проверка статуса
-            const finalResponse = await apiFetch(`/api/user/payment/status/${paymentId}`);
-            if (finalResponse.ok) {
-                const finalData = await finalResponse.json();
-                if (finalData.success && finalData.status === 'pending') {
-                    // Платеж все еще pending - возможно, пользователь не оплатил
-                    showFormMessage('payment-form-message', 'error', 'Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
-                    goBackFromPayment();
+                // Конечная проверка статуса
+                const finalResponse = await apiFetch(`/api/user/payment/status/${paymentId}`);
+                if (finalResponse.ok) {
+                    const finalData = await finalResponse.json();
+                    if (finalData.success && finalData.status === 'pending') {
+                        showFormMessage('payment-form-message', 'error', 'Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
+                        goBackFromPayment();
+                    }
                 }
+                return;
             }
-            return;
-        }
         
         const response = await apiFetch(`/api/user/payment/status/${paymentId}`);
         
