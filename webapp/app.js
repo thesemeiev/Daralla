@@ -220,7 +220,10 @@ function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
     return true;
 }
 function applyRoute(route, isAuthenticated, isAdmin) {
-    if (!route || !isPageAllowedForUser(route.pageName, isAuthenticated, isAdmin)) return false;
+    if (!route) return false;
+    var pageName = route.pageName;
+    if (tg && tg.initData && pageName === 'landing') pageName = 'subscriptions';
+    if (!isPageAllowedForUser(pageName, isAuthenticated, isAdmin)) return false;
     var p = route.params;
     if (route.pageName === 'admin-user-detail' && p.id) {
         showAdminUserDetail(p.id);
@@ -251,13 +254,13 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         showCreateSubscriptionForm(p.userId);
         return true;
     }
-    if (route.pageName === 'admin-users') {
+    if (pageName === 'admin-users') {
         showPage('admin-users', { page: p.page, search: p.search });
         var searchEl = document.getElementById('admin-user-search');
         if (searchEl) searchEl.value = p.search || '';
         return true;
     }
-    showPage(route.pageName);
+    showPage(pageName);
     return true;
 }
 
@@ -266,6 +269,11 @@ let serverLoadChartInterval = null;
 
 // Функция переключения страниц (params — необязательный объект для hash)
 function showPage(pageName, params) {
+    // В Telegram Mini App лендинга нет — всегда открываем подписки
+    if (pageName === 'landing' && tg && tg.initData) {
+        showPage('subscriptions', params);
+        return;
+    }
     // Очищаем интервалы при уходе со страницы аналитики серверов
     if (currentPage === 'admin-servers-analytics' && pageName !== 'admin-servers-analytics' && serverLoadChartInterval) {
         clearInterval(serverLoadChartInterval);
@@ -2004,9 +2012,11 @@ function openPaymentUrl() {
         try {
             webApp.openLink(url);
         } catch (err) {
-            var w = window.open(url, '_blank', 'noopener,noreferrer');
-            if (!w) window.location.href = url;
+            window.location.href = url;
         }
+    } else if (tg && tg.initData) {
+        // TG Mini App, но openLink недоступен (скрипт не загрузился и т.п.) — открываем в текущем WebView
+        window.location.href = url;
     } else {
         var w = window.open(url, '_blank', 'noopener,noreferrer');
         if (!w) window.location.href = url;
@@ -2211,6 +2221,7 @@ function showPaymentPage() {
             btn.setAttribute('aria-disabled', 'true');
             delete btn.dataset.paymentUrl;
             delete btn.dataset.paymentId;
+            if (btn.href !== undefined) btn.href = '#';
         }
         var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
         if (w && w.MainButton) w.MainButton.hide();
@@ -2225,6 +2236,7 @@ function showPaymentPage() {
         btn.setAttribute('aria-disabled', 'false');
         btn.dataset.paymentUrl = currentPaymentData.payment_url;
         btn.dataset.paymentId = currentPaymentData.payment_id;
+        if (btn.href !== undefined) btn.href = (currentPaymentData.payment_url || '').indexOf('http') === 0 ? currentPaymentData.payment_url : '#';
     }
     var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : tg;
     if (webApp && webApp.initData && webApp.MainButton) {
@@ -3647,24 +3659,36 @@ function waitForTelegram(maxMs) {
 
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
-    // Сразу показываем лендинг (на случай если в HTML по умолчанию не он), чтобы не было белого экрана
+    // В Telegram Mini App лендинг не показываем — по умолчанию будет подставлена страница подписок после инициализации.
     var landingEl = document.getElementById('page-landing');
     if (landingEl) landingEl.style.display = '';
     // Сначала пробуем достать initData из URL hash — Telegram передаёт tgWebAppData при открытии Mini App.
-    // Работает без скрипта telegram.org (когда он заблокирован).
     var hashInit = parseInitDataFromHash();
     if (hashInit && hashInit.initData) {
         tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
-        // Подгружаем скрипт в фоне без await — при блокировке telegram.org в РФ приложение откроется сразу.
-        // Когда скрипт загрузится (например с VPN), подменим tg на полный WebApp с openLink.
+        try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
         loadTelegramScript(400).then(function () {
             if (window.Telegram && window.Telegram.WebApp) {
                 tg = window.Telegram.WebApp;
+                try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
             }
         });
     } else {
-        await waitForTelegram(400);
-        tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+        var stored = '';
+        try { stored = sessionStorage.getItem('tg_init_data') || ''; } catch (e) {}
+        if (stored) {
+            tg = Object.assign({}, TG_STUB, { initData: stored, initDataUnsafe: { user: {} } });
+            loadTelegramScript(400).then(function () {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    tg = window.Telegram.WebApp;
+                    try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
+                }
+            });
+        } else {
+            await waitForTelegram(400);
+            tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+            if (tg.initData) try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
+        }
     }
     isWebMode = !tg.initData;
     if (tg.initData) {
