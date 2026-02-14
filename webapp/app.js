@@ -121,20 +121,25 @@ var platform = (function () {
             if (!url || String(url).indexOf('http') !== 0) return;
             if (_isTelegram) {
                 var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : _tg;
-                if (webApp && typeof webApp.openLink === 'function' && webApp.openLink !== TG_STUB.openLink) {
+                var hasOpenLink = webApp && typeof webApp.openLink === 'function' && webApp.openLink !== TG_STUB.openLink;
+                if (hasOpenLink) {
                     try {
                         webApp.openLink(url);
                     } catch (err) {
-                        platform.showAlert('Не удалось открыть ссылку. Скопируйте её из сообщения или откройте вручную.');
+                        window.location.href = url;
                     }
                 } else {
-                    platform.showAlert('Откройте ссылку на оплату в браузере. Если не открылось — скопируйте ссылку из уведомления.');
+                    window.location.href = url;
                 }
             } else {
-                var w = window.open(url, '_blank', 'noopener,noreferrer');
-                if (!w) {
-                    platform.showAlert('Включите всплывающие окна для этого сайта или откройте ссылку вручную в новой вкладке.');
-                }
+                var a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
             }
         },
         getDefaultPage: function () {
