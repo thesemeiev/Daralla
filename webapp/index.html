@@ -187,19 +187,13 @@
             </header>
             
             <div class="buy-subscription-content">
-                <p class="payment-method-title">Способ оплаты</p>
-                <div class="payment-method-switch" role="group" aria-label="Выберите способ оплаты">
-                    <input type="hidden" name="payment-gateway" value="yookassa">
-                    <button type="button" class="payment-method-segment payment-method-segment-selected" data-gateway="yookassa" aria-pressed="true"><span class="payment-method-icon">💳</span> Картой</button>
-                    <button type="button" class="payment-method-segment" data-gateway="cryptocloud" aria-pressed="false"><span class="payment-method-icon">₿</span> Криптой</button>
-                </div>
                 <div class="subscription-plans">
                     <div class="plan-card">
                         <div class="plan-header">
                             <h2>1 месяц</h2>
                             <div class="plan-price" data-period="month">150₽</div>
                         </div>
-                        <button class="btn-primary" onclick="createPayment('month')" style="width: 100%; margin-top: 12px;">Купить</button>
+                        <button class="btn-primary" onclick="goToChoosePaymentMethod('month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                     
                     <div class="plan-card">
@@ -210,7 +204,7 @@
                                 <div class="plan-badge">Выгодно</div>
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="createPayment('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
+                        <button class="btn-primary" onclick="goToChoosePaymentMethod('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                 </div>
                 <div id="buy-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
@@ -229,19 +223,13 @@
             </header>
             
             <div class="buy-subscription-content">
-                <p class="payment-method-title">Способ оплаты</p>
-                <div class="payment-method-switch" role="group" aria-label="Выберите способ оплаты">
-                    <input type="hidden" name="payment-gateway" value="yookassa">
-                    <button type="button" class="payment-method-segment payment-method-segment-selected" data-gateway="yookassa" aria-pressed="true"><span class="payment-method-icon">💳</span> Картой</button>
-                    <button type="button" class="payment-method-segment" data-gateway="cryptocloud" aria-pressed="false"><span class="payment-method-icon">₿</span> Криптой</button>
-                </div>
                 <div class="subscription-plans">
                     <div class="plan-card">
                         <div class="plan-header">
                             <h2>1 месяц</h2>
                             <div class="plan-price" data-period="month">150₽</div>
                         </div>
-                        <button class="btn-primary" onclick="createPayment('month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
+                        <button class="btn-primary" onclick="goToChoosePaymentMethod('month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
                     
                     <div class="plan-card">
@@ -252,7 +240,7 @@
                                 <div class="plan-badge">Выгодно</div>
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="createPayment('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
+                        <button class="btn-primary" onclick="goToChoosePaymentMethod('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
                 </div>
                 <div id="extend-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
@@ -261,6 +249,29 @@
                         <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
                     </label>
                 </div>
+            </div>
+        </div>
+
+        <!-- Раздел Выбор способа оплаты -->
+        <div id="page-choose-payment-method" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="goBackFromChoosePayment()">← Назад</button>
+            </header>
+            <div class="buy-subscription-content" style="padding: 20px;">
+                <p class="payment-method-title">Выберите способ оплаты</p>
+                <p id="choose-payment-period" style="color: #999; font-size: 14px; margin-bottom: 16px;">—</p>
+                <input type="hidden" name="payment-gateway" value="yookassa">
+                <div class="payment-method-switch" role="group" aria-label="Выберите способ оплаты">
+                    <button type="button" class="payment-method-segment payment-method-segment-selected" data-gateway="yookassa" aria-pressed="true"><span class="payment-method-icon">💳</span> Картой</button>
+                    <button type="button" class="payment-method-segment" data-gateway="cryptocloud" aria-pressed="false"><span class="payment-method-icon">₿</span> Криптой</button>
+                </div>
+                <div id="choose-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
+                    <label class="form-group" style="margin-bottom: 0;">
+                        <span style="color: #999; font-size: 14px;">Реферальный код (необязательно)</span>
+                        <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
+                    </label>
+                </div>
+                <button type="button" class="btn-primary" id="choose-payment-submit" style="width: 100%; margin-top: 24px;">Оплатить</button>
             </div>
         </div>
 

@@ -177,7 +177,7 @@ let currentPage = 'subscriptions';
 // URL-роутинг: допустимые имена страниц для hash
 var ROUTE_PAGE_NAMES = new Set([
     'landing', 'login', 'register',
-    'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'payment',
+    'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'choose-payment-method', 'payment',
     'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
     'admin-stats', 'admin-servers-analytics', 'admin-users', 'admin-broadcast',
     'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
@@ -414,7 +414,14 @@ function showPage(pageName, params) {
     } else if (pageName === 'buy-subscription' || pageName === 'extend-subscription') {
         loadPrices();
         updateReferralCodeBlockVisibility();
-        syncPaymentMethodSegmentSelection();
+    } else if (pageName === 'choose-payment-method') {
+        var periodEl = document.getElementById('choose-payment-period');
+        if (periodEl && currentPaymentPeriod) {
+            periodEl.textContent = currentPaymentPeriod === 'month' ? '1 месяц' : '3 месяца';
+        }
+        updateReferralCodeBlockVisibility();
+        syncChoosePaymentMethodSelection();
+        bindChoosePaymentSubmit();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
@@ -1917,6 +1924,8 @@ function showRenameSubscriptionModal() {
 // Глобальная переменная для хранения ID подписки при продлении
 let currentExtendSubscriptionId = null;
 let currentPaymentData = null;
+// Выбранный период при переходе на страницу выбора способа оплаты (month / 3month)
+let currentPaymentPeriod = null;
 
 // Функция показа страницы продления подписки
 function showExtendSubscriptionModal(subscriptionId) {
@@ -1935,10 +1944,29 @@ function goBackFromExtend() {
     showPage('subscription-detail');
 }
 
-// Функция возврата с страницы оплаты
+// Переход на страницу выбора способа оплаты после выбора периода (покупка или продление)
+function goToChoosePaymentMethod(period, subscriptionId) {
+    if (!period || (period !== 'month' && period !== '3month')) return;
+    currentPaymentPeriod = period;
+    if (subscriptionId != null) currentExtendSubscriptionId = subscriptionId;
+    showPage('choose-payment-method');
+}
+
+// Функция возврата со страницы выбора способа оплаты
+function goBackFromChoosePayment() {
+    if (currentExtendSubscriptionId) {
+        showPage('extend-subscription');
+    } else {
+        showPage('buy-subscription');
+    }
+}
+
+// Функция возврата с страницы оплаты (на страницу выбора способа оплаты, чтобы можно было выбрать другой способ)
 function goBackFromPayment() {
     currentPaymentData = null;
-    if (currentExtendSubscriptionId) {
+    if (currentPaymentPeriod) {
+        showPage('choose-payment-method');
+    } else if (currentExtendSubscriptionId) {
         showPage('extend-subscription');
     } else {
         showPage('buy-subscription');
@@ -1997,7 +2025,8 @@ else bindPaymentLinkButton();
 async function updateReferralCodeBlockVisibility() {
     var buyBlock = document.getElementById('buy-referral-code-block');
     var extendBlock = document.getElementById('extend-referral-code-block');
-    if (!buyBlock && !extendBlock) return;
+    var chooseBlock = document.getElementById('choose-referral-code-block');
+    if (!buyBlock && !extendBlock && !chooseBlock) return;
     try {
         var r = await apiFetch('/api/events/');
         if (!r.ok) return;
@@ -2005,13 +2034,24 @@ async function updateReferralCodeBlockVisibility() {
         var hasActive = (data.active || []).length > 0;
         if (buyBlock) buyBlock.style.display = hasActive ? 'block' : 'none';
         if (extendBlock) extendBlock.style.display = hasActive ? 'block' : 'none';
+        if (chooseBlock) chooseBlock.style.display = hasActive ? 'block' : 'none';
     } catch (e) {
         if (buyBlock) buyBlock.style.display = 'none';
         if (extendBlock) extendBlock.style.display = 'none';
+        if (chooseBlock) chooseBlock.style.display = 'none';
     }
 }
 
 function getReferralCodeFromCurrentPage() {
+    var choosePage = document.getElementById('page-choose-payment-method');
+    if (choosePage && choosePage.style.display !== 'none') {
+        var chooseBlock = document.getElementById('choose-referral-code-block');
+        if (chooseBlock && chooseBlock.style.display !== 'none') {
+            var input = chooseBlock.querySelector('.referral-code-input');
+            return input ? (input.value || '').trim() : '';
+        }
+        return '';
+    }
     var buyPage = document.getElementById('page-buy-subscription');
     var extendPage = document.getElementById('page-extend-subscription');
     var isBuyVisible = buyPage && buyPage.style.display !== 'none';
@@ -2023,43 +2063,51 @@ function getReferralCodeFromCurrentPage() {
     return input ? (input.value || '').trim() : '';
 }
 
-/** Вешает клики на переключатель способа оплаты: скрытый input + кнопки без радио. */
-function syncPaymentMethodSegmentSelection() {
-    var buyPage = document.getElementById('page-buy-subscription');
-    var extendPage = document.getElementById('page-extend-subscription');
-    [buyPage, extendPage].forEach(function (container) {
-        if (!container) return;
-        var switchEl = container.querySelector('.payment-method-switch');
-        if (!switchEl) return;
-        var input = switchEl.querySelector('input[name="payment-gateway"]');
-        var segments = switchEl.querySelectorAll('.payment-method-segment');
-        if (!input || !segments.length) return;
-        function selectGateway(gateway) {
-            input.value = gateway;
-            segments.forEach(function (btn) {
-                var isSelected = btn.dataset.gateway === gateway;
-                btn.classList.toggle('payment-method-segment-selected', isSelected);
-                btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
-            });
-        }
+/** Переключатель способа оплаты на странице choose-payment-method. */
+function syncChoosePaymentMethodSelection() {
+    var container = document.getElementById('page-choose-payment-method');
+    if (!container) return;
+    var switchEl = container.querySelector('.payment-method-switch');
+    if (!switchEl) return;
+    var input = switchEl.querySelector('input[name="payment-gateway"]');
+    var segments = switchEl.querySelectorAll('.payment-method-segment');
+    if (!input || !segments.length) return;
+    function selectGateway(gateway) {
+        input.value = gateway;
         segments.forEach(function (btn) {
-            btn.removeEventListener('click', btn._paymentSegmentClick);
-            btn._paymentSegmentClick = function () { selectGateway(btn.dataset.gateway); };
-            btn.addEventListener('click', btn._paymentSegmentClick);
+            var isSelected = btn.dataset.gateway === gateway;
+            btn.classList.toggle('payment-method-segment-selected', isSelected);
+            btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
-        selectGateway(input.value);
+    }
+    segments.forEach(function (btn) {
+        btn.removeEventListener('click', btn._paymentSegmentClick);
+        btn._paymentSegmentClick = function () { selectGateway(btn.dataset.gateway); };
+        btn.addEventListener('click', btn._paymentSegmentClick);
+    });
+    selectGateway(input.value || 'yookassa');
+}
+
+/** Кнопка «Оплатить» на странице выбора способа оплаты. */
+function bindChoosePaymentSubmit() {
+    var btn = document.getElementById('choose-payment-submit');
+    if (!btn) return;
+    if (btn._choosePaymentBound) return;
+    btn._choosePaymentBound = true;
+    btn.addEventListener('click', function () {
+        if (!currentPaymentPeriod) return;
+        createPayment(currentPaymentPeriod, currentExtendSubscriptionId);
     });
 }
 
-// Функция создания платежа
+// Функция создания платежа (вызывается со страницы выбора способа оплаты)
 async function createPayment(period, subscriptionId = null) {
     try {
         var referrerCode = getReferralCodeFromCurrentPage();
-        var buyPage = document.getElementById('page-buy-subscription');
-        var extendPage = document.getElementById('page-extend-subscription');
-        var container = (buyPage && buyPage.style.display !== 'none') ? buyPage : (extendPage || buyPage);
-        var gatewayInput = container ? container.querySelector('input[name="payment-gateway"]') : null;
-        var gateway = gatewayInput ? gatewayInput.value : 'yookassa';
+        var choosePage = document.getElementById('page-choose-payment-method');
+        var gatewayInput = choosePage ? choosePage.querySelector('input[name="payment-gateway"]') : null;
+        var gateway = (gatewayInput && gatewayInput.value) ? gatewayInput.value.trim().toLowerCase() : 'yookassa';
+        if (gateway !== 'yookassa' && gateway !== 'cryptocloud') gateway = 'yookassa';
         var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
         if (referrerCode) body.referrer_code = referrerCode;
         // Показываем страницу оплаты с индикатором загрузки
@@ -2081,14 +2129,15 @@ async function createPayment(period, subscriptionId = null) {
         
         const data = await response.json();
         
-        if (!data.success || !data.payment_url) {
+        var payUrl = data.payment_url;
+        if (!data.success || !payUrl || typeof payUrl !== 'string' || !String(payUrl).trim() || String(payUrl).trim().indexOf('http') !== 0) {
             throw new Error('Не удалось получить ссылку на оплату');
         }
         
         // Сохраняем данные платежа
         currentPaymentData = {
             payment_id: data.payment_id,
-            payment_url: data.payment_url,
+            payment_url: String(payUrl).trim(),
             amount: data.amount,
             period: data.period
         };
