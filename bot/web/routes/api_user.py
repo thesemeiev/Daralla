@@ -289,7 +289,12 @@ def create_blueprint(bot_app):
                     "currency": "RUB",
                     "order_id": order_id,
                 }
-                add_fields = {"cryptocurrency": "USDT_TRC20"}
+                add_fields = {
+                    "available_currencies": [
+                        "USDT_TRC20", "USDT_ERC20", "USDT_BSC", "USDT_TON", "USDT_SOL",
+                        "TON", "BTC", "ETH", "SOL", "BNB", "LTC", "TRX",
+                    ]
+                }
                 payload["add_fields"] = add_fields
                 import httpx
                 async with httpx.AsyncClient(timeout=15.0) as client:
