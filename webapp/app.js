@@ -2007,7 +2007,7 @@ function openPaymentUrl() {
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
 
-/** Делегирование клика по кнопке «Перейти к оплате» — работает даже если страница была скрыта при загрузке. */
+/** Делегирование клика по кнопке «Перейти к оплате». Capture-фаза и stopPropagation — чтобы ссылка не срабатывала по умолчанию (нет двойного перехода в вебе). */
 function bindPaymentLinkButton() {
     if (document.body._paymentLinkDelegationBound) return;
     document.body._paymentLinkDelegationBound = true;
@@ -2015,12 +2015,31 @@ function bindPaymentLinkButton() {
         var btn = document.getElementById('payment-link-button');
         if (!btn || (e.target !== btn && !btn.contains(e.target))) return;
         e.preventDefault();
+        e.stopPropagation();
         if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
         openPaymentUrl();
-    });
+    }, true);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindPaymentLinkButton);
 else bindPaymentLinkButton();
+
+/** Делегирование кликов «Купить»/«Продлить» — если onclick не сработает (например десктопный TG), переход на выбор способа оплаты всё равно выполнится. */
+function bindGoToChoosePaymentDelegation() {
+    if (document.body._goToChooseDelegationBound) return;
+    document.body._goToChooseDelegationBound = true;
+    document.body.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('[data-goto-choose][data-period]');
+        if (!btn) return;
+        var period = btn.getAttribute('data-period');
+        if (!period || (period !== 'month' && period !== '3month')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var subId = btn.getAttribute('data-extend') === '1' ? currentExtendSubscriptionId : null;
+        goToChoosePaymentMethod(period, subId);
+    }, true);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindGoToChoosePaymentDelegation);
+else bindGoToChoosePaymentDelegation();
 
 async function updateReferralCodeBlockVisibility() {
     var buyBlock = document.getElementById('buy-referral-code-block');
@@ -2192,6 +2211,15 @@ function showPaymentPage() {
         btn.setAttribute('aria-disabled', 'false');
         btn.dataset.paymentUrl = currentPaymentData.payment_url;
         btn.dataset.paymentId = currentPaymentData.payment_id;
+        if (!btn._paymentLinkDirectBound) {
+            btn._paymentLinkDirectBound = true;
+            btn.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
+                openPaymentUrl();
+            });
+        }
     }
 }
 

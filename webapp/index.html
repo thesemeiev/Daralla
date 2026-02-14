@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css?v=2">
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
 </head>
 <body style="background:#1a1a1a;color:#e0e0e0">
@@ -193,7 +193,7 @@
                             <h2>1 месяц</h2>
                             <div class="plan-price" data-period="month">150₽</div>
                         </div>
-                        <button class="btn-primary" onclick="goToChoosePaymentMethod('month')" style="width: 100%; margin-top: 12px;">Купить</button>
+                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="month" onclick="goToChoosePaymentMethod('month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                     
                     <div class="plan-card">
@@ -204,7 +204,7 @@
                                 <div class="plan-badge">Выгодно</div>
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="goToChoosePaymentMethod('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
+                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="3month" onclick="goToChoosePaymentMethod('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
                     </div>
                 </div>
                 <div id="buy-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
@@ -229,7 +229,7 @@
                             <h2>1 месяц</h2>
                             <div class="plan-price" data-period="month">150₽</div>
                         </div>
-                        <button class="btn-primary" onclick="goToChoosePaymentMethod('month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
+                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="month" data-extend="1" onclick="goToChoosePaymentMethod('month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
                     
                     <div class="plan-card">
@@ -240,7 +240,7 @@
                                 <div class="plan-badge">Выгодно</div>
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="goToChoosePaymentMethod('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
+                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="3month" data-extend="1" onclick="goToChoosePaymentMethod('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
                     </div>
                 </div>
                 <div id="extend-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
@@ -1180,6 +1180,6 @@
         </div>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=2"></script>
 </body>
 </html>
