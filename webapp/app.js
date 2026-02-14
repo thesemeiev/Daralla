@@ -1944,14 +1944,30 @@ function goBackFromPayment() {
     }
 }
 
-// Обработчик клика по ссылке «Перейти к оплате». Ссылка открывается браузером/Telegram по href.
+// Обработчик клика по ссылке «Перейти к оплате».
+// Всегда открываем URL из ответа API (currentPaymentData.payment_url), не полагаясь на href в DOM.
+// В Telegram — tg.openLink() во внешнем браузере (на ПК иначе WebView и редирект на наш сайт).
+// В браузере — window.open() в новой вкладке, при блокировке попапа — переход в текущей.
 function handlePaymentLinkClick(e) {
+    e.preventDefault();
     if (!currentPaymentData || !currentPaymentData.payment_url) {
-        e.preventDefault();
         alert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    // href уже установлен в payment_url — переход выполнит браузер/Telegram
+    var url = currentPaymentData.payment_url;
+    // Только полные внешние ссылки (защита от случайного перехода на наш сайт)
+    if (typeof url !== 'string' || !url.startsWith('http')) {
+        alert('Ошибка: неверная ссылка на оплату');
+        return;
+    }
+    if (tg && tg.initData && typeof tg.openLink === 'function') {
+        tg.openLink(url);
+    } else {
+        var w = window.open(url, '_blank', 'noopener,noreferrer');
+        if (!w) {
+            window.location.href = url;
+        }
+    }
     checkPaymentStatus(currentPaymentData.payment_id, currentExtendSubscriptionId);
 }
 
