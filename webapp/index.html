@@ -12,7 +12,6 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
     <link rel="stylesheet" href="/style.css">
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
-    <!-- Chart.js загружается лениво (ensureChartJs) при переходе в админ-панель, чтобы не блокировать страницу при недоступности CDN -->
 </head>
 <body style="background:#1a1a1a;color:#e0e0e0">
     <div class="container">
@@ -480,18 +479,6 @@
                 <section class="admin-panel-section admin-panel-section-analytics">
                     <h2 class="admin-panel-section-title">Аналитика</h2>
                     <div class="admin-panel-rows">
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-users-analytics')">
-                            <span class="admin-panel-row-label">Аналитика пользователей</span>
-                            <span class="admin-panel-row-chevron">›</span>
-                        </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-subscriptions')">
-                            <span class="admin-panel-row-label">Аналитика подписок</span>
-                            <span class="admin-panel-row-chevron">›</span>
-                        </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-notifications')">
-                            <span class="admin-panel-row-label">Аналитика уведомлений</span>
-                            <span class="admin-panel-row-chevron">›</span>
-                        </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-servers-analytics')">
                             <span class="admin-panel-row-label">Аналитика серверов</span>
                             <span class="admin-panel-row-chevron">›</span>
@@ -582,75 +569,6 @@
             </div>
         </div>
 
-        <!-- АДМИН-ПАНЕЛЬ: Аналитика пользователей -->
-        <div id="page-admin-users-analytics" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-            </header>
-            
-            <div id="admin-users-analytics-loading" class="loading">
-                <div class="spinner"></div>
-                <p>Загрузка...</p>
-            </div>
-            
-            <div id="admin-users-analytics-error" class="error" style="display: none;">
-                <p>Ошибка загрузки данных</p>
-                <button onclick="loadUsersAnalyticsPage()">Повторить</button>
-            </div>
-            
-            <div id="admin-users-analytics-content" class="admin-page-content" style="display: none;">
-                <div class="analytics-period-row">
-                    <span class="analytics-period-label">Период:</span>
-                    <select id="users-analytics-period" class="analytics-period-select" onchange="changeUsersAnalyticsPeriod()">
-                        <option value="1">24 часа</option>
-                        <option value="7">7 дней</option>
-                        <option value="14">14 дней</option>
-                        <option value="30" selected>30 дней</option>
-                        <option value="90">90 дней</option>
-                    </select>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-title">Пользователи</div>
-                        <div class="stat-card-value" id="users-analytics-total">0</div>
-                        <div class="stat-card-subtitle">Новых за 30 дней: <span id="users-analytics-new-30d">0</span></div>
-                    </div>
-                </div>
-                
-                <div class="analytics-charts-block" style="margin-top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Новых пользователей</h2>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('users-analytics-growth-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="users-analytics-growth-chart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="margin: 0;">Конверсия новых пользователей</h2>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <button class="fullscreen-btn" onclick="toggleFullscreen('users-analytics-conversion-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                    <span>⛶</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                            <div style="position: relative; height: 300px; min-width: 700px;">
-                                <canvas id="users-analytics-conversion-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- АДМИН-ПАНЕЛЬ: Аналитика серверов -->
         <div id="page-admin-servers-analytics" class="page" style="display: none;">
             <header>
@@ -670,166 +588,6 @@
             <div id="admin-servers-analytics-content" class="admin-page-content" style="display: none;">
                 <h2 style="margin: 0 0 16px 0;">Нагрузка на канал серверов</h2>
                 <div id="servers-load-list" class="servers-load-list"></div>
-            </div>
-        </div>
-
-        <!-- АДМИН-ПАНЕЛЬ: Раздел Уведомления -->
-        <div id="page-admin-notifications" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-            </header>
-            
-            <div id="admin-notifications-loading" class="loading">
-                <div class="spinner"></div>
-                <p>Загрузка статистики уведомлений...</p>
-            </div>
-            
-            <div id="admin-notifications-error" class="error" style="display: none;">
-                <p>Ошибка загрузки данных</p>
-                <button onclick="loadNotificationStats()">Повторить</button>
-            </div>
-            
-            <div id="admin-notifications-content" class="admin-page-content" style="display: none;">
-                <div class="analytics-period-row">
-                    <span class="analytics-period-label">Период:</span>
-                    <select id="notifications-period" class="analytics-period-select" onchange="changeNotificationsPeriod()">
-                        <option value="7" selected>7 дней</option>
-                        <option value="14">14 дней</option>
-                        <option value="30">30 дней</option>
-                    </select>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-title">Всего отправлено</div>
-                        <div class="stat-card-value" id="notifications-total-sent">0</div>
-                        <div class="stat-card-subtitle">За выбранный период</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Успешно доставлено</div>
-                        <div class="stat-card-value active" id="notifications-success-count">0</div>
-                        <div class="stat-card-subtitle">Процент: <span id="notifications-success-rate">0%</span></div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Заблокировано</div>
-                        <div class="stat-card-value expired" id="notifications-blocked">0</div>
-                        <div class="stat-card-subtitle">Пользователей</div>
-                    </div>
-                </div>
-                
-                <div class="analytics-charts-block" style="margin-top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Доставка уведомлений</h2>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('notification-delivery-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="notification-delivery-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- АДМИН-ПАНЕЛЬ: Раздел Аналитика подписок -->
-        <div id="page-admin-subscriptions" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-            </header>
-            
-            <div id="admin-subscriptions-loading" class="loading">
-                <div class="spinner"></div>
-                <p>Загрузка статистики подписок...</p>
-            </div>
-            
-            <div id="admin-subscriptions-error" class="error" style="display: none;">
-                <p>Ошибка загрузки данных</p>
-                <button onclick="loadSubscriptionStats()">Повторить</button>
-            </div>
-            
-            <div id="admin-subscriptions-content" class="admin-page-content" style="display: none;">
-                <div class="analytics-period-row">
-                    <span class="analytics-period-label">Период:</span>
-                    <select id="subscriptions-period" class="analytics-period-select" onchange="changeSubscriptionsPeriod()">
-                        <option value="7">7 дней</option>
-                        <option value="14">14 дней</option>
-                        <option value="30" selected>30 дней</option>
-                    </select>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-title">Всего активных</div>
-                        <div class="stat-card-value" id="subscriptions-total-active">0</div>
-                        <div class="stat-card-subtitle">Подписок</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Пробные подписки</div>
-                        <div class="stat-card-value" id="subscriptions-trial">0</div>
-                        <div class="stat-card-subtitle">Активных</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Купленные подписки</div>
-                        <div class="stat-card-value active" id="subscriptions-purchased">0</div>
-                        <div class="stat-card-subtitle">Активных</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Конверсия</div>
-                        <div class="stat-card-value revenue" id="subscriptions-conversion">0%</div>
-                        <div class="stat-card-subtitle">Пробных в купленные</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Истекшие</div>
-                        <div class="stat-card-value expired" id="subscriptions-expired">0</div>
-                        <div class="stat-card-subtitle">Подписок</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-card-title">Удалённых</div>
-                        <div class="stat-card-value" id="subscriptions-deleted">0</div>
-                        <div class="stat-card-subtitle">Подписок</div>
-                    </div>
-                </div>
-                
-                <div class="analytics-charts-block" style="margin-top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Динамика подписок</h2>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('subscription-dynamics-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="subscription-dynamics-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="margin: 0;">Конверсия пробных подписок</h2>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="fullscreen-btn" onclick="toggleFullscreen('subscription-conversion-chart')" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Полный экран">
-                                <span>⛶</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div style="overflow-x: auto; overflow-y: hidden; margin-bottom: 24px; -webkit-overflow-scrolling: touch;">
-                        <div style="position: relative; height: 300px; min-width: 700px;">
-                            <canvas id="subscription-conversion-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
