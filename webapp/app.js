@@ -55,7 +55,133 @@ var TG_STUB = {
         enable: function() {}
     }
 };
-// Скрипт telegram-web-app.js подключается с async — при загрузке страницы обновим tg в DOMContentLoaded
+
+// Адаптер платформы: веб vs Telegram Mini App. Вся логика различий сосредоточена здесь.
+var platform = (function () {
+    var _tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+    var _isTelegram = !!(_tg && _tg.initData);
+
+    function applyTgUi() {
+        if (!_isTelegram || !_tg) return;
+        try {
+            _tg.ready();
+            _tg.expand();
+            if (_tg.disableVerticalSwipes) _tg.disableVerticalSwipes();
+            _tg.setHeaderColor('#1a1a1a');
+            _tg.setBackgroundColor('#1a1a1a');
+        } catch (e) {}
+    }
+
+    return {
+        init: function () {
+            var hashInit = parseInitDataFromHash();
+            if (hashInit && hashInit.initData) {
+                _tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
+                _isTelegram = true;
+                try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
+                return loadTelegramScript(400).then(function () {
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        _tg = window.Telegram.WebApp;
+                        try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
+                    }
+                    applyTgUi();
+                });
+            }
+            var stored = '';
+            try { stored = sessionStorage.getItem('tg_init_data') || ''; } catch (e) {}
+            if (stored) {
+                _tg = Object.assign({}, TG_STUB, { initData: stored, initDataUnsafe: { user: {} } });
+                _isTelegram = true;
+                return loadTelegramScript(400).then(function () {
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        _tg = window.Telegram.WebApp;
+                        try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
+                    }
+                    applyTgUi();
+                });
+            }
+            return loadTelegramScript(400).then(function () {
+                _tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+                _isTelegram = !!(_tg && _tg.initData);
+                if (_tg.initData) try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
+                applyTgUi();
+            });
+        },
+        isTelegram: function () { return _isTelegram; },
+        getAuth: function () {
+            if (_isTelegram && _tg && _tg.initData) return { type: 'tg', initData: _tg.initData };
+            try {
+                var token = localStorage.getItem('web_token');
+                return { type: 'web', token: token || null };
+            } catch (e) { return { type: 'web', token: null }; }
+        },
+        getTgRef: function () { return _tg; },
+        getTgUser: function () { return _tg && _tg.initDataUnsafe && _tg.initDataUnsafe.user ? _tg.initDataUnsafe.user : null; },
+        openExternalUrl: function (url) {
+            if (!url || String(url).indexOf('http') !== 0) return;
+            if (_isTelegram && _tg && typeof _tg.openLink === 'function') {
+                try { _tg.openLink(url); } catch (err) { window.location.href = url; }
+            } else if (_isTelegram) {
+                window.location.href = url;
+            } else {
+                var w = window.open(url, '_blank', 'noopener,noreferrer');
+                if (!w) window.location.href = url;
+            }
+        },
+        getDefaultPage: function () {
+            if (_isTelegram) return 'subscriptions';
+            var route = parseHashRoute();
+            if (route && ROUTE_PAGE_NAMES.has(route.pageName)) return route.pageName;
+            return 'landing';
+        },
+        canShowPage: function (pageName) {
+            if (_isTelegram && pageName === 'landing') return false;
+            return true;
+        },
+        mainButton: {
+            _onClick: null,
+            show: function (text, onClick) {
+                if (!_isTelegram || !_tg || !_tg.MainButton) return;
+                try {
+                    this._onClick = onClick;
+                    _tg.MainButton.setText(text || '');
+                    _tg.MainButton.onClick(function () {
+                        if (typeof platform.mainButton._onClick === 'function') platform.mainButton._onClick();
+                        platform.mainButton.hide();
+                    });
+                    _tg.MainButton.show();
+                } catch (e) { console.warn('MainButton.show error', e); }
+            },
+            hide: function () {
+                if (!_isTelegram || !_tg || !_tg.MainButton) return;
+                try { _tg.MainButton.hide(); } catch (e) {}
+                this._onClick = null;
+            },
+            disable: function () {
+                if (_isTelegram && _tg && _tg.MainButton && typeof _tg.MainButton.disable === 'function') _tg.MainButton.disable();
+            },
+            enable: function () {
+                if (_isTelegram && _tg && _tg.MainButton && typeof _tg.MainButton.enable === 'function') _tg.MainButton.enable();
+            }
+        },
+        showAlert: function (msg) {
+            if (_isTelegram && _tg && typeof _tg.showAlert === 'function') {
+                try { _tg.showAlert(msg); } catch (e) { alert(msg); }
+            } else {
+                alert(msg);
+            }
+        },
+        showConfirm: function (msg, callback) {
+            if (_isTelegram && _tg && typeof _tg.showConfirm === 'function') {
+                try { _tg.showConfirm(msg, function (result) { if (typeof callback === 'function') callback(result); }); } catch (e) { if (typeof callback === 'function') callback(confirm(msg)); }
+            } else {
+                if (typeof callback === 'function') callback(confirm(msg)); else confirm(msg);
+            }
+        }
+    };
+})();
+
+// Обратная совместимость: глобальные tg и isWebMode выставляются в DOMContentLoaded после platform.init()
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
 
 // Глобальные переменные для веб-авторизации
@@ -71,37 +197,29 @@ let isWebMode = !tg.initData;
 // Функция для выполнения защищенных запросов к API
 async function apiFetch(url, options = {}) {
     if (!options.headers) options.headers = {};
-    
-    // Добавляем авторизацию
-    if (tg.initData) {
-        // Режим Telegram
-        const separator = url.includes('?') ? '&' : '?';
-        url = `${url}${separator}initData=${encodeURIComponent(tg.initData)}`;
-    } else if (webAuthToken) {
-        // Режим Веб
-        options.headers['Authorization'] = `Bearer ${webAuthToken}`;
+    var auth = platform.getAuth();
+    if (auth.type === 'tg' && auth.initData) {
+        var separator = url.includes('?') ? '&' : '?';
+        url = url + separator + 'initData=' + encodeURIComponent(auth.initData);
+    } else if (auth.type === 'web' && auth.token) {
+        options.headers['Authorization'] = 'Bearer ' + auth.token;
     }
-    
-    // Если это POST/PUT запрос и нет тела, добавляем пустой объект
-    // Это предотвращает ошибки 400 на сервере при ожидании JSON
     if ((options.method === 'POST' || options.method === 'PUT') && !options.body) {
         options.body = JSON.stringify({});
         if (!options.headers['Content-Type']) {
             options.headers['Content-Type'] = 'application/json';
         }
     }
-    
-    console.log(`[API] Запрос: ${options.method || 'GET'} ${url}`, { mode: isWebMode ? 'Web' : 'Telegram', hasToken: !!webAuthToken });
-    
+    console.log('[API] Запрос: ' + (options.method || 'GET') + ' ' + url, { mode: platform.isTelegram() ? 'Telegram' : 'Web', hasToken: !!(auth.token || auth.initData) });
     try {
-        const response = await fetch(url, options);
-        if (response.status === 401 && isWebMode) {
+        var response = await fetch(url, options);
+        if (response.status === 401 && !platform.isTelegram()) {
             console.warn('[API] Ошибка 401: Токен недействителен или истек');
             logout();
         }
         return response;
     } catch (e) {
-        console.error(`[API] Ошибка сетевого запроса (${url}):`, e);
+        console.error('[API] Ошибка сетевого запроса (' + url + '):', e);
         throw e;
     }
 }
@@ -222,7 +340,7 @@ function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
 function applyRoute(route, isAuthenticated, isAdmin) {
     if (!route) return false;
     var pageName = route.pageName;
-    if (tg && tg.initData && pageName === 'landing') pageName = 'subscriptions';
+    if (!platform.canShowPage(pageName)) pageName = 'subscriptions';
     if (!isPageAllowedForUser(pageName, isAuthenticated, isAdmin)) return false;
     var p = route.params;
     if (route.pageName === 'admin-user-detail' && p.id) {
@@ -269,8 +387,7 @@ let serverLoadChartInterval = null;
 
 // Функция переключения страниц (params — необязательный объект для hash)
 function showPage(pageName, params) {
-    // В Telegram Mini App лендинга нет — всегда открываем подписки
-    if (pageName === 'landing' && tg && tg.initData) {
+    if (pageName === 'landing' && !platform.canShowPage('landing')) {
         showPage('subscriptions', params);
         return;
     }
@@ -304,11 +421,7 @@ function showPage(pageName, params) {
         bottomNav.style.display = isMainSectionPage ? 'flex' : 'none';
     }
 
-    // В Telegram скрываем MainButton при уходе со страницы оплаты
-    if (pageName !== 'payment') {
-        var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
-        if (w && w.MainButton) w.MainButton.hide();
-    }
+    if (pageName !== 'payment') platform.mainButton.hide();
 
     // Скрываем все страницы
     document.querySelectorAll('.page').forEach(page => {
@@ -461,7 +574,8 @@ function updateProfileCard(userId, username) {
 var profileCardAvatarObjectURL = null;
 
 function setProfileAvatarFromInitData() {
-    var photoUrl = tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.photo_url;
+    var user = platform.getTgUser();
+    var photoUrl = user && user.photo_url;
     if (!photoUrl || typeof photoUrl !== 'string') return false;
     var iconEl = document.querySelector('.profile-card-icon');
     var imgEl = document.getElementById('profile-card-avatar');
@@ -661,7 +775,7 @@ async function loadSubscriptions() {
         // Запрашиваем подписки через защищенный API
         const response = await apiFetch(`/api/subscriptions`);
         
-        if (response.status === 401 && !isWebMode) {
+        if (response.status === 401 && platform.isTelegram()) {
             // Если в Telegram получили 401 - значит аккаунт не найден (был отвязан)
             // Пробуем зарегистрироваться заново
             console.log('Unauthorized in loadSubscriptions (TG mode), retrying registration...');
@@ -1978,8 +2092,7 @@ function goBackFromChoosePayment() {
 // Функция возврата с страницы оплаты (на страницу выбора способа оплаты, чтобы можно было выбрать другой способ)
 function goBackFromPayment() {
     currentPaymentData = null;
-    var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
-    if (w && w.MainButton) w.MainButton.hide();
+    platform.mainButton.hide();
     if (currentPaymentPeriod) {
         showPage('choose-payment-method');
     } else if (currentExtendSubscriptionId) {
@@ -1989,10 +2102,6 @@ function goBackFromPayment() {
     }
 }
 
-/**
- * Открывает ссылку на оплату. В Telegram — через openLink (внешний браузер),
- * в вебе — только window.open в новой вкладке (текущая вкладка не меняется).
- */
 function openPaymentUrl() {
     var btn = document.getElementById('payment-link-button');
     var url = (currentPaymentData && currentPaymentData.payment_url)
@@ -2004,23 +2113,10 @@ function openPaymentUrl() {
         paymentId = btn.dataset.paymentId || paymentId;
     }
     if (!url || url.indexOf('http') !== 0) {
-        if (typeof alert === 'function') alert('Ошибка: ссылка на оплату не найдена');
+        platform.showAlert('Ошибка: ссылка на оплату не найдена');
         return;
     }
-    var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : tg;
-    if (webApp && webApp.initData && typeof webApp.openLink === 'function') {
-        try {
-            webApp.openLink(url);
-        } catch (err) {
-            window.location.href = url;
-        }
-    } else if (tg && tg.initData) {
-        // TG Mini App, но openLink недоступен (скрипт не загрузился и т.п.) — открываем в текущем WebView
-        window.location.href = url;
-    } else {
-        var w = window.open(url, '_blank', 'noopener,noreferrer');
-        if (!w) window.location.href = url;
-    }
+    platform.openExternalUrl(url);
     if (paymentId) checkPaymentStatus(paymentId, currentExtendSubscriptionId);
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
@@ -2223,8 +2319,7 @@ function showPaymentPage() {
             delete btn.dataset.paymentId;
             if (btn.href !== undefined) btn.href = '#';
         }
-        var w = typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp;
-        if (w && w.MainButton) w.MainButton.hide();
+        platform.mainButton.hide();
         return;
     }
     var periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
@@ -2238,19 +2333,10 @@ function showPaymentPage() {
         btn.dataset.paymentId = currentPaymentData.payment_id;
         if (btn.href !== undefined) btn.href = (currentPaymentData.payment_url || '').indexOf('http') === 0 ? currentPaymentData.payment_url : '#';
     }
-    var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : tg;
-    if (webApp && webApp.initData && webApp.MainButton) {
-        try {
-            webApp.MainButton.setText('Перейти к оплате');
-            webApp.MainButton.onClick(function () {
-                openPaymentUrl();
-                webApp.MainButton.hide();
-            });
-            webApp.MainButton.show();
-        } catch (e) {
-            console.warn('MainButton error:', e);
-        }
-    }
+    platform.mainButton.show('Перейти к оплате', function () {
+        openPaymentUrl();
+        platform.mainButton.hide();
+    });
 }
 
 // Функция проверки статуса платежа
@@ -2386,10 +2472,7 @@ function copySubscriptionLink(token) {
     const webhookUrl = window.location.origin;
     const subscriptionUrl = `${webhookUrl}/sub/${token}`;
     
-    const showCopyMessage = (msg) => {
-        if (!isWebMode && tg?.showAlert) tg.showAlert(msg);
-        else alert(msg);
-    };
+    var showCopyMessage = function (msg) { platform.showAlert(msg); };
     // Копируем в буфер обмена
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(subscriptionUrl).then(() => {
@@ -3258,12 +3341,8 @@ async function confirmDeleteUser(userId) {
         closeDeleteUserModal();
         
         // Показываем уведомление об успехе
-        const successMsg = `Пользователь удален:\n- Подписок: ${data.stats.subscriptions_deleted}\n- Платежей: ${data.stats.payments_deleted}\n- Серверов очищено: ${data.deleted_servers.length}`;
-        if (!isWebMode && tg?.showAlert) {
-            tg.showAlert(successMsg);
-        } else {
-            alert(successMsg);
-        }
+        var successMsg = 'Пользователь удален:\n- Подписок: ' + data.stats.subscriptions_deleted + '\n- Платежей: ' + data.stats.payments_deleted + '\n- Серверов очищено: ' + data.deleted_servers.length;
+        platform.showAlert(successMsg);
         
         // Возвращаемся к списку пользователей
         setTimeout(() => {
@@ -3280,11 +3359,7 @@ async function confirmDeleteUser(userId) {
         
     } catch (error) {
         console.error('Ошибка удаления пользователя:', error);
-        if (!isWebMode && tg?.showAlert) {
-            tg.showAlert(`Ошибка удаления пользователя: ${error.message}`);
-        } else {
-            alert(`Ошибка удаления пользователя: ${error.message}`);
-        }
+        platform.showAlert('Ошибка удаления пользователя: ' + (error && error.message));
         
         // Всегда сбрасывать состояние кнопки при ошибке
         const confirmBtn = document.getElementById('delete-user-confirm-btn');
@@ -3659,66 +3734,27 @@ function waitForTelegram(maxMs) {
 
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
-    // В Telegram Mini App лендинг не показываем — по умолчанию будет подставлена страница подписок после инициализации.
     var landingEl = document.getElementById('page-landing');
     if (landingEl) landingEl.style.display = '';
-    // Сначала пробуем достать initData из URL hash — Telegram передаёт tgWebAppData при открытии Mini App.
-    var hashInit = parseInitDataFromHash();
-    if (hashInit && hashInit.initData) {
-        tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
-        try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
-        loadTelegramScript(400).then(function () {
-            if (window.Telegram && window.Telegram.WebApp) {
-                tg = window.Telegram.WebApp;
-                try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
-            }
-        });
-    } else {
-        var stored = '';
-        try { stored = sessionStorage.getItem('tg_init_data') || ''; } catch (e) {}
-        if (stored) {
-            tg = Object.assign({}, TG_STUB, { initData: stored, initDataUnsafe: { user: {} } });
-            loadTelegramScript(400).then(function () {
-                if (window.Telegram && window.Telegram.WebApp) {
-                    tg = window.Telegram.WebApp;
-                    try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
-                }
-            });
-        } else {
-            await waitForTelegram(400);
-            tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
-            if (tg.initData) try { sessionStorage.setItem('tg_init_data', tg.initData); } catch (e) {}
-        }
-    }
-    isWebMode = !tg.initData;
-    if (tg.initData) {
-        tg.ready();
-        tg.expand();
-    }
-    if (tg.disableVerticalSwipes) {
-        tg.disableVerticalSwipes();
-    }
-    tg.setHeaderColor('#1a1a1a');
-    tg.setBackgroundColor('#1a1a1a');
+    await platform.init();
+    tg = platform.getTgRef();
+    isWebMode = !platform.isTelegram();
 
-    // Загружаем цены
     loadPrices();
-    // Включаем защиту от закрытия при скролле вверх
     preventCloseOnScroll();
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function () {}, function (err) { console.warn('SW register failed', err); });
     }
-    // Если это веб-режим, проверяем токен
-    if (isWebMode) {
+    if (!platform.isTelegram()) {
         document.body.classList.add('web-mode');
         if (webAuthToken) {
             try {
-                const response = await fetch('/api/auth/verify', {
+                var response = await fetch('/api/auth/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: webAuthToken })
                 });
-                const result = await response.json();
+                var result = await response.json();
                 if (result.success) {
                     currentUserId = result.user_id;
                     await checkAdminAccess();
@@ -3726,14 +3762,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
                         applyRoute(route, true, isAdmin);
                     } else {
-                        showPage('subscriptions');
+                        showPage(platform.getDefaultPage());
                     }
                 } else {
                     var routeGuest = parseHashRoute();
                     if (routeGuest && isPageAllowedForUser(routeGuest.pageName, false, false)) {
                         applyRoute(routeGuest, false, false);
                     } else {
-                        showPage('landing');
+                        showPage(platform.getDefaultPage());
                     }
                 }
             } catch (e) {
@@ -3741,7 +3777,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (routeGuest2 && isPageAllowedForUser(routeGuest2.pageName, false, false)) {
                     applyRoute(routeGuest2, false, false);
                 } else {
-                    showPage('landing');
+                    showPage(platform.getDefaultPage());
                 }
             }
         } else {
@@ -3749,18 +3785,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (routeGuest3 && isPageAllowedForUser(routeGuest3.pageName, false, false)) {
                 applyRoute(routeGuest3, false, false);
             } else {
-                showPage('landing');
+                showPage(platform.getDefaultPage());
             }
         }
     } else {
-        // Режим Telegram
         await initTelegramFlow();
     }
-    
-    // Инициализируем навигацию с индикатором
-    initNavIndicator();
 
-    // Кнопка «Назад» в браузере: синхронизация экрана с hash
+    initNavIndicator();
     window.addEventListener('hashchange', function () {
         var route = parseHashRoute();
         if (!route || route.pageName === currentPage) return;
@@ -3769,17 +3801,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initTelegramFlow() {
-    // Регистрация пользователя при первом открытии мини-приложения
+    var auth = platform.getAuth();
     try {
-        const initData = tg.initData;
-        if (initData) {
-            const response = await fetch('/api/user/register', {
+        if (auth.type === 'tg' && auth.initData) {
+            var response = await fetch('/api/user/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    initData: initData
+                    initData: auth.initData
                 })
             });
             
@@ -4046,16 +4077,12 @@ async function handleWebAccessSetup(event) {
         if (result.success) {
             closeModal('web-access-modal');
             refreshAboutAccount();
-            if (!isWebMode && tg?.showAlert) {
-                tg.showAlert(result.message);
-            } else {
-                alert(result.message);
-            }
+            platform.showAlert(result.message);
         } else {
-            alert(result.error || 'Ошибка при настройке');
+            platform.showAlert(result.error || 'Ошибка при настройке');
         }
     } catch (e) {
-        alert('Ошибка сети');
+        platform.showAlert('Ошибка сети');
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;
@@ -4073,8 +4100,7 @@ async function refreshAboutAccount() {
     var loginSection = document.getElementById('link-telegram-section');
     if (!userIdEl || !loginEl || !tgIdEl) return;
 
-    // В веб-режиме без токена сразу выходим
-    if (isWebMode && !webAuthToken) {
+    if (!platform.isTelegram() && !webAuthToken) {
         userIdEl.textContent = '—';
         loginEl.textContent = '—';
         tgIdEl.textContent = '—';
@@ -4108,8 +4134,7 @@ async function refreshAboutAccount() {
                 }
             }
 
-            // 2. Блок "Привязать / Отвязать Telegram" (для сайта или если вошли по паролю в TMA)
-            if (isWebMode || webAuthToken) {
+            if (!platform.isTelegram() || webAuthToken) {
                 if (loginSection) loginSection.style.display = 'block';
                 if (unlinked && linked) {
                     if (data.telegram_linked) {
@@ -4124,9 +4149,9 @@ async function refreshAboutAccount() {
                 if (loginSection) loginSection.style.display = 'none';
             }
         } else {
-            // Если ошибка (например, 401)
-            if (!isWebMode) {
-                var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
+            if (platform.isTelegram()) {
+                var u = platform.getTgUser();
+                var tid = (u && u.id != null) ? String(u.id) : '—';
                 userIdEl.textContent = '—';
                 loginEl.textContent = tid;
                 tgIdEl.textContent = tid;
@@ -4138,8 +4163,9 @@ async function refreshAboutAccount() {
         }
     } catch (e) {
         console.error('refreshAboutAccount error:', e);
-        if (!isWebMode) {
-            var tid = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '—';
+        if (platform.isTelegram()) {
+            var u = platform.getTgUser();
+            var tid = (u && u.id != null) ? String(u.id) : '—';
             userIdEl.textContent = '—';
             loginEl.textContent = tid;
             tgIdEl.textContent = tid;
@@ -4152,7 +4178,7 @@ async function refreshAboutAccount() {
 
 async function handleLinkTelegram(event) {
     if (event) event.preventDefault();
-    if (!isWebMode || !webAuthToken) return;
+    if (platform.isTelegram() || !webAuthToken) return;
     var btn = document.getElementById('link-telegram-btn');
     var originalText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'Переход...'; }
@@ -4173,7 +4199,7 @@ async function handleLinkTelegram(event) {
 
 async function handleChangeLogin(event) {
     event.preventDefault();
-    if (isWebMode && !webAuthToken) return;
+    if (!platform.isTelegram() && !webAuthToken) return;
     var form = document.getElementById('form-change-login');
     var btn = form && form.querySelector('button[type="submit"]');
     var current = document.getElementById('change-login-current');
@@ -4209,7 +4235,7 @@ async function handleChangeLogin(event) {
 
 async function handleChangePassword(event) {
     event.preventDefault();
-    if (isWebMode && !webAuthToken) return;
+    if (!platform.isTelegram() && !webAuthToken) return;
     var form = document.getElementById('form-change-password');
     var btn = form && form.querySelector('button[type="submit"]');
     var current = document.getElementById('change-pw-current');
@@ -4248,7 +4274,7 @@ async function handleChangePassword(event) {
 
 async function handleUnlinkTelegram(event) {
     event.preventDefault();
-    if (isWebMode && !webAuthToken) return;
+    if (!platform.isTelegram() && !webAuthToken) return;
     var form = document.getElementById('form-unlink-telegram');
     var btn = form && form.querySelector('button[type="submit"]');
     var password = document.getElementById('unlink-telegram-password');
@@ -4617,45 +4643,21 @@ async function sendBroadcast() {
     const message = messageEl.value.trim();
     
     if (!message) {
-        if (!isWebMode && tg?.showAlert) {
-            tg.showAlert('Пожалуйста, введите текст сообщения');
-        } else {
-            alert('Пожалуйста, введите текст сообщения');
-        }
+        platform.showAlert('Пожалуйста, введите текст сообщения');
         return;
     }
-    
-    const isSelectMode = broadcastSendMode === 'selected';
-    
+    var isSelectMode = broadcastSendMode === 'selected';
     if (isSelectMode && broadcastSelectedUsers.length === 0) {
-        if (!isWebMode && tg?.showAlert) {
-            tg.showAlert('Пожалуйста, выберите хотя бы одного пользователя');
-        } else {
-            alert('Пожалуйста, выберите хотя бы одного пользователя');
-        }
+        platform.showAlert('Пожалуйста, выберите хотя бы одного пользователя');
         return;
     }
-    
-    // Формируем текст подтверждения
-    let confirmText;
-    if (isSelectMode) {
-        confirmText = `Вы уверены, что хотите отправить рассылку ${broadcastSelectedUsers.length} выбранным пользователям?`;
-    } else {
-        confirmText = 'Вы уверены, что хотите отправить рассылку всем пользователям?';
-    }
-    
-    if (!isWebMode && tg?.showConfirm) {
-        const confirmed = await new Promise((resolve) => {
-            tg.showConfirm(confirmText, (result) => resolve(result));
-        });
-        if (!confirmed) {
-            return;
-        }
-    } else {
-        if (!confirm(confirmText)) {
-            return;
-        }
-    }
+    var confirmText = isSelectMode
+        ? 'Вы уверены, что хотите отправить рассылку ' + broadcastSelectedUsers.length + ' выбранным пользователям?'
+        : 'Вы уверены, что хотите отправить рассылку всем пользователям?';
+    var confirmed = await new Promise(function (resolve) {
+        platform.showConfirm(confirmText, resolve);
+    });
+    if (!confirmed) return;
     
     // Блокируем кнопку и показываем загрузку
     sendBtn.disabled = true;
@@ -4704,13 +4706,8 @@ async function sendBroadcast() {
         // Очищаем поле сообщения
         messageEl.value = '';
         
-        // Показываем уведомление (в вебе — alert, иначе tg.showAlert может вернуть WebAppMethodUnsupported)
-        const resultMsg = `Рассылка завершена!\n\nОтправлено: ${data.sent}\nОшибок: ${data.failed}\nВсего: ${data.total}`;
-        if (!isWebMode && tg?.showAlert) {
-            tg.showAlert(resultMsg);
-        } else {
-            alert(resultMsg);
-        }
+        var resultMsg = 'Рассылка завершена!\n\nОтправлено: ' + data.sent + '\nОшибок: ' + data.failed + '\nВсего: ' + data.total;
+        platform.showAlert(resultMsg);
         
     } catch (error) {
         console.error('Ошибка отправки рассылки:', error);
@@ -5847,32 +5844,30 @@ async function deleteServerConfig(serverId) {
 
 // Синхронизация всех серверов
 async function syncAllServers() {
-    if (!confirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.')) return;
-    
-    if (!isWebMode && tg?.MainButton) {
-        tg.MainButton.setText('СИНХРОНИЗАЦИЯ...');
-        tg.MainButton.show();
-        tg.MainButton.disable();
-    }
-
+    platform.showConfirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.', function (ok) {
+        if (!ok) return;
+        runSyncAllServers();
+    });
+}
+async function runSyncAllServers() {
+    platform.mainButton.show('СИНХРОНИЗАЦИЯ...', function () {});
+    platform.mainButton.disable();
     try {
-        const response = await apiFetch('/api/admin/sync-all', {
+        var response = await apiFetch('/api/admin/sync-all', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
-        const result = await response.json();
+        var result = await response.json();
         if (result.success) {
-            alert('Синхронизация завершена!\n' + 
-                  'Проверено подписок: ' + result.stats.subscriptions_checked + '\n' +
-                  'Создано клиентов: ' + result.stats.total_clients_created);
+            platform.showAlert('Синхронизация завершена!\nПроверено подписок: ' + result.stats.subscriptions_checked + '\nСоздано клиентов: ' + result.stats.total_clients_created);
             loadServerGroups();
         } else {
-            alert('Ошибка: ' + result.error);
+            platform.showAlert('Ошибка: ' + result.error);
         }
     } catch (err) {
         console.error('Ошибка синхронизации:', err);
-        alert('Ошибка при выполнении синхронизации');
+        platform.showAlert('Ошибка при выполнении синхронизации');
     } finally {
-        if (!isWebMode && tg?.MainButton) tg.MainButton.hide();
+        platform.mainButton.hide();
     }
 }
