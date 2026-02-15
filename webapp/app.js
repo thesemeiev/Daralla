@@ -444,7 +444,7 @@ function showPage(pageName, params) {
         bottomNav.style.display = isMainSectionPage ? 'flex' : 'none';
     }
 
-    if (pageName !== 'payment') platform.mainButton.hide();
+    platform.mainButton.hide();
 
     // Скрываем все страницы
     document.querySelectorAll('.page').forEach(page => {
@@ -2115,7 +2115,6 @@ function goBackFromChoosePayment() {
 // Функция возврата с страницы оплаты (на страницу выбора способа оплаты, чтобы можно было выбрать другой способ)
 function goBackFromPayment() {
     currentPaymentData = null;
-    platform.mainButton.hide();
     if (currentPaymentPeriod) {
         showPage('choose-payment-method');
     } else if (currentExtendSubscriptionId) {
@@ -2360,7 +2359,6 @@ function showPaymentPage() {
             btn.onclick = null;
             btn.style.display = '';
         }
-        platform.mainButton.hide();
         return;
     }
     var periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
@@ -2382,12 +2380,10 @@ function showPaymentPage() {
         };
         btn.style.display = '';
     }
-    platform.mainButton.hide();
 }
 
-// Показать на странице оплаты состояние «Оплата прошла» (скрыть MainButton, обновить карточку, кнопка «К подпискам»)
+// Показать на странице оплаты состояние «Оплата прошла» (обновить карточку, кнопка «К подпискам»)
 function showPaymentSuccessState() {
-    platform.mainButton.hide();
     var page = document.getElementById('page-payment');
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
@@ -2420,7 +2416,6 @@ function showPaymentSuccessState() {
 
 // Показать на странице оплаты состояние отмены/ошибки (красный статус, кнопка «Попробовать снова»)
 function showPaymentErrorState(message) {
-    platform.mainButton.hide();
     var page = document.getElementById('page-payment');
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
