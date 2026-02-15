@@ -28,7 +28,7 @@ async def require_admin(request):
     Usage: user_id, err = await require_admin(request); if err: return err
     """
     body = await request.get_json(silent=True) or {}
-    user_id = await authenticate_request_async(request.headers, request.args, body)
+    user_id = await authenticate_request_async(request.headers, request.args, body, request.cookies)
     if not user_id:
         return None, (jsonify({"error": "Invalid authentication"}), 401, _cors_headers())
     if not await check_admin_access_async(user_id):

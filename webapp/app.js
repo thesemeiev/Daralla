@@ -325,6 +325,7 @@ async function apiFetch(url, options = {}) {
             options.headers['Content-Type'] = 'application/json';
         }
     }
+    options.credentials = options.credentials || 'include';
     console.log('[API] Запрос: ' + (options.method || 'GET') + ' ' + url, { mode: platform.isTelegram() ? 'Telegram' : 'Web', hasToken: !!(auth.token || auth.initData) });
     try {
         var response = await fetch(url, options);
@@ -339,7 +340,10 @@ async function apiFetch(url, options = {}) {
     }
 }
 
-function logout() {
+async function logout() {
+    try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    } catch (e) {}
     removeAuthToken();
     currentUserId = null;
     showPage('login');
@@ -3968,43 +3972,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (!platform.isTelegram()) {
         document.body.classList.add('web-mode');
-        if (webAuthToken) {
-            try {
-                var response = await fetch('/api/auth/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: webAuthToken })
-                });
-                var result = await response.json();
-                if (result.success) {
-                    currentUserId = result.user_id;
-                    await checkAdminAccess();
-                    var route = parseHashRoute();
-                    if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
-                        applyRoute(route, true, isAdmin);
-                    } else {
-                        showPage(platform.getDefaultPage());
-                    }
+        try {
+            var response = await fetch('/api/auth/verify', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: webAuthToken ? JSON.stringify({ token: webAuthToken }) : '{}'
+            });
+            var result = await response.json();
+            if (result.success) {
+                currentUserId = result.user_id;
+                await checkAdminAccess();
+                var route = parseHashRoute();
+                if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
+                    applyRoute(route, true, isAdmin);
                 } else {
-                    var routeGuest = parseHashRoute();
-                    if (routeGuest && isPageAllowedForUser(routeGuest.pageName, false, false)) {
-                        applyRoute(routeGuest, false, false);
-                    } else {
-                        showPage(platform.getDefaultPage());
-                    }
+                    showPage(platform.getDefaultPage());
                 }
-            } catch (e) {
-                var routeGuest2 = parseHashRoute();
-                if (routeGuest2 && isPageAllowedForUser(routeGuest2.pageName, false, false)) {
-                    applyRoute(routeGuest2, false, false);
+            } else {
+                var routeGuest = parseHashRoute();
+                if (routeGuest && isPageAllowedForUser(routeGuest.pageName, false, false)) {
+                    applyRoute(routeGuest, false, false);
                 } else {
                     showPage(platform.getDefaultPage());
                 }
             }
-        } else {
-            var routeGuest3 = parseHashRoute();
-            if (routeGuest3 && isPageAllowedForUser(routeGuest3.pageName, false, false)) {
-                applyRoute(routeGuest3, false, false);
+        } catch (e) {
+            var routeGuest2 = parseHashRoute();
+            if (routeGuest2 && isPageAllowedForUser(routeGuest2.pageName, false, false)) {
+                applyRoute(routeGuest2, false, false);
             } else {
                 showPage(platform.getDefaultPage());
             }
@@ -4112,6 +4108,7 @@ async function handleWebLogin(event) {
     try {
         const response = await fetch('/api/auth/login', {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password, remember })
         });
@@ -4189,6 +4186,7 @@ async function handleWebRegister(event) {
     try {
         const response = await fetch('/api/auth/register', {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 username: username,

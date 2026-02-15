@@ -23,7 +23,7 @@ def create_blueprint(bot_app):
 
     async def _auth():
         body = await request.get_json(silent=True) or {}
-        return await authenticate_request_async(request.headers, request.args, body)
+        return await authenticate_request_async(request.headers, request.args, body, request.cookies)
 
     @bp.route("/api/user/register", methods=["POST", "OPTIONS"])
     async def api_user_register():

@@ -1,6 +1,6 @@
 """
-Quart Blueprint: /api/auth/register, /api/auth/login, /api/auth/verify.
-Async implementation — no asyncio.new_event_loop / run_until_complete.
+Quart Blueprint: /api/auth/register, /api/auth/login, /api/auth/verify, /api/auth/logout.
+Cookie daralla_web_token для PWA (persist в standalone), токен в теле/заголовке по-прежнему поддерживается.
 """
 import logging
 import secrets
@@ -22,6 +22,9 @@ CORS_HEADERS = {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "*",
 }
+
+AUTH_COOKIE_NAME = "daralla_web_token"
+AUTH_COOKIE_MAX_AGE_REMEMBER = 30 * 24 * 3600  # 30 дней
 
 
 def create_blueprint(bot_app):
@@ -47,7 +50,9 @@ def create_blueprint(bot_app):
             user_id = await register_web_user(username, password_hash)
             token = secrets.token_hex(32)
             await update_user_auth_token(user_id, token)
-            return jsonify({"success": True, "token": token, "user_id": user_id})
+            resp = jsonify({"success": True, "token": token, "user_id": user_id})
+            _set_auth_cookie(resp, token, remember=True)
+            return resp
         except Exception as e:
             logger.error("Ошибка регистрации: %s", e)
             return jsonify({"error": str(e)}), 500
@@ -72,12 +77,15 @@ def create_blueprint(bot_app):
 
             token = secrets.token_hex(32)
             await update_user_auth_token(user["user_id"], token)
-            return jsonify({
+            remember = data.get("remember", True)
+            resp = jsonify({
                 "success": True,
                 "token": token,
                 "user_id": user["user_id"],
                 "username": user.get("username") or user["user_id"],
             })
+            _set_auth_cookie(resp, token, remember=remember)
+            return resp
         except Exception as e:
             logger.error("Ошибка входа: %s", e)
             return jsonify({"error": str(e)}), 500
@@ -88,7 +96,7 @@ def create_blueprint(bot_app):
             return "", 200, CORS_HEADERS
         try:
             data = await request.get_json(silent=True) or {}
-            token = data.get("token")
+            token = data.get("token") or request.cookies.get(AUTH_COOKIE_NAME)
             if not token:
                 return jsonify({"error": "Token required"}), 400
 
@@ -103,4 +111,30 @@ def create_blueprint(bot_app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @bp.route("/api/auth/logout", methods=["POST", "OPTIONS"])
+    async def api_auth_logout():
+        if request.method == "OPTIONS":
+            return "", 200, CORS_HEADERS
+        resp = jsonify({"success": True})
+        resp.delete_cookie(AUTH_COOKIE_NAME, path="/")
+        return resp
+
     return bp
+
+
+def _set_auth_cookie(response, token, *, remember=True):
+    secure = getattr(request, "is_secure", None)
+    if secure is None and hasattr(request, "url"):
+        secure = (request.url or "").startswith("https://")
+    if secure is None:
+        secure = True
+    max_age = AUTH_COOKIE_MAX_AGE_REMEMBER if remember else None
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        token,
+        max_age=max_age,
+        httponly=True,
+        samesite="Lax",
+        path="/",
+        secure=secure,
+    )

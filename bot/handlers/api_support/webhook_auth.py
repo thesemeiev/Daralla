@@ -7,22 +7,30 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def authenticate_request_async(headers, args, body):
+AUTH_COOKIE_NAME = "daralla_web_token"
+
+
+async def authenticate_request_async(headers, args, body, cookies=None):
     """
     Async auth for Quart. Call with:
       body = await request.get_json(silent=True) or {}
-      user_id = await authenticate_request_async(request.headers, request.args, body)
+      user_id = await authenticate_request_async(request.headers, request.args, body, request.cookies)
+    Поддерживает: Authorization Bearer, cookie daralla_web_token, initData (Telegram).
     """
     from ...db.users_db import get_user_by_auth_token, get_user_by_telegram_id_v2
 
+    token = None
     web_token = headers.get("Authorization") if headers else None
     if web_token and web_token.startswith("Bearer "):
-        token = web_token.split(" ")[1]
+        token = web_token.split(" ", 1)[1]
+    if not token and cookies:
+        token = cookies.get(AUTH_COOKIE_NAME)
+    if token:
         user = await get_user_by_auth_token(token)
         if user:
             logger.info("Успешная веб-аутентификация для user_id=%s", user["user_id"])
             return user["user_id"]
-        logger.warning("Веб-токен не найден в БД: %s...", token[:10])
+        logger.warning("Веб-токен не найден в БД: %s...", (token[:10] if len(token) >= 10 else token))
 
     init_data = (args.get("initData") if args else None) or (body.get("initData") if body else None)
     if init_data:

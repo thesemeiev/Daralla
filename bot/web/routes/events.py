@@ -51,7 +51,7 @@ def create_blueprint():
         from bot.handlers.api_support.webhook_auth import authenticate_request_async, check_admin_access_async
         body = await request.get_json(silent=True) or {}
         args = request.args if request.args else {}
-        user_id = await authenticate_request_async(request.headers, args, body)
+        user_id = await authenticate_request_async(request.headers, args, body, request.cookies)
         if not user_id:
             return None, 401
         if not await check_admin_access_async(user_id):
@@ -149,7 +149,7 @@ def create_blueprint():
     async def public_my_code():
         from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
-        user_id = await authenticate_request_async(request.headers, request.args or {}, body)
+        user_id = await authenticate_request_async(request.headers, request.args or {}, body, request.cookies)
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
         try:
@@ -193,7 +193,7 @@ def create_blueprint():
     async def public_my_place(event_id):
         from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
-        user_id = await authenticate_request_async(request.headers, request.args or {}, body)
+        user_id = await authenticate_request_async(request.headers, request.args or {}, body, request.cookies)
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
         try:

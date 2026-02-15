@@ -68,7 +68,7 @@ def create_blueprint(bot_app):
         if request.method == "OPTIONS":
             return "", 200, CORS_OPTIONS_HEADERS
         try:
-            user_id = await authenticate_request_async(request.headers, request.args, {})
+            user_id = await authenticate_request_async(request.headers, request.args, {}, request.cookies)
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401, CORS_HEADERS
 
