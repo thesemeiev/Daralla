@@ -1468,12 +1468,16 @@ h1 {
     background: rgba(255, 59, 48, 0.2);
     color: #ff3b30;
     border: 1px solid rgba(255, 59, 48, 0.3);
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .detail-status.success {
     background: rgba(76, 175, 80, 0.25);
     color: #4caf50;
     border: 1px solid rgba(76, 175, 80, 0.4);
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .detail-info-grid {

@@ -23,7 +23,7 @@ def create_blueprint(bot_app):
             if not data:
                 return jsonify({"status": "error"}), 400
             token_str = data.get("token")
-            status = data.get("status")
+            status = (data.get("status") or "").strip().lower()
             invoice_info = data.get("invoice_info") or {}
             invoice_uuid = invoice_info.get("uuid") or data.get("invoice_id")
             if not invoice_uuid:
@@ -38,8 +38,13 @@ def create_blueprint(bot_app):
                     return jsonify({"status": "error"}), 401
             elif not secret:
                 logger.warning("CryptoCloud postback: CRYPTOCLOUD_WEBHOOK_SECRET not set")
+            # Успех — активируем подписку; отмена/истечение/ошибка — обновляем статус в БД, фронт сразу покажет сообщение
             if status == "success":
                 asyncio.create_task(_process_webhook(bot_app, invoice_uuid, "succeeded"))
+            else:
+                # cancelled, expired, failed или любой не success — помечаем как неуспех
+                our_status = "canceled" if status in ("cancelled", "canceled") else "failed"
+                asyncio.create_task(_process_webhook(bot_app, invoice_uuid, our_status))
             return jsonify({"status": "ok"}), 200
         except Exception as e:
             logger.error("CryptoCloud webhook error: %s", e, exc_info=True)

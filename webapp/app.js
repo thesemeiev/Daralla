@@ -2341,6 +2341,8 @@ function showPaymentPage() {
         }
         var toSubs = document.getElementById('payment-to-subscriptions-button');
         if (toSubs) toSubs.style.display = 'none';
+        var retryBtn = document.getElementById('payment-retry-button');
+        if (retryBtn) retryBtn.style.display = 'none';
         var hint = page.querySelector('.detail-card .hint');
         if (hint) hint.style.display = '';
     }
@@ -2356,8 +2358,7 @@ function showPaymentPage() {
             delete btn.dataset.paymentUrl;
             delete btn.dataset.paymentId;
             btn.onclick = null;
-            if (platform.isTelegram()) btn.style.display = 'none';
-            else btn.style.display = '';
+            btn.style.display = '';
         }
         platform.mainButton.hide();
         return;
@@ -2379,28 +2380,10 @@ function showPaymentPage() {
             openPaymentUrl();
             return false;
         };
-        if (platform.isTelegram()) btn.style.display = 'none';
-        else btn.style.display = '';
+        btn.style.display = '';
     }
-    platform.mainButton.show('Перейти к оплате', function () {
-        openPaymentUrl();
-    });
+    platform.mainButton.hide();
 }
-
-// При возврате в Mini App (visibilitychange) снова показываем MainButton на странице оплаты
-function bindPaymentPageVisibilityRestore() {
-    if (document.body._paymentVisibilityBound) return;
-    document.body._paymentVisibilityBound = true;
-    document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState !== 'visible' || !platform.isTelegram()) return;
-        if (currentPage !== 'payment') return;
-        if (!currentPaymentData || !currentPaymentData.payment_url || String(currentPaymentData.payment_url).indexOf('http') !== 0) return;
-        platform.mainButton.show('Перейти к оплате', function () {
-            openPaymentUrl();
-        });
-    });
-}
-bindPaymentPageVisibilityRestore();
 
 // Показать на странице оплаты состояние «Оплата прошла» (скрыть MainButton, обновить карточку, кнопка «К подпискам»)
 function showPaymentSuccessState() {
@@ -2409,7 +2392,7 @@ function showPaymentSuccessState() {
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
     if (statusEl) {
-        statusEl.textContent = 'Оплата прошла';
+        statusEl.textContent = '\u2713 Оплата прошла';
         statusEl.className = 'detail-status success';
     }
     var btn = document.getElementById('payment-link-button');
@@ -2423,7 +2406,7 @@ function showPaymentSuccessState() {
         toSubs = document.createElement('button');
         toSubs.id = 'payment-to-subscriptions-button';
         toSubs.type = 'button';
-        toSubs.className = 'action-button';
+        toSubs.className = 'action-button payment-link-button';
         toSubs.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:#4a9eff;color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
         toSubs.textContent = 'К подпискам';
         toSubs.onclick = function () {
@@ -2433,6 +2416,38 @@ function showPaymentSuccessState() {
         actions.appendChild(toSubs);
     }
     toSubs.style.display = '';
+}
+
+// Показать на странице оплаты состояние отмены/ошибки (красный статус, кнопка «Попробовать снова»)
+function showPaymentErrorState(message) {
+    platform.mainButton.hide();
+    var page = document.getElementById('page-payment');
+    if (!page) return;
+    var statusEl = page.querySelector('.detail-status');
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = 'detail-status expired';
+    }
+    var btn = document.getElementById('payment-link-button');
+    if (btn) btn.style.display = 'none';
+    var hint = page.querySelector('.detail-card .hint');
+    if (hint) hint.style.display = 'none';
+    var actions = page.querySelector('.detail-actions');
+    if (!actions) return;
+    var toSubs = document.getElementById('payment-to-subscriptions-button');
+    if (toSubs) toSubs.style.display = 'none';
+    var retryBtn = document.getElementById('payment-retry-button');
+    if (!retryBtn) {
+        retryBtn = document.createElement('button');
+        retryBtn.id = 'payment-retry-button';
+        retryBtn.type = 'button';
+        retryBtn.className = 'action-button payment-link-button';
+        retryBtn.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:#4a9eff;color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
+        retryBtn.textContent = 'Попробовать снова';
+        retryBtn.onclick = function () { goBackFromPayment(); };
+        actions.appendChild(retryBtn);
+    }
+    retryBtn.style.display = '';
 }
 
 // Функция проверки статуса платежа
@@ -2462,8 +2477,14 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 if (finalResponse.ok) {
                     const finalData = await finalResponse.json();
                     if (finalData.success && finalData.status === 'pending') {
-                        showFormMessage('payment-form-message', 'error', 'Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
-                        goBackFromPayment();
+                        const currentPage = document.querySelector('.page.active');
+                        const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
+                        if (isOnPaymentPage) {
+                            showPaymentErrorState('Ссылка истекла');
+                        } else {
+                            showFormMessage('payment-form-message', 'error', 'Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
+                            goBackFromPayment();
+                        }
                     }
                 }
                 return;
@@ -2498,18 +2519,19 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                     setTimeout(loadSubscriptions, 1000);
                 }
             } else if (data.success && (data.status === 'canceled' || data.status === 'refunded' || data.status === 'failed')) {
-                // Платеж отменен, возвращен или не прошел
+                // Платеж отменен, возвращен или не прошел — показываем состояние на странице оплаты
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
-                
-                // Показываем уведомление об отмене
-                const statusText = data.status === 'canceled' ? 'отменен' : 
-                                 data.status === 'refunded' ? 'возвращен' : 'не прошел';
-                
-                showFormMessage('payment-form-message', 'error', 'Платеж ' + statusText + '. Вы можете попробовать оплатить снова.');
-                
-                // Возвращаемся на предыдущую страницу
-                goBackFromPayment();
+                const currentPage = document.querySelector('.page.active');
+                const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
+                const statusMessage = data.status === 'canceled' ? 'Платеж отменен' :
+                                      data.status === 'refunded' ? 'Платеж возвращен' : 'Платеж не прошел';
+                if (isOnPaymentPage) {
+                    showPaymentErrorState(statusMessage);
+                } else {
+                    showFormMessage('payment-form-message', 'error', statusMessage + '. Вы можете попробовать оплатить снова.');
+                    goBackFromPayment();
+                }
             }
             
         } catch (error) {

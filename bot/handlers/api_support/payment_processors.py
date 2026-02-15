@@ -29,8 +29,11 @@ def get_globals():
 
 
 async def process_payment_webhook(bot_app, payment_id, status):
-    """Обрабатывает платеж из webhook'а"""
+    """Обрабатывает платеж из webhook'а (YooKassa и CryptoCloud)."""
     try:
+        # Нормализуем статус: CryptoCloud может присылать "cancelled"
+        if status == "cancelled":
+            status = "canceled"
         # Получаем информацию о платеже из базы данных
         payment_info = await get_payment_by_id(payment_id)
         if not payment_info:
@@ -722,9 +725,10 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
 
 
 async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
-    """Обрабатывает отмененный платеж"""
+    """Обрабатывает отмененный/возвращенный платеж. В БД сохраняем реальный статус (canceled/refunded) для корректного отображения на фронте."""
     try:
-        await update_payment_status(payment_id, 'failed')
+        # Сохраняем фактический статус, чтобы API отдал его фронту и пользователь видел «отменен»/«возвращен»
+        await update_payment_status(payment_id, status if status in ('canceled', 'refunded') else 'failed')
         await update_payment_activation(payment_id, 0)
         
         message_id = meta.get('message_id')
