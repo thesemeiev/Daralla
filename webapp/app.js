@@ -3987,7 +3987,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
                     applyRoute(route, true, isAdmin);
                 } else {
-                    showPage(platform.getDefaultPage());
+                    showPage('subscriptions');
                 }
             } else {
                 var routeGuest = parseHashRoute();
