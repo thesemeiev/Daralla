@@ -277,21 +277,16 @@ def create_blueprint(bot_app):
                 payment_meta_base["referrer_user_id"] = referrer_user_id
 
             if gateway == "cryptocloud":
-                # CryptoCloud API (docs.cryptocloud.plus create-invoice): amount* = Payment amount in USD;
-                # currency = RUB — отображение суммы в рублях. Курс RUB→USD из CRYPTOCLOUD_RUB_TO_USD (по умолчанию 100).
+                # CryptoCloud API: при currency=RUB поле amount — сумма в рублях (docs + support).
                 api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
                 shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
                 if not api_token or not shop_id:
                     return jsonify({"error": "CryptoCloud payment is not configured"}), 503
                 amount_rub = float(PRICES[period])
-                rub_to_usd = float(os.getenv("CRYPTOCLOUD_RUB_TO_USD", "100"))
-                amount_usd = round(amount_rub / rub_to_usd, 2)
-                if amount_usd < 0.01:
-                    amount_usd = 0.01
                 order_id = f"{user_id}_{int(time.time() * 1000)}"
                 payload = {
                     "shop_id": shop_id,
-                    "amount": amount_usd,
+                    "amount": amount_rub,
                     "currency": "RUB",
                     "order_id": order_id,
                 }
