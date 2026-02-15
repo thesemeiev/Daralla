@@ -1064,17 +1064,25 @@ function getEventDaysText(ev, isLive, isEnded) {
 }
 
 function buildLeaderboardHtml(leaderboard, myPlace) {
+    var list = leaderboard || [];
+    var empty = list.length === 0;
     var html = '<div class="live-ranking">';
     if (myPlace) {
         html += '<p style="margin:0 0 12px 0;font-weight:600;">Ваша позиция: ' + myPlace.place + ' (засчитано оплат: ' + myPlace.count + ')</p>';
     }
-    html += '<div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div><ul class="leaderboard-list">';
-    (leaderboard || []).forEach(function (row) {
-        var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
-        var accountId = row.account_id || row.referrer_user_id || '';
-        html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + escapeHtml(accountId) + ' — ' + row.count + '</li>';
-    });
-    html += '</ul></div>';
+    html += '<div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div>';
+    if (empty) {
+        html += '<p class="leaderboard-empty-hint" style="margin:12px 0 0 0;color:#777;font-size:14px;">Пока никого в рейтинге.</p>';
+    } else {
+        html += '<ul class="leaderboard-list">';
+        list.forEach(function (row) {
+            var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
+            var accountId = row.account_id || row.referrer_user_id || '';
+            html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + escapeHtml(accountId) + ' — ' + row.count + '</li>';
+        });
+        html += '</ul>';
+    }
+    html += '</div>';
     return html;
 }
 
@@ -1129,8 +1137,8 @@ function loadEventDetail(eventId) {
             html += '</ul></div>';
         }
         if (live) {
-            html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашай друзей — поднимайся в рейтинге.</p>';
-            html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дай другу свой код. Когда он введёт его при покупке или продлении, твой рейтинг вырастет.</p>';
+            html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашайте друзей — поднимайтесь в рейтинге.</p>';
+            html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дайте другу свой код. Когда он введёт его при покупке или продлении, ваш рейтинг вырастет.</p>';
             if (myCode) {
                 html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;background:#2a2a2a;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
                 html += '<code style="font-size:18px;font-weight:600;color:#4a9eff;letter-spacing:1px;">' + escapeHtml(myCode) + '</code>';
