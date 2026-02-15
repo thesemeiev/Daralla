@@ -387,8 +387,18 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         showAdminSubscriptionEdit(Number(p.id));
         return true;
     }
-    if (route.pageName === 'extend-subscription' && p.id) {
-        showExtendSubscriptionModal(Number(p.id));
+    if (route.pageName === 'buy-subscription') {
+        currentPaymentPeriod = 'month';
+        currentExtendSubscriptionId = null;
+        showPage('choose-payment-method');
+        return true;
+    }
+    if (route.pageName === 'extend-subscription') {
+        if (p.id) {
+            showExtendSubscriptionModal(Number(p.id));
+        } else {
+            showPage('subscriptions');
+        }
         return true;
     }
     if (route.pageName === 'admin-create-subscription' && p.userId) {
@@ -561,16 +571,10 @@ function showPage(pageName, params) {
         loadServerManagement();
     } else if (pageName === 'admin-events') {
         loadAdminEventsPage();
-    } else if (pageName === 'buy-subscription' || pageName === 'extend-subscription') {
-        loadPrices();
-        updateReferralCodeBlockVisibility();
     } else if (pageName === 'choose-payment-method') {
-        var periodEl = document.getElementById('choose-payment-period');
-        if (periodEl && currentPaymentPeriod) {
-            periodEl.textContent = currentPaymentPeriod === 'month' ? '1 месяц' : '3 месяца';
-        }
+        currentPaymentPeriod = currentPaymentPeriod || 'month';
         updateReferralCodeBlockVisibility();
-        syncChoosePaymentMethodSelection();
+        syncChooseOptionCards();
         bindChoosePaymentSubmit();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
@@ -843,7 +847,11 @@ async function loadSubscriptions() {
             buyButton.className = 'btn-primary';
             buyButton.style.cssText = 'width: 100%; margin-top: 16px;';
             buyButton.textContent = 'Купить подписку';
-            buyButton.onclick = () => showPage('buy-subscription');
+            buyButton.onclick = function () {
+            currentPaymentPeriod = 'month';
+            currentExtendSubscriptionId = null;
+            showPage('choose-payment-method');
+        };
             subscriptionsListEl.appendChild(buyButton);
         }
         
@@ -2090,50 +2098,38 @@ let currentPaymentData = null;
 // Выбранный период при переходе на страницу выбора способа оплаты (month / 3month)
 let currentPaymentPeriod = null;
 
-// Функция показа страницы продления подписки
+// Функция показа страницы продления подписки (сразу на оформление с карточками)
 function showExtendSubscriptionModal(subscriptionId) {
     if (!subscriptionId) {
         alert('Ошибка: ID подписки не найден');
         return;
     }
-    
     currentExtendSubscriptionId = subscriptionId;
-    showPage('extend-subscription', { id: String(subscriptionId) });
-}
-
-// Функция возврата с страницы продления
-function goBackFromExtend() {
-    currentExtendSubscriptionId = null;
-    showPage('subscription-detail');
-}
-
-// Переход на страницу выбора способа оплаты после выбора периода (покупка или продление)
-function goToChoosePaymentMethod(period, subscriptionId) {
-    if (!period || (period !== 'month' && period !== '3month')) return;
-    currentPaymentPeriod = period;
-    if (subscriptionId != null) currentExtendSubscriptionId = subscriptionId;
+    currentPaymentPeriod = 'month';
     showPage('choose-payment-method');
 }
 
-// Функция возврата со страницы выбора способа оплаты
+// Переход на страницу оформления (покупка — с подписок)
+function goToChoosePaymentMethod(period, subscriptionId) {
+    currentPaymentPeriod = period === '3month' ? '3month' : 'month';
+    if (subscriptionId != null) currentExtendSubscriptionId = subscriptionId;
+    else currentExtendSubscriptionId = null;
+    showPage('choose-payment-method');
+}
+
+// Функция возврата со страницы оформления
 function goBackFromChoosePayment() {
     if (currentExtendSubscriptionId) {
-        showPage('extend-subscription');
+        showPage('subscription-detail');
     } else {
-        showPage('buy-subscription');
+        showPage('subscriptions');
     }
 }
 
-// Функция возврата с страницы оплаты (на страницу выбора способа оплаты, чтобы можно было выбрать другой способ)
+// Функция возврата с страницы оплаты (на страницу оформления)
 function goBackFromPayment() {
     currentPaymentData = null;
-    if (currentPaymentPeriod) {
-        showPage('choose-payment-method');
-    } else if (currentExtendSubscriptionId) {
-        showPage('extend-subscription');
-    } else {
-        showPage('buy-subscription');
-    }
+    showPage('choose-payment-method');
 }
 
 function openPaymentUrl() {
@@ -2224,51 +2220,78 @@ function getReferralCodeFromCurrentPage() {
     return input ? (input.value || '').trim() : '';
 }
 
-/** Переключатель способа оплаты на странице choose-payment-method. */
-function syncChoosePaymentMethodSelection() {
+/** Карточки периода и способа оплаты на странице choose-payment-method. */
+function syncChooseOptionCards() {
     var container = document.getElementById('page-choose-payment-method');
     if (!container) return;
-    var switchEl = container.querySelector('.payment-method-switch');
-    if (!switchEl) return;
-    var input = container.querySelector('input[name="payment-gateway"]');
-    var segments = switchEl.querySelectorAll('.payment-method-segment');
-    if (!input || !segments.length) return;
-    function selectGateway(gateway) {
-        input.value = gateway;
-        segments.forEach(function (btn) {
-            var isSelected = btn.dataset.gateway === gateway;
-            btn.classList.toggle('payment-method-segment-selected', isSelected);
-            btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    var periodRow = container.querySelector('.choose-options-row[aria-label="Период подписки"]');
+    var paymentRow = container.querySelector('.choose-options-row[aria-label="Способ оплаты"]');
+    var submitBtn = document.getElementById('choose-payment-submit');
+    if (!periodRow || !paymentRow) return;
+
+    function updatePayButtonText() {
+        var period = currentPaymentPeriod === '3month' ? '3month' : 'month';
+        var price = period === '3month' ? '350' : '150';
+        if (submitBtn) submitBtn.textContent = 'Оплатить ' + price + '₽';
+    }
+
+    function setPeriod(period) {
+        currentPaymentPeriod = period === '3month' ? '3month' : 'month';
+        periodRow.querySelectorAll('.choose-option-card[data-period]').forEach(function (card) {
+            var isSelected = card.getAttribute('data-period') === currentPaymentPeriod;
+            card.classList.toggle('choose-option-card-selected', isSelected);
+            card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+        updatePayButtonText();
+    }
+
+    function setGateway(gateway) {
+        var g = (gateway === 'cryptocloud') ? 'cryptocloud' : 'yookassa';
+        paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
+            var isSelected = card.getAttribute('data-gateway') === g;
+            card.classList.toggle('choose-option-card-selected', isSelected);
+            card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
     }
-    segments.forEach(function (btn) {
-        btn.removeEventListener('click', btn._paymentSegmentClick);
-        btn._paymentSegmentClick = function () { selectGateway(btn.dataset.gateway); };
-        btn.addEventListener('click', btn._paymentSegmentClick);
+
+    periodRow.querySelectorAll('.choose-option-card[data-period]').forEach(function (card) {
+        card.removeEventListener('click', card._periodClick);
+        card._periodClick = function () { setPeriod(card.getAttribute('data-period')); };
+        card.addEventListener('click', card._periodClick);
     });
-    selectGateway(input.value || 'yookassa');
+    paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
+        card.removeEventListener('click', card._gatewayClick);
+        card._gatewayClick = function () { setGateway(card.getAttribute('data-gateway')); };
+        card.addEventListener('click', card._gatewayClick);
+    });
+
+    setPeriod(currentPaymentPeriod || 'month');
+    setGateway('yookassa');
+    updatePayButtonText();
 }
 
-/** Кнопка «Оплатить» на странице выбора способа оплаты. */
+/** Кнопка «Оплатить» на странице оформления. */
 function bindChoosePaymentSubmit() {
     var btn = document.getElementById('choose-payment-submit');
     if (!btn) return;
     if (btn._choosePaymentBound) return;
     btn._choosePaymentBound = true;
     btn.addEventListener('click', function () {
-        if (!currentPaymentPeriod) return;
-        createPayment(currentPaymentPeriod, currentExtendSubscriptionId);
+        var container = document.getElementById('page-choose-payment-method');
+        var periodCard = container && container.querySelector('.choose-option-card[data-period].choose-option-card-selected');
+        var gatewayCard = container && container.querySelector('.choose-option-card[data-gateway].choose-option-card-selected');
+        var period = periodCard ? (periodCard.getAttribute('data-period') === '3month' ? '3month' : 'month') : (currentPaymentPeriod || 'month');
+        var gateway = gatewayCard ? (gatewayCard.getAttribute('data-gateway') === 'cryptocloud' ? 'cryptocloud' : 'yookassa') : 'yookassa';
+        createPayment(period, currentExtendSubscriptionId, gateway);
     });
 }
 
-// Функция создания платежа (вызывается со страницы выбора способа оплаты)
-async function createPayment(period, subscriptionId = null) {
+// Функция создания платежа (вызывается со страницы оформления)
+async function createPayment(period, subscriptionId, gateway) {
+    if (subscriptionId === undefined) subscriptionId = null;
+    if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud')) gateway = 'yookassa';
     try {
         var referrerCode = getReferralCodeFromCurrentPage();
-        var choosePage = document.getElementById('page-choose-payment-method');
-        var gatewayInput = choosePage ? choosePage.querySelector('input[name="payment-gateway"]') : null;
-        var gateway = (gatewayInput && gatewayInput.value) ? gatewayInput.value.trim().toLowerCase() : 'yookassa';
-        if (gateway !== 'yookassa' && gateway !== 'cryptocloud') gateway = 'yookassa';
         var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
         if (referrerCode) body.referrer_code = referrerCode;
         // Показываем страницу оплаты с индикатором загрузки
@@ -2300,7 +2323,8 @@ async function createPayment(period, subscriptionId = null) {
             payment_id: data.payment_id,
             payment_url: String(payUrl).trim(),
             amount: data.amount,
-            period: data.period
+            period: data.period,
+            gateway: gateway
         };
         
         // Обновляем страницу оплаты с данными (кнопка восстановится автоматически)

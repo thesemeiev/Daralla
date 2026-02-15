@@ -1138,6 +1138,78 @@ h1 {
     line-height: 1;
 }
 
+/* Оформление: карточки периода и способа оплаты */
+.choose-section-label {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #999;
+    font-weight: 500;
+}
+.choose-options-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 0;
+}
+.choose-option-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 72px;
+    padding: 14px 10px;
+    background: #2a2a2a;
+    border: 2px solid #333;
+    border-radius: 10px;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.choose-option-card:hover {
+    border-color: #444;
+    background: #333;
+    color: #e0e0e0;
+}
+.choose-option-card-selected,
+.choose-option-card.choose-option-card-selected {
+    border-color: #4a9eff;
+    background: rgba(74, 158, 255, 0.15);
+    color: #fff;
+}
+.choose-option-card .choose-option-title {
+    display: block;
+    margin-bottom: 2px;
+}
+.choose-option-card .choose-option-price {
+    display: block;
+    font-size: 14px;
+    color: #999;
+}
+.choose-option-card-selected .choose-option-price,
+.choose-option-card.choose-option-card-selected .choose-option-price {
+    color: #8fc5ff;
+}
+.choose-option-card .choose-option-icon {
+    display: block;
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+.choose-option-card .choose-option-sub {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: #888;
+}
+.choose-option-card-selected .choose-option-sub,
+.choose-option-card.choose-option-card-selected .choose-option-sub {
+    color: #aaa;
+}
+
 /* Стили для страницы покупки подписки */
 .subscription-plans {
     display: flex;

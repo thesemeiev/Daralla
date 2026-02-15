@@ -180,78 +180,35 @@
             <div id="subscription-detail-content"></div>
         </div>
 
-        <!-- Раздел Покупка подписки -->
-        <div id="page-buy-subscription" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
-            </header>
-            
-            <div class="buy-subscription-content">
-                <div class="subscription-plans">
-                    <div class="plan-card">
-                        <div class="plan-header">
-                            <h2>1 месяц</h2>
-                            <div class="plan-price" data-period="month">150₽</div>
-                        </div>
-                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="month" onclick="goToChoosePaymentMethod('month')" style="width: 100%; margin-top: 12px;">Купить</button>
-                    </div>
-                    
-                    <div class="plan-card">
-                        <div class="plan-header">
-                            <h2>3 месяца</h2>
-                            <div class="plan-price-container">
-                                <div class="plan-price" data-period="3month">350₽</div>
-                                <div class="plan-badge">Выгодно</div>
-                            </div>
-                        </div>
-                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="3month" onclick="goToChoosePaymentMethod('3month')" style="width: 100%; margin-top: 12px;">Купить</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Раздел Продление подписки -->
-        <div id="page-extend-subscription" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="goBackFromExtend()">← Назад</button>
-            </header>
-            
-            <div class="buy-subscription-content">
-                <div class="subscription-plans">
-                    <div class="plan-card">
-                        <div class="plan-header">
-                            <h2>1 месяц</h2>
-                            <div class="plan-price" data-period="month">150₽</div>
-                        </div>
-                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="month" data-extend="1" onclick="goToChoosePaymentMethod('month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
-                    </div>
-                    
-                    <div class="plan-card">
-                        <div class="plan-header">
-                            <h2>3 месяца</h2>
-                            <div class="plan-price-container">
-                                <div class="plan-price" data-period="3month">350₽</div>
-                                <div class="plan-badge">Выгодно</div>
-                            </div>
-                        </div>
-                        <button type="button" class="btn-primary" data-goto-choose="1" data-period="3month" data-extend="1" onclick="goToChoosePaymentMethod('3month', currentExtendSubscriptionId)" style="width: 100%; margin-top: 12px;">Продлить</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Раздел Выбор способа оплаты -->
+        <!-- Раздел Оформление (период + способ оплаты карточками) -->
         <div id="page-choose-payment-method" class="page" style="display: none;">
             <header>
                 <button class="back-button" onclick="goBackFromChoosePayment()">← Назад</button>
             </header>
-            <div class="buy-subscription-content" style="padding: 20px;">
-                <p class="payment-method-title">Выберите способ оплаты</p>
-                <p id="choose-payment-period" style="color: #999; font-size: 14px; margin-bottom: 16px;">—</p>
-                <input type="hidden" name="payment-gateway" value="yookassa">
-                <div class="payment-method-switch" role="group" aria-label="Выберите способ оплаты">
-                    <button type="button" class="payment-method-segment payment-method-segment-selected" data-gateway="yookassa" aria-pressed="true"><span class="payment-method-icon">₽</span> Рублями</button>
-                    <button type="button" class="payment-method-segment" data-gateway="cryptocloud" aria-pressed="false"><span class="payment-method-icon">₿</span> Криптой</button>
+            <div class="buy-subscription-content choose-payment-content" style="padding: 20px;">
+                <p class="choose-section-label">Период</p>
+                <div class="choose-options-row" role="group" aria-label="Период подписки">
+                    <button type="button" class="choose-option-card choose-option-card-selected" data-period="month" aria-pressed="true">
+                        <span class="choose-option-title">1 месяц</span>
+                        <span class="choose-option-price">150₽</span>
+                    </button>
+                    <button type="button" class="choose-option-card" data-period="3month" aria-pressed="false">
+                        <span class="choose-option-title">3 месяца</span>
+                        <span class="choose-option-price">350₽</span>
+                    </button>
+                </div>
+                <p class="choose-section-label" style="margin-top: 20px;">Способ оплаты</p>
+                <div class="choose-options-row" role="group" aria-label="Способ оплаты">
+                    <button type="button" class="choose-option-card choose-option-card-selected" data-gateway="yookassa" aria-pressed="true">
+                        <span class="choose-option-icon">💳</span>
+                        <span class="choose-option-title">Рублями</span>
+                        <span class="choose-option-sub">карта, СБП</span>
+                    </button>
+                    <button type="button" class="choose-option-card" data-gateway="cryptocloud" aria-pressed="false">
+                        <span class="choose-option-icon">₿</span>
+                        <span class="choose-option-title">Криптой</span>
+                        <span class="choose-option-sub">TON, USDT</span>
+                    </button>
                 </div>
                 <div id="choose-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px; background: #2a2a2a; border-radius: 8px;">
                     <label class="form-group" style="margin-bottom: 0;">
