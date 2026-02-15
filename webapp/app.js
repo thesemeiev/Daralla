@@ -149,11 +149,11 @@ var platform = (function () {
                 document.body.removeChild(a);
             }
         },
-        getDefaultPage: function () {
+        getDefaultPage: function (isAuthenticated) {
             if (_isTelegram) return 'subscriptions';
             var route = parseHashRoute();
             if (route && ROUTE_PAGE_NAMES.has(route.pageName)) return route.pageName;
-            return 'landing';
+            return isAuthenticated ? 'subscriptions' : 'landing';
         },
         canShowPage: function (pageName) {
             if (_isTelegram && pageName === 'landing') return false;
@@ -448,6 +448,7 @@ function buildHash(pageName, params) {
 }
 function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
     if (!pageName) return false;
+    if (pageName === 'landing' && isAuthenticated) return false;
     if (ROUTE_PAGES_GUEST.has(pageName)) return true;
     if (!isAuthenticated) return false;
     if (isPageAdminOnly(pageName)) return !!isAdminUser;
@@ -3987,14 +3988,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (route && isPageAllowedForUser(route.pageName, true, isAdmin)) {
                     applyRoute(route, true, isAdmin);
                 } else {
-                    showPage('subscriptions');
+                    showPage(platform.getDefaultPage(true));
                 }
             } else {
                 var routeGuest = parseHashRoute();
                 if (routeGuest && isPageAllowedForUser(routeGuest.pageName, false, false)) {
                     applyRoute(routeGuest, false, false);
                 } else {
-                    showPage(platform.getDefaultPage());
+                    showPage(platform.getDefaultPage(false));
                 }
             }
         } catch (e) {
@@ -4002,7 +4003,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (routeGuest2 && isPageAllowedForUser(routeGuest2.pageName, false, false)) {
                 applyRoute(routeGuest2, false, false);
             } else {
-                showPage(platform.getDefaultPage());
+                showPage(platform.getDefaultPage(false));
             }
         }
     } else {
