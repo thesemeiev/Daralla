@@ -1,6 +1,10 @@
 """
 Quart Blueprint: POST /webhook/yookassa (YooKassa), POST /webhook/cryptocloud (CryptoCloud).
 Async: respond 200 immediately, process payment in background task.
+
+CryptoCloud: постбек приходит после подтверждения транзакции в блокчейне (обычно 30 сек – 10 мин;
+BTC до часа). До этого в ЛК инвойс может быть «частично оплачен»; после подтверждения статус
+меняется и мы получаем postback со status=success.
 """
 import asyncio
 import logging
@@ -9,6 +13,7 @@ import os
 import jwt
 from quart import Blueprint, request, jsonify
 
+from bot.db import get_payment_by_id
 from bot.handlers.api_support.payment_processors import process_payment_webhook
 
 logger = logging.getLogger(__name__)
@@ -22,29 +27,43 @@ def create_blueprint(bot_app):
             data = await request.get_json(silent=True)
             if not data:
                 return jsonify({"status": "error"}), 400
-            token_str = data.get("token")
+            # Документация: status, invoice_id (короткий id), invoice_info.uuid (INV-xxx), token (JWT HS256).
             status = (data.get("status") or "").strip().lower()
             invoice_info = data.get("invoice_info") or {}
-            invoice_uuid = invoice_info.get("uuid") or data.get("invoice_id")
-            if not invoice_uuid:
+            raw_id = invoice_info.get("uuid") or data.get("invoice_id")
+            if not raw_id:
                 logger.warning("CryptoCloud postback: missing invoice uuid/invoice_id")
                 return jsonify({"status": "ok"}), 200
+            # Верификация JWT до обработки (документация: token подписан секретом проекта).
             secret = os.getenv("CRYPTOCLOUD_WEBHOOK_SECRET")
+            token_str = data.get("token")
             if secret and token_str:
                 try:
                     jwt.decode(token_str, secret, algorithms=["HS256"])
                 except jwt.InvalidTokenError:
-                    logger.warning("CryptoCloud postback: invalid JWT for uuid=%s", invoice_uuid)
+                    logger.warning("CryptoCloud postback: invalid JWT for raw_id=%s", raw_id)
                     return jsonify({"status": "error"}), 401
             elif not secret:
                 logger.warning("CryptoCloud postback: CRYPTOCLOUD_WEBHOOK_SECRET not set")
-            # Успех — активируем подписку; отмена/истечение/ошибка — обновляем статус в БД, фронт сразу покажет сообщение
-            if status == "success":
-                asyncio.create_task(_process_webhook(bot_app, invoice_uuid, "succeeded"))
+            # В create сохраняем payment_id = result["uuid"] (INV-XXXXXXXX). В постбеке приходит
+            # invoice_info.uuid (INV-xxx) или invoice_id (короткий). Ищем в БД; при коротком id пробуем INV- + id.
+            payment_id = raw_id
+            info = await get_payment_by_id(raw_id)
+            if not info and not str(raw_id).strip().upper().startswith("INV-"):
+                payment_id = "INV-" + str(raw_id).strip()
+                info = await get_payment_by_id(payment_id)
+            if info:
+                payment_id = info["payment_id"]
             else:
-                # cancelled, expired, failed или любой не success — помечаем как неуспех
+                logger.warning("CryptoCloud postback: payment not found for raw_id=%s", raw_id)
+            logger.info("CryptoCloud postback: status=%s, raw_id=%s, payment_id=%s, found=%s", status, raw_id, payment_id, bool(info))
+            if status == "success":
+                if info:
+                    asyncio.create_task(_process_webhook(bot_app, payment_id, "succeeded"))
+            else:
                 our_status = "canceled" if status in ("cancelled", "canceled") else "failed"
-                asyncio.create_task(_process_webhook(bot_app, invoice_uuid, our_status))
+                if info:
+                    asyncio.create_task(_process_webhook(bot_app, payment_id, our_status))
             return jsonify({"status": "ok"}), 200
         except Exception as e:
             logger.error("CryptoCloud webhook error: %s", e, exc_info=True)

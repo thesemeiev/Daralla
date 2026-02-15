@@ -277,15 +277,21 @@ def create_blueprint(bot_app):
                 payment_meta_base["referrer_user_id"] = referrer_user_id
 
             if gateway == "cryptocloud":
+                # CryptoCloud API (docs.cryptocloud.plus create-invoice): amount* = Payment amount in USD;
+                # currency = RUB — отображение суммы в рублях. Курс RUB→USD из CRYPTOCLOUD_RUB_TO_USD (по умолчанию 100).
                 api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
                 shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
                 if not api_token or not shop_id:
                     return jsonify({"error": "CryptoCloud payment is not configured"}), 503
-                amount_rub = PRICES[period]
+                amount_rub = float(PRICES[period])
+                rub_to_usd = float(os.getenv("CRYPTOCLOUD_RUB_TO_USD", "100"))
+                amount_usd = round(amount_rub / rub_to_usd, 2)
+                if amount_usd < 0.01:
+                    amount_usd = 0.01
                 order_id = f"{user_id}_{int(time.time() * 1000)}"
                 payload = {
                     "shop_id": shop_id,
-                    "amount": amount_rub,
+                    "amount": amount_usd,
                     "currency": "RUB",
                     "order_id": order_id,
                 }
@@ -293,7 +299,8 @@ def create_blueprint(bot_app):
                     "available_currencies": [
                         "USDT_TRC20", "USDT_ERC20", "USDT_BSC", "USDT_TON", "USDT_SOL",
                         "TON", "BTC", "ETH", "SOL", "BNB", "LTC", "TRX",
-                    ]
+                    ],
+                    "time_to_pay": {"hours": 0, "minutes": 15},
                 }
                 payload["add_fields"] = add_fields
                 import httpx
