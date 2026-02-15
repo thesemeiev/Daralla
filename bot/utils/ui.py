@@ -4,12 +4,7 @@ UI компоненты для бота (эмодзи, стили, кнопки,
 import os
 from telegram import InlineKeyboardButton
 
-try:
-    from ..prices_config import PRICE_MONTH, PRICE_3MONTH
-except ImportError:
-    # Если prices_config не найден, берем из переменных окружения или используем значения по умолчанию
-    PRICE_MONTH = int(os.getenv("PRICE_MONTH", "150"))
-    PRICE_3MONTH = int(os.getenv("PRICE_3MONTH", "350"))
+from ..prices_config import PRICE_MONTH, PRICE_3MONTH
 
 
 def get_site_urls():

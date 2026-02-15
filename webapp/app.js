@@ -1521,8 +1521,8 @@ class CustomGlobe {
             if (Math.abs(server.lat - 56.9496) < 0.5 && Math.abs(server.lng - 24.1052) < 0.5) {
                 return 'Riga';
             }
-            // Frankfurt: 51.5074, 6.7760
-            if (Math.abs(server.lat - 51.5074) < 0.5 && Math.abs(server.lng - 6.7760) < 0.5) {
+            // Frankfurt am Main: 50.1109, 8.6821
+            if (Math.abs(server.lat - 50.1109) < 0.5 && Math.abs(server.lng - 8.6821) < 0.5) {
                 return 'Frankfurt';
             }
         }
