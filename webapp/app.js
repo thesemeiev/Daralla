@@ -171,7 +171,6 @@ var platform = (function () {
                     _tg.MainButton.setText(text || '');
                     _tg.MainButton.onClick(function () {
                         if (typeof platform.mainButton._onClick === 'function') platform.mainButton._onClick();
-                        platform.mainButton.hide();
                     });
                     _tg.MainButton.show();
                 } catch (e) { console.warn('MainButton.show error', e); }
@@ -2333,7 +2332,20 @@ async function createPayment(period, subscriptionId = null) {
 function showPaymentPage() {
     hideFormMessage('payment-form-message');
     showPage('payment');
+    var page = document.getElementById('page-payment');
+    if (page) {
+        var statusEl = page.querySelector('.detail-status');
+        if (statusEl) {
+            statusEl.textContent = 'Ожидает оплаты';
+            statusEl.className = 'detail-status active';
+        }
+        var toSubs = document.getElementById('payment-to-subscriptions-button');
+        if (toSubs) toSubs.style.display = 'none';
+        var hint = page.querySelector('.detail-card .hint');
+        if (hint) hint.style.display = '';
+    }
     var btn = document.getElementById('payment-link-button');
+    if (btn) btn.style.display = '';
     if (!currentPaymentData) {
         document.getElementById('payment-period').textContent = 'Загрузка...';
         document.getElementById('payment-amount').textContent = 'Загрузка...';
@@ -2372,7 +2384,6 @@ function showPaymentPage() {
     }
     platform.mainButton.show('Перейти к оплате', function () {
         openPaymentUrl();
-        platform.mainButton.hide();
     });
 }
 
@@ -2386,11 +2397,43 @@ function bindPaymentPageVisibilityRestore() {
         if (!currentPaymentData || !currentPaymentData.payment_url || String(currentPaymentData.payment_url).indexOf('http') !== 0) return;
         platform.mainButton.show('Перейти к оплате', function () {
             openPaymentUrl();
-            platform.mainButton.hide();
         });
     });
 }
 bindPaymentPageVisibilityRestore();
+
+// Показать на странице оплаты состояние «Оплата прошла» (скрыть MainButton, обновить карточку, кнопка «К подпискам»)
+function showPaymentSuccessState() {
+    platform.mainButton.hide();
+    var page = document.getElementById('page-payment');
+    if (!page) return;
+    var statusEl = page.querySelector('.detail-status');
+    if (statusEl) {
+        statusEl.textContent = 'Оплата прошла';
+        statusEl.className = 'detail-status success';
+    }
+    var btn = document.getElementById('payment-link-button');
+    if (btn) btn.style.display = 'none';
+    var hint = page.querySelector('.detail-card .hint');
+    if (hint) hint.style.display = 'none';
+    var actions = page.querySelector('.detail-actions');
+    if (!actions) return;
+    var toSubs = document.getElementById('payment-to-subscriptions-button');
+    if (!toSubs) {
+        toSubs = document.createElement('button');
+        toSubs.id = 'payment-to-subscriptions-button';
+        toSubs.type = 'button';
+        toSubs.className = 'action-button';
+        toSubs.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:#4a9eff;color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
+        toSubs.textContent = 'К подпискам';
+        toSubs.onclick = function () {
+            showPage('subscriptions');
+            loadSubscriptions();
+        };
+        actions.appendChild(toSubs);
+    }
+    toSubs.style.display = '';
+}
 
 // Функция проверки статуса платежа
 // Примечание: основная обработка платежа идет через вебхук от YooKassa (/webhook/yookassa)
@@ -2441,20 +2484,19 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 clearInterval(paymentCheckInterval);
                 paymentCheckInterval = null;
                 
-                // Показываем уведомление только если мы еще на странице оплаты
-                // Это предотвращает дублирование уведомлений
                 const currentPage = document.querySelector('.page.active');
                 const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
                 
                 if (isOnPaymentPage) {
-                    showFormMessage('payment-form-message', 'success', 'Подписка успешно активирована!');
+                    showPaymentSuccessState();
+                    setTimeout(function () {
+                        showPage('subscriptions');
+                        loadSubscriptions();
+                    }, 2500);
+                } else {
+                    showPage('subscriptions');
+                    setTimeout(loadSubscriptions, 1000);
                 }
-                
-                // Обновляем список подписок
-                showPage('subscriptions');
-                setTimeout(() => {
-                    loadSubscriptions();
-                }, 1000);
             } else if (data.success && (data.status === 'canceled' || data.status === 'refunded' || data.status === 'failed')) {
                 // Платеж отменен, возвращен или не прошел
                 clearInterval(paymentCheckInterval);
