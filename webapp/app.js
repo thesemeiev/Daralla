@@ -120,10 +120,7 @@ var platform = (function () {
         isTelegram: function () { return _isTelegram; },
         getAuth: function () {
             if (_isTelegram && _tg && _tg.initData) return { type: 'tg', initData: _tg.initData };
-            try {
-                var token = localStorage.getItem('web_token');
-                return { type: 'web', token: token || null };
-            } catch (e) { return { type: 'web', token: null }; }
+            return { type: 'web', token: (typeof webAuthToken !== 'undefined' ? webAuthToken : null) || null };
         },
         getTgRef: function () { return _tg; },
         getTgUser: function () { return _tg && _tg.initDataUnsafe && _tg.initDataUnsafe.user ? _tg.initDataUnsafe.user : null; },
@@ -217,6 +214,101 @@ try {
 let currentUserId = null;
 let isWebMode = !tg.initData;
 
+// IndexedDB для веб-токена (надёжнее в PWA standalone, чем только localStorage)
+var AuthStorage = {
+    DB_NAME: 'daralla_auth',
+    DB_VERSION: 1,
+    STORE: 'keyval',
+    KEY: 'web_token',
+    get: function () {
+        var self = this;
+        return new Promise(function (resolve) {
+            try {
+                if (!window.indexedDB) { resolve(null); return; }
+                var req = indexedDB.open(self.DB_NAME, self.DB_VERSION);
+                req.onupgradeneeded = function (e) {
+                    if (!e.target.result.objectStoreNames.contains(self.STORE)) {
+                        e.target.result.createObjectStore(self.STORE);
+                    }
+                };
+                req.onsuccess = function (e) {
+                    var db = e.target.result;
+                    var tx = db.transaction(self.STORE, 'readonly');
+                    var store = tx.objectStore(self.STORE);
+                    var getReq = store.get(self.KEY);
+                    getReq.onsuccess = function () { resolve(getReq.result || null); };
+                    getReq.onerror = function () { resolve(null); };
+                    tx.onerror = function () { resolve(null); };
+                };
+                req.onerror = function () { resolve(null); };
+            } catch (err) {
+                resolve(null);
+            }
+        });
+    },
+    set: function (value) {
+        var self = this;
+        return new Promise(function (resolve) {
+            try {
+                if (!window.indexedDB) { resolve(); return; }
+                var req = indexedDB.open(self.DB_NAME, self.DB_VERSION);
+                req.onupgradeneeded = function (e) {
+                    if (!e.target.result.objectStoreNames.contains(self.STORE)) {
+                        e.target.result.createObjectStore(self.STORE);
+                    }
+                };
+                req.onsuccess = function (e) {
+                    var db = e.target.result;
+                    var tx = db.transaction(self.STORE, 'readwrite');
+                    var store = tx.objectStore(self.STORE);
+                    store.put(value, self.KEY);
+                    tx.oncomplete = function () { resolve(); };
+                    tx.onerror = function () { resolve(); };
+                };
+                req.onerror = function () { resolve(); };
+            } catch (err) {
+                resolve();
+            }
+        });
+    },
+    remove: function () {
+        var self = this;
+        return new Promise(function (resolve) {
+            try {
+                if (!window.indexedDB) { resolve(); return; }
+                var req = indexedDB.open(self.DB_NAME, self.DB_VERSION);
+                req.onsuccess = function (e) {
+                    var db = e.target.result;
+                    var tx = db.transaction(self.STORE, 'readwrite');
+                    var store = tx.objectStore(self.STORE);
+                    store.delete(self.KEY);
+                    tx.oncomplete = function () { resolve(); };
+                    tx.onerror = function () { resolve(); };
+                };
+                req.onerror = function () { resolve(); };
+            } catch (err) {
+                resolve();
+            }
+        });
+    }
+};
+
+function setAuthToken(token) {
+    webAuthToken = token;
+    try {
+        localStorage.setItem('web_token', token);
+    } catch (e) {}
+    AuthStorage.set(token);
+}
+
+function removeAuthToken() {
+    webAuthToken = null;
+    try {
+        localStorage.removeItem('web_token');
+    } catch (e) {}
+    AuthStorage.remove();
+}
+
 // Функция для выполнения защищенных запросов к API
 async function apiFetch(url, options = {}) {
     if (!options.headers) options.headers = {};
@@ -248,10 +340,7 @@ async function apiFetch(url, options = {}) {
 }
 
 function logout() {
-    try {
-        localStorage.removeItem('web_token');
-    } catch (e) {}
-    webAuthToken = null;
+    removeAuthToken();
     currentUserId = null;
     showPage('login');
 }
@@ -3864,6 +3953,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     tg = platform.getTgRef();
     isWebMode = !platform.isTelegram();
 
+    if (!platform.isTelegram()) {
+        var idbToken = await AuthStorage.get();
+        if (idbToken && !webAuthToken) {
+            webAuthToken = idbToken;
+            try { localStorage.setItem('web_token', idbToken); } catch (e) {}
+        }
+    }
+
     loadPrices();
     preventCloseOnScroll();
     if ('serviceWorker' in navigator) {
@@ -4021,13 +4118,10 @@ async function handleWebLogin(event) {
         const result = await response.json();
         
         if (result.success) {
-            webAuthToken = result.token;
             if (remember) {
-                try {
-                    localStorage.setItem('web_token', result.token);
-                } catch (e) {
-                    console.error('Failed to save token to localStorage:', e);
-                }
+                setAuthToken(result.token);
+            } else {
+                webAuthToken = result.token;
             }
             currentUserId = result.user_id;
             var formEl = event.target;
@@ -4104,12 +4198,7 @@ async function handleWebRegister(event) {
         const result = await response.json();
         
         if (result.success) {
-            webAuthToken = result.token;
-            try {
-                localStorage.setItem('web_token', result.token);
-            } catch (e) {
-                console.error('Failed to save token to localStorage:', e);
-            }
+            setAuthToken(result.token);
             currentUserId = result.user_id;
             var formEl = event.target;
             var successMsg = document.getElementById('register-success-msg');
