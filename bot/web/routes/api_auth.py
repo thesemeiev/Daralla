@@ -1,8 +1,10 @@
 """
 Quart Blueprint: /api/auth/register, /api/auth/login, /api/auth/verify, /api/auth/logout.
 Cookie daralla_web_token для PWA (persist в standalone), токен в теле/заголовке по-прежнему поддерживается.
+Для общего входа на daralla.ru и app.daralla.ru задайте AUTH_COOKIE_DOMAIN=.daralla.ru
 """
 import logging
+import os
 import secrets
 
 from quart import Blueprint, request, jsonify
@@ -25,6 +27,8 @@ CORS_HEADERS = {
 
 AUTH_COOKIE_NAME = "daralla_web_token"
 AUTH_COOKIE_MAX_AGE_REMEMBER = 30 * 24 * 3600  # 30 дней
+# Общий домен для cookie: один вход на daralla.ru и app.daralla.ru (PWA/мини-апп)
+AUTH_COOKIE_DOMAIN = os.environ.get("AUTH_COOKIE_DOMAIN", "").strip() or None  # например ".daralla.ru"
 
 
 def create_blueprint(bot_app):
@@ -116,7 +120,7 @@ def create_blueprint(bot_app):
         if request.method == "OPTIONS":
             return "", 200, CORS_HEADERS
         resp = jsonify({"success": True})
-        resp.delete_cookie(AUTH_COOKIE_NAME, path="/")
+        _clear_auth_cookie(resp)
         return resp
 
     return bp
@@ -129,12 +133,22 @@ def _set_auth_cookie(response, token, *, remember=True):
     if secure is None:
         secure = True
     max_age = AUTH_COOKIE_MAX_AGE_REMEMBER if remember else None
-    response.set_cookie(
-        AUTH_COOKIE_NAME,
-        token,
-        max_age=max_age,
-        httponly=True,
-        samesite="Lax",
-        path="/",
-        secure=secure,
-    )
+    kwargs = {
+        "key": AUTH_COOKIE_NAME,
+        "value": token,
+        "max_age": max_age,
+        "httponly": True,
+        "samesite": "Lax",
+        "path": "/",
+        "secure": secure,
+    }
+    if AUTH_COOKIE_DOMAIN:
+        kwargs["domain"] = AUTH_COOKIE_DOMAIN
+    response.set_cookie(**kwargs)
+
+
+def _clear_auth_cookie(response):
+    kwargs = {"key": AUTH_COOKIE_NAME, "path": "/"}
+    if AUTH_COOKIE_DOMAIN:
+        kwargs["domain"] = AUTH_COOKIE_DOMAIN
+    response.delete_cookie(**kwargs)
