@@ -1063,9 +1063,13 @@ function getEventDaysText(ev, isLive, isEnded) {
     return 'До начала: ' + daysUntil + ' ' + daysWord(daysUntil);
 }
 
-function buildLeaderboardHtml(leaderboard) {
-    var html = '<div class="live-ranking"><div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div><ul class="leaderboard-list">';
-    leaderboard.forEach(function (row) {
+function buildLeaderboardHtml(leaderboard, myPlace) {
+    var html = '<div class="live-ranking">';
+    if (myPlace) {
+        html += '<p style="margin:0 0 12px 0;font-weight:600;">Ваша позиция: ' + myPlace.place + ' (засчитано оплат: ' + myPlace.count + ')</p>';
+    }
+    html += '<div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div><ul class="leaderboard-list">';
+    (leaderboard || []).forEach(function (row) {
         var topClass = row.place === 1 ? 'leaderboard-row--top1' : row.place === 2 ? 'leaderboard-row--top2' : row.place === 3 ? 'leaderboard-row--top3' : '';
         var accountId = row.account_id || row.referrer_user_id || '';
         html += '<li class="leaderboard-row ' + topClass + '">' + row.place + '. ' + escapeHtml(accountId) + ' — ' + row.count + '</li>';
@@ -1102,9 +1106,6 @@ function loadEventDetail(eventId) {
             (ev.description ? '<p style="color:#999;margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
             '<p style="color:#666;font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
         if (daysText) html += '<p class="event-days">' + daysText + '</p>';
-        if (myPlace) {
-            html += '<p style="margin:16px 0 8px 0;font-weight:600;">Моё место: ' + myPlace.place + ' (засчитано оплат: ' + myPlace.count + ')</p>';
-        }
         var rewards = ev.rewards || [];
         var winningPlaces = rewards.map(function (r) { return r.place; });
         var isWinner = myPlace && winningPlaces.indexOf(myPlace.place) >= 0;
@@ -1132,13 +1133,12 @@ function loadEventDetail(eventId) {
             html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дай другу свой код. Когда он введёт его при покупке или продлении, твой рейтинг вырастет.</p>';
             if (myCode) {
                 html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;background:#2a2a2a;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
-                html += '<span style="color:#999;font-size:14px;">Твой код:</span>';
                 html += '<code style="font-size:18px;font-weight:600;color:#4a9eff;letter-spacing:1px;">' + escapeHtml(myCode) + '</code>';
                 html += '<button type="button" class="btn-primary" style="padding:8px 16px;flex-shrink:0;" onclick="copyEventReferralCode(\'' + myCode.replace(/'/g, "\\'") + '\')">Копировать</button>';
                 html += '</div>';
             }
         }
-        html += buildLeaderboardHtml(leaderboard);
+        html += buildLeaderboardHtml(leaderboard, myPlace);
         html += '</div>';
         contentEl.innerHTML = html;
         contentEl.setAttribute('data-event-detail-id', String(eventId));
@@ -1150,12 +1150,16 @@ function loadEventDetail(eventId) {
                     eventDetailLeaderboardTimer = null;
                     return;
                 }
-                apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) {
-                    var list = d.leaderboard || [];
+                Promise.all([
+                    apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
+                    apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; })
+                ]).then(function (res) {
+                    var list = res[0];
+                    var myPlace = res[1];
                     var wrap = el && el.querySelector('.live-ranking');
                     if (wrap && wrap.parentNode) {
                         var temp = document.createElement('div');
-                        temp.innerHTML = buildLeaderboardHtml(list);
+                        temp.innerHTML = buildLeaderboardHtml(list, myPlace);
                         var newWrap = temp.firstElementChild;
                         if (newWrap) wrap.parentNode.replaceChild(newWrap, wrap);
                     }
@@ -2191,40 +2195,24 @@ async function updateReferralCodeBlockVisibility() {
     var buyBlock = document.getElementById('buy-referral-code-block');
     var extendBlock = document.getElementById('extend-referral-code-block');
     var chooseBlock = document.getElementById('choose-referral-code-block');
-    if (!buyBlock && !extendBlock && !chooseBlock) return;
+    if (buyBlock) buyBlock.style.display = 'none';
+    if (extendBlock) extendBlock.style.display = 'none';
+    if (!chooseBlock) return;
     try {
         var r = await apiFetch('/api/events/');
         if (!r.ok) return;
         var data = await r.json();
         var hasActive = (data.active || []).length > 0;
-        if (buyBlock) buyBlock.style.display = hasActive ? 'block' : 'none';
-        if (extendBlock) extendBlock.style.display = hasActive ? 'block' : 'none';
-        if (chooseBlock) chooseBlock.style.display = hasActive ? 'block' : 'none';
+        chooseBlock.style.display = hasActive ? 'block' : 'none';
     } catch (e) {
-        if (buyBlock) buyBlock.style.display = 'none';
-        if (extendBlock) extendBlock.style.display = 'none';
-        if (chooseBlock) chooseBlock.style.display = 'none';
+        chooseBlock.style.display = 'none';
     }
 }
 
 function getReferralCodeFromCurrentPage() {
-    var choosePage = document.getElementById('page-choose-payment-method');
-    if (choosePage && choosePage.style.display !== 'none') {
-        var chooseBlock = document.getElementById('choose-referral-code-block');
-        if (chooseBlock && chooseBlock.style.display !== 'none') {
-            var input = chooseBlock.querySelector('.referral-code-input');
-            return input ? (input.value || '').trim() : '';
-        }
-        return '';
-    }
-    var buyPage = document.getElementById('page-buy-subscription');
-    var extendPage = document.getElementById('page-extend-subscription');
-    var isBuyVisible = buyPage && buyPage.style.display !== 'none';
-    var block = isBuyVisible
-        ? document.getElementById('buy-referral-code-block')
-        : document.getElementById('extend-referral-code-block');
-    if (!block || block.style.display === 'none') return '';
-    var input = block.querySelector('.referral-code-input');
+    var chooseBlock = document.getElementById('choose-referral-code-block');
+    if (!chooseBlock || chooseBlock.style.display === 'none') return '';
+    var input = chooseBlock.querySelector('.referral-code-input');
     return input ? (input.value || '').trim() : '';
 }
 
