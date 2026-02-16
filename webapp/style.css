@@ -2107,6 +2107,9 @@ body.about-page-active {
     body {
         padding: 16px 12px calc(200px + env(safe-area-inset-bottom)) 12px;
     }
+    body.about-page-active {
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    }
     
     h1 {
         font-size: 24px;

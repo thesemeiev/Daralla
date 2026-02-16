@@ -807,31 +807,12 @@ function initAboutPage() {
     if (!pageEl || !wrapEl) return;
 
     document.body.classList.add('about-page-active');
+    var targetProgress = 0;
     var scrollListener = function () {
         if (currentPage !== 'about') return;
         var scrollTop = window.scrollY || document.documentElement.scrollTop;
         var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        var progress = Math.min(1, scrollTop / maxScroll);
-        var isLight = progress > 0.5;
-        document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
-        pageEl.classList.toggle('about-bg-light', isLight);
-        if (aboutPageState && aboutPageState.mesh) {
-            aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
-            aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
-            var hex = progress > 0.5 ? 0x2a2d32 : 0x1e2024;
-            var mesh = aboutPageState.mesh;
-            if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
-            if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = isLight ? 1.18 : 0.95;
-        }
-        if (aboutPageState && aboutPageState.lights) {
-            var k = isLight ? 1.6 : 1;
-            aboutPageState.lights.ambient.intensity = 0.58 * k;
-            aboutPageState.lights.dirLight.intensity = 1.15 * k;
-            aboutPageState.lights.rimLight.intensity = 0.8 * k;
-            aboutPageState.lights.fillLight.intensity = 0.4 * k;
-            aboutPageState.lights.highlight1.intensity = 1.1 * k;
-            aboutPageState.lights.highlight2.intensity = 0.6 * k;
-        }
+        targetProgress = Math.min(1, scrollTop / maxScroll);
     };
 
     var observer = new IntersectionObserver(
@@ -847,20 +828,46 @@ function initAboutPage() {
     var heroEl = pageEl.querySelector('.about-hero');
     if (heroEl) heroEl.classList.add('in-view');
 
+    var smoothedProgress = 0;
     aboutPageState = {
         scrollListener: scrollListener,
         observer: observer,
         disposed: false,
         renderer: null,
         resizeHandler: null,
-        animId: null
+        animId: null,
+        smoothedProgress: 0
     };
     window.addEventListener('scroll', scrollListener, { passive: true });
     scrollListener();
+    aboutPageState.animId = requestAnimationFrame(animate);
 
     function animate() {
         if (!aboutPageState || aboutPageState.disposed) return;
         aboutPageState.animId = requestAnimationFrame(animate);
+        var t = 0.06;
+        smoothedProgress += (targetProgress - smoothedProgress) * t;
+        aboutPageState.smoothedProgress = smoothedProgress;
+        var isLight = smoothedProgress > 0.5;
+        document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
+        pageEl.classList.toggle('about-bg-light', isLight);
+        if (aboutPageState.mesh) {
+            var mesh = aboutPageState.mesh;
+            mesh.rotation.y = smoothedProgress * Math.PI * 2;
+            mesh.rotation.x = smoothedProgress * Math.PI * 0.5;
+            var hex = isLight ? 0x2a2d32 : 0x1e2024;
+            if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
+            if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = isLight ? 1.18 : 0.95;
+        }
+        if (aboutPageState.lights) {
+            var k = isLight ? 1.6 : 1;
+            aboutPageState.lights.ambient.intensity = 0.58 * k;
+            aboutPageState.lights.dirLight.intensity = 1.15 * k;
+            aboutPageState.lights.rimLight.intensity = 0.8 * k;
+            aboutPageState.lights.fillLight.intensity = 0.4 * k;
+            aboutPageState.lights.highlight1.intensity = 1.1 * k;
+            aboutPageState.lights.highlight2.intensity = 0.6 * k;
+        }
         if (aboutPageState.renderer && aboutPageState.scene && aboutPageState.camera) {
             aboutPageState.renderer.render(aboutPageState.scene, aboutPageState.camera);
         }
