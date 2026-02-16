@@ -1648,34 +1648,33 @@ body.about-page-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 80px 24px;
-    margin-top: 18vh;
-}
-.about-block:first-of-type {
+    padding: 72px 24px;
     margin-top: 0;
-}
-/* Высота футера = 50vh − половина высоты блока «Связаться», чтобы при конце скролла блок был по центру */
-.about-footer {
-    margin-top: 0;
-    padding: 8.75vh 24px;
     box-sizing: border-box;
+}
+.about-block + .about-block {
+    margin-top: 10vh;
 }
 .about-block.about-contact {
     min-height: 65vh;
     min-height: 65dvh;
+    padding: 48px 24px 72px;
 }
 .about-contact .about-block-inner {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: 24px;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
 }
 .page-about-scroll.about-bg-light .about-hero-title,
 .page-about-scroll.about-bg-light .about-hero-slogan,
 .page-about-scroll.about-bg-light .about-block-title,
 .page-about-scroll.about-bg-light .about-block-text,
 .page-about-scroll.about-bg-light .about-features-list li,
-.page-about-scroll.about-bg-light .about-contact-card,
-.page-about-scroll.about-bg-light .about-footer {
+.page-about-scroll.about-bg-light .about-contact-card {
     color: #1a1a1a;
 }
 .page-about-scroll.about-bg-light .about-contact-card {
@@ -1701,28 +1700,6 @@ body.about-page-active {
 }
 .about-reveal.in-view {
     opacity: 1;
-}
-
-/* Полоска прогресса скролла */
-.about-scroll-progress {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    z-index: 2;
-    pointer-events: none;
-    background: rgba(255, 255, 255, 0.08);
-}
-.page-about-scroll.about-bg-light .about-scroll-progress {
-    background: rgba(0, 0, 0, 0.06);
-}
-.about-scroll-progress-bar {
-    display: block;
-    height: 100%;
-    width: 0;
-    background: var(--about-accent, #0d6efd);
-    transition: width 0.12s ease-out;
 }
 
 .about-hero-canvas-wrap {
@@ -1794,12 +1771,6 @@ body.about-page-active {
     color: #3a3a42;
 }
 
-.about-block {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 64px 24px;
-}
 .about-block-inner {
     max-width: 520px;
     width: 100%;
@@ -1862,11 +1833,6 @@ body.about-page-active {
 }
 .about-features-list li:last-child {
     border-bottom: none;
-}
-.about-contact .about-block-inner {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
 }
 .about-contact-cards {
     display: flex;
@@ -1953,22 +1919,6 @@ body.about-page-active {
     color: #fff;
     transform: translateX(4px);
 }
-.about-footer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8.75vh 24px;
-    text-align: center;
-}
-.about-footer-year {
-    font-size: 14px;
-    color: #909098;
-    transition: color 0.4s ease-out;
-}
-.page-about-scroll.about-bg-light .about-footer-year {
-    color: #666;
-}
-
 /* Скрытие шапки на странице О нас (контент полноэкранный) */
 #page-about header {
     display: none;

@@ -806,9 +806,6 @@ function initAboutPage() {
     var wrapEl = document.getElementById('about-hero-canvas-wrap');
     if (!pageEl || !wrapEl) return;
 
-    var footerYear = pageEl.querySelector('.about-footer-year');
-    if (footerYear) footerYear.textContent = new Date().getFullYear();
-
     document.body.classList.add('about-page-active');
     var scrollListener = function () {
         if (currentPage !== 'about') return;
@@ -826,8 +823,6 @@ function initAboutPage() {
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
             if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = isLight ? 1.18 : 0.95;
         }
-        var progressEl = pageEl.querySelector('.about-scroll-progress-bar');
-        if (progressEl) progressEl.style.width = (progress * 100) + '%';
         if (aboutPageState && aboutPageState.lights) {
             var k = isLight ? 1.6 : 1;
             aboutPageState.lights.ambient.intensity = 0.58 * k;
