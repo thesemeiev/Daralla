@@ -809,11 +809,15 @@ function initAboutPage() {
     var footerYear = pageEl.querySelector('.about-footer-year');
     if (footerYear) footerYear.textContent = new Date().getFullYear();
 
+    var scrollRoot = pageEl.querySelector('.about-scroll-root');
+    if (scrollRoot) scrollRoot.scrollTop = 0;
+
     document.body.classList.add('about-page-active');
     var scrollListener = function () {
         if (currentPage !== 'about') return;
-        var scrollTop = window.scrollY || document.documentElement.scrollTop;
-        var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        var el = scrollRoot || document.documentElement;
+        var scrollTop = el.scrollTop || 0;
+        var maxScroll = Math.max(1, (el.scrollHeight || 0) - (el.clientHeight || window.innerHeight));
         var progress = Math.min(1, scrollTop / maxScroll);
         var isLight = progress > 0.5;
         document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
@@ -833,20 +837,21 @@ function initAboutPage() {
                 if (e.isIntersecting) e.target.classList.add('in-view');
             });
         },
-        { root: null, rootMargin: '0px', threshold: 0.2 }
+        { root: scrollRoot || null, rootMargin: '0px', threshold: 0.3 }
     );
     pageEl.querySelectorAll('.about-block').forEach(function (el) { observer.observe(el); });
     pageEl.querySelectorAll('.about-contact-card').forEach(function (el) { observer.observe(el); });
 
     aboutPageState = {
         scrollListener: scrollListener,
+        scrollRoot: scrollRoot,
         observer: observer,
         disposed: false,
         renderer: null,
         resizeHandler: null,
         animId: null
     };
-    window.addEventListener('scroll', scrollListener, { passive: true });
+    if (scrollRoot) scrollRoot.addEventListener('scroll', scrollListener, { passive: true });
     scrollListener();
 
     function animate() {
@@ -954,7 +959,7 @@ function aboutPageDispose() {
     if (!aboutPageState) return;
     aboutPageState.disposed = true;
     if (aboutPageState.animId) cancelAnimationFrame(aboutPageState.animId);
-    window.removeEventListener('scroll', aboutPageState.scrollListener);
+    if (aboutPageState.scrollRoot) aboutPageState.scrollRoot.removeEventListener('scroll', aboutPageState.scrollListener);
     if (aboutPageState.resizeHandler) window.removeEventListener('resize', aboutPageState.resizeHandler);
     if (aboutPageState.observer) aboutPageState.observer.disconnect();
     if (aboutPageState.renderer) {

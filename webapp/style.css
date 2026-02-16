@@ -1624,10 +1624,14 @@ h1 {
 /* Страница "О нас" — мини-сайт со скроллом, 3D, фон тёмный → белый (фон задаётся на body в JS) */
 body.about-page-active {
     transition: background-color 0.4s ease-out;
+    overflow: hidden;
 }
 .page-about-scroll {
+    position: fixed;
+    inset: 0;
     background: transparent;
-    min-height: 100vh;
+    overflow: hidden;
+    z-index: 1;
 }
 .page-about-scroll.about-bg-light .about-hero-title,
 .page-about-scroll.about-bg-light .about-hero-slogan,
@@ -1672,11 +1676,30 @@ body.about-page-active {
 .about-scroll-root {
     position: relative;
     z-index: 1;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+.about-scroll-root::-webkit-scrollbar {
+    width: 0;
+    display: none;
+}
+
+.about-hero,
+.about-block,
+.about-contact,
+.about-footer {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    height: 100vh;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .about-hero {
-    min-height: 100vh;
-    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1737,8 +1760,6 @@ body.about-page-active {
 }
 
 .about-block {
-    min-height: 80vh;
-    min-height: 80dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1887,6 +1908,9 @@ body.about-page-active {
     transform: translateX(4px);
 }
 .about-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 32px 24px;
     text-align: center;
 }
