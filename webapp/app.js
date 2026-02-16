@@ -883,14 +883,17 @@ function initAboutPage() {
         var fillLight = new THREE.DirectionalLight(0x8090b0, 0.4);
         fillLight.position.set(-2, 1, 3);
         scene.add(fillLight);
-        var highlightLight = new THREE.PointLight(0xffffff, 0.7, 8);
+        var highlightLight = new THREE.PointLight(0xffffff, 1.1, 8);
         highlightLight.position.set(2, 2, 2);
         scene.add(highlightLight);
+        var highlightLight2 = new THREE.PointLight(0xe8eeff, 0.6, 6);
+        highlightLight2.position.set(-2.5, 1.5, 2);
+        scene.add(highlightLight2);
         var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
             color: 0x1e2024,
             metalness: 0.78,
-            roughness: 0.28,
+            roughness: 0.22,
             envMapIntensity: 0.95
         });
         var mesh = new THREE.Mesh(geom, mat);
