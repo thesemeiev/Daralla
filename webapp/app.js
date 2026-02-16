@@ -824,7 +824,10 @@ function initAboutPage() {
             var hex = progress > 0.5 ? 0x2a2d32 : 0x1e2024;
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
+            if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = isLight ? 1.18 : 0.95;
         }
+        var progressEl = pageEl.querySelector('.about-scroll-progress-bar');
+        if (progressEl) progressEl.style.width = (progress * 100) + '%';
         if (aboutPageState && aboutPageState.lights) {
             var k = isLight ? 1.6 : 1;
             aboutPageState.lights.ambient.intensity = 0.58 * k;
@@ -844,7 +847,10 @@ function initAboutPage() {
         },
         { root: null, rootMargin: '0px 0px -12% 0px', threshold: 0.15 }
     );
+    pageEl.querySelectorAll('.about-reveal').forEach(function (el) { observer.observe(el); });
     pageEl.querySelectorAll('.about-contact-card').forEach(function (el) { observer.observe(el); });
+    var heroEl = pageEl.querySelector('.about-hero');
+    if (heroEl) heroEl.classList.add('in-view');
 
     aboutPageState = {
         scrollListener: scrollListener,
