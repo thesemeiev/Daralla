@@ -812,7 +812,12 @@ function initAboutPage() {
         if (currentPage !== 'about') return;
         var scrollTop = window.scrollY || document.documentElement.scrollTop;
         var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        targetProgress = Math.min(1, scrollTop / maxScroll);
+        targetProgress = Math.min(1, Math.max(0, scrollTop / maxScroll));
+    };
+    var getTargetProgress = function () {
+        var scrollTop = window.scrollY || document.documentElement.scrollTop;
+        var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        return Math.min(1, Math.max(0, scrollTop / maxScroll));
     };
 
     var observer = new IntersectionObserver(
@@ -842,10 +847,13 @@ function initAboutPage() {
     scrollListener();
     aboutPageState.animId = requestAnimationFrame(animate);
 
+    var isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 0));
+    var lerpFactor = isTouchDevice ? 0.028 : 0.06;
     function animate() {
         if (!aboutPageState || aboutPageState.disposed) return;
         aboutPageState.animId = requestAnimationFrame(animate);
-        var t = 0.06;
+        targetProgress = getTargetProgress();
+        var t = lerpFactor;
         smoothedProgress += (targetProgress - smoothedProgress) * t;
         aboutPageState.smoothedProgress = smoothedProgress;
         var isLight = smoothedProgress > 0.5;
