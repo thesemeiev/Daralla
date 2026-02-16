@@ -1655,7 +1655,7 @@ body.about-page-active {
     margin-top: 0;
 }
 .about-block.about-contact {
-    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
 }
 .about-contact .about-block-inner {
     display: flex;
@@ -1957,7 +1957,7 @@ body.about-page-active {
         padding-top: calc(40px + env(safe-area-inset-top, 0px));
     }
     .about-block.about-contact {
-        padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
     }
     .about-contact .about-block-inner {
         gap: 20px;
