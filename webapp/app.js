@@ -889,14 +889,35 @@ function initAboutPage() {
         var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
             color: 0x2a2d32,
-            metalness: 0.78,
-            roughness: 0.26,
-            envMapIntensity: 1.15
+            metalness: 0.82,
+            roughness: 0.22,
+            envMapIntensity: 1.5
         });
         var mesh = new THREE.Mesh(geom, mat);
         mesh.scale.setScalar(1.15);
         scene.add(mesh);
-        (function loadEnvMap() {
+        (function setDefaultEnvMap() {
+            var size = 64;
+            var canvases = [];
+            for (var i = 0; i < 6; i++) {
+                var c = document.createElement('canvas');
+                c.width = size;
+                c.height = size;
+                var ctx = c.getContext('2d');
+                var g = ctx.createLinearGradient(0, 0, size, size);
+                g.addColorStop(0, '#1a1c20');
+                g.addColorStop(0.5, '#4a4e58');
+                g.addColorStop(1, '#8a8e98');
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, size, size);
+                canvases.push(c);
+            }
+            var cubeEnv = new THREE.CubeTexture(canvases);
+            cubeEnv.mapping = THREE.CubeReflectionMapping;
+            cubeEnv.needsUpdate = true;
+            scene.environment = cubeEnv;
+        })();
+        (function loadEnvMapHDR() {
             import('https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js').then(function (mod) {
                 var RGBELoader = mod.default;
                 var rl = new RGBELoader();
