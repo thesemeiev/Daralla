@@ -822,11 +822,8 @@ function initAboutPage() {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
             var hex = progress > 0.5 ? 0x1a5fb4 : 0x4a9eff;
-            if (aboutPageState.mesh.children) {
-                aboutPageState.mesh.children.forEach(function (child) {
-                    if (child.material && child.material.color) child.material.color.setHex(hex);
-                });
-            }
+            var m = aboutPageState.mesh.material;
+            if (m && m.color) m.color.setHex(hex);
         }
     };
 
@@ -874,34 +871,37 @@ function initAboutPage() {
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setClearColor(0x000000, 0);
-        function createSolarSymbolGeometry() {
-            var w = 0.1, L1 = 0.45, L2 = 0.35;
-            var shape = new THREE.Shape();
-            shape.moveTo(0, -w / 2);
-            shape.lineTo(L1, -w / 2);
-            shape.lineTo(L1, L2);
-            shape.lineTo(L1 - w, L2);
-            shape.lineTo(L1 - w, w / 2);
-            shape.lineTo(0, w / 2);
-            shape.lineTo(0, -w / 2);
-            var extrudeSettings = { depth: 0.12, bevelEnabled: false };
-            var armGeom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-            var group = new THREE.Group();
-            for (var i = 0; i < 4; i++) {
-                var angle = i * Math.PI / 2;
-                var armMesh = new THREE.Mesh(armGeom.clone(), new THREE.MeshBasicMaterial({
-                    color: 0x4a9eff,
-                    transparent: true,
-                    opacity: 0.65,
-                    side: THREE.DoubleSide
-                }));
-                armMesh.rotation.z = -angle;
-                group.add(armMesh);
-            }
-            return group;
+        function createChechenSolarSymbol() {
+            var L = 0.36, R = 0.2, w = 0.1;
+            var s = new THREE.Shape();
+            s.moveTo(0, L + R);
+            s.quadraticCurveTo(w / 2 + 0.03, L + R * 0.4, w / 2, L);
+            s.lineTo(w / 2, w / 2);
+            s.lineTo(L, w / 2);
+            s.quadraticCurveTo(L + R * 0.5, w / 2 + 0.03, L + R, 0);
+            s.quadraticCurveTo(L + R * 0.5, -w / 2 - 0.03, L, -w / 2);
+            s.lineTo(w / 2, -w / 2);
+            s.lineTo(w / 2, -L);
+            s.quadraticCurveTo(w / 2 + 0.03, -L - R * 0.4, 0, -L - R);
+            s.quadraticCurveTo(-w / 2 - 0.03, -L - R * 0.4, -w / 2, -L);
+            s.lineTo(-w / 2, -w / 2);
+            s.lineTo(-L, -w / 2);
+            s.quadraticCurveTo(-L - R * 0.5, -w / 2 - 0.03, -L - R, 0);
+            s.quadraticCurveTo(-L - R * 0.5, w / 2 + 0.03, -L, w / 2);
+            s.lineTo(-w / 2, w / 2);
+            s.lineTo(-w / 2, L);
+            s.quadraticCurveTo(-w / 2 - 0.03, L + R * 0.4, 0, L + R);
+            var extrude = new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2 });
+            var mesh = new THREE.Mesh(extrude, new THREE.MeshBasicMaterial({
+                color: 0x4a9eff,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            }));
+            return mesh;
         }
-        var mesh = createSolarSymbolGeometry();
-        mesh.scale.setScalar(1.1);
+        var mesh = createChechenSolarSymbol();
+        mesh.scale.setScalar(1.15);
         scene.add(mesh);
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
