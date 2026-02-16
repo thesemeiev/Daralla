@@ -886,15 +886,15 @@ function initAboutPage() {
         var highlightLight = new THREE.PointLight(0xffffff, 0.5, 8);
         highlightLight.position.set(2, 2, 2);
         scene.add(highlightLight);
-        var knotGeom = new THREE.TorusKnotGeometry(0.5, 0.12, 100, 20, 2, 3);
+        var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
             color: 0x3d4a6e,
-            metalness: 0.82,
-            roughness: 0.28,
-            envMapIntensity: 1.1
+            metalness: 0.78,
+            roughness: 0.26,
+            envMapIntensity: 1.15
         });
-        var mesh = new THREE.Mesh(knotGeom, mat);
-        mesh.scale.setScalar(1.2);
+        var mesh = new THREE.Mesh(geom, mat);
+        mesh.scale.setScalar(1.15);
         scene.add(mesh);
         var envLoader = new THREE.CubeTextureLoader();
         var envUrls = ['px', 'nx', 'py', 'ny', 'pz', 'nz'].map(function (f) {
