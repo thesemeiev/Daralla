@@ -1,7 +1,8 @@
 """
 Quart Blueprint: /api/auth/register, /api/auth/login, /api/auth/verify, /api/auth/logout.
 Cookie daralla_web_token для PWA (persist в standalone), токен в теле/заголовке по-прежнему поддерживается.
-Для общего входа на daralla.ru и app.daralla.ru задайте AUTH_COOKIE_DOMAIN=.daralla.ru
+По умолчанию cookie привязан к текущему домену: веб на daralla.ru работает без доп. настроек (логин и возвраты на daralla.ru).
+Опционально AUTH_COOKIE_DOMAIN=.daralla.ru — только если нужен один вход на daralla.ru и app.daralla.ru.
 """
 import logging
 import os
@@ -16,6 +17,7 @@ from bot.db.users_db import (
     update_user_auth_token,
     get_user_by_auth_token,
 )
+from bot.web.auth_validation import validate_username_format, validate_password_format
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +29,8 @@ CORS_HEADERS = {
 
 AUTH_COOKIE_NAME = "daralla_web_token"
 AUTH_COOKIE_MAX_AGE_REMEMBER = 30 * 24 * 3600  # 30 дней
-# Общий домен для cookie: один вход на daralla.ru и app.daralla.ru (PWA/мини-апп)
-AUTH_COOKIE_DOMAIN = os.environ.get("AUTH_COOKIE_DOMAIN", "").strip() or None  # например ".daralla.ru"
+# Опционально: общий домен cookie для одного входа на daralla.ru и app.daralla.ru. Не задан = cookie только для текущего хоста (веб на daralla.ru работает без настройки).
+AUTH_COOKIE_DOMAIN = os.environ.get("AUTH_COOKIE_DOMAIN", "").strip() or None
 
 
 def create_blueprint(bot_app):
@@ -43,12 +45,12 @@ def create_blueprint(bot_app):
             username = (data.get("username") or "").strip().lower()
             password = (data.get("password") or "").strip()
 
-            if not username or not password:
-                return jsonify({"error": "Логин и пароль обязательны"}), 400
-            if len(username) < 3:
-                return jsonify({"error": "Логин слишком короткий"}), 400
-            if len(password) < 6:
-                return jsonify({"error": "Пароль слишком короткий (минимум 6 символов)"}), 400
+            ok, err = validate_username_format(username)
+            if not ok:
+                return jsonify({"error": err}), 400
+            ok, err = validate_password_format(password)
+            if not ok:
+                return jsonify({"error": err}), 400
 
             password_hash = generate_password_hash(password)
             user_id = await register_web_user(username, password_hash)

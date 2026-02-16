@@ -518,6 +518,10 @@ function showPage(pageName, params) {
         showPage('subscriptions', params);
         return;
     }
+    if (pageName === 'landing' && currentUserId) {
+        showPage('subscriptions', params);
+        return;
+    }
     // Очищаем интервалы при уходе со страницы аналитики серверов
     if (currentPage === 'admin-servers-analytics' && pageName !== 'admin-servers-analytics' && serverLoadChartInterval) {
         clearInterval(serverLoadChartInterval);
@@ -4014,7 +4018,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('hashchange', function () {
         var route = parseHashRoute();
         if (!route || route.pageName === currentPage) return;
-        applyRoute(route, !!currentUserId, isAdmin);
+        if (!applyRoute(route, !!currentUserId, isAdmin)) {
+            showPage(platform.getDefaultPage(!!currentUserId));
+        }
     });
 });
 
@@ -4261,7 +4267,7 @@ async function handleWebAccessSetup(event) {
         return;
     }
     if (password.length < 6) {
-        alert('Пароль должен быть не менее 6 символов');
+        alert('Пароль: минимум 8 символов, нужны буква и цифра');
         return;
     }
     if (password !== confirm) {
@@ -4458,7 +4464,7 @@ async function handleChangePassword(event) {
     var neu = (newPw.value || '').trim();
     var conf = (confirm.value || '').trim();
     if (!cur) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
-    if (neu.length < 6) { showFormMessage('account-form-message', 'error', 'Новый пароль слишком короткий (минимум 6 символов)'); return; }
+    if (neu.length < 8) { showFormMessage('account-form-message', 'error', 'Новый пароль: минимум 8 символов, нужны буква и цифра'); return; }
     if (neu !== conf) { showFormMessage('account-form-message', 'error', 'Пароли не совпадают'); return; }
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {

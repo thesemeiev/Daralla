@@ -13,6 +13,7 @@ from quart import Blueprint, request, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from bot.handlers.api_support.webhook_auth import authenticate_request_async, verify_telegram_init_data
+from bot.web.auth_validation import validate_username_format, validate_password_format
 from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
 
 logger = logging.getLogger(__name__)
@@ -495,10 +496,12 @@ def create_blueprint(bot_app):
                 return jsonify({"error": "Invalid authentication"}), 401
             username = (data.get("username") or "").strip().lower()
             password = (data.get("password") or "").strip()
-            if len(username) < 3:
-                return jsonify({"error": "Логин слишком короткий (мин. 3 символа)"}), 400
-            if len(password) < 6:
-                return jsonify({"error": "Пароль слишком короткий (мин. 6 символов)"}), 400
+            ok, err = validate_username_format(username)
+            if not ok:
+                return jsonify({"error": err}), 400
+            ok, err = validate_password_format(password)
+            if not ok:
+                return jsonify({"error": err}), 400
             from bot.db.users_db import (
                 get_user_by_telegram_id_v2,
                 username_available,
@@ -656,8 +659,9 @@ def create_blueprint(bot_app):
             new_pw = (data.get("new_password") or "").strip()
             if not current:
                 return jsonify({"error": "Введите текущий пароль"}), 400
-            if len(new_pw) < 6:
-                return jsonify({"error": "Новый пароль слишком короткий (минимум 6 символов)"}), 400
+            ok, err = validate_password_format(new_pw)
+            if not ok:
+                return jsonify({"error": err}), 400
             from bot.db.users_db import get_user_by_id, update_user_password
 
             user = await get_user_by_id(user_id)
@@ -687,8 +691,9 @@ def create_blueprint(bot_app):
             new_login = (data.get("new_login") or "").strip().lower()
             if not current:
                 return jsonify({"error": "Введите текущий пароль"}), 400
-            if len(new_login) < 3:
-                return jsonify({"error": "Логин слишком короткий (минимум 3 символа)"}), 400
+            ok, err = validate_username_format(new_login)
+            if not ok:
+                return jsonify({"error": err}), 400
             from bot.db.users_db import (
                 get_user_by_id,
                 update_user_username,
