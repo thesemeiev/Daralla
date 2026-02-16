@@ -821,7 +821,7 @@ function initAboutPage() {
         if (aboutPageState && aboutPageState.mesh) {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
-            var hex = progress > 0.5 ? 0x4d5a7a : 0x3d4a6e;
+            var hex = progress > 0.5 ? 0xe8f0ff : 0xc8d8f0;
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
@@ -881,10 +881,17 @@ function initAboutPage() {
         fillLight.position.set(-2, 1, 3);
         scene.add(fillLight);
         var knotGeom = new THREE.TorusKnotGeometry(0.5, 0.12, 100, 20, 2, 3);
-        var mat = new THREE.MeshStandardMaterial({
-            color: 0x3d4a6e,
-            metalness: 0.5,
-            roughness: 0.4
+        var mat = new THREE.MeshPhysicalMaterial({
+            color: 0xe8f0ff,
+            metalness: 0,
+            roughness: 0,
+            transparent: true,
+            opacity: 0.92,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            transmission: 1,
+            thickness: 0.35,
+            ior: 1.5
         });
         var mesh = new THREE.Mesh(knotGeom, mat);
         mesh.scale.setScalar(1.2);
