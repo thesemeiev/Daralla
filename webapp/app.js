@@ -821,7 +821,7 @@ function initAboutPage() {
         if (aboutPageState && aboutPageState.mesh) {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
-            var hex = progress > 0.5 ? 0x1a5fb4 : 0x4a9eff;
+            var hex = progress > 0.5 ? 0x3d4f6a : 0x2d3a4f;
             var mesh = aboutPageState.mesh;
             if (mesh.children && mesh.children.length) {
                 mesh.children.forEach(function (child) {
@@ -877,40 +877,40 @@ function initAboutPage() {
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setClearColor(0x000000, 0);
-        function createChechenSolarSymbol() {
-            var L1 = 0.38, L2 = 0.3, w = 0.1, r = 0.06, tip = 0.05, ang = 0.04;
-            var s = new THREE.Shape();
-            s.moveTo(w / 2, 0);
-            s.lineTo(w / 2, L1 - r);
-            s.quadraticCurveTo(w / 2 + r, L1, w / 2 + r, L1);
-            s.lineTo(-L2 + tip * 2, L1 + w / 2);
-            s.quadraticCurveTo(-L2 + tip, L1 + w / 2 + ang, -L2, L1 + w / 2);
-            s.quadraticCurveTo(-L2 - ang, L1 + w / 2 - tip, -L2, L1);
-            s.quadraticCurveTo(-L2 + ang, L1 - tip, -L2, L1 - w / 2);
-            s.lineTo(w / 2 + r, L1 - w / 2);
-            s.quadraticCurveTo(w / 2 + r, L1 - r, w / 2, L1 - r);
-            s.lineTo(w / 2, 0);
-            s.lineTo(-w / 2, 0);
-            s.lineTo(-w / 2, L1 - w / 2);
-            s.lineTo(w / 2 + r, L1 - w / 2);
-            var extrudeSettings = { depth: 0.12, bevelEnabled: true, bevelThickness: 0.018, bevelSize: 0.018, bevelSegments: 2 };
-            var armGeom = new THREE.ExtrudeGeometry(s, extrudeSettings);
-            var mat = new THREE.MeshBasicMaterial({
-                color: 0x4a9eff,
-                transparent: true,
-                opacity: 0.7,
-                side: THREE.DoubleSide
-            });
+        if (renderer.outputColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
+        else if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+        scene.add(new THREE.AmbientLight(0x404060, 0.6));
+        var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(3, 4, 5);
+        scene.add(dirLight);
+        var fillLight = new THREE.DirectionalLight(0xa0b0d0, 0.35);
+        fillLight.position.set(-2, 1, 3);
+        scene.add(fillLight);
+        function createGeometricFigure() {
             var group = new THREE.Group();
-            for (var i = 0; i < 4; i++) {
-                var arm = new THREE.Mesh(armGeom.clone(), mat.clone());
-                arm.rotation.z = -i * Math.PI / 2;
-                group.add(arm);
-            }
+            var mat = new THREE.MeshStandardMaterial({
+                color: 0x2d3a4f,
+                metalness: 0.45,
+                roughness: 0.55,
+                envMapIntensity: 0.8
+            });
+            var core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 1), mat.clone());
+            group.add(core);
+            var ring = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.065, 20, 56), mat.clone());
+            ring.rotation.x = Math.PI / 2;
+            group.add(ring);
+            var ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.065, 20, 56), mat.clone());
+            ring2.rotation.x = 0;
+            ring2.rotation.z = Math.PI / 2;
+            group.add(ring2);
+            var ring3 = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.065, 20, 56), mat.clone());
+            ring3.rotation.x = Math.PI / 4;
+            ring3.rotation.z = Math.PI / 4;
+            group.add(ring3);
             return group;
         }
-        var mesh = createChechenSolarSymbol();
-        mesh.scale.setScalar(1.15);
+        var mesh = createGeometricFigure();
+        mesh.scale.setScalar(1.1);
         scene.add(mesh);
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
