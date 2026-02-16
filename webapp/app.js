@@ -531,6 +531,9 @@ function showPage(pageName, params) {
         clearInterval(eventDetailLeaderboardTimer);
         eventDetailLeaderboardTimer = null;
     }
+    if (currentPage === 'about' && pageName !== 'about' && typeof aboutPageDispose === 'function') {
+        aboutPageDispose();
+    }
 
     // Сбрасываем скролл наверх при переключении страниц
     window.scrollTo(0, 0);
@@ -680,7 +683,7 @@ function showPage(pageName, params) {
         initLandingObserver();
         initLandingWheelAndHint();
     } else if (pageName === 'about') {
-        refreshAboutAccount();
+        initAboutPage();
     }
 
     if (ROUTE_PAGE_NAMES.has(pageName)) {
@@ -778,6 +781,135 @@ function initLandingWheelAndHint() {
     }
 
     updateHintVisibility();
+}
+
+// --- Страница «О нас»: 3D-фигура, фон тёмный → белый при скролле ---
+var aboutPageState = null;
+
+function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+        if (document.querySelector('script[src="' + src + '"]')) {
+            resolve();
+            return;
+        }
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+function initAboutPage() {
+    if (aboutPageState && aboutPageState.disposed) aboutPageState = null;
+    var pageEl = document.getElementById('page-about');
+    var wrapEl = document.getElementById('about-hero-canvas-wrap');
+    if (!pageEl || !wrapEl) return;
+
+    var footerYear = pageEl.querySelector('.about-footer-year');
+    if (footerYear) footerYear.textContent = new Date().getFullYear();
+
+    var scrollListener = function () {
+        if (currentPage !== 'about') return;
+        var scrollTop = window.scrollY || document.documentElement.scrollTop;
+        var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        var progress = Math.min(1, scrollTop / maxScroll);
+        pageEl.classList.toggle('about-bg-light', progress > 0.5);
+        if (aboutPageState && aboutPageState.mesh) {
+            aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
+            aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
+            if (aboutPageState.mesh.material && aboutPageState.mesh.material.color) {
+                aboutPageState.mesh.material.color.setHex(progress > 0.5 ? 0x1a5fb4 : 0x4a9eff);
+            }
+        }
+    };
+
+    var observer = new IntersectionObserver(
+        function (entries) {
+            entries.forEach(function (e) {
+                if (e.isIntersecting) e.target.classList.add('in-view');
+            });
+        },
+        { root: null, rootMargin: '0px', threshold: 0.2 }
+    );
+    pageEl.querySelectorAll('.about-block').forEach(function (el) { observer.observe(el); });
+
+    aboutPageState = {
+        scrollListener: scrollListener,
+        observer: observer,
+        disposed: false,
+        renderer: null,
+        resizeHandler: null,
+        animId: null
+    };
+    window.addEventListener('scroll', scrollListener, { passive: true });
+    scrollListener();
+
+    function animate() {
+        if (!aboutPageState || aboutPageState.disposed) return;
+        aboutPageState.animId = requestAnimationFrame(animate);
+        if (aboutPageState.renderer && aboutPageState.scene && aboutPageState.camera) {
+            aboutPageState.renderer.render(aboutPageState.scene, aboutPageState.camera);
+        }
+    }
+
+    loadScript('https://unpkg.com/three@0.160.0/build/three.min.js').then(function () {
+        if (currentPage !== 'about' || !aboutPageState || aboutPageState.disposed || !wrapEl.parentNode) return;
+        var THREE = window.THREE;
+        if (!THREE) return;
+        var canvas = document.createElement('canvas');
+        wrapEl.innerHTML = '';
+        wrapEl.appendChild(canvas);
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 4;
+        var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x000000, 0);
+        var geometry = new THREE.TorusKnotGeometry(0.6, 0.2, 100, 16);
+        var material = new THREE.MeshBasicMaterial({
+            color: 0x4a9eff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.85
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+        function onResize() {
+            if (!aboutPageState || aboutPageState.disposed) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        window.addEventListener('resize', onResize);
+        aboutPageState.renderer = renderer;
+        aboutPageState.scene = scene;
+        aboutPageState.camera = camera;
+        aboutPageState.mesh = mesh;
+        aboutPageState.resizeHandler = onResize;
+        aboutPageState.animId = requestAnimationFrame(animate);
+    }).catch(function () {});
+}
+
+function aboutPageDispose() {
+    if (!aboutPageState) return;
+    aboutPageState.disposed = true;
+    if (aboutPageState.animId) cancelAnimationFrame(aboutPageState.animId);
+    window.removeEventListener('scroll', aboutPageState.scrollListener);
+    if (aboutPageState.resizeHandler) window.removeEventListener('resize', aboutPageState.resizeHandler);
+    if (aboutPageState.observer) aboutPageState.observer.disconnect();
+    if (aboutPageState.renderer) {
+        aboutPageState.renderer.dispose();
+        if (aboutPageState.renderer.domElement && aboutPageState.renderer.domElement.parentNode) {
+            aboutPageState.renderer.domElement.parentNode.removeChild(aboutPageState.renderer.domElement);
+        }
+    }
+    var wrapEl = document.getElementById('about-hero-canvas-wrap');
+    if (wrapEl) wrapEl.innerHTML = '';
+    var pageEl = document.getElementById('page-about');
+    if (pageEl) pageEl.classList.remove('about-bg-light');
+    aboutPageState = null;
 }
 
 // Функция показа модального окна

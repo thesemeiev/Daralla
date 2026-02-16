@@ -348,35 +348,44 @@
             </div>
         </div>
 
-        <!-- Раздел О нас -->
-        <div id="page-about" class="page" style="display: none;">
-            <header>
-                <h1>О нас</h1>
-            </header>
-            
-            <div class="about-content">
-                <div class="about-section">
-                    <h2>Daralla VPN</h2>
-                    <p>Лучший чеченский мультисерверный VPN-сервис.</p>
-                </div>
-                
-                <div class="about-section">
-                    <p class="about-link-caption">Разработчик</p>
-                    <a href="https://t.me/thesemeiev" class="link-button" target="_blank">
-                        <span>@thesemeiev</span>
-                        <span class="link-arrow">→</span>
-                    </a>
-                    <p class="about-link-caption">Канал новостей</p>
-                    <a href="https://t.me/DarallaNews" class="link-button" target="_blank">
-                        <span>@DarallaNews</span>
-                        <span class="link-arrow">→</span>
-                    </a>
-                    <p class="about-link-caption">Поддержка</p>
-                    <a href="https://t.me/DarallaSupport" class="link-button" target="_blank">
-                        <span>@DarallaSupport</span>
-                        <span class="link-arrow">→</span>
-                    </a>
-                </div>
+        <!-- Раздел О нас: мини-сайт со скроллом, 3D-фигура, фон тёмный → белый -->
+        <div id="page-about" class="page page-about-scroll" style="display: none;">
+            <div id="about-hero-canvas-wrap" class="about-hero-canvas-wrap" aria-hidden="true"></div>
+            <div class="about-scroll-root">
+                <section class="about-hero" id="about-hero">
+                    <div class="about-hero-content">
+                        <h1 class="about-hero-title">Daralla VPN</h1>
+                        <p class="about-hero-slogan">Мультисерверный VPN. Без логов. Сайт и Telegram.</p>
+                    </div>
+                </section>
+                <section class="about-block about-intro" id="about-intro">
+                    <div class="about-block-inner">
+                        <h2 class="about-block-title">О сервисе</h2>
+                        <p class="about-block-text">Daralla — VPN для стабильного доступа в обход блокировок. Одна подписка даёт доступ к нескольким серверам, трафик не логируется. Войти можно с сайта или из Mini App в Telegram.</p>
+                    </div>
+                </section>
+                <section class="about-block about-features" id="about-features">
+                    <div class="about-block-inner">
+                        <h2 class="about-block-title">Почему мы</h2>
+                        <ul class="about-features-list">
+                            <li>Без логов</li>
+                            <li>Несколько серверов в одной подписке</li>
+                            <li>Вход с сайта и из Telegram</li>
+                            <li>Разные протоколы — меньше шансов на блокировку</li>
+                        </ul>
+                    </div>
+                </section>
+                <section class="about-block about-contact" id="about-contact">
+                    <div class="about-block-inner">
+                        <h2 class="about-block-title">Связаться</h2>
+                        <a href="https://t.me/thesemeiev" class="about-link" target="_blank" rel="noopener noreferrer">Разработчик · @thesemeiev</a>
+                        <a href="https://t.me/DarallaNews" class="about-link" target="_blank" rel="noopener noreferrer">Канал новостей · @DarallaNews</a>
+                        <a href="https://t.me/DarallaSupport" class="about-link" target="_blank" rel="noopener noreferrer">Поддержка · @DarallaSupport</a>
+                    </div>
+                </section>
+                <footer class="about-footer">
+                    <span class="about-footer-year"></span>
+                </footer>
             </div>
         </div>
 
