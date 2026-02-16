@@ -825,6 +825,18 @@ function initAboutPage() {
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
+        var vh = window.innerHeight;
+        var vc = vh * 0.5;
+        var range = Math.max(200, vh * 0.45);
+        pageEl.querySelectorAll('.about-reveal').forEach(function (el) {
+            var rect = el.getBoundingClientRect();
+            var centerY = rect.top + rect.height * 0.5;
+            var p = centerY >= vc ? 1 : (centerY - (vc - range)) / range;
+            p = Math.max(0, Math.min(1, p));
+            var tx = el.classList.contains('about-reveal-left') ? -72 * (1 - p) : 72 * (1 - p);
+            el.style.transform = 'translateX(' + tx + 'px)';
+            el.style.opacity = String(p);
+        });
     };
 
     var observer = new IntersectionObserver(
@@ -835,10 +847,7 @@ function initAboutPage() {
         },
         { root: null, rootMargin: '0px 0px -12% 0px', threshold: 0.15 }
     );
-    pageEl.querySelectorAll('.about-reveal').forEach(function (el) { observer.observe(el); });
     pageEl.querySelectorAll('.about-contact-card').forEach(function (el) { observer.observe(el); });
-    var heroEl = pageEl.querySelector('.about-hero');
-    if (heroEl) heroEl.classList.add('in-view');
 
     aboutPageState = {
         scrollListener: scrollListener,
