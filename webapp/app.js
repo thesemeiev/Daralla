@@ -872,25 +872,26 @@ function initAboutPage() {
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setClearColor(0x000000, 0);
         function createChechenSolarSymbol() {
-            var L = 0.36, R = 0.2, w = 0.1;
+            var L = 0.32, w = 0.1;
+            var bx = 0.2, by = 0.18, cx = 0.06, cy = 0.12;
             var s = new THREE.Shape();
-            s.moveTo(0, L + R);
-            s.quadraticCurveTo(w / 2 + 0.03, L + R * 0.4, w / 2, L);
-            s.lineTo(w / 2, w / 2);
-            s.lineTo(L, w / 2);
-            s.quadraticCurveTo(L + R * 0.5, w / 2 + 0.03, L + R, 0);
-            s.quadraticCurveTo(L + R * 0.5, -w / 2 - 0.03, L, -w / 2);
-            s.lineTo(w / 2, -w / 2);
-            s.lineTo(w / 2, -L);
-            s.quadraticCurveTo(w / 2 + 0.03, -L - R * 0.4, 0, -L - R);
-            s.quadraticCurveTo(-w / 2 - 0.03, -L - R * 0.4, -w / 2, -L);
-            s.lineTo(-w / 2, -w / 2);
-            s.lineTo(-L, -w / 2);
-            s.quadraticCurveTo(-L - R * 0.5, -w / 2 - 0.03, -L - R, 0);
-            s.quadraticCurveTo(-L - R * 0.5, w / 2 + 0.03, -L, w / 2);
+            s.moveTo(0, L + cy);
+            s.quadraticCurveTo(-bx * 0.7, L + by, -w / 2, L);
             s.lineTo(-w / 2, w / 2);
-            s.lineTo(-w / 2, L);
-            s.quadraticCurveTo(-w / 2 - 0.03, L + R * 0.4, 0, L + R);
+            s.lineTo(-L, w / 2);
+            s.quadraticCurveTo(-L - bx, by * 0.8, -L - cx, 0);
+            s.quadraticCurveTo(-L - bx, -by * 0.8, -L, -w / 2);
+            s.lineTo(-w / 2, -w / 2);
+            s.lineTo(-w / 2, -L);
+            s.quadraticCurveTo(-bx * 0.7, -L - by, 0, -L - cy);
+            s.quadraticCurveTo(bx * 0.7, -L - by, w / 2, -L);
+            s.lineTo(w / 2, -w / 2);
+            s.lineTo(L, -w / 2);
+            s.quadraticCurveTo(L + bx, -by * 0.8, L + cx, 0);
+            s.quadraticCurveTo(L + bx, by * 0.8, L, w / 2);
+            s.lineTo(w / 2, w / 2);
+            s.lineTo(w / 2, L);
+            s.quadraticCurveTo(bx * 0.7, L + by, 0, L + cy);
             var extrude = new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2 });
             var mesh = new THREE.Mesh(extrude, new THREE.MeshBasicMaterial({
                 color: 0x4a9eff,
