@@ -1633,6 +1633,9 @@ body.about-page-active {
 .about-scroll-root {
     position: relative;
     z-index: 1;
+    padding-bottom: 50dvh;
+    padding-bottom: calc(50dvh + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
 }
 .about-hero {
     min-height: 100vh;
@@ -1640,7 +1643,9 @@ body.about-page-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: calc(38dvh + env(safe-area-inset-top, 0px)) clamp(20px, 5vw, 24px) calc(50dvh + env(safe-area-inset-bottom, 0px));
+    padding: 48px 24px;
+    padding-top: calc(48px + env(safe-area-inset-top, 0px));
+    padding-bottom: 48px;
     box-sizing: border-box;
 }
 .about-block {
@@ -1649,18 +1654,14 @@ body.about-page-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: clamp(48px, 10vh, 72px) clamp(20px, 5vw, 24px);
-    margin-top: 0;
+    padding: 48px 24px;
     box-sizing: border-box;
 }
 .about-block + .about-block {
-    margin-top: 10vh;
+    margin-top: 0;
 }
 .about-block.about-contact {
-    min-height: 65vh;
-    min-height: 65dvh;
-    padding: 18dvh clamp(20px, 5vw, 24px) calc(32dvh + env(safe-area-inset-bottom, 0px));
-    box-sizing: border-box;
+    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
 }
 .about-contact .about-block-inner {
     display: flex;
@@ -1922,18 +1923,12 @@ body.about-page-active {
     color: #fff;
     transform: translateX(4px);
 }
-/* Адаптив: страница О нас на узких и широких экранах */
+/* Адаптив: страница О нас */
 @media (max-width: 480px) {
-    .about-hero {
-        padding-top: calc(32dvh + env(safe-area-inset-top, 0px));
-        padding-bottom: calc(44dvh + env(safe-area-inset-bottom, 0px));
-    }
-    .about-block + .about-block {
-        margin-top: 8vh;
-    }
-    .about-block.about-contact {
-        padding-top: 14dvh;
-        padding-bottom: calc(26dvh + env(safe-area-inset-bottom, 0px));
+    .about-hero,
+    .about-block {
+        padding-left: 20px;
+        padding-right: 20px;
     }
     .about-contact .about-block-inner {
         gap: 20px;

@@ -969,12 +969,29 @@ function initAboutPage() {
                 }, undefined, function () {});
             }).catch(function () {});
         })();
+        var lastResizeW = 0;
+        var lastResizeH = 0;
+        var resizeDebounce = null;
+        var RESIZE_THRESHOLD = 8;
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            if (resizeDebounce) clearTimeout(resizeDebounce);
+            resizeDebounce = setTimeout(function () {
+                resizeDebounce = null;
+                if (!aboutPageState || aboutPageState.disposed) return;
+                if (Math.abs(w - lastResizeW) > RESIZE_THRESHOLD || Math.abs(h - lastResizeH) > RESIZE_THRESHOLD || lastResizeW === 0) {
+                    lastResizeW = w;
+                    lastResizeH = h;
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                }
+            }, 280);
         }
+        lastResizeW = window.innerWidth;
+        lastResizeH = window.innerHeight;
         window.addEventListener('resize', onResize);
         aboutPageState.renderer = renderer;
         aboutPageState.scene = scene;
