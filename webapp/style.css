@@ -1656,21 +1656,6 @@ body.about-page-active {
 .about-footer {
     margin-top: 18vh;
 }
-.about-reveal {
-    transition: none;
-}
-.about-reveal-left {
-    opacity: 0;
-    transform: translateX(-72px);
-}
-.about-reveal-right {
-    opacity: 0;
-    transform: translateX(72px);
-}
-.about-reveal.in-view {
-    opacity: 1;
-    transform: translateX(0);
-}
 .about-contact .about-block-inner {
     display: flex;
     flex-direction: column;
