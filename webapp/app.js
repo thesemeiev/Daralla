@@ -822,19 +822,8 @@ function initAboutPage() {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
             var hex = progress > 0.5 ? 0x4d5a7a : 0x3d4a6e;
-            var wireHex = progress > 0.5 ? 0x8a9ab8 : 0x7a8a9e;
-            var innerHex = progress > 0.5 ? 0x3d4558 : 0x2d3548;
             var mesh = aboutPageState.mesh;
-            if (mesh.children && mesh.children.length) {
-                mesh.children.forEach(function (child, i) {
-                    if (!child.material || !child.material.color) return;
-                    if (i === 1) child.material.color.setHex(wireHex);
-                    else if (i === 2) child.material.color.setHex(innerHex);
-                    else child.material.color.setHex(hex);
-                });
-            } else if (mesh.material && mesh.material.color) {
-                mesh.material.color.setHex(hex);
-            }
+            if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
     };
 
@@ -891,39 +880,14 @@ function initAboutPage() {
         var fillLight = new THREE.DirectionalLight(0xa0b0d0, 0.35);
         fillLight.position.set(-2, 1, 3);
         scene.add(fillLight);
-        function createGeometricFigure() {
-            var group = new THREE.Group();
-            var knotGeom = new THREE.TorusKnotGeometry(0.55, 0.18, 120, 24, 3, 4);
-            var mat = new THREE.MeshStandardMaterial({
-                color: 0x3d4a6e,
-                metalness: 0.62,
-                roughness: 0.26,
-                envMapIntensity: 1
-            });
-            var knot = new THREE.Mesh(knotGeom, mat);
-            group.add(knot);
-            var wireMat = new THREE.MeshBasicMaterial({
-                color: 0x6a7a9e,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.35
-            });
-            var wire = new THREE.Mesh(knotGeom.clone(), wireMat);
-            wire.scale.setScalar(1.028);
-            group.add(wire);
-            var inner = new THREE.Mesh(
-                new THREE.DodecahedronGeometry(0.22, 0),
-                new THREE.MeshStandardMaterial({
-                    color: 0x2d3548,
-                    metalness: 0.5,
-                    roughness: 0.4
-                })
-            );
-            group.add(inner);
-            return group;
-        }
-        var mesh = createGeometricFigure();
-        mesh.scale.setScalar(1.15);
+        var knotGeom = new THREE.TorusKnotGeometry(0.5, 0.12, 100, 20, 2, 3);
+        var mat = new THREE.MeshStandardMaterial({
+            color: 0x3d4a6e,
+            metalness: 0.5,
+            roughness: 0.4
+        });
+        var mesh = new THREE.Mesh(knotGeom, mat);
+        mesh.scale.setScalar(1.2);
         scene.add(mesh);
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
