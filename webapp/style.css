@@ -1654,7 +1654,12 @@ body.about-page-active {
     margin-top: 0;
 }
 .about-footer {
-    margin-top: 18vh;
+    margin-top: 0;
+    padding: 10vh 24px 24px;
+}
+.about-block.about-contact {
+    min-height: 65vh;
+    min-height: 65dvh;
 }
 .about-contact .about-block-inner {
     display: flex;
@@ -1907,7 +1912,7 @@ body.about-page-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px 24px;
+    padding: 10vh 24px 16px;
     text-align: center;
 }
 .about-footer-year {

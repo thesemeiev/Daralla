@@ -825,6 +825,15 @@ function initAboutPage() {
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
+        if (aboutPageState && aboutPageState.lights) {
+            var k = isLight ? 1.6 : 1;
+            aboutPageState.lights.ambient.intensity = 0.58 * k;
+            aboutPageState.lights.dirLight.intensity = 1.15 * k;
+            aboutPageState.lights.rimLight.intensity = 0.8 * k;
+            aboutPageState.lights.fillLight.intensity = 0.4 * k;
+            aboutPageState.lights.highlight1.intensity = 1.1 * k;
+            aboutPageState.lights.highlight2.intensity = 0.6 * k;
+        }
     };
 
     var observer = new IntersectionObserver(
@@ -872,7 +881,8 @@ function initAboutPage() {
         renderer.setClearColor(0x000000, 0);
         if (renderer.outputColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
         else if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-        scene.add(new THREE.AmbientLight(0x303850, 0.58));
+        var ambient = new THREE.AmbientLight(0x303850, 0.58);
+        scene.add(ambient);
         var dirLight = new THREE.DirectionalLight(0xffffff, 1.15);
         dirLight.position.set(3, 4, 5);
         scene.add(dirLight);
@@ -888,6 +898,16 @@ function initAboutPage() {
         var highlightLight2 = new THREE.PointLight(0xe8eeff, 0.6, 6);
         highlightLight2.position.set(-2.5, 1.5, 2);
         scene.add(highlightLight2);
+        if (aboutPageState) {
+            aboutPageState.lights = {
+                ambient: ambient,
+                dirLight: dirLight,
+                rimLight: rimLight,
+                fillLight: fillLight,
+                highlight1: highlightLight,
+                highlight2: highlightLight2
+            };
+        }
         var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
             color: 0x1e2024,
