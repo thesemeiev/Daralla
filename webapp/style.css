@@ -1621,63 +1621,53 @@ h1 {
     border-top: 1px solid #2a2a2a;
 }
 
-/* Страница "О нас" — скролл крутит фигуру, контент меняется в фиксированном блоке (кроссфейд) */
+/* Страница "О нас" — обычный скролл, блоки выезжают с боков */
 body.about-page-active {
     transition: background-color 0.4s ease-out;
 }
 .page-about-scroll {
-    position: fixed;
-    inset: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
     background: transparent;
-    z-index: 10;
+    min-height: 100vh;
 }
-.page-about-scroll::-webkit-scrollbar {
-    width: 0;
-    display: none;
-}
-.about-scroll-driver {
-    height: 400vh;
-    pointer-events: none;
-}
-.about-fixed-content {
-    position: fixed;
-    inset: 0;
+.about-scroll-root {
+    position: relative;
     z-index: 1;
-    pointer-events: none;
+}
+.about-hero {
+    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 48px 24px;
 }
-.about-content-box {
-    pointer-events: auto;
-    position: relative;
-    width: 100%;
-    max-width: 520px;
-    min-height: 280px;
+.about-block {
+    min-height: 80vh;
+    min-height: 80dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 24px;
 }
-.about-slide {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+.about-reveal {
+    transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.6s ease-out;
+}
+.about-reveal-left {
     opacity: 0;
-    transition: opacity 0.5s ease-out;
-    pointer-events: none;
+    transform: translateX(-72px);
 }
-.about-slide.about-slide-active {
-    position: relative;
+.about-reveal-right {
+    opacity: 0;
+    transform: translateX(72px);
+}
+.about-reveal.in-view {
     opacity: 1;
-    pointer-events: auto;
+    transform: translateX(0);
 }
-.about-slide .about-hero-content,
-.about-slide .about-block-inner {
-    margin: 0;
-}
-.about-slide-contact .about-footer {
-    margin-top: 24px;
+.about-contact .about-block-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
 }
 .page-about-scroll.about-bg-light .about-hero-title,
 .page-about-scroll.about-bg-light .about-hero-slogan,
@@ -1940,17 +1930,6 @@ body.about-page-active {
 /* Скрытие шапки на странице О нас (контент полноэкранный) */
 #page-about header {
     display: none;
-}
-
-/* Scroll-reveal: блоки изначально смещены, при появлении — на место */
-.about-block-inner {
-    opacity: 0;
-    transform: translateY(28px);
-    transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1), transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.about-block.in-view .about-block-inner {
-    opacity: 1;
-    transform: translateY(0);
 }
 
 /* Старые стили для страницы «Аккаунт» и форм */
