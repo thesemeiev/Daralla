@@ -85,7 +85,7 @@ async def test_post_api_admin_check_with_admin_token_returns_200_and_is_admin(qu
     # Register a user and get token
     reg = await client.post(
         "/api/auth/register",
-        json={"username": "admincheckuser", "password": "pass123"},
+        json={"username": "admincheckuser", "password": "pass1234"},
     )
     assert reg.status_code == 200
     reg_data = await reg.get_json()
