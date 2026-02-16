@@ -1633,35 +1633,29 @@ body.about-page-active {
 .about-scroll-root {
     position: relative;
     z-index: 1;
-    padding-bottom: 50dvh;
-    padding-bottom: calc(50dvh + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
 }
-.about-hero {
-    min-height: 100vh;
-    min-height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    padding-top: calc(48px + env(safe-area-inset-top, 0px));
-    padding-bottom: 48px;
-    box-sizing: border-box;
-}
+
+/* Цепочка полноэкранных блоков: старт = hero по центру, конец = Связаться по центру */
+.about-hero,
 .about-block {
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 48px 24px;
+    padding: 56px 24px;
     box-sizing: border-box;
 }
-.about-block + .about-block {
+.about-hero {
+    padding-top: calc(56px + env(safe-area-inset-top, 0px));
+}
+.about-block {
     margin-top: 0;
 }
 .about-block.about-contact {
-    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 .about-contact .about-block-inner {
     display: flex;
@@ -1927,8 +1921,13 @@ body.about-page-active {
 @media (max-width: 480px) {
     .about-hero,
     .about-block {
-        padding-left: 20px;
-        padding-right: 20px;
+        padding: 40px 20px;
+    }
+    .about-hero {
+        padding-top: calc(40px + env(safe-area-inset-top, 0px));
+    }
+    .about-block.about-contact {
+        padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     }
     .about-contact .about-block-inner {
         gap: 20px;
