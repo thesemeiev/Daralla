@@ -1621,17 +1621,63 @@ h1 {
     border-top: 1px solid #2a2a2a;
 }
 
-/* Страница "О нас" — мини-сайт со скроллом, 3D, фон тёмный → белый (фон задаётся на body в JS) */
+/* Страница "О нас" — скролл крутит фигуру, контент меняется в фиксированном блоке (кроссфейд) */
 body.about-page-active {
     transition: background-color 0.4s ease-out;
-    overflow: hidden;
 }
 .page-about-scroll {
     position: fixed;
     inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     background: transparent;
-    overflow: hidden;
+    z-index: 10;
+}
+.page-about-scroll::-webkit-scrollbar {
+    width: 0;
+    display: none;
+}
+.about-scroll-driver {
+    height: 400vh;
+    pointer-events: none;
+}
+.about-fixed-content {
+    position: fixed;
+    inset: 0;
     z-index: 1;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+}
+.about-content-box {
+    pointer-events: auto;
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    min-height: 280px;
+}
+.about-slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease-out;
+    pointer-events: none;
+}
+.about-slide.about-slide-active {
+    position: relative;
+    opacity: 1;
+    pointer-events: auto;
+}
+.about-slide .about-hero-content,
+.about-slide .about-block-inner {
+    margin: 0;
+}
+.about-slide-contact .about-footer {
+    margin-top: 24px;
 }
 .page-about-scroll.about-bg-light .about-hero-title,
 .page-about-scroll.about-bg-light .about-hero-slogan,
@@ -1673,38 +1719,6 @@ body.about-page-active {
     height: 100%;
 }
 
-.about-scroll-root {
-    position: relative;
-    z-index: 1;
-    height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scroll-snap-type: y mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-}
-.about-scroll-root::-webkit-scrollbar {
-    width: 0;
-    display: none;
-}
-
-.about-hero,
-.about-block,
-.about-contact,
-.about-footer {
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
-    height: 100vh;
-    min-height: 100vh;
-    min-height: 100dvh;
-}
-
-.about-hero {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-}
 .about-hero-content {
     text-align: center;
     max-width: 520px;

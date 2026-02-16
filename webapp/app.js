@@ -809,15 +809,20 @@ function initAboutPage() {
     var footerYear = pageEl.querySelector('.about-footer-year');
     if (footerYear) footerYear.textContent = new Date().getFullYear();
 
-    var scrollRoot = pageEl.querySelector('.about-scroll-root');
-    if (scrollRoot) scrollRoot.scrollTop = 0;
+    var slides = [
+        pageEl.querySelector('#about-slide-hero'),
+        pageEl.querySelector('#about-slide-intro'),
+        pageEl.querySelector('#about-slide-features'),
+        pageEl.querySelector('#about-slide-contact')
+    ].filter(Boolean);
+    var contactCards = pageEl.querySelectorAll('.about-contact-card');
 
+    pageEl.scrollTop = 0;
     document.body.classList.add('about-page-active');
     var scrollListener = function () {
         if (currentPage !== 'about') return;
-        var el = scrollRoot || document.documentElement;
-        var scrollTop = el.scrollTop || 0;
-        var maxScroll = Math.max(1, (el.scrollHeight || 0) - (el.clientHeight || window.innerHeight));
+        var scrollTop = pageEl.scrollTop || 0;
+        var maxScroll = Math.max(1, pageEl.scrollHeight - pageEl.clientHeight);
         var progress = Math.min(1, scrollTop / maxScroll);
         var isLight = progress > 0.5;
         document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
@@ -829,29 +834,36 @@ function initAboutPage() {
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
-    };
-
-    var observer = new IntersectionObserver(
-        function (entries) {
-            entries.forEach(function (e) {
-                if (e.isIntersecting) e.target.classList.add('in-view');
+        var spread = 0.22;
+        var maxOpacity = 0;
+        var maxIndex = 0;
+        slides.forEach(function (slide, i) {
+            var center = (2 * i + 1) / 8;
+            var d = Math.abs(progress - center);
+            var opacity = d < spread ? Math.max(0, 1 - (d / spread) * (d / spread)) : 0;
+            slide.style.opacity = opacity;
+            slide.style.zIndex = opacity > 0.02 ? 1 : 0;
+            if (opacity > maxOpacity) { maxOpacity = opacity; maxIndex = i; }
+            slide.classList.toggle('about-slide-active', opacity > 0.5);
+        });
+        if (slides[maxIndex]) slides[maxIndex].style.zIndex = 2;
+        if (contactCards.length) {
+            var contactOpacity = slides[3] ? parseFloat(slides[3].style.opacity || 0) : 0;
+            contactCards.forEach(function (c) {
+                c.classList.toggle('in-view', contactOpacity > 0.3);
             });
-        },
-        { root: scrollRoot || null, rootMargin: '0px', threshold: 0.3 }
-    );
-    pageEl.querySelectorAll('.about-block').forEach(function (el) { observer.observe(el); });
-    pageEl.querySelectorAll('.about-contact-card').forEach(function (el) { observer.observe(el); });
+        }
+    };
 
     aboutPageState = {
         scrollListener: scrollListener,
-        scrollRoot: scrollRoot,
-        observer: observer,
+        scrollEl: pageEl,
         disposed: false,
         renderer: null,
         resizeHandler: null,
         animId: null
     };
-    if (scrollRoot) scrollRoot.addEventListener('scroll', scrollListener, { passive: true });
+    pageEl.addEventListener('scroll', scrollListener, { passive: true });
     scrollListener();
 
     function animate() {
@@ -959,9 +971,8 @@ function aboutPageDispose() {
     if (!aboutPageState) return;
     aboutPageState.disposed = true;
     if (aboutPageState.animId) cancelAnimationFrame(aboutPageState.animId);
-    if (aboutPageState.scrollRoot) aboutPageState.scrollRoot.removeEventListener('scroll', aboutPageState.scrollListener);
+    if (aboutPageState.scrollEl) aboutPageState.scrollEl.removeEventListener('scroll', aboutPageState.scrollListener);
     if (aboutPageState.resizeHandler) window.removeEventListener('resize', aboutPageState.resizeHandler);
-    if (aboutPageState.observer) aboutPageState.observer.disconnect();
     if (aboutPageState.renderer) {
         aboutPageState.renderer.dispose();
         if (aboutPageState.renderer.domElement && aboutPageState.renderer.domElement.parentNode) {

@@ -349,50 +349,53 @@
             </div>
         </div>
 
-        <!-- Раздел О нас: мини-сайт со скроллом, 3D-фигура, фон тёмный → белый -->
+        <!-- Раздел О нас: скролл крутит фигуру, контент меняется в одном блоке (кроссфейд) -->
         <div id="page-about" class="page page-about-scroll" style="display: none;">
             <div id="about-hero-canvas-wrap" class="about-hero-canvas-wrap" aria-hidden="true"></div>
-            <div class="about-scroll-root">
-                <section class="about-hero" id="about-hero">
-                    <div class="about-hero-content">
-                        <h1 class="about-hero-title">Daralla</h1>
-                        <p class="about-hero-slogan">Немного пространства. Немного тишины.</p>
-                    </div>
-                </section>
-                <section class="about-block about-intro" id="about-intro">
-                    <div class="about-block-inner">
-                        <h2 class="about-block-title">О нас</h2>
-                        <p class="about-block-text">Не манифест и не обещания. Просто идея: чуть больше контроля, чуть меньше шума.</p>
-                    </div>
-                </section>
-                <section class="about-block about-features" id="about-features">
-                    <div class="about-block-inner">
-                        <h2 class="about-block-title">Зачем мы это делаем</h2>
-                        <p class="about-block-text">Чтобы у тебя было чуть больше свободы и спокойствия в сети.</p>
-                    </div>
-                </section>
-                <section class="about-block about-contact" id="about-contact">
-                    <div class="about-block-inner">
-                        <h2 class="about-block-title">Связаться</h2>
-                        <div class="about-contact-cards">
-                            <a href="https://t.me/thesemeiev" class="about-contact-card" target="_blank" rel="noopener noreferrer">
-                                <span class="about-contact-card-label">Разработчик</span>
-                                <span class="about-contact-card-value">@thesemeiev</span>
-                            </a>
-                            <a href="https://t.me/DarallaNews" class="about-contact-card" target="_blank" rel="noopener noreferrer">
-                                <span class="about-contact-card-label">Канал новостей</span>
-                                <span class="about-contact-card-value">@DarallaNews</span>
-                            </a>
-                            <a href="https://t.me/DarallaSupport" class="about-contact-card" target="_blank" rel="noopener noreferrer">
-                                <span class="about-contact-card-label">Поддержка</span>
-                                <span class="about-contact-card-value">@DarallaSupport</span>
-                            </a>
+            <div class="about-scroll-driver" aria-hidden="true"></div>
+            <div class="about-fixed-content">
+                <div class="about-content-box">
+                    <div class="about-slide about-slide-hero" id="about-slide-hero">
+                        <div class="about-hero-content">
+                            <h1 class="about-hero-title">Daralla</h1>
+                            <p class="about-hero-slogan">Немного пространства. Немного тишины.</p>
                         </div>
                     </div>
-                </section>
-                <footer class="about-footer">
-                    <span class="about-footer-year"></span>
-                </footer>
+                    <div class="about-slide about-slide-intro" id="about-slide-intro">
+                        <div class="about-block-inner">
+                            <h2 class="about-block-title">О нас</h2>
+                            <p class="about-block-text">Не манифест и не обещания. Просто идея: чуть больше контроля, чуть меньше шума.</p>
+                        </div>
+                    </div>
+                    <div class="about-slide about-slide-features" id="about-slide-features">
+                        <div class="about-block-inner">
+                            <h2 class="about-block-title">Зачем мы это делаем</h2>
+                            <p class="about-block-text">Чтобы у тебя было чуть больше свободы и спокойствия в сети.</p>
+                        </div>
+                    </div>
+                    <div class="about-slide about-slide-contact" id="about-slide-contact">
+                        <div class="about-block-inner">
+                            <h2 class="about-block-title">Связаться</h2>
+                            <div class="about-contact-cards">
+                                <a href="https://t.me/thesemeiev" class="about-contact-card" target="_blank" rel="noopener noreferrer">
+                                    <span class="about-contact-card-label">Разработчик</span>
+                                    <span class="about-contact-card-value">@thesemeiev</span>
+                                </a>
+                                <a href="https://t.me/DarallaNews" class="about-contact-card" target="_blank" rel="noopener noreferrer">
+                                    <span class="about-contact-card-label">Канал новостей</span>
+                                    <span class="about-contact-card-value">@DarallaNews</span>
+                                </a>
+                                <a href="https://t.me/DarallaSupport" class="about-contact-card" target="_blank" rel="noopener noreferrer">
+                                    <span class="about-contact-card-label">Поддержка</span>
+                                    <span class="about-contact-card-value">@DarallaSupport</span>
+                                </a>
+                            </div>
+                        </div>
+                        <footer class="about-footer">
+                            <span class="about-footer-year"></span>
+                        </footer>
+                    </div>
+                </div>
             </div>
         </div>
 
