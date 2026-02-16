@@ -76,7 +76,7 @@
                     </div>
                     <div class="form-group">
                         <label>Пароль</label>
-                        <input type="password" id="login-password" required placeholder="Пароль — только между нами">
+                        <input type="password" id="login-password" required placeholder="Пароль — только между нами" autocomplete="current-password">
                     </div>
                     <div class="checkbox-group checkbox-group-login" onclick="document.getElementById('login-remember').click()">
                         <input type="checkbox" id="login-remember" checked onclick="event.stopPropagation()">
@@ -110,7 +110,7 @@
                     </div>
                     <div class="form-group">
                         <label>Повторите пароль</label>
-                        <input type="password" id="register-confirm" required placeholder="Повторите пароль — да, мы не доверяем памяти">
+                        <input type="password" id="register-confirm" required placeholder="Повторите пароль — да, мы не доверяем памяти" autocomplete="new-password">
                     </div>
                     <div id="register-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                     <div class="form-actions" style="flex-direction: column;">
@@ -933,7 +933,7 @@
                     </div>
                     <div class="form-group">
                         <label for="server-pass-input">Пароль 3X-UI</label>
-                        <input type="password" id="server-pass-input" required>
+                        <input type="password" id="server-pass-input" required autocomplete="current-password">
                     </div>
                     <div class="form-group">
                         <label for="server-vpnhost-input">VPN Host (IP/Домен для ключей)</label>
@@ -1079,6 +1079,7 @@
         <div class="modal-content" style="max-width: 400px;">
             <h2>Сменить логин</h2>
             <form id="form-change-login" onsubmit="handleChangeLogin(event)" style="margin-top: 16px;">
+                <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
                 <div class="form-group">
                     <label>Текущий пароль</label>
                     <input type="password" id="change-login-current" required placeholder="Текущий пароль" autocomplete="current-password" />
@@ -1100,6 +1101,7 @@
         <div class="modal-content" style="max-width: 400px;">
             <h2>Сменить пароль</h2>
             <form id="form-change-password" onsubmit="handleChangePassword(event)" style="margin-top: 16px;">
+                <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
                 <div class="form-group">
                     <label>Текущий пароль</label>
                     <input type="password" id="change-pw-current" required placeholder="Текущий пароль" autocomplete="current-password" />
@@ -1126,6 +1128,7 @@
             <h2>Отвязать Telegram</h2>
             <p class="hint" style="margin-top: 8px; margin-bottom: 16px;">После отвязки вы не сможете заходить в Mini App без пароля. Все подписки и данные останутся в веб-аккаунте.</p>
             <form id="form-unlink-telegram" onsubmit="handleUnlinkTelegram(event)" style="margin-top: 16px;">
+                <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
                 <div class="form-group">
                     <label>Текущий пароль</label>
                     <input type="password" id="unlink-telegram-password" required placeholder="Текущий пароль" autocomplete="current-password" />

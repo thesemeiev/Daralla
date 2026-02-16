@@ -881,10 +881,9 @@ function initAboutPage() {
         }
     }
 
-    loadScript('https://unpkg.com/three@0.160.0/build/three.min.js').then(function () {
+    import('three').then(function (THREE) {
         if (currentPage !== 'about' || !aboutPageState || aboutPageState.disposed || !wrapEl.parentNode) return;
-        var THREE = window.THREE;
-        if (!THREE) return;
+        if (!THREE || !THREE.Scene) return;
         var canvas = document.createElement('canvas');
         wrapEl.innerHTML = '';
         wrapEl.appendChild(canvas);
