@@ -3962,6 +3962,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     tg = platform.getTgRef();
     isWebMode = !platform.isTelegram();
 
+    // app.daralla.ru только для Mini App (Telegram). В браузере без Telegram — редирект на daralla.ru.
+    if (isMiniAppHost() && !platform.isTelegram()) {
+        var mainHost = location.hostname.replace(/^app\./, '');
+        if (mainHost !== location.hostname) {
+            var target = location.protocol + '//' + mainHost + (location.pathname || '') + (location.search || '') + (location.hash || '');
+            location.replace(target);
+            return;
+        }
+    }
+
     if (!platform.isTelegram()) {
         var idbToken = await AuthStorage.get();
         if (idbToken && !webAuthToken) {
