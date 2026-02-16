@@ -1621,25 +1621,35 @@ h1 {
     border-top: 1px solid #2a2a2a;
 }
 
-/* Страница "О нас" — мини-сайт со скроллом, 3D, фон тёмный → белый */
-.page-about-scroll {
-    background: #1a1a1a;
+/* Страница "О нас" — мини-сайт со скроллом, 3D, фон тёмный → белый (фон задаётся на body в JS) */
+body.about-page-active {
     transition: background-color 0.4s ease-out;
-    min-height: 100vh;
 }
-.page-about-scroll.about-bg-light {
-    background: #f5f5f5;
+.page-about-scroll {
+    background: transparent;
+    min-height: 100vh;
 }
 .page-about-scroll.about-bg-light .about-hero-title,
 .page-about-scroll.about-bg-light .about-hero-slogan,
 .page-about-scroll.about-bg-light .about-block-title,
 .page-about-scroll.about-bg-light .about-block-text,
 .page-about-scroll.about-bg-light .about-features-list li,
-.page-about-scroll.about-bg-light .about-link,
+.page-about-scroll.about-bg-light .about-contact-card,
 .page-about-scroll.about-bg-light .about-footer {
     color: #1a1a1a;
 }
-.page-about-scroll.about-bg-light .about-link:hover {
+.page-about-scroll.about-bg-light .about-contact-card {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+.page-about-scroll.about-bg-light .about-contact-card:hover {
+    background: rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+.page-about-scroll.about-bg-light .about-contact-card-label {
+    color: #555;
+}
+.page-about-scroll.about-bg-light .about-contact-card-value {
     color: #0d6efd;
 }
 
@@ -1676,12 +1686,25 @@ h1 {
     max-width: 480px;
 }
 .about-hero-title {
-    font-size: clamp(28px, 8vw, 48px);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: #f5f5f5;
-    margin-bottom: 16px;
+    font-size: clamp(42px, 14vw, 72px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 20px;
     transition: color 0.4s ease-out;
+    /* 3D выпуклый эффект: градиент + тени */
+    background: linear-gradient(180deg, #ffffff 0%, #e8e8e8 40%, #c0c0c0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.4)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+.page-about-scroll.about-bg-light .about-hero-title {
+    background: linear-gradient(180deg, #1a1a1a 0%, #333 40%, #555 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
 }
 .about-hero-slogan {
     font-size: clamp(15px, 4vw, 18px);
@@ -1732,7 +1755,49 @@ h1 {
 .about-contact .about-block-inner {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
+}
+.about-contact-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.about-contact-card {
+    display: block;
+    padding: 20px 24px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    text-decoration: none;
+    color: rgba(255, 255, 255, 0.95);
+    transition: background 0.2s, border-color 0.2s, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease-out;
+    opacity: 0;
+    transform: translateY(24px);
+}
+.about-contact-card.in-view {
+    opacity: 1;
+    transform: translateY(0);
+}
+.about-contact-card:nth-child(1) { transition-delay: 0s; }
+.about-contact-card:nth-child(2) { transition-delay: 0.08s; }
+.about-contact-card:nth-child(3) { transition-delay: 0.16s; }
+.about-contact-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+.about-contact-card-label {
+    display: block;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 4px;
+    transition: color 0.4s ease-out;
+}
+.about-contact-card-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    transition: color 0.4s ease-out;
 }
 .about-link {
     display: inline-block;

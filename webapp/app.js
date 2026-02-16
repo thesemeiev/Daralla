@@ -809,12 +809,15 @@ function initAboutPage() {
     var footerYear = pageEl.querySelector('.about-footer-year');
     if (footerYear) footerYear.textContent = new Date().getFullYear();
 
+    document.body.classList.add('about-page-active');
     var scrollListener = function () {
         if (currentPage !== 'about') return;
         var scrollTop = window.scrollY || document.documentElement.scrollTop;
         var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
         var progress = Math.min(1, scrollTop / maxScroll);
-        pageEl.classList.toggle('about-bg-light', progress > 0.5);
+        var isLight = progress > 0.5;
+        document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
+        pageEl.classList.toggle('about-bg-light', isLight);
         if (aboutPageState && aboutPageState.mesh) {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
@@ -833,6 +836,7 @@ function initAboutPage() {
         { root: null, rootMargin: '0px', threshold: 0.2 }
     );
     pageEl.querySelectorAll('.about-block').forEach(function (el) { observer.observe(el); });
+    pageEl.querySelectorAll('.about-contact-card').forEach(function (el) { observer.observe(el); });
 
     aboutPageState = {
         scrollListener: scrollListener,
@@ -909,6 +913,8 @@ function aboutPageDispose() {
     if (wrapEl) wrapEl.innerHTML = '';
     var pageEl = document.getElementById('page-about');
     if (pageEl) pageEl.classList.remove('about-bg-light');
+    document.body.classList.remove('about-page-active');
+    document.body.style.backgroundColor = '#1a1a1a';
     aboutPageState = null;
 }
 
