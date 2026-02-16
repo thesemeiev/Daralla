@@ -821,7 +821,7 @@ function initAboutPage() {
         if (aboutPageState && aboutPageState.mesh) {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
-            var hex = progress > 0.5 ? 0x4d5a7a : 0x3d4a6e;
+            var hex = progress > 0.5 ? 0x3d4048 : 0x2a2d32;
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
@@ -888,7 +888,7 @@ function initAboutPage() {
         scene.add(highlightLight);
         var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
-            color: 0x3d4a6e,
+            color: 0x2a2d32,
             metalness: 0.78,
             roughness: 0.26,
             envMapIntensity: 1.15
