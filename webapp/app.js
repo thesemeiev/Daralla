@@ -896,15 +896,31 @@ function initAboutPage() {
         var mesh = new THREE.Mesh(geom, mat);
         mesh.scale.setScalar(1.15);
         scene.add(mesh);
-        var envLoader = new THREE.CubeTextureLoader();
-        var envUrls = ['px', 'nx', 'py', 'ny', 'pz', 'nz'].map(function (f) {
-            return 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/cube/Bridge2/' + f + '.jpg';
-        });
-        envLoader.load(envUrls, function (envMap) {
+        function setEnvMap(envMap) {
             if (!aboutPageState || aboutPageState.disposed) return;
             scene.environment = envMap;
-            if (mesh.material) mesh.material.envMap = envMap;
-        }, undefined, function () {});
+        }
+        var cubeUrl = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/cube/Bridge2/';
+        var envLoader = new THREE.CubeTextureLoader();
+        envLoader.load(
+            [cubeUrl + 'px.jpg', cubeUrl + 'nx.jpg', cubeUrl + 'py.jpg', cubeUrl + 'ny.jpg', cubeUrl + 'pz.jpg', cubeUrl + 'nz.jpg'],
+            setEnvMap,
+            undefined,
+            function () {
+                import('https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js').then(function (mod) {
+                    var RGBELoader = mod.default;
+                    var rl = new RGBELoader();
+                    rl.load('https://dl.polyhaven.org/file/ahjdyrye/industrial_sunset_puresky_2k.hdr', function (hdr) {
+                        if (!aboutPageState || aboutPageState.disposed) return;
+                        var pmrem = new THREE.PMREMGenerator(renderer);
+                        var envMap = pmrem.fromEquirectangular(hdr).texture;
+                        scene.environment = envMap;
+                        hdr.dispose();
+                        pmrem.dispose();
+                    }, undefined, function () {});
+                }).catch(function () {});
+            }
+        );
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
             camera.aspect = window.innerWidth / window.innerHeight;
