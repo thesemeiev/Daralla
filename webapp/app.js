@@ -821,7 +821,7 @@ function initAboutPage() {
         if (aboutPageState && aboutPageState.mesh) {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
-            var hex = progress > 0.5 ? 0x3d4048 : 0x2a2d32;
+            var hex = progress > 0.5 ? 0x2a2d32 : 0x1e2024;
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
@@ -888,10 +888,10 @@ function initAboutPage() {
         scene.add(highlightLight);
         var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
-            color: 0x2a2d32,
-            metalness: 0.82,
-            roughness: 0.22,
-            envMapIntensity: 1.5
+            color: 0x1e2024,
+            metalness: 0.78,
+            roughness: 0.28,
+            envMapIntensity: 0.95
         });
         var mesh = new THREE.Mesh(geom, mat);
         mesh.scale.setScalar(1.15);
@@ -905,9 +905,9 @@ function initAboutPage() {
                 c.height = size;
                 var ctx = c.getContext('2d');
                 var g = ctx.createLinearGradient(0, 0, size, size);
-                g.addColorStop(0, '#1a1c20');
-                g.addColorStop(0.5, '#4a4e58');
-                g.addColorStop(1, '#8a8e98');
+                g.addColorStop(0, '#0c0d10');
+                g.addColorStop(0.5, '#22252a');
+                g.addColorStop(1, '#3a3e44');
                 ctx.fillStyle = g;
                 ctx.fillRect(0, 0, size, size);
                 canvases.push(c);
