@@ -1639,11 +1639,12 @@ body.about-page-active {
     color: #1a1a1a;
 }
 .page-about-scroll.about-bg-light .about-contact-card {
-    background: rgba(0, 0, 0, 0.06);
+    background: #e8e8ec;
     border-color: rgba(0, 0, 0, 0.1);
+    color: #1a1a1a;
 }
 .page-about-scroll.about-bg-light .about-contact-card:hover {
-    background: rgba(0, 0, 0, 0.1);
+    background: #dddce2;
     border-color: rgba(0, 0, 0, 0.15);
 }
 .page-about-scroll.about-bg-light .about-contact-card-label {
@@ -1683,42 +1684,39 @@ body.about-page-active {
 }
 .about-hero-content {
     text-align: center;
-    max-width: 480px;
-    padding: 32px 24px;
-    background: rgba(0, 0, 0, 0.35);
+    max-width: 520px;
+    padding: 40px 28px;
+    background: #1c1e22;
     border-radius: 16px;
     position: relative;
     z-index: 1;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 .page-about-scroll.about-bg-light .about-hero-content {
-    background: rgba(255, 255, 255, 0.7);
+    background: #f2f2f4;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 .about-hero-title {
-    font-size: clamp(42px, 14vw, 72px);
+    font-size: clamp(44px, 14vw, 76px);
     font-weight: 800;
     letter-spacing: -0.03em;
     margin-bottom: 20px;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     transition: color 0.4s ease-out;
-    /* 3D выпуклый эффект: градиент + тени */
-    background: linear-gradient(180deg, #ffffff 0%, #e8e8e8 40%, #c0c0c0 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: none;
-    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.4)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
 .page-about-scroll.about-bg-light .about-hero-title {
-    background: linear-gradient(180deg, #1a1a1a 0%, #333 40%, #555 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+    color: #1a1a1a;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 .about-hero-slogan {
-    font-size: clamp(15px, 4vw, 18px);
-    color: rgba(255, 255, 255, 0.85);
-    line-height: 1.5;
+    font-size: clamp(16px, 4.2vw, 20px);
+    color: #e4e4e8;
+    line-height: 1.55;
     transition: color 0.4s ease-out;
+}
+.page-about-scroll.about-bg-light .about-hero-slogan {
+    color: #3a3a42;
 }
 
 .about-block {
@@ -1730,22 +1728,36 @@ body.about-page-active {
     padding: 64px 24px;
 }
 .about-block-inner {
-    max-width: 480px;
+    max-width: 520px;
     width: 100%;
+    padding: 36px 28px;
+    background: #1c1e22;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+.page-about-scroll.about-bg-light .about-block-inner {
+    background: #f2f2f4;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
 }
 .about-block-title {
-    font-size: clamp(22px, 5vw, 28px);
+    font-size: clamp(24px, 5.5vw, 30px);
     font-weight: 600;
-    color: #f5f5f5;
+    color: #f0f0f4;
     margin-bottom: 20px;
     letter-spacing: -0.02em;
     transition: color 0.4s ease-out;
 }
+.page-about-scroll.about-bg-light .about-block-title {
+    color: #1a1a1e;
+}
 .about-block-text {
-    font-size: 17px;
+    font-size: 18px;
     line-height: 1.65;
-    color: rgba(255, 255, 255, 0.85);
+    color: #d8d8e0;
     transition: color 0.4s ease-out;
+}
+.page-about-scroll.about-bg-light .about-block-text {
+    color: #3a3a42;
 }
 .about-features-list {
     list-style: none;
@@ -1773,11 +1785,11 @@ body.about-page-active {
 .about-contact-card {
     display: block;
     padding: 20px 24px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 14px;
     text-decoration: none;
-    color: rgba(255, 255, 255, 0.95);
+    color: #f0f0f4;
     transition: background 0.2s, border-color 0.2s, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease-out;
     opacity: 0;
     transform: translateY(24px);
@@ -1790,22 +1802,28 @@ body.about-page-active {
 .about-contact-card:nth-child(2) { transition-delay: 0.08s; }
 .about-contact-card:nth-child(3) { transition-delay: 0.16s; }
 .about-contact-card:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
     transform: translateY(-2px);
 }
 .about-contact-card-label {
     display: block;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
+    color: #a0a0a8;
     margin-bottom: 4px;
     transition: color 0.4s ease-out;
+}
+.page-about-scroll.about-bg-light .about-contact-card-label {
+    color: #555;
 }
 .about-contact-card-value {
     font-size: 18px;
     font-weight: 600;
     color: #fff;
     transition: color 0.4s ease-out;
+}
+.page-about-scroll.about-bg-light .about-contact-card-value {
+    color: #0d6efd;
 }
 .about-link {
     display: inline-block;
@@ -1824,8 +1842,11 @@ body.about-page-active {
 }
 .about-footer-year {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.5);
+    color: #909098;
     transition: color 0.4s ease-out;
+}
+.page-about-scroll.about-bg-light .about-footer-year {
+    color: #666;
 }
 
 /* Скрытие шапки на странице О нас (контент полноэкранный) */
