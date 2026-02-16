@@ -1917,7 +1917,37 @@ body.about-page-active {
     color: #fff;
     transform: translateX(4px);
 }
-/* Адаптив: страница О нас */
+/* Адаптив: страница О нас. На мобильном — фиксируем высоту по 100vh (как фигурка по ширине), чтобы адресная строка не дергала блоки */
+@media (max-width: 768px) {
+    .about-hero,
+    .about-block {
+        min-height: 100vh;
+    }
+    .about-hero-content,
+    .about-block-inner,
+    .about-contact-card {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    .about-hero-content {
+        background: rgba(28, 30, 34, 0.88);
+    }
+    .page-about-scroll.about-bg-light .about-hero-content {
+        background: rgba(242, 242, 244, 0.95);
+    }
+    .about-block-inner {
+        background: rgba(28, 30, 34, 0.85);
+    }
+    .page-about-scroll.about-bg-light .about-block-inner {
+        background: rgba(242, 242, 244, 0.9);
+    }
+    .about-contact-card {
+        background: rgba(255, 255, 255, 0.12);
+    }
+    .page-about-scroll.about-bg-light .about-contact-card {
+        background: rgba(232, 232, 236, 0.95);
+    }
+}
 @media (max-width: 480px) {
     .about-hero,
     .about-block {
