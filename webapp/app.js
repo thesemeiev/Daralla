@@ -821,7 +821,7 @@ function initAboutPage() {
         if (aboutPageState && aboutPageState.mesh) {
             aboutPageState.mesh.rotation.y = progress * Math.PI * 2;
             aboutPageState.mesh.rotation.x = progress * Math.PI * 0.5;
-            var hex = progress > 0.5 ? 0xe8f0ff : 0xc8d8f0;
+            var hex = progress > 0.5 ? 0x4d5a7a : 0x3d4a6e;
             var mesh = aboutPageState.mesh;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
         }
@@ -873,29 +873,38 @@ function initAboutPage() {
         renderer.setClearColor(0x000000, 0);
         if (renderer.outputColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
         else if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-        scene.add(new THREE.AmbientLight(0x404060, 0.6));
-        var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        scene.add(new THREE.AmbientLight(0x303850, 0.45));
+        var dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
         dirLight.position.set(3, 4, 5);
         scene.add(dirLight);
-        var fillLight = new THREE.DirectionalLight(0xa0b0d0, 0.35);
+        var rimLight = new THREE.DirectionalLight(0xc0d0ff, 0.6);
+        rimLight.position.set(-4, -2, -3);
+        scene.add(rimLight);
+        var fillLight = new THREE.DirectionalLight(0x8090b0, 0.25);
         fillLight.position.set(-2, 1, 3);
         scene.add(fillLight);
+        var highlightLight = new THREE.PointLight(0xffffff, 0.5, 8);
+        highlightLight.position.set(2, 2, 2);
+        scene.add(highlightLight);
         var knotGeom = new THREE.TorusKnotGeometry(0.5, 0.12, 100, 20, 2, 3);
-        var mat = new THREE.MeshPhysicalMaterial({
-            color: 0xe8f0ff,
-            metalness: 0,
-            roughness: 0,
-            transparent: true,
-            opacity: 0.92,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            transmission: 1,
-            thickness: 0.35,
-            ior: 1.5
+        var mat = new THREE.MeshStandardMaterial({
+            color: 0x3d4a6e,
+            metalness: 0.82,
+            roughness: 0.28,
+            envMapIntensity: 1.1
         });
         var mesh = new THREE.Mesh(knotGeom, mat);
         mesh.scale.setScalar(1.2);
         scene.add(mesh);
+        var envLoader = new THREE.CubeTextureLoader();
+        var envUrls = ['px', 'nx', 'py', 'ny', 'pz', 'nz'].map(function (f) {
+            return 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/cube/Bridge2/' + f + '.jpg';
+        });
+        envLoader.load(envUrls, function (envMap) {
+            if (!aboutPageState || aboutPageState.disposed) return;
+            scene.environment = envMap;
+            if (mesh.material) mesh.material.envMap = envMap;
+        }, undefined, function () {});
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
             camera.aspect = window.innerWidth / window.innerHeight;
