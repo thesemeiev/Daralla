@@ -972,7 +972,7 @@ function initAboutPage() {
         var lastResizeW = 0;
         var lastResizeH = 0;
         var resizeDebounce = null;
-        var RESIZE_THRESHOLD = 8;
+        var RESIZE_THRESHOLD = 10;
         function onResize() {
             if (!aboutPageState || aboutPageState.disposed) return;
             var w = window.innerWidth;
@@ -981,7 +981,8 @@ function initAboutPage() {
             resizeDebounce = setTimeout(function () {
                 resizeDebounce = null;
                 if (!aboutPageState || aboutPageState.disposed) return;
-                if (Math.abs(w - lastResizeW) > RESIZE_THRESHOLD || Math.abs(h - lastResizeH) > RESIZE_THRESHOLD || lastResizeW === 0) {
+                var widthChanged = Math.abs(w - lastResizeW) > RESIZE_THRESHOLD;
+                if (widthChanged || lastResizeW === 0) {
                     lastResizeW = w;
                     lastResizeH = h;
                     camera.aspect = w / h;
