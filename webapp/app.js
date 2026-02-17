@@ -899,19 +899,19 @@ function initAboutPage() {
         smoothedProgress += (targetProgress - smoothedProgress) * t;
         aboutPageState.smoothedProgress = smoothedProgress;
         var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
-        var isLight = themeLight || smoothedProgress > 0.5;
+        var isLight = themeLight ? (smoothedProgress < 0.5) : (smoothedProgress > 0.5);
         document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
         pageEl.classList.toggle('about-bg-light', isLight);
         if (aboutPageState.mesh) {
             var mesh = aboutPageState.mesh;
             mesh.rotation.y = smoothedProgress * Math.PI * 2;
             mesh.rotation.x = smoothedProgress * Math.PI * 0.5;
-            var hex = isLight ? 0x25282c : 0x1c1e22;
+            var hex = 0x1c1e22;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
-            if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = isLight ? 1.18 : 0.95;
+            if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = 0.95;
         }
         if (aboutPageState.lights) {
-            var k = isLight ? 1.6 : 1;
+            var k = 1;
             aboutPageState.lights.ambient.intensity = 0.58 * k;
             aboutPageState.lights.dirLight.intensity = 1.15 * k;
             aboutPageState.lights.rimLight.intensity = 0.8 * k;
@@ -1919,8 +1919,7 @@ class CustomGlobe {
     // Рисует точки крупных городов (серые)
     drawMajorCities(ctx) {
         const cities = this.getMajorCities();
-        var isLight = typeof getTheme === 'function' && getTheme() === 'light';
-        const grayColor = isLight ? '#666' : '#888'; // Серый цвет
+        const grayColor = '#888';
         const size = 4; // Размер точки меньше, чем у серверов
         
         cities.forEach(city => {
@@ -1930,7 +1929,7 @@ class CustomGlobe {
             // Все города — одинаковый стиль (серые точки)
             ctx.fillStyle = grayColor;
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
-            ctx.strokeStyle = isLight ? '#999' : '#666';
+            ctx.strokeStyle = '#666';
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
@@ -1947,8 +1946,8 @@ class CustomGlobe {
             
             ctx.imageSmoothingEnabled = false;
             
-            ctx.fillStyle = isLight ? '#1a1a1a' : '#fff';
-            ctx.strokeStyle = isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.lineWidth = 2;
             ctx.lineJoin = 'round';
             ctx.strokeText(label, labelX, labelY);
@@ -2131,11 +2130,11 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
-        var isLight = typeof getTheme === 'function' && getTheme() === 'light';
-        var bgColor = isLight ? '#f5f5f5' : '#1a1a1a';
-        var globeGradient = isLight ? ['#e8e8ec', '#d8d8e0', '#c8c8d0'] : ['#25282c', '#1c1e22', '#141618'];
-        var globeStroke = isLight ? '#c8c8d0' : '#2e3036';
-        var labelColor = isLight ? '#1a1a1a' : '#fff';
+        var isLightTheme = typeof getTheme === 'function' && getTheme() === 'light';
+        var bgColor = isLightTheme ? '#f5f5f5' : '#1a1a1a';
+        var globeGradient = ['#25282c', '#1c1e22', '#141618'];
+        var globeStroke = '#2e3036';
+        var labelColor = '#fff';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
@@ -2245,7 +2244,7 @@ class CustomGlobe {
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
             // Обводка
-            ctx.strokeStyle = isLight ? '#1a1a1a' : '#fff';
+            ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             

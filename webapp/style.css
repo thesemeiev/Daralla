@@ -57,6 +57,9 @@
 [data-theme="light"] .bottom-nav {
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
+[data-theme="light"] .landing-scroll-hint {
+    color: rgba(0, 0, 0, 0.5);
+}
 [data-theme="light"] .nav-glass-indicator {
     background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 40%, rgba(248,252,255,0.6) 100%);
     border: 1px solid rgba(0, 0, 0, 0.06);
@@ -250,7 +253,7 @@
 .landing-back-link {
     background: none;
     border: none;
-    color: #666;
+    color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
     padding: 8px 0;
@@ -258,7 +261,7 @@
 }
 
 .landing-back-link:hover {
-    color: #888;
+    color: var(--text-primary);
 }
 
 .landing-scroll-hint {
@@ -1774,32 +1777,22 @@ body.about-page-active {
 .page-about-scroll.about-bg-light .about-block-title,
 .page-about-scroll.about-bg-light .about-block-text,
 .page-about-scroll.about-bg-light .about-features-list li,
-.page-about-scroll.about-bg-light .about-contact-card,
-[data-theme="light"] .page-about-scroll .about-hero-title,
-[data-theme="light"] .page-about-scroll .about-hero-slogan,
-[data-theme="light"] .page-about-scroll .about-block-title,
-[data-theme="light"] .page-about-scroll .about-block-text,
-[data-theme="light"] .page-about-scroll .about-features-list li,
-[data-theme="light"] .page-about-scroll .about-contact-card {
+.page-about-scroll.about-bg-light .about-contact-card {
     color: #1a1a1a;
 }
-.page-about-scroll.about-bg-light .about-contact-card,
-[data-theme="light"] .page-about-scroll .about-contact-card {
+.page-about-scroll.about-bg-light .about-contact-card {
     background: rgba(232, 232, 236, 0.7);
     border-color: rgba(0, 0, 0, 0.08);
     color: #1a1a1a;
 }
-.page-about-scroll.about-bg-light .about-contact-card:hover,
-[data-theme="light"] .page-about-scroll .about-contact-card:hover {
+.page-about-scroll.about-bg-light .about-contact-card:hover {
     background: rgba(221, 220, 226, 0.85);
     border-color: rgba(0, 0, 0, 0.12);
 }
-.page-about-scroll.about-bg-light .about-contact-card-label,
-[data-theme="light"] .page-about-scroll .about-contact-card-label {
+.page-about-scroll.about-bg-light .about-contact-card-label {
     color: #555;
 }
-.page-about-scroll.about-bg-light .about-contact-card-value,
-[data-theme="light"] .page-about-scroll .about-contact-card-value {
+.page-about-scroll.about-bg-light .about-contact-card-value {
     color: var(--about-accent, #0d6efd);
 }
 
@@ -1853,13 +1846,11 @@ body.about-page-active {
     mix-blend-mode: overlay;
     border-radius: inherit;
 }
-.page-about-scroll.about-bg-light .about-hero-content,
-[data-theme="light"] .page-about-scroll .about-hero-content {
+.page-about-scroll.about-bg-light .about-hero-content {
     background: rgba(242, 242, 244, 0.72);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
 }
-.page-about-scroll.about-bg-light .about-hero-content::after,
-[data-theme="light"] .page-about-scroll .about-hero-content::after {
+.page-about-scroll.about-bg-light .about-hero-content::after {
     opacity: 0.12;
 }
 .about-hero-title {
@@ -1871,8 +1862,7 @@ body.about-page-active {
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     transition: color 0.4s ease-out;
 }
-.page-about-scroll.about-bg-light .about-hero-title,
-[data-theme="light"] .page-about-scroll .about-hero-title {
+.page-about-scroll.about-bg-light .about-hero-title {
     color: #1a1a1a;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
@@ -1882,8 +1872,7 @@ body.about-page-active {
     line-height: 1.55;
     transition: color 0.4s ease-out;
 }
-.page-about-scroll.about-bg-light .about-hero-slogan,
-[data-theme="light"] .page-about-scroll .about-hero-slogan {
+.page-about-scroll.about-bg-light .about-hero-slogan {
     color: #3a3a42;
 }
 
@@ -1910,8 +1899,7 @@ body.about-page-active {
     mix-blend-mode: overlay;
     border-radius: inherit;
 }
-.page-about-scroll.about-bg-light .about-block-inner,
-[data-theme="light"] .page-about-scroll .about-block-inner {
+.page-about-scroll.about-bg-light .about-block-inner {
     background: rgba(242, 242, 244, 0.68);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
 }
@@ -1926,8 +1914,7 @@ body.about-page-active {
     letter-spacing: -0.02em;
     transition: color 0.4s ease-out;
 }
-.page-about-scroll.about-bg-light .about-block-title,
-[data-theme="light"] .page-about-scroll .about-block-title {
+.page-about-scroll.about-bg-light .about-block-title {
     color: #1a1a1e;
 }
 .about-block-text {
@@ -1936,8 +1923,7 @@ body.about-page-active {
     color: #d8d8e0;
     transition: color 0.4s ease-out;
 }
-.page-about-scroll.about-bg-light .about-block-text,
-[data-theme="light"] .page-about-scroll .about-block-text {
+.page-about-scroll.about-bg-light .about-block-text {
     color: #3a3a42;
 }
 .about-features-list {
@@ -2002,12 +1988,10 @@ body.about-page-active {
     transform: translateY(0) scale(0.98);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
-.page-about-scroll.about-bg-light .about-contact-card:hover,
-[data-theme="light"] .page-about-scroll .about-contact-card:hover {
+.page-about-scroll.about-bg-light .about-contact-card:hover {
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
 }
-.page-about-scroll.about-bg-light .about-contact-card:active,
-[data-theme="light"] .page-about-scroll .about-contact-card:active {
+.page-about-scroll.about-bg-light .about-contact-card:active {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 .about-contact-card-label {
@@ -2027,6 +2011,12 @@ body.about-page-active {
     transition: color 0.4s ease-out;
 }
 .page-about-scroll.about-bg-light .about-contact-card-value {
+    color: var(--about-accent, #0d6efd);
+}
+.page-about-scroll.about-bg-light .about-link {
+    color: #1a1a1a;
+}
+.page-about-scroll.about-bg-light .about-link:hover {
     color: var(--about-accent, #0d6efd);
 }
 .about-link {
@@ -2055,22 +2045,19 @@ body.about-page-active {
     .about-hero-content {
         background: rgba(28, 30, 34, 0.88);
     }
-    .page-about-scroll.about-bg-light .about-hero-content,
-    [data-theme="light"] .page-about-scroll .about-hero-content {
+    .page-about-scroll.about-bg-light .about-hero-content {
         background: rgba(242, 242, 244, 0.95);
     }
     .about-block-inner {
         background: rgba(28, 30, 34, 0.85);
     }
-    .page-about-scroll.about-bg-light .about-block-inner,
-    [data-theme="light"] .page-about-scroll .about-block-inner {
+    .page-about-scroll.about-bg-light .about-block-inner {
         background: rgba(242, 242, 244, 0.9);
     }
     .about-contact-card {
         background: rgba(255, 255, 255, 0.12);
     }
-    .page-about-scroll.about-bg-light .about-contact-card,
-    [data-theme="light"] .page-about-scroll .about-contact-card {
+    .page-about-scroll.about-bg-light .about-contact-card {
         background: rgba(232, 232, 236, 0.95);
     }
 }
@@ -2211,7 +2198,7 @@ body.about-page-active {
 }
 
 .instructions-menu h2 {
-    color: #fff;
+    color: var(--text-primary);
     font-size: 18px;
     margin-bottom: 16px;
 }
@@ -2228,7 +2215,7 @@ body.about-page-active {
     border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 20px;
-    color: #fff;
+    color: var(--text-primary);
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
@@ -2246,7 +2233,7 @@ body.about-page-active {
 }
 
 .instruction-detail {
-    color: #fff;
+    color: var(--text-primary);
     line-height: 1.6;
 }
 
