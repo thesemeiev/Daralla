@@ -3808,52 +3808,6 @@ body.about-page-active {
     cursor: not-allowed;
 }
 
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: 16px;
-}
-
-.stat-card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 14px;
-    text-align: center;
-}
-
-.stat-card-title {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-    font-weight: 500;
-}
-
-.stat-card-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-}
-
-.stat-card-value.active {
-    color: #7fcf7f;
-}
-
-.stat-card-value.expired {
-    color: #cf7f7f;
-}
-
-.stat-card-value.revenue {
-    color: #7fcfef;
-}
-
-.stat-card-subtitle {
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
 /* Админ-панель: главный экран — минимализм, ровные строки */
 .admin-panel-content {
     padding: calc(36px + env(safe-area-inset-top, 0px)) 0 16px 0;
@@ -3942,12 +3896,6 @@ body.about-page-active {
 .admin-panel-row:hover .admin-panel-row-chevron {
     transform: translateX(3px);
     color: var(--text-primary);
-}
-
-@media (max-width: 600px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Стили для списка нагрузки серверов (карточки с progress bar) */
