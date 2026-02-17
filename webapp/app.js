@@ -1556,7 +1556,7 @@ async function loadAdminEventsPage() {
                 listEl.innerHTML = events.map(function (ev) {
                     var start = (ev.start_at || '').slice(0, 16);
                     var end = (ev.end_at || '').slice(0, 16);
-                    return '<div class="event-card" style="background:#1a1a1a;border-radius:8px;padding:16px;margin-bottom:12px;">' +
+                    return '<div class="event-card" style="border-radius:8px;padding:16px;margin-bottom:12px;">' +
                         '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
                         '<p style="margin:0 0 8px 0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
                         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +

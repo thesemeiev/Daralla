@@ -1,6 +1,8 @@
 :root {
     --card-bg: #1c1e22;
     --card-border: #2e3036;
+    --card-bg-hover: #25282c;
+    --card-border-hover: #3a3d44;
 }
 
 * {
@@ -296,6 +298,8 @@ input, textarea, select {
 
 /* Модальное окно инструкций — компактный размер */
 .instruction-modal-content {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     height: min(85vh, 520px) !important;
     min-height: 280px !important;
     max-height: min(85vh, 520px) !important;
@@ -461,8 +465,8 @@ h1 {
     width: 100%;
     padding: 20px 22px;
     margin-bottom: 20px;
-    background: linear-gradient(135deg, #252525 0%, #1e1e1e 100%);
-    border: 1px solid #333;
+    background: linear-gradient(135deg, var(--card-bg) 0%, #181a1e 100%);
+    border: 1px solid var(--card-border);
     border-radius: 14px;
     cursor: pointer;
     overflow: hidden;
@@ -473,7 +477,7 @@ h1 {
 }
 
 .profile-card:hover {
-    border-color: #444;
+    border-color: var(--card-border-hover);
 }
 
 .profile-card:active {
@@ -679,17 +683,17 @@ h1 {
 
 .subscription-card:active {
     transform: scale(0.98);
-    background: #252525;
+    background: var(--card-bg-hover);
 }
 
 .subscription-card:hover {
-    border-color: #3a3a3a;
-    background: #252525;
+    border-color: var(--card-border-hover);
+    background: var(--card-bg-hover);
 }
 
 .subscription-card.active {
-    border-color: #4a4a4a;
-    background: #252525;
+    border-color: var(--card-border-hover);
+    background: var(--card-bg-hover);
 }
 
 .subscription-card.expired {
@@ -1154,6 +1158,17 @@ h1 {
     background: var(--card-bg);
     border-radius: 4px;
 }
+
+#subscription-changes-list {
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+
+#broadcast-users-list {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+}
 .choose-option-card {
     flex: 1;
     display: flex;
@@ -1176,7 +1191,7 @@ h1 {
 }
 .choose-option-card:hover {
     border-color: #444;
-    background: #333;
+    background: var(--card-bg-hover);
     color: #e0e0e0;
 }
 .choose-option-card-selected,
@@ -2104,7 +2119,7 @@ body.about-page-active {
 }
 
 .instruction-platform-btn:hover {
-    background: #2a2a2a;
+    background: var(--card-bg-hover);
     border-color: #4a9eff;
 }
 
