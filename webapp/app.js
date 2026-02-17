@@ -1109,7 +1109,8 @@ function showSubscriptionDetail(sub) {
         nameEl.textContent = escapeHtml(sub.name);
     }
     
-    const statusClass = sub.status === 'active' ? 'active' : 'expired';
+    const isActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
+    const statusClass = isActive ? 'active' : 'expired';
     const statusText = sub.status === 'active' ? 'Активна' : 
                       sub.status === 'expired' ? 'Истекла' : 
                       sub.status === 'trial' ? 'Пробная' : sub.status;
@@ -1137,11 +1138,11 @@ function showSubscriptionDetail(sub) {
                 </div>
                 
                 <div class="detail-info-item">
-                    <div class="detail-info-label">${sub.status === 'active' ? 'Истекает' : 'Истекла'}</div>
+                    <div class="detail-info-label">${isActive ? 'Истекает' : 'Истекла'}</div>
                     <div class="detail-info-value">${sub.expires_at_formatted}</div>
                 </div>
                 
-                ${sub.status === 'active' && sub.expires_at ? `
+                ${isActive && sub.expires_at ? `
                     <div class="detail-info-item full-width">
                         <div class="detail-info-label">Осталось</div>
                         <div class="detail-info-value days-highlight">${formatTimeRemaining(sub.expires_at)}</div>
@@ -1153,12 +1154,12 @@ function showSubscriptionDetail(sub) {
                 <button class="action-button" onclick="showRenameSubscriptionModal()" style="margin-bottom: 12px;">
                     Переименовать подписку
                 </button>
-                ${sub.status === 'active' ? `
+                ${isActive ? `
                     <button class="action-button" onclick="copySubscriptionLink('${sub.token}')" style="margin-bottom: 12px;">
                         Копировать ссылку подписки
                     </button>
                 ` : ''}
-                ${sub.status === 'active' || sub.status === 'expired' ? `
+                ${sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial' ? `
                     <button class="action-button" onclick="showExtendSubscriptionModal(${sub.id})" style="background: #4a9eff;">
                         Продлить подписку
                     </button>
@@ -1265,7 +1266,8 @@ function createSubscriptionCard(sub) {
     card.style.cursor = 'pointer';
     card.onclick = () => showSubscriptionDetail(sub);
     
-    const statusClass = sub.status === 'active' ? 'active' : 'expired';
+    const isActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
+    const statusClass = isActive ? 'active' : 'expired';
     const statusText = sub.status === 'active' ? 'Активна' : 
                       sub.status === 'expired' ? 'Истекла' : 
                       sub.status === 'trial' ? 'Пробная' : sub.status;
@@ -1275,7 +1277,7 @@ function createSubscriptionCard(sub) {
             <div class="subscription-name">${escapeHtml(sub.name)}</div>
             <div class="subscription-status subscription-status-blink ${statusClass}">${statusText}</div>
         </div>
-        ${sub.status === 'active' && sub.expires_at ? `
+        ${isActive && sub.expires_at ? `
             <div class="days-badge">
                 <span class="info-label">Осталось</span>
                 <span class="days-remaining">${formatTimeRemaining(sub.expires_at)}</span>
@@ -3279,17 +3281,22 @@ async function showAdminUserDetail(userId) {
             <div class="admin-user-detail-section">
                 <h3>Подписки (${data.subscriptions.length})</h3>
                 ${data.subscriptions.length > 0 ? 
-                    data.subscriptions.map(sub => `
+                    data.subscriptions.map(sub => {
+                        const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
+                        const statusClass = sub.status === 'deleted' ? 'deleted' : sub.status === 'canceled' ? 'canceled' : (isSubActive ? 'active' : 'expired');
+                        const statusLabel = sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : sub.status === 'trial' ? 'Пробная' : sub.status === 'deleted' ? 'Удалена' : 'Отменена';
+                        return `
                         <div class="admin-subscription-card" onclick="showAdminSubscriptionEdit(${sub.id})">
                             <div class="admin-subscription-name">${escapeHtml(sub.name)}</div>
-                            <div class="admin-subscription-status ${sub.status}">${sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : sub.status === 'deleted' ? 'Удалена' : 'Отменена'}</div>
+                            <div class="admin-subscription-status ${statusClass}">${statusLabel}</div>
                             <div class="admin-subscription-info">
                                 <div>Создана: ${escapeHtml(sub.created_at_formatted)}</div>
                                 <div>Истекает: ${escapeHtml(sub.expires_at_formatted)}</div>
                                 <div>Устройств: ${sub.device_limit}</div>
                             </div>
                         </div>
-                    `).join('') :
+                    `;
+                    }).join('') :
                     '<p class="empty-hint hint" style="padding: 16px;">Нет подписок</p>'
                 }
             </div>
@@ -3389,13 +3396,14 @@ async function showAdminSubscriptionEdit(subId) {
         
         if (sub.status === 'deleted') {
             statusDisplay.textContent = `Текущий статус: ${currentStatusName}`;
-            statusDisplay.style.color = '#ff6b6b';
+            statusDisplay.className = 'sub-status-display sub-status-expired';
             statusHint.textContent = 'Финальный статус, нельзя изменить';
             statusDisplayGroup.style.display = 'block';
         } else {
             // Для active/expired статус управляется автоматически
             statusDisplay.textContent = `Текущий статус: ${currentStatusName}`;
-            statusDisplay.style.color = sub.status === 'active' ? '#4CAF50' : '#ffa726';
+            const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
+            statusDisplay.className = 'sub-status-display ' + (isSubActive ? 'sub-status-active' : 'sub-status-expired');
             statusHint.textContent = 'Управляется автоматически через дату истечения';
             statusDisplayGroup.style.display = 'block';
         }

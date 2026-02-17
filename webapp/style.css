@@ -65,7 +65,29 @@
     color: #1a7a2e;
 }
 [data-theme="light"] .bottom-nav {
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 40%, rgba(248,250,255,0.88) 100%),
+        var(--nav-bg);
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+[data-theme="light"] .nav-glass-indicator {
+    background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 40%, rgba(240,245,255,0.75) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.06),
+        0 0 0 1px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+[data-theme="light"] .nav-glass-indicator.pressing {
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,255,0.9) 50%, rgba(240,245,255,0.85) 100%);
+    box-shadow:
+        0 2px 12px rgba(0, 0, 0, 0.05),
+        0 0 0 1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 [data-theme="light"] .landing-scroll-hint {
     color: rgba(0, 0, 0, 0.5);
@@ -116,6 +138,71 @@
 
 [data-theme="light"] .subscription-change-field {
     color: #1a7a2e;
+}
+
+/* Статусы в светлой теме — видимость */
+[data-theme="light"] .subscription-status.active,
+[data-theme="light"] .server-status-badge.online {
+    background: rgba(76, 175, 80, 0.25);
+    color: #1a7a2e;
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+[data-theme="light"] .subscription-status.expired,
+[data-theme="light"] .server-status-badge.offline {
+    background: rgba(220, 53, 69, 0.2);
+    color: #c44;
+    border-color: rgba(220, 53, 69, 0.4);
+}
+
+[data-theme="light"] .detail-status.active,
+[data-theme="light"] .detail-status.success {
+    background: rgba(76, 175, 80, 0.2);
+    color: #1a7a2e;
+    border-color: rgba(76, 175, 80, 0.4);
+}
+
+[data-theme="light"] .detail-status.expired {
+    background: rgba(220, 53, 69, 0.15);
+    color: #c44;
+    border-color: rgba(220, 53, 69, 0.35);
+}
+
+[data-theme="light"] .event-badge--live,
+[data-theme="light"] .event-detail-status--live {
+    background: rgba(76, 175, 80, 0.25);
+    color: #1a7a2e;
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+[data-theme="light"] .event-badge--upcoming,
+[data-theme="light"] .event-detail-status--upcoming {
+    background: rgba(100, 120, 180, 0.25);
+    color: #6b7bc4;
+    border-color: rgba(100, 120, 180, 0.45);
+}
+
+[data-theme="light"] .event-badge--ended,
+[data-theme="light"] .event-detail-status--ended {
+    background: rgba(0, 0, 0, 0.08);
+    color: #555;
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .admin-subscription-status.active {
+    background: rgba(76, 175, 80, 0.2);
+    color: #1a7a2e;
+}
+
+[data-theme="light"] .admin-subscription-status.expired,
+[data-theme="light"] .admin-subscription-status.deleted {
+    background: rgba(220, 53, 69, 0.15);
+    color: #c44;
+}
+
+[data-theme="light"] .admin-subscription-status.canceled {
+    background: rgba(0, 0, 0, 0.08);
+    color: #555;
 }
 
 * {
@@ -859,12 +946,6 @@ h1 {
     border: 1px solid rgba(255, 59, 48, 0.5);
 }
 
-.subscription-status.trial {
-    background: rgba(255, 152, 0, 0.4);
-    color: #ffb74d;
-    border: 1px solid rgba(255, 152, 0, 0.5);
-}
-
 .subscription-status-blink,
 .server-status-blink {
     animation: status-blink 2s ease-in-out infinite;
@@ -1589,6 +1670,13 @@ h1 {
     transition: color 0.3s ease;
     position: relative;
     z-index: 2;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+.nav-item:focus-visible {
+    outline: 2px solid var(--nav-text-active);
+    outline-offset: 2px;
 }
 
 .nav-item svg {
@@ -2215,6 +2303,8 @@ body.about-page-active {
     font-size: 20px;
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
 }
 .theme-btn:hover {
     background: var(--card-border-hover);
@@ -2225,6 +2315,36 @@ body.about-page-active {
 .theme-btn.active {
     border-color: var(--btn-primary, #4a9eff);
     background: rgba(74, 158, 255, 0.15);
+}
+
+/* Кнопка тёмной темы в светлой теме — остаётся тёмной */
+[data-theme="light"] .theme-btn[data-theme="dark"]:not(.active) {
+    background: #2a2a2e;
+    color: #e0e0e0;
+    border-color: #3a3a3e;
+}
+[data-theme="light"] .theme-btn[data-theme="dark"]:not(.active):hover {
+    background: #35353a;
+    border-color: #45454a;
+}
+
+/* Кнопка светлой темы в тёмной теме — остаётся светлой */
+.theme-btn[data-theme="light"]:not(.active) {
+    background: #e8e8ec;
+    color: #1a1a1a;
+    border-color: #d0d0d8;
+}
+.theme-btn[data-theme="light"]:not(.active):hover {
+    background: #f0f0f4;
+    border-color: #c8c8d0;
+}
+[data-theme="light"] .theme-btn[data-theme="light"]:not(.active) {
+    background: var(--card-bg-hover);
+    color: var(--text-primary);
+    border-color: var(--card-border);
+}
+[data-theme="light"] .theme-btn[data-theme="light"]:not(.active):hover {
+    background: var(--card-border-hover);
 }
 
 .about-section p {
@@ -3327,7 +3447,22 @@ body.about-page-active {
 .sub-status-display {
     padding: 8px 12px;
     margin-top: 4px;
-    color: var(--text-primary);
+}
+
+.sub-status-display.sub-status-active {
+    color: #5ee85e;
+}
+
+.sub-status-display.sub-status-expired {
+    color: #ff5c5c;
+}
+
+[data-theme="light"] .sub-status-display.sub-status-active {
+    color: #1a7a2e;
+}
+
+[data-theme="light"] .sub-status-display.sub-status-expired {
+    color: #c44;
 }
 
 .sub-status-hint {
