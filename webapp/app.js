@@ -61,6 +61,46 @@ function isMiniAppHost() {
     return typeof window !== 'undefined' && window.location && (window.location.hostname || '').toLowerCase() === MINI_APP_HOST;
 }
 
+// Тема оформления: сохранение в localStorage, применение data-theme
+var THEME_KEY = 'daralla-theme';
+function getTheme() {
+    try {
+        var stored = localStorage.getItem(THEME_KEY);
+        if (stored === 'light' || stored === 'dark') return stored;
+        if (typeof window !== 'undefined' && window.matchMedia) {
+            var mq = window.matchMedia('(prefers-color-scheme: light)');
+            if (mq && mq.matches) return 'light';
+        }
+        return 'dark';
+    } catch (e) { return 'dark'; }
+}
+function setTheme(theme) {
+    if (theme !== 'light' && theme !== 'dark') return;
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+    applyTheme();
+}
+function applyTheme() {
+    var theme = getTheme();
+    var root = document.documentElement;
+    if (root) root.setAttribute('data-theme', theme);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#f5f5f5' : '#1a1a1a');
+    if (typeof platform !== 'undefined' && platform.reapplyTgUi) platform.reapplyTgUi();
+}
+function initThemeToggle() {
+    document.querySelectorAll('.theme-btn').forEach(function (btn) {
+        var theme = btn.getAttribute('data-theme');
+        if (!theme) return;
+        btn.classList.toggle('active', getTheme() === theme);
+        btn.addEventListener('click', function () {
+            setTheme(theme);
+            document.querySelectorAll('.theme-btn').forEach(function (b) {
+                b.classList.toggle('active', b.getAttribute('data-theme') === theme);
+            });
+        });
+    });
+}
+
 // Адаптер платформы: веб vs Telegram Mini App. Вся логика различий сосредоточена здесь.
 var platform = (function () {
     var _tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
@@ -72,8 +112,9 @@ var platform = (function () {
             _tg.ready();
             _tg.expand();
             if (_tg.disableVerticalSwipes) _tg.disableVerticalSwipes();
-            _tg.setHeaderColor('#1a1a1a');
-            _tg.setBackgroundColor('#1a1a1a');
+            var color = (typeof getTheme === 'function' && getTheme() === 'light') ? '#f5f5f5' : '#1a1a1a';
+            _tg.setHeaderColor(color);
+            _tg.setBackgroundColor(color);
         } catch (e) {}
     }
 
@@ -122,6 +163,7 @@ var platform = (function () {
             if (_isTelegram && _tg && _tg.initData) return { type: 'tg', initData: _tg.initData };
             return { type: 'web', token: (typeof webAuthToken !== 'undefined' ? webAuthToken : null) || null };
         },
+        reapplyTgUi: applyTgUi,
         getTgRef: function () { return _tg; },
         getTgUser: function () { return _tg && _tg.initDataUnsafe && _tg.initDataUnsafe.user ? _tg.initDataUnsafe.user : null; },
         openExternalUrl: function (url) {
@@ -856,7 +898,8 @@ function initAboutPage() {
         var t = lerpFactor;
         smoothedProgress += (targetProgress - smoothedProgress) * t;
         aboutPageState.smoothedProgress = smoothedProgress;
-        var isLight = smoothedProgress > 0.5;
+        var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
+        var isLight = themeLight || smoothedProgress > 0.5;
         document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
         pageEl.classList.toggle('about-bg-light', isLight);
         if (aboutPageState.mesh) {
@@ -4200,6 +4243,7 @@ function waitForTelegram(maxMs) {
 
 // Загружаем подписки при загрузке страницы
 document.addEventListener('DOMContentLoaded', async () => {
+    applyTheme();
     var landingEl = document.getElementById('page-landing');
     if (landingEl) landingEl.style.display = '';
     await platform.init();
@@ -4269,6 +4313,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initNavIndicator();
+    initThemeToggle();
     window.addEventListener('hashchange', function () {
         var route = parseHashRoute();
         if (!route || route.pageName === currentPage) return;

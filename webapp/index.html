@@ -10,11 +10,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=3">
+    <link rel="stylesheet" href="/style.css?v=4">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
 </head>
-<body style="background:#1a1a1a;color:#e0e0e0">
+<body>
     <div class="container">
         <!-- Лендинг до входа (Веб) — о сервисе, fullscreen, scroll-snap -->
         <!-- По умолчанию виден лендинг — нет белого экрана до загрузки JS -->
@@ -399,6 +399,16 @@
             </header>
             <div class="about-content about-content-account">
                 <div id="account-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
+                <div class="about-section">
+                    <h3>Внешний вид</h3>
+                    <div class="theme-toggle-row">
+                        <span class="theme-toggle-label">Тема</span>
+                        <div class="theme-toggle-buttons">
+                            <button type="button" class="theme-btn" data-theme="light" title="Светлая">☀️</button>
+                            <button type="button" class="theme-btn" data-theme="dark" title="Тёмная">🌙</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="about-section">
                     <h3>Данные аккаунта</h3>
                     <div class="about-account-info">
