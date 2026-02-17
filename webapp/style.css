@@ -26,6 +26,8 @@
     --spinner-border-top: #6a6a6a;
     --profile-gradient-end: #181a1e;
     --scrollbar-thumb: #333;
+    --aurora-mid: rgba(255, 255, 255, 0.08);
+    --aurora-peak: rgba(255, 255, 255, 0.18);
 }
 
 [data-theme="light"] {
@@ -56,6 +58,8 @@
     --spinner-border-top: #888;
     --profile-gradient-end: #e8e8ec;
     --scrollbar-thumb: #c0c0c0;
+    --aurora-mid: rgba(0, 0, 0, 0.03);
+    --aurora-peak: rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="light"] .form-message--error {
@@ -75,39 +79,19 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 [data-theme="light"] .nav-glass-indicator {
-    /* В светлой теме делаем индикатор более прозрачным, чтобы иконка оставалась читаемой */
     background:
-        linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.2) 40%, rgba(240,245,255,0.12) 100%);
+        linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.02) 40%, rgba(0,0,0,0.01) 100%);
     border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.06),
-        0 0 0 1px rgba(0, 0, 0, 0.03),
-        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 [data-theme="light"] .nav-glass-indicator.pressing {
-    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,255,0.9) 50%, rgba(240,245,255,0.85) 100%);
-    box-shadow:
-        0 2px 12px rgba(0, 0, 0, 0.05),
-        0 0 0 1px rgba(0, 0, 0, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 1);
+    background: linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.04) 50%, rgba(0,0,0,0.02) 100%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 [data-theme="light"] .landing-scroll-hint {
     color: rgba(0, 0, 0, 0.5);
 }
 
-/* Aurora на карточке аккаунта: в светлой теме — тёмный блик вместо белого */
-[data-theme="light"] .profile-card-aurora::after {
-    background: linear-gradient(
-        105deg,
-        transparent 0%,
-        transparent 30%,
-        rgba(0, 0, 0, 0.03) 45%,
-        rgba(0, 0, 0, 0.08) 50%,
-        rgba(0, 0, 0, 0.03) 55%,
-        transparent 70%,
-        transparent 100%
-    );
-}
 [data-theme="light"] .delete-section .hint.warning {
     color: #c44;
 }
@@ -718,9 +702,9 @@ h1 {
         105deg,
         transparent 0%,
         transparent 30%,
-        rgba(255, 255, 255, 0.08) 45%,
-        rgba(255, 255, 255, 0.18) 50%,
-        rgba(255, 255, 255, 0.08) 55%,
+        var(--aurora-mid) 45%,
+        var(--aurora-peak) 50%,
+        var(--aurora-mid) 55%,
         transparent 70%,
         transparent 100%
     );
