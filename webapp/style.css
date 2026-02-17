@@ -1674,10 +1674,6 @@ h1 {
     -webkit-tap-highlight-color: transparent;
     user-select: none;
 }
-.nav-item:focus-visible {
-    outline: 2px solid var(--nav-text-active);
-    outline-offset: 2px;
-}
 
 .nav-item svg {
     width: 24px;
