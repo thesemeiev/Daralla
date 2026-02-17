@@ -1,3 +1,8 @@
+:root {
+    --card-bg: #1c1e22;
+    --card-border: #2e3036;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -630,7 +635,7 @@ h1 {
     gap: 16px;
     margin-bottom: 24px;
     padding: 20px;
-    background: #222222;
+    background: var(--card-bg);
     border-radius: 14px;
 }
 
@@ -662,8 +667,8 @@ h1 {
 }
 
 .subscription-card {
-    background: #222222;
-    border: 1px solid #2a2a2a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 14px 14px;
     margin-bottom: 10px;
@@ -756,17 +761,17 @@ h1 {
 
 /* --- События: карточки и бейджи --- */
 .event-card {
-    background: #1a1a1a;
+    background: var(--card-bg);
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 12px;
-    border: 1px solid #2a2a2a;
+    border: 1px solid var(--card-border);
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .event-card--live {
-    border-color: rgba(76, 175, 80, 0.5);
-    background: rgba(76, 175, 80, 0.08);
+    border-color: var(--card-border);
+    background: var(--card-bg);
 }
 
 .event-badge {
@@ -1004,7 +1009,7 @@ h1 {
 .subscription-actions {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #2a2a2a;
+    border-top: 1px solid var(--card-border);
 }
 
 .action-button {
@@ -1124,6 +1129,31 @@ h1 {
     gap: 12px;
     margin-bottom: 0;
 }
+
+.referral-code-block {
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+
+.event-referral-code-block {
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+
+#broadcast-result {
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+
+.info-section {
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+
+#sub-status-display {
+    background: var(--card-bg);
+    border-radius: 4px;
+}
 .choose-option-card {
     flex: 1;
     display: flex;
@@ -1132,8 +1162,8 @@ h1 {
     justify-content: center;
     min-height: 72px;
     padding: 14px 10px;
-    background: #2a2a2a;
-    border: 2px solid #333;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
     border-radius: 10px;
     color: #ccc;
     font-family: inherit;
@@ -1193,10 +1223,10 @@ h1 {
 }
 
 .plan-card {
-    background: #2a2a2a;
+    background: var(--card-bg);
     border-radius: 10px;
     padding: 14px;
-    border: 1px solid #333;
+    border: 1px solid var(--card-border);
     cursor: default;
     transition: all 0.2s;
     position: relative;
@@ -1484,8 +1514,8 @@ h1 {
 }
 
 .detail-card {
-    background: #222222;
-    border: 1px solid #2a2a2a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 14px;
     padding: 20px;
 }
@@ -1566,13 +1596,13 @@ h1 {
 .detail-actions {
     margin-top: 20px;
     padding-top: 20px;
-    border-top: 1px solid #2a2a2a;
+    border-top: 1px solid var(--card-border);
 }
 
 /* Страница серверов */
 .server-card {
-    background: #222222;
-    border: 1px solid #2a2a2a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 14px;
     padding: 20px;
     margin-bottom: 12px;
@@ -1581,11 +1611,11 @@ h1 {
 }
 
 .server-card.online {
-    border-color: #3a4a3a;
+    border-color: var(--card-border);
 }
 
 .server-card.offline {
-    border-color: #4a3a3a;
+    border-color: var(--card-border);
     opacity: 0.7;
 }
 
@@ -1618,7 +1648,7 @@ h1 {
 .server-info {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #2a2a2a;
+    border-top: 1px solid var(--card-border);
 }
 
 /* Страница "О нас" — обычный скролл, блоки выезжают с боков */
@@ -1649,7 +1679,7 @@ body.about-page-active {
     box-sizing: border-box;
 }
 .about-hero {
-    padding-top: calc(56px + env(safe-area-inset-top, 0px));
+    padding-top: calc(36px + env(safe-area-inset-top, 0px));
 }
 .about-block {
     margin-top: 0;
@@ -1954,7 +1984,7 @@ body.about-page-active {
         padding: 40px 20px;
     }
     .about-hero {
-        padding-top: calc(40px + env(safe-area-inset-top, 0px));
+        padding-top: calc(28px + env(safe-area-inset-top, 0px));
     }
     .about-block.about-contact {
         padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
@@ -1987,8 +2017,8 @@ body.about-page-active {
 }
 
 .about-section {
-    background: #222222;
-    border: 1px solid #2a2a2a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 14px;
     padding: 20px;
     margin-bottom: 16px;
@@ -2061,8 +2091,8 @@ body.about-page-active {
 }
 
 .instruction-platform-btn {
-    background: #222222;
-    border: 1px solid #2a2a2a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 20px;
     color: #fff;
@@ -2219,8 +2249,8 @@ body.about-page-active {
 }
 
 .admin-user-card {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 12px;
@@ -2432,8 +2462,8 @@ body.about-page-active {
 }
 
 .admin-user-detail-section {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
@@ -2709,8 +2739,8 @@ body.about-page-active {
 }
 
 .admin-subscription-card {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 10px;
@@ -3101,8 +3131,8 @@ body.about-page-active {
 }
 
 .key-item {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     padding: 16px;
     transition: border-color 0.2s;
@@ -3218,8 +3248,8 @@ body.about-page-active {
 }
 
 .stat-card {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     padding: 14px;
     text-align: center;
@@ -3291,8 +3321,8 @@ body.about-page-active {
 }
 
 .admin-panel-rows {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 10px;
     overflow: hidden;
 }
@@ -3360,8 +3390,8 @@ body.about-page-active {
 }
 
 .server-load-card {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 14px 16px;
     transition: border-color 0.2s, background 0.2s;

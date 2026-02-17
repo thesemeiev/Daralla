@@ -1490,7 +1490,7 @@ function loadEventDetail(eventId) {
             html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашайте друзей — поднимайтесь в рейтинге.</p>';
             html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дайте другу свой код. Когда он введёт его при покупке или продлении, ваш рейтинг вырастет.</p>';
             if (myCode) {
-                html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;background:#2a2a2a;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
+                html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
                 html += '<code style="font-size:18px;font-weight:600;color:#4a9eff;letter-spacing:1px;">' + escapeHtml(myCode) + '</code>';
                 html += '<button type="button" class="btn-primary" style="padding:8px 16px;flex-shrink:0;" onclick="copyEventReferralCode(\'' + myCode.replace(/'/g, "\\'") + '\')">Копировать</button>';
                 html += '</div>';
