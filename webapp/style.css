@@ -83,10 +83,16 @@
         linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.02) 40%, rgba(0,0,0,0.01) 100%);
     border: 1px solid rgba(0, 0, 0, 0.06);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 [data-theme="light"] .nav-glass-indicator.pressing {
     background: linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.04) 50%, rgba(0,0,0,0.02) 100%);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .nav-glass-indicator.dragging {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 [data-theme="light"] .landing-scroll-hint {
     color: rgba(0, 0, 0, 0.5);
