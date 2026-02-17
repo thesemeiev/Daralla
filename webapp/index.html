@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=7">
+    <link rel="stylesheet" href="/style.css?v=8">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
 </head>
@@ -213,7 +213,7 @@
                 </div>
                 <div id="choose-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px;">
                     <label class="form-group" style="margin-bottom: 0;">
-                        <span style="color: #999; font-size: 14px;">Код события (необязательно)</span>
+                        <span class="hint" style="font-size: 14px;">Код события (необязательно)</span>
                         <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
                     </label>
                 </div>
@@ -252,7 +252,7 @@
                         </button>
                     </div>
                     
-                    <p class="hint" style="margin-top: 16px; text-align: center; color: #999; font-size: 14px;">
+                    <p class="hint" style="margin-top: 16px; text-align: center; font-size: 14px;">
                         Ссылка действительна 15 минут
                     </p>
                 </div>
@@ -267,7 +267,7 @@
             
             <div style="margin-bottom: 24px; position: relative; z-index: 1;">
                 <div id="server-map" style="height: 300px; width: 100%; border-radius: 8px; overflow: visible; background: transparent; position: relative; z-index: 0;"></div>
-                <div id="server-map-error" style="display: none; padding: 16px; background: #2a1a1a; border-radius: 8px; margin-top: 8px; color: #ff6b6b; text-align: center;">
+                <div id="server-map-error" class="server-map-error" style="display: none; padding: 16px; border-radius: 8px; margin-top: 8px; text-align: center;">
                     <p>Не удалось загрузить карту серверов</p>
                 </div>
             </div>
@@ -321,7 +321,7 @@
             
             <div class="instructions-content">
                 <div class="instructions-menu" id="instructions-menu">
-                    <h2 style="margin-bottom: 16px; color: #fff;">Выберите вашу платформу:</h2>
+                    <h2 style="margin-bottom: 16px;">Выберите вашу платформу:</h2>
                     <div class="instructions-grid">
                         <button class="instruction-platform-btn" onclick="showInstructionModal('android')">
                             <span>Android</span>
@@ -537,7 +537,7 @@
                     </div>
                     <div class="form-group">
                         <label>Награды</label>
-                        <p class="hint" style="margin: 0 0 8px 0; font-size: 12px; color: #999;">Текст приза для каждого места (например: 100 дней, Футболка, Скидка 50%)</p>
+                        <p class="hint" style="margin: 0 0 8px 0; font-size: 12px;">Текст приза для каждого места (например: 100 дней, Футболка, Скидка 50%)</p>
                         <div class="form-group" style="margin-bottom: 8px;">
                             <label for="admin-event-reward1" style="font-size: 13px;">1 место</label>
                             <input type="text" id="admin-event-reward1" placeholder="Например: 100 дней подписки">
@@ -657,9 +657,10 @@
                             <input 
                                 type="text" 
                                 id="broadcast-user-search" 
+                                class="broadcast-input"
                                 placeholder="Поиск пользователей по ID..." 
                                 oninput="searchUsersForBroadcast()"
-                                style="width: 100%; padding: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; color: #e0e0e0; font-size: 14px; box-sizing: border-box;"
+                                style="width: 100%; padding: 10px; border-radius: 8px; font-size: 14px; box-sizing: border-box;"
                             >
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -683,20 +684,21 @@
                     <div id="broadcast-selected-chips" class="chip-container" style="display: none; margin-bottom: 12px;"></div>
                     
                     <div id="broadcast-users-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 12px;">
-                        <div class="broadcast-empty-state" style="padding: 16px; text-align: center; color: #a0a0a0;">
+                        <div class="broadcast-empty-state" style="padding: 16px; text-align: center;">
                             Введите ID для поиска
                         </div>
                     </div>
                 </div>
                 
                 <div style="margin-bottom: 20px;">
-                    <label for="broadcast-message" style="display: block; margin-bottom: 8px; color: #e0e0e0; font-size: 14px; font-weight: 500;">Текст сообщения:</label>
+                    <label for="broadcast-message" class="broadcast-label">Текст сообщения:</label>
                     <textarea 
                         id="broadcast-message" 
+                        class="broadcast-input"
                         placeholder="Введите текст сообщения для рассылки..."
-                        style="width: 100%; min-height: 200px; padding: 12px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; color: #e0e0e0; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                        style="width: 100%; min-height: 200px; padding: 12px; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"
                     ></textarea>
-                    <p style="color: #8a8a8a; font-size: 12px; margin-top: 8px; margin-bottom: 0;">
+                    <p class="hint" style="font-size: 12px; margin-top: 8px; margin-bottom: 0;">
                         Поддерживается HTML разметка (жирный текст, ссылки и т.д.)
                     </p>
                 </div>
@@ -710,12 +712,12 @@
                     Отправить рассылку
                 </button>
                 
-                <div id="broadcast-result" style="display: none; margin-top: 20px; padding: 16px;">
-                    <h3 style="color: #f5f5f5; font-size: 16px; margin-top: 0; margin-bottom: 12px;">Результат рассылки:</h3>
-                    <div style="color: #e0e0e0; font-size: 14px;">
-                        <p style="margin: 8px 0;">Отправлено: <span id="broadcast-sent-count" style="color: #7fcf7f; font-weight: 600;">0</span></p>
-                        <p style="margin: 8px 0;">Ошибок: <span id="broadcast-failed-count" style="color: #cf7f7f; font-weight: 600;">0</span></p>
-                        <p style="margin: 8px 0;">Всего получателей: <span id="broadcast-total-count" style="color: #f5f5f5; font-weight: 600;">0</span></p>
+                <div id="broadcast-result" class="broadcast-result" style="display: none; margin-top: 20px; padding: 16px;">
+                    <h3>Результат рассылки:</h3>
+                    <div class="broadcast-result-body">
+                        <p>Отправлено: <span id="broadcast-sent-count" class="broadcast-count-success">0</span></p>
+                        <p>Ошибок: <span id="broadcast-failed-count" class="broadcast-count-error">0</span></p>
+                        <p>Всего получателей: <span id="broadcast-total-count" class="broadcast-count-total">0</span></p>
                     </div>
                 </div>
             </div>
@@ -813,8 +815,8 @@
                         
                         <div class="form-group" id="sub-status-display-group" style="display: none;">
                             <label>Статус подписки</label>
-                            <div id="sub-status-display" style="padding: 8px 12px; color: #fff; margin-top: 4px;"></div>
-                            <small style="color: #a0a0a0; display: block; margin-top: 4px;" id="sub-status-hint"></small>
+                            <div id="sub-status-display" class="sub-status-display"></div>
+                            <small class="sub-status-hint hint" id="sub-status-hint"></small>
                         </div>
                         
                         <div class="form-actions">
@@ -831,8 +833,8 @@
                         </p>
                     </div>
                     
-                    <div class="delete-section" style="margin-top: 24px; padding: 16px; background: #3a1a1a; border-radius: 8px; border: 1px solid #ff4444;">
-                        <h3 style="margin-top: 0; color: #ff6666;"> Удаление подписки</h3>
+                    <div class="delete-section">
+                        <h3>Удаление подписки</h3>
                         <p class="hint warning" style="margin-bottom: 16px;">
                             <strong>Внимание! Это действие необратимо.</strong><br>
                             Подписка будет полностью удалена из базы данных, а все клиенты удалены со всех X-UI серверов.
@@ -866,7 +868,7 @@
             
             <div id="admin-server-management-content" class="admin-page-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 style="margin: 0; font-size: 18px; color: #fff;">Группы серверов</h2>
+                    <h2 class="page-section-title">Группы серверов</h2>
                     <div style="display: flex; gap: 8px;">
                         <button class="btn-primary" onclick="showAddServerGroupModal()" style="padding: 8px 16px; font-size: 14px; border-radius: 10px;">+ Группа</button>
                     </div>
@@ -1021,7 +1023,7 @@
     <div id="subscription-confirm-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h2>Подтверждение изменений</h2>
-            <p style="margin: 16px 0; color: #fff;">Изменения будут применены к подписке и автоматически синхронизированы с X-UI серверами:</p>
+            <p class="modal-body">Изменения будут применены к подписке и автоматически синхронизированы с X-UI серверами:</p>
             <div id="subscription-changes-list" style="padding: 16px; margin: 16px 0; max-height: 300px; overflow-y: auto;">
                 <!-- Список изменений будет добавлен динамически -->
             </div>
@@ -1061,7 +1063,7 @@
     <div id="web-access-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h2>Настроить web-доступ</h2>
-            <p style="margin-bottom: 16px; color: #ccc;">Укажите логин и пароль для входа на сайт.</p>
+            <p class="hint" style="margin-bottom: 16px;">Укажите логин и пароль для входа на сайт.</p>
             <form id="web-access-form" onsubmit="handleWebAccessSetup(event)">
                 <div class="form-group">
                     <label>Логин</label>
