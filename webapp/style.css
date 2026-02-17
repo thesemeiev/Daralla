@@ -1020,7 +1020,7 @@ h1 {
     width: 100%;
     padding: 12px;
     border: none;
-    background: #3a3a3a;
+    background: var(--card-bg-hover);
     color: #f5f5f5;
     border-radius: 10px;
     font-size: 15px;
@@ -1510,8 +1510,8 @@ h1 {
 
 /* Детальная страница подписки */
 .back-button {
-    background: #2a2a2a;
-    border: 1px solid #333;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     color: #fff;
     font-size: 14px;
     cursor: pointer;
@@ -1525,7 +1525,7 @@ h1 {
 
 .back-button:active {
     transform: scale(0.95);
-    background: #333;
+    background: var(--card-bg-hover);
 }
 
 .detail-card {
@@ -2366,12 +2366,12 @@ body.about-page-active {
     border: 1px solid transparent;
 }
 .server-action-btn.btn-secondary {
-    background: #2a2a2a;
+    background: var(--card-bg);
     color: #a0a0a0;
-    border-color: #3a3a3a;
+    border-color: var(--card-border);
 }
 .server-action-btn.btn-secondary:hover {
-    background: #353535;
+    background: var(--card-bg-hover);
     color: #c0c0c0;
 }
 .server-action-btn.btn-danger {
@@ -2885,25 +2885,31 @@ body.about-page-active {
 }
 
 .btn-primary {
-    background: #4a4a4a;
-    color: #f5f5f5;
+    background: #4a9eff;
+    color: #fff;
 }
 
 .btn-primary:hover {
-    background: #5a5a5a;
+    background: #5aaeff;
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 16px rgba(74, 158, 255, 0.4);
 }
 
 .btn-primary:active {
     transform: scale(0.98);
-    background: #3a3a3a;
+    background: #3a8eef;
 }
 
 .btn-secondary {
-    background: #2a2a2a;
+    background: var(--card-bg);
     color: #a0a0a0;
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--card-border);
+}
+
+.btn-secondary:hover {
+    background: var(--card-bg-hover);
+    border-color: var(--card-border-hover);
+    color: #c0c0c0;
 }
 
 .btn-secondary:active {
@@ -3056,8 +3062,8 @@ body.about-page-active {
 
 .pagination button {
     padding: 8px 12px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 6px;
     color: #e0e0e0;
     font-size: 14px;

@@ -863,7 +863,7 @@ function initAboutPage() {
             var mesh = aboutPageState.mesh;
             mesh.rotation.y = smoothedProgress * Math.PI * 2;
             mesh.rotation.x = smoothedProgress * Math.PI * 0.5;
-            var hex = isLight ? 0x2a2d32 : 0x1e2024;
+            var hex = isLight ? 0x25282c : 0x1c1e22;
             if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
             if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = isLight ? 1.18 : 0.95;
         }
@@ -925,7 +925,7 @@ function initAboutPage() {
         }
         var geom = new THREE.DodecahedronGeometry(0.6, 0);
         var mat = new THREE.MeshStandardMaterial({
-            color: 0x1e2024,
+            color: 0x1c1e22,
             metalness: 0.78,
             roughness: 0.22,
             envMapIntensity: 0.95
@@ -2096,7 +2096,7 @@ class CustomGlobe {
         ctx.fillStyle = '#1a1a1a';
         ctx.fillRect(0, 0, width, height);
         
-        // Рисуем круг глобуса (темный стиль)
+        // Рисуем круг глобуса (цвет карточек #1c1e22)
         ctx.save();
         ctx.translate(this.centerX, this.centerY);
         // Убираем ctx.scale - применяем zoom только в latLngToXY для единообразия
@@ -2104,20 +2104,20 @@ class CustomGlobe {
         // Внешний круг (граница) - применяем zoom к радиусу
         const scaledRadius = this.radius * this.zoom;
         const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, scaledRadius);
-        gradient.addColorStop(0, '#2a2a2a');
-        gradient.addColorStop(0.7, '#1a1a1a');
-        gradient.addColorStop(1, '#0a0a0a');
+        gradient.addColorStop(0, '#25282c');
+        gradient.addColorStop(0.5, '#1c1e22');
+        gradient.addColorStop(1, '#141618');
         
         ctx.beginPath();
         ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
-        ctx.strokeStyle = '#333';
+        ctx.strokeStyle = '#2e3036';
         ctx.lineWidth = 2 / this.zoom; // Компенсируем толщину линии при зуме
         ctx.stroke();
         
         // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
-        ctx.strokeStyle = '#333';
+        ctx.strokeStyle = '#2e3036';
         ctx.lineWidth = 1 / this.zoom; // Компенсируем толщину линии при зуме
         
         // Меридианы (вертикальные линии)
