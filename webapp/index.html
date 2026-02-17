@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=8">
+    <link rel="stylesheet" href="/style.css?v=9">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
 </head>
@@ -247,7 +247,7 @@
                     </div>
                     
                     <div class="detail-actions">
-                        <button type="button" id="payment-link-button" class="action-button payment-link-button" style="width:100%;padding:12px;border:none;border-radius:10px;background:#4a9eff;color:#fff;cursor:pointer;font-size:15px;font-weight:500;">
+                        <button type="button" id="payment-link-button" class="action-button payment-link-button" style="width:100%;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:500;">
                             Перейти к оплате
                         </button>
                     </div>
@@ -826,7 +826,7 @@
                     </form>
                     
                     <div class="info-section" style="margin-top: 24px; padding: 16px;">
-                        <h3 style="margin-top: 0; color: #4a9eff;"> Автоматическая синхронизация</h3>
+                        <h3 class="text-accent" style="margin-top: 0;">Автоматическая синхронизация</h3>
                         <p class="hint" style="margin-bottom: 0;">
                             При сохранении изменений подписка автоматически синхронизируется со всеми X-UI серверами. 
                             Изменения статуса, даты истечения и лимита устройств применяются на всех серверах.
@@ -1027,7 +1027,7 @@
             <div id="subscription-changes-list" style="padding: 16px; margin: 16px 0; max-height: 300px; overflow-y: auto;">
                 <!-- Список изменений будет добавлен динамически -->
             </div>
-            <p style="margin: 16px 0; color: #ffa500; font-size: 14px;"> Это действие изменит настройки на всех серверах. Продолжить?</p>
+            <p class="modal-warning">Это действие изменит настройки на всех серверах. Продолжить?</p>
             <div style="display: flex; gap: 12px; margin-top: 24px;">
                 <button type="button" class="btn-secondary" onclick="closeSubscriptionConfirmModal()" style="flex: 1;">Отмена</button>
                 <button type="button" class="btn-primary" onclick="confirmSaveSubscriptionChanges()" style="flex: 1;">Подтвердить и сохранить</button>

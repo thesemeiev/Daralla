@@ -88,6 +88,36 @@
     color: #c44;
 }
 
+[data-theme="light"] .event-winner-block {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(40, 167, 69, 0.08) 100%);
+    border-color: rgba(40, 167, 69, 0.4);
+}
+
+[data-theme="light"] .event-winner-text {
+    color: #1a7a2e;
+}
+
+[data-theme="light"] .event-winner-hint {
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .btn-danger {
+    background: rgba(220, 53, 69, 0.15);
+    color: #c44;
+}
+
+[data-theme="light"] .btn-danger:hover {
+    background: rgba(220, 53, 69, 0.25);
+}
+
+[data-theme="light"] .btn-danger:active {
+    background: rgba(220, 53, 69, 0.2);
+}
+
+[data-theme="light"] .subscription-change-field {
+    color: #1a7a2e;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -1000,8 +1030,14 @@ h1 {
     color: #8ba3e8;
 }
 
-.event-card--live .event-days {
+.event-card--live .event-days,
+.event-detail-live .event-days {
     color: #5ee85e;
+}
+
+[data-theme="light"] .event-card--live .event-days,
+[data-theme="light"] .event-detail-live .event-days {
+    color: #1a7a2e;
 }
 
 .event-card-rewards {
@@ -1140,6 +1176,10 @@ h1 {
     border-radius: 10px;
     font-size: 15px;
     font-weight: 500;
+    background: #4a9eff;
+    color: #fff;
+    border: none;
+    cursor: pointer;
 }
 
 /* Выбор способа оплаты — две кнопки и скрытый input (без радио).
@@ -3304,6 +3344,177 @@ body.about-page-active {
 .modal-body {
     margin: 16px 0;
     color: var(--text-primary);
+}
+
+/* Утилитарные классы для тем */
+.text-secondary { color: var(--text-secondary); }
+.text-primary { color: var(--text-primary); }
+.text-accent { color: #4a9eff; }
+
+.instruction-step-box {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+}
+
+.instruction-step-title {
+    color: #4a9eff;
+    margin-bottom: 16px;
+    font-size: 18px;
+}
+
+.instruction-step-body {
+    color: var(--text-primary);
+    line-height: 1.8;
+    font-size: 15px;
+}
+
+.instruction-link {
+    color: #4a9eff;
+}
+
+.admin-event-delete {
+    color: var(--error-text);
+}
+
+.broadcast-user-card {
+    padding: 12px;
+    border-bottom: 1px solid var(--card-border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.2s;
+}
+
+.broadcast-user-card:hover {
+    background: var(--card-bg-hover);
+}
+
+.broadcast-user-id {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.broadcast-user-subs {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.subscription-change-item {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.subscription-change-field {
+    font-weight: bold;
+    color: #4caf50;
+    margin-bottom: 4px;
+}
+
+.subscription-change-old {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.subscription-change-new {
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.empty-hint {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+}
+
+.error-text {
+    color: var(--error-text);
+    text-align: center;
+    padding: 20px;
+}
+
+.modal-warning {
+    color: #ffa500;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+/* События — динамическая разметка */
+.event-description {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.event-dates {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.event-thanks {
+    margin: 12px 0;
+    color: var(--text-secondary);
+}
+
+.event-winner-block {
+    margin: 16px 0;
+    padding: 16px;
+    background: linear-gradient(135deg, #2a4a2a 0%, #1a3a1a 100%);
+    border-radius: 12px;
+    border: 1px solid #3a6a3a;
+}
+
+.event-winner-text {
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    color: #8f8;
+}
+
+.event-winner-hint {
+    margin: 0 0 16px 0;
+    color: var(--text-secondary);
+}
+
+.event-referral-hint {
+    margin: 8px 0 12px 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.event-referral-code-hint {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.event-referral-code {
+    font-size: 18px;
+    font-weight: 600;
+    color: #4a9eff;
+    letter-spacing: 1px;
+}
+
+/* Delete user confirm modal */
+.delete-modal-text {
+    color: var(--error-text);
+    margin: 16px 0;
+    line-height: 1.6;
+}
+
+.delete-modal-list {
+    margin: 12px 0;
+    padding-left: 20px;
+    color: var(--text-secondary);
+}
+
+.delete-modal-warning {
+    color: var(--error-text);
 }
 
 /* Стили для вкладок */

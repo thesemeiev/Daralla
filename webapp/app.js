@@ -1346,8 +1346,8 @@ function renderEventCard(ev, isLive, isEnded) {
     var html = '<div class="' + cardClass + '">' +
         '<div class="' + badgeClass + '" style="margin-bottom:10px;">' + badgeIcon + '<span>' + badgeText + '</span></div>' +
         '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
-        (ev.description ? '<p style="margin:0 0 8px 0;color:#999;font-size:14px;">' + ev.description + '</p>' : '') +
-        '<p style="margin:0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>';
+        (ev.description ? '<p class="event-description">' + ev.description + '</p>' : '') +
+        '<p class="event-dates">' + start + ' — ' + end + '</p>';
     if (daysText) html += '<p class="event-days">' + daysText + '</p>';
     var rewards = ev.rewards || [];
     if (rewards.length > 0) {
@@ -1431,8 +1431,12 @@ function isEventLive(ev) {
 }
 
 function daysWord(n) {
-    if (n === 1) return 'день';
-    if (n >= 2 && n <= 4) return 'дня';
+    n = Math.abs(n);
+    var mod10 = n % 10;
+    var mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 14) return 'дней';
+    if (mod10 === 1) return 'день';
+    if (mod10 >= 2 && mod10 <= 4) return 'дня';
     return 'дней';
 }
 
@@ -1465,7 +1469,7 @@ function buildLeaderboardHtml(leaderboard, myPlace) {
     }
     html += '<div class="live-ranking-title">' + EVENT_ICON_TROPHY + '<span>Рейтинг</span></div>';
     if (empty) {
-        html += '<p class="leaderboard-empty-hint" style="margin:12px 0 0 0;color:#777;font-size:14px;">Пока никого в рейтинге.</p>';
+        html += '<p class="leaderboard-empty-hint event-description" style="margin:12px 0 0 0;">Пока никого в рейтинге.</p>';
     } else {
         html += '<ul class="leaderboard-list">';
         list.forEach(function (row) {
@@ -1501,21 +1505,22 @@ function loadEventDetail(eventId) {
         var statusIcon = live ? EVENT_ICON_LIVE : (ended ? '🏁' : EVENT_ICON_CLOCK);
         var statusText = live ? 'Идёт' : (ended ? 'Завершено' : 'Скоро');
         var daysText = getEventDaysText(ev, live, ended);
-        var html = '<div style="padding:16px;">' +
+        var innerClass = live ? 'event-detail-inner event-detail-live' : 'event-detail-inner';
+        var html = '<div class="' + innerClass + '" style="padding:16px;">' +
             '<div class="' + statusClass + '">' + statusIcon + '<span>' + statusText + '</span></div>' +
             '<h2 style="margin:0 0 12px 0;">' + (ev.name || 'Событие') + '</h2>' +
-            (ev.description ? '<p style="color:#999;margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
-            '<p style="color:#666;font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
+            (ev.description ? '<p class="event-description" style="margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
+            '<p class="event-dates" style="font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
         if (daysText) html += '<p class="event-days">' + daysText + '</p>';
         var rewards = ev.rewards || [];
         var winningPlaces = rewards.map(function (r) { return r.place; });
         var isWinner = myPlace && winningPlaces.indexOf(myPlace.place) >= 0;
         if (ended) {
-            html += '<p style="margin:12px 0;color:#aaa;">Спасибо за участие!</p>';
+            html += '<p class="event-thanks">Спасибо за участие!</p>';
             if (isWinner && ev.support_url) {
-                html += '<div class="event-winner-block" style="margin:16px 0;padding:16px;background:linear-gradient(135deg,#2a4a2a 0%,#1a3a1a 100%);border-radius:12px;border:1px solid #3a6a3a;">';
-                html += '<p style="margin:0 0 12px 0;font-weight:600;color:#8f8;">Поздравляем! Вы в числе победителей.</p>';
-                html += '<p style="margin:0 0 16px 0;color:#ccc;">За вашей наградой обратитесь в службу поддержки.</p>';
+                html += '<div class="event-winner-block">';
+                html += '<p class="event-winner-text">Поздравляем! Вы в числе победителей.</p>';
+                html += '<p class="event-winner-hint">За вашей наградой обратитесь в службу поддержки.</p>';
                 html += '<a href="' + escapeHtml(ev.support_url) + '" target="_blank" rel="noopener" class="btn-primary" style="display:inline-block;padding:10px 20px;text-decoration:none;color:inherit;">Служба поддержки</a>';
                 html += '</div>';
             }
@@ -1530,11 +1535,11 @@ function loadEventDetail(eventId) {
             html += '</ul></div>';
         }
         if (live) {
-            html += '<p style="margin:8px 0 12px 0;color:#b0b0b0;font-size:14px;">Приглашайте друзей — поднимайтесь в рейтинге.</p>';
-            html += '<p style="margin:0 0 12px 0;color:#8a8a8a;font-size:13px;">Дайте другу свой код. Когда он введёт его при покупке или продлении, ваш рейтинг вырастет.</p>';
+            html += '<p class="event-referral-hint">Приглашайте друзей — поднимайтесь в рейтинге.</p>';
+            html += '<p class="event-referral-code-hint">Дайте другу свой код. Когда он введёт его при покупке или продлении, ваш рейтинг вырастет.</p>';
             if (myCode) {
                 html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
-                html += '<code style="font-size:18px;font-weight:600;color:#4a9eff;letter-spacing:1px;">' + escapeHtml(myCode) + '</code>';
+                html += '<code class="event-referral-code">' + escapeHtml(myCode) + '</code>';
                 html += '<button type="button" class="btn-primary" style="padding:8px 16px;flex-shrink:0;" onclick="copyEventReferralCode(\'' + myCode.replace(/'/g, "\\'") + '\')">Копировать</button>';
                 html += '</div>';
             }
@@ -1601,10 +1606,10 @@ async function loadAdminEventsPage() {
                     var end = (ev.end_at || '').slice(0, 16);
                     return '<div class="event-card" style="border-radius:8px;padding:16px;margin-bottom:12px;">' +
                         '<h3 style="margin:0 0 8px 0;font-size:1.1em;">' + (ev.name || 'Событие') + '</h3>' +
-                        '<p style="margin:0 0 8px 0;color:#666;font-size:12px;">' + start + ' — ' + end + '</p>' +
+                        '<p class="event-dates">' + start + ' — ' + end + '</p>' +
                         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
                         '<button type="button" class="btn-secondary" onclick="editAdminEvent(' + ev.id + ')">Редактировать</button>' +
-                        '<button type="button" class="btn-secondary" style="color:#ff6b6b;" onclick="deleteAdminEvent(' + ev.id + ')">Удалить</button>' +
+                        '<button type="button" class="btn-secondary admin-event-delete" onclick="deleteAdminEvent(' + ev.id + ')">Удалить</button>' +
                         '</div></div>';
                 }).join('');
             }
@@ -3143,7 +3148,7 @@ async function loadAdminUsers(page = 1, search = '') {
                 const extra = [user.telegram_id && `TG: ${escapeHtml(user.telegram_id)}`, user.username && `Логин: ${escapeHtml(user.username)}`].filter(Boolean).join(' · ');
                 card.innerHTML = `
                     <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
-                    ${extra ? `<div class="admin-user-extra" style="font-size: 12px; color: #888; margin-top: 4px;">${extra}</div>` : ''}
+                    ${extra ? `<div class="admin-user-extra hint" style="font-size: 12px; margin-top: 4px;">${extra}</div>` : ''}
                     <div class="admin-user-meta">
                         <span>Создан: ${firstSeen}</span>
                         <span>Активен: ${lastSeen}</span>
@@ -3285,7 +3290,7 @@ async function showAdminUserDetail(userId) {
                             </div>
                         </div>
                     `).join('') :
-                    '<p style="color: #a0a0a0; padding: 16px;">Нет подписок</p>'
+                    '<p class="empty-hint hint" style="padding: 16px;">Нет подписок</p>'
                 }
             </div>
             
@@ -3303,7 +3308,7 @@ async function showAdminUserDetail(userId) {
             
             <div class="create-subscription-section" style="margin-top: 24px;">
                 <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')" style="width: 100%; margin-bottom: 12px;">Создать подписку</button>
-                <button class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')" style="width: 100%; background: #d32f2f; color: #fff; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Удалить пользователя</button>
+                <button class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')" style="width: 100%; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500;">Удалить пользователя</button>
             </div>
         `;
     } catch (error) {
@@ -3477,10 +3482,10 @@ async function saveSubscriptionChanges(event) {
         // Показываем список изменений
         const changesList = document.getElementById('subscription-changes-list');
         changesList.innerHTML = changes.map(change => `
-            <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #333;">
-                <div style="font-weight: bold; color: #4CAF50; margin-bottom: 4px;">${escapeHtml(change.field)}</div>
-                <div style="color: #999; font-size: 12px;">Было: ${escapeHtml(String(change.old))}</div>
-                <div style="color: #fff; font-size: 12px;">Станет: ${escapeHtml(String(change.new))}</div>
+            <div class="subscription-change-item">
+                <div class="subscription-change-field">${escapeHtml(change.field)}</div>
+                <div class="subscription-change-old">Было: ${escapeHtml(String(change.old))}</div>
+                <div class="subscription-change-new">Станет: ${escapeHtml(String(change.new))}</div>
             </div>
         `).join('');
         
@@ -3789,20 +3794,20 @@ function showDeleteUserConfirm(userId) {
             <div id="delete-user-confirm-modal" class="modal" style="display: none;">
                 <div class="modal-content">
                     <h2>⚠️ Удаление пользователя</h2>
-                    <p style="color: #ff6b6b; margin: 16px 0; line-height: 1.6;">
+                    <p class="delete-modal-text">
                         Вы уверены, что хотите удалить этого пользователя?<br><br>
                         Это действие удалит:
-                        <ul style="margin: 12px 0; padding-left: 20px; color: #ccc;">
+                        <ul class="delete-modal-list">
                             <li>Все подписки пользователя</li>
                             <li>Все клиенты на серверах</li>
                             <li>Все платежи</li>
                             <li>Все данные пользователя</li>
                         </ul>
-                        <strong style="color: #ff6b6b;">Это действие нельзя отменить!</strong>
+                        <strong class="delete-modal-warning">Это действие нельзя отменить!</strong>
                     </p>
                     <div style="display: flex; gap: 12px; margin-top: 24px; align-items: stretch;">
-                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; border: 1px solid #3a3a3a; display: flex; align-items: center; justify-content: center; margin: 0;">Отмена</button>
-                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; background: #d32f2f; color: #fff; border: 1px solid #d32f2f; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Удалить</button>
+                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Отмена</button>
+                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Удалить</button>
                     </div>
                 </div>
             </div>
@@ -4082,13 +4087,13 @@ async function loadServerLoadChart() {
 
         const result = await response.json();
         if (!result.success || !result.data) {
-            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Нет данных</p>';
+            container.innerHTML = '<p class="empty-hint">Нет данных</p>';
             return;
         }
 
         const serverData = result.data.servers || [];
         if (serverData.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Нет данных о нагрузке на серверы</p>';
+            container.innerHTML = '<p class="empty-hint">Нет данных о нагрузке на серверы</p>';
             return;
         }
 
@@ -4123,7 +4128,7 @@ async function loadServerLoadChart() {
         }).join('');
     } catch (error) {
         console.error('Ошибка загрузки нагрузки серверов:', error);
-        container.innerHTML = '<p style="text-align: center; color: #cf7f7f; padding: 20px;">Ошибка загрузки данных</p>';
+        container.innerHTML = '<p class="error-text">Ошибка загрузки данных</p>';
     }
 }
 
@@ -4936,14 +4941,14 @@ function renderBroadcastUserResults() {
     
     const query = (broadcastCurrentQuery || '').trim();
     if (!query) {
-        listEl.innerHTML = '<div class="broadcast-empty-state" style="padding: 16px; text-align: center; color: #a0a0a0;">Введите ID для поиска</div>';
+        listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Введите ID для поиска</div>';
         return;
     }
     
     // Фильтруем: выбранные показываем только в чипах
     const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
     if (usersToShow.length === 0) {
-        listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Нет результатов</div>';
+        listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Нет результатов</div>';
         return;
     }
     
@@ -4952,8 +4957,7 @@ function renderBroadcastUserResults() {
     
     usersToShow.forEach(user => {
         const userCard = document.createElement('div');
-        userCard.style.cssText = 'padding: 12px; border-bottom: 1px solid #3a3a3a; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
-        userCard.style.background = 'transparent';
+        userCard.className = 'broadcast-user-card';
         
         userCard.onclick = () => toggleUserForBroadcast(user.user_id);
         
@@ -4973,8 +4977,8 @@ function renderBroadcastUserResults() {
         const idLine = highlightMatchRaw(`ID: ${String(user.user_id)}`, qLower);
         const subsText = `Подписок: ${user.subscriptions_count || 0}`;
         userInfo.innerHTML = `
-            <div style="color: #f5f5f5; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${idLine}</div>
-            <div style="color: #a0a0a0; font-size: 12px;">${escapeHtml(subsText)}</div>
+            <div class="broadcast-user-id">${idLine}</div>
+            <div class="broadcast-user-subs">${escapeHtml(subsText)}</div>
         `;
         
         userCard.appendChild(checkbox);
@@ -5001,7 +5005,7 @@ async function searchUsersForBroadcast() {
     
     broadcastUserSearchTimeout = setTimeout(async () => {
         try {
-            listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Поиск...</div>';
+            listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Поиск...</div>';
             
             const response = await apiFetch('/api/admin/users', {
                 method: 'POST',
@@ -5022,7 +5026,7 @@ async function searchUsersForBroadcast() {
             const data = await response.json();
             
             if (!data.users || data.users.length === 0) {
-                listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #a0a0a0;">Пользователи не найдены</div>';
+                listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Пользователи не найдены</div>';
                 return;
             }
             
@@ -5031,7 +5035,7 @@ async function searchUsersForBroadcast() {
             
         } catch (error) {
             console.error('Ошибка поиска пользователей:', error);
-            listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: #cf7f7f;">Ошибка загрузки пользователей</div>';
+            listEl.innerHTML = '<div class="error-text" style="padding: 16px;">Ошибка загрузки пользователей</div>';
         }
     }, 500);
 }
@@ -5259,8 +5263,8 @@ const instructionSteps = {
                 content: `
                     <p>Выберите одно из приложений для Android:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" style="color: #4a9eff;">v2RayTun из Google Play</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/search?q=happ+plus&c=apps" target="_blank" style="color: #4a9eff;">Happ из Google Play</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" class="instruction-link">v2RayTun из Google Play</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/search?q=happ+plus&c=apps" target="_blank" class="instruction-link">Happ из Google Play</a></li>
                     </ul>
                     <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
                 `
@@ -5322,8 +5326,8 @@ const instructionSteps = {
                 content: `
                     <p>Выберите одно из приложений для iPhone:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank" style="color: #4a9eff;">v2RayTun из App Store</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973" target="_blank" style="color: #4a9eff;">Happ из App Store</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank" class="instruction-link">v2RayTun из App Store</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973" target="_blank" class="instruction-link">Happ из App Store</a></li>
                     </ul>
                     <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
                 `
@@ -5378,8 +5382,8 @@ const instructionSteps = {
                 content: `
                     <p>Выберите и скачайте одно из приложений:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank" style="color: #4a9eff;">v2RayTun для Windows</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" target="_blank" style="color: #4a9eff;">Happ для Windows</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank" class="instruction-link">v2RayTun для Windows</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" target="_blank" class="instruction-link">Happ для Windows</a></li>
                     </ul>
                     <p>Установите приложение на ваш компьютер.</p>
                 `
@@ -5428,8 +5432,8 @@ const instructionSteps = {
                 content: `
                     <p>Выберите и скачайте одно из приложений:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank" style="color: #4a9eff;">v2RayTun для Mac</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?platform=mac" target="_blank" style="color: #4a9eff;">Happ для Mac</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank" class="instruction-link">v2RayTun для Mac</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?platform=mac" target="_blank" class="instruction-link">Happ для Mac</a></li>
                     </ul>
                     <p>Установите приложение на ваш Mac.</p>
                 `
@@ -5476,7 +5480,7 @@ const instructionSteps = {
             {
                 title: 'Шаг 1: Скачайте Happ',
                 content: `
-                    <p><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/Happ.linux.x64.deb" target="_blank" style="color: #4a9eff;">Скачайте Happ для Linux</a> и установите на ваш компьютер.</p>
+                    <p><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/Happ.linux.x64.deb" target="_blank" class="instruction-link">Скачайте Happ для Linux</a> и установите на ваш компьютер.</p>
                 `
             },
             {
@@ -5522,8 +5526,8 @@ const instructionSteps = {
                 content: `
                     <p>Выберите одно из приложений для Android TV:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" style="color: #4a9eff;">v2RayTun для Android TV</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank" style="color: #4a9eff;">Happ для Android TV</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" class="instruction-link">v2RayTun для Android TV</a></li>
+                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank" class="instruction-link">Happ для Android TV</a></li>
                     </ul>
                 `
             },
@@ -5630,9 +5634,9 @@ function renderInstructionStep() {
     if (!step) return;
     
     container.innerHTML = `
-        <div style="background: #222; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
-            <h3 style="color: #4a9eff; margin-bottom: 16px; font-size: 18px;">${step.title}</h3>
-            <div style="color: #e0e0e0; line-height: 1.8; font-size: 15px;">
+        <div class="instruction-step-box">
+            <h3 class="instruction-step-title">${step.title}</h3>
+            <div class="instruction-step-body">
                 ${step.content}
             </div>
         </div>
@@ -6049,7 +6053,7 @@ async function loadServerGroups() {
     } catch (err) {
         console.error('Ошибка в loadServerGroups:', err);
         if (listEl) {
-            listEl.innerHTML = `<p class="error-text" style="color: #ff4444; text-align: center; padding: 20px;">Ошибка: ${err.message}</p>`;
+            listEl.innerHTML = `<p class="error-text">Ошибка: ${err.message}</p>`;
         }
         throw err;
     }
@@ -6062,7 +6066,7 @@ function renderServerGroups(groups, stats) {
     if (!listEl) return;
     
     if (!groups || groups.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">Нет созданных групп серверов</p>';
+        listEl.innerHTML = '<p class="empty-hint">Нет созданных групп серверов</p>';
         return;
     }
 
@@ -6210,7 +6214,7 @@ async function loadServersInGroup(groupId, groupName) {
 function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
     if (!servers || servers.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px; color: #999;">В этой группе пока нет серверов</p>';
+        listEl.innerHTML = '<p class="empty-hint">В этой группе пока нет серверов</p>';
         return;
     }
 
