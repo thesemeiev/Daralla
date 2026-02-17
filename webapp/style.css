@@ -6,6 +6,21 @@
     --bg-page: #1a1a1a;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0a0;
+    --input-bg: #1a1a1a;
+    --input-border: #333;
+    --input-color: #fff;
+    --input-placeholder: #888;
+    --landing-bg: #1a1a1a;
+    --landing-title: #fff;
+    --landing-sub: #888;
+    --nav-bg: rgba(18, 18, 22, 0.5);
+    --nav-border: rgba(255, 255, 255, 0.1);
+    --nav-text: rgba(255, 255, 255, 0.6);
+    --nav-text-active: rgba(255, 255, 255, 0.95);
+    --spinner-border: #2a2a2a;
+    --spinner-border-top: #6a6a6a;
+    --profile-gradient-end: #181a1e;
+    --scrollbar-thumb: #333;
 }
 
 [data-theme="light"] {
@@ -16,6 +31,36 @@
     --bg-page: #f5f5f5;
     --text-primary: #1a1a1a;
     --text-secondary: #555;
+    --input-bg: #ffffff;
+    --input-border: #d0d0d0;
+    --input-color: #1a1a1a;
+    --input-placeholder: #999;
+    --landing-bg: #f5f5f5;
+    --landing-title: #1a1a1a;
+    --landing-sub: #555;
+    --nav-bg: rgba(255, 255, 255, 0.85);
+    --nav-border: rgba(0, 0, 0, 0.08);
+    --nav-text: rgba(0, 0, 0, 0.6);
+    --nav-text-active: rgba(0, 0, 0, 0.9);
+    --spinner-border: #e0e0e0;
+    --spinner-border-top: #888;
+    --profile-gradient-end: #e8e8ec;
+    --scrollbar-thumb: #c0c0c0;
+}
+
+[data-theme="light"] .form-message--error {
+    color: #c44;
+}
+[data-theme="light"] .form-message--success {
+    color: #1a7a2e;
+}
+[data-theme="light"] .bottom-nav {
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+[data-theme="light"] .nav-glass-indicator {
+    background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 40%, rgba(248,252,255,0.6) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 * {
@@ -49,7 +94,7 @@
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: #1a1a1a;
+    background: var(--landing-bg);
     overflow: hidden;
     margin: 0 !important;
     max-width: none !important;
@@ -74,7 +119,7 @@
 }
 
 .landing-scroll::-webkit-scrollbar-thumb {
-    background: #333;
+    background: var(--scrollbar-thumb);
     border-radius: 3px;
 }
 
@@ -105,14 +150,14 @@
 .landing-hero-title {
     font-size: clamp(32px, 8vw, 48px);
     font-weight: 700;
-    color: #fff;
+    color: var(--landing-title);
     letter-spacing: -0.02em;
     margin-bottom: 12px;
 }
 
 .landing-hero-sub {
     font-size: clamp(16px, 3vw, 18px);
-    color: #888;
+    color: var(--landing-sub);
     font-weight: 400;
     line-height: 1.5;
 }
@@ -120,7 +165,7 @@
 .landing-h2 {
     font-size: clamp(22px, 4vw, 28px);
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     margin-bottom: 24px;
 }
 
@@ -131,7 +176,7 @@
 
 .landing-features-list li {
     font-size: 15px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     line-height: 1.7;
     padding: 10px 0;
     padding-left: 24px;
@@ -152,13 +197,13 @@
 
 .landing-text {
     font-size: 15px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     line-height: 1.75;
 }
 
 .landing-cta-sub {
     font-size: 16px;
-    color: #888;
+    color: var(--landing-sub);
     margin-bottom: 28px;
 }
 
@@ -193,13 +238,13 @@
 
 .landing-btn-secondary {
     background: transparent;
-    color: #a0a0a0;
-    border: 1px solid #3a3a3a;
+    color: var(--text-secondary);
+    border: 1px solid var(--card-border);
 }
 
 .landing-btn-secondary:hover {
-    border-color: #4a4a4a;
-    color: #e0e0e0;
+    border-color: var(--card-border-hover);
+    color: var(--text-primary);
 }
 
 .landing-back-link {
@@ -412,8 +457,8 @@ h1 {
 .spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid #2a2a2a;
-    border-top-color: #6a6a6a;
+    border: 3px solid var(--spinner-border);
+    border-top-color: var(--spinner-border-top);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin: 0 auto 16px;
@@ -424,7 +469,7 @@ h1 {
 }
 
 .loading p {
-    color: #8a8a8a;
+    color: var(--text-secondary);
     font-size: 15px;
 }
 
@@ -442,13 +487,13 @@ h1 {
 
 .error p, .empty p {
     margin-bottom: 12px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     font-size: 15px;
 }
 
 .error button {
-    background: #3a3a3a;
-    color: #f5f5f5;
+    background: var(--card-bg-hover);
+    color: var(--text-primary);
     border: none;
     padding: 10px 24px;
     border-radius: 8px;
@@ -460,12 +505,12 @@ h1 {
 }
 
 .error button:hover {
-    background: #4a4a4a;
+    background: var(--card-border-hover);
 }
 
 .hint {
     font-size: 14px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     line-height: 1.5;
 }
 
@@ -478,7 +523,7 @@ h1 {
     width: 100%;
     padding: 20px 22px;
     margin-bottom: 20px;
-    background: linear-gradient(135deg, var(--card-bg) 0%, #181a1e 100%);
+    background: linear-gradient(135deg, var(--card-bg) 0%, var(--profile-gradient-end) 100%);
     border: 1px solid var(--card-border);
     border-radius: 14px;
     cursor: pointer;
@@ -595,20 +640,20 @@ h1 {
 .profile-card-title {
     font-size: 18px;
     font-weight: 600;
-    color: #f0f0f0;
+    color: var(--text-primary);
     letter-spacing: -0.3px;
 }
 
 .profile-card-subtitle {
     font-size: 14px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     font-weight: 400;
 }
 
 .profile-card-chevron {
     flex-shrink: 0;
     font-size: 22px;
-    color: #6a6a6a;
+    color: var(--text-secondary);
     font-weight: 300;
 }
 
@@ -620,7 +665,7 @@ h1 {
 .page-subscriptions-block-label {
     font-size: 12px;
     font-weight: 500;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0;
@@ -629,21 +674,21 @@ h1 {
 .subscriptions-section-title {
     font-size: 18px;
     font-weight: 600;
-    color: #f0f0f0;
+    color: var(--text-primary);
     margin: 24px 0 8px 0;
     letter-spacing: -0.3px;
 }
 
 .subscriptions-stats-inline {
     font-size: 13px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     margin: 0 0 16px 0;
     font-weight: 400;
 }
 
 .subscriptions-stats-inline #total-count,
 .subscriptions-stats-inline #active-count {
-    color: #b0b0b0;
+    color: var(--text-secondary);
     font-weight: 600;
 }
 
@@ -662,13 +707,13 @@ h1 {
 }
 
 .stat-item.active .stat-value {
-    color: #b0b0b0;
+    color: var(--text-secondary);
 }
 
 .stat-label {
     display: block;
     font-size: 12px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     margin-bottom: 8px;
     font-weight: 400;
     text-transform: uppercase;
@@ -679,7 +724,7 @@ h1 {
     display: block;
     font-size: 28px;
     font-weight: 600;
-    color: #e0e0e0;
+    color: var(--text-primary);
     letter-spacing: -0.5px;
 }
 
@@ -723,7 +768,7 @@ h1 {
 .subscription-name {
     font-size: 16px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     letter-spacing: -0.3px;
     flex: 1;
 }
@@ -832,7 +877,7 @@ h1 {
 .event-section-title {
     font-size: 14px;
     font-weight: 600;
-    color: #b0b0b0;
+    color: var(--text-secondary);
     margin: 16px 0 10px 0;
     letter-spacing: -0.2px;
 }
@@ -1004,7 +1049,7 @@ h1 {
 
 .info-label {
     font-size: 11px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     margin-bottom: 6px;
     font-weight: 400;
     text-transform: uppercase;
@@ -1071,23 +1116,23 @@ h1 {
 .payment-method-title {
     margin: 0 0 10px 0;
     font-size: 14px;
-    color: #999;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 .payment-method-switch {
     display: flex;
     margin-bottom: 20px;
-    background: #2a2a2a !important;
+    background: var(--card-bg-hover) !important;
     border-radius: 12px;
     padding: 4px;
-    border: 1px solid #333;
+    border: 1px solid var(--card-border);
     color-scheme: dark;
 }
 .buy-subscription-content .payment-method-switch,
 .page .payment-method-switch,
 #page-buy-subscription .payment-method-switch,
 #page-extend-subscription .payment-method-switch {
-    background: #2a2a2a !important;
+    background: var(--card-bg-hover) !important;
 }
 .payment-method-segment {
     flex: 1;
@@ -1101,8 +1146,8 @@ h1 {
     border-radius: 10px;
     font-size: 15px;
     font-weight: 500;
-    color: #999 !important;
-    background-color: #2a2a2a !important;
+    color: var(--text-secondary) !important;
+    background-color: var(--input-bg) !important;
     cursor: pointer;
     transition: color 0.2s, background-color 0.2s;
     font-family: inherit;
@@ -1113,14 +1158,14 @@ h1 {
 .page .payment-method-segment,
 #page-buy-subscription .payment-method-segment,
 #page-extend-subscription .payment-method-segment {
-    color: #999 !important;
-    background-color: #2a2a2a !important;
+    color: var(--text-secondary) !important;
+    background-color: var(--input-bg) !important;
 }
 .payment-method-segment:hover,
 #page-buy-subscription .payment-method-segment:hover,
 #page-extend-subscription .payment-method-segment:hover {
-    color: #ccc !important;
-    background-color: #333 !important;
+    color: var(--text-primary) !important;
+    background-color: var(--card-bg-hover) !important;
 }
 .payment-method-segment-selected,
 .payment-method-segment.payment-method-segment-selected,
@@ -1138,7 +1183,7 @@ h1 {
 .choose-section-label {
     margin: 0 0 10px 0;
     font-size: 14px;
-    color: #999;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 .choose-options-row {
@@ -1193,7 +1238,7 @@ h1 {
     background: var(--card-bg);
     border: 2px solid var(--card-border);
     border-radius: 10px;
-    color: #ccc;
+    color: var(--text-secondary);
     font-family: inherit;
     font-size: 15px;
     font-weight: 500;
@@ -1203,15 +1248,15 @@ h1 {
     appearance: none;
 }
 .choose-option-card:hover {
-    border-color: #444;
+    border-color: var(--card-border-hover);
     background: var(--card-bg-hover);
-    color: #e0e0e0;
+    color: var(--text-primary);
 }
 .choose-option-card-selected,
 .choose-option-card.choose-option-card-selected {
     border-color: #4a9eff;
     background: rgba(74, 158, 255, 0.15);
-    color: #fff;
+    color: var(--text-primary);
 }
 .choose-option-card .choose-option-title {
     display: block;
@@ -1220,7 +1265,7 @@ h1 {
 .choose-option-card .choose-option-price {
     display: block;
     font-size: 14px;
-    color: #999;
+    color: var(--text-secondary);
 }
 .choose-option-card-selected .choose-option-price,
 .choose-option-card.choose-option-card-selected .choose-option-price {
@@ -1235,11 +1280,11 @@ h1 {
     display: block;
     font-size: 12px;
     font-weight: 400;
-    color: #888;
+    color: var(--landing-sub);
 }
 .choose-option-card-selected .choose-option-sub,
 .choose-option-card.choose-option-card-selected .choose-option-sub {
-    color: #aaa;
+    color: var(--text-secondary);
 }
 
 /* Стили для страницы покупки подписки */
@@ -1263,7 +1308,7 @@ h1 {
 }
 
 .plan-card:hover {
-    border-color: #3a3a3a;
+    border-color: var(--card-border-hover);
 }
 
 .plan-card .btn-primary:hover {
@@ -1284,7 +1329,7 @@ h1 {
 .plan-header h2 {
     margin: 0;
     font-size: 18px;
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .plan-price {
@@ -1317,14 +1362,14 @@ h1 {
 }
 
 .feature-item {
-    color: #ccc;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
 .days-badge {
     margin-top: 12px;
     padding: 12px 14px;
-    background: #1f1f1f;
+    background: var(--card-bg-hover);
     border-radius: 8px;
     text-align: center;
 }
@@ -1338,7 +1383,7 @@ h1 {
     font-size: 17px;
     display: block;
     font-weight: 600;
-    color: #b0b0b0;
+    color: var(--text-secondary);
 }
 
 /* Нижняя навигация — liquid glass (в духе bergice/liquidglass, без WebGL) */
@@ -1353,10 +1398,10 @@ h1 {
     /* Стекло: приглушённый тон, без стальной белизны */
     background:
         linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 40%, transparent 100%),
-        rgba(18, 18, 22, 0.5);
+        var(--nav-bg);
     backdrop-filter: blur(32px) saturate(180%);
     -webkit-backdrop-filter: blur(32px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--nav-border);
     border-radius: 28px;
     display: flex;
     justify-content: space-around;
@@ -1468,7 +1513,7 @@ h1 {
     background: none;
     border: none;
     border-radius: 0;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--nav-text);
     cursor: pointer;
     transition: color 0.3s ease;
     position: relative;
@@ -1482,7 +1527,7 @@ h1 {
 }
 
 .nav-item.active {
-    color: rgba(255, 255, 255, 0.95);
+    color: var(--nav-text-active);
 }
 
 /* Иконка под выделением по умолчанию обычная; цвет выделения только когда индикатор уменьшился */
@@ -1507,7 +1552,7 @@ h1 {
 }
 
 .nav-item:hover:not(.active) {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--nav-text-active);
 }
 
 .nav-icon {
@@ -1525,7 +1570,7 @@ h1 {
 .back-button {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    color: #fff;
+    color: var(--text-primary);
     font-size: 14px;
     cursor: pointer;
     padding: 8px 16px;
@@ -1602,7 +1647,7 @@ h1 {
 
 .detail-info-label {
     font-size: 11px;
-    color: #8a8a8a;
+    color: var(--text-secondary);
     margin-bottom: 6px;
     font-weight: 400;
     text-transform: uppercase;
@@ -1612,11 +1657,11 @@ h1 {
 .detail-info-value {
     font-size: 16px;
     font-weight: 500;
-    color: #d0d0d0;
+    color: var(--text-primary);
 }
 
 .detail-info-value.days-highlight {
-    color: #b0b0b0;
+    color: var(--text-secondary);
     font-size: 24px;
     font-weight: 600;
 }
@@ -1657,7 +1702,7 @@ h1 {
 .server-name {
     font-size: 18px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     letter-spacing: -0.3px;
 }
 
@@ -2146,7 +2191,7 @@ body.about-page-active {
 }
 
 .about-label {
-    color: #8a8a8a;
+    color: var(--text-secondary);
     font-size: 14px;
     margin-right: 6px;
 }
@@ -2249,18 +2294,18 @@ body.about-page-active {
     justify-content: space-between;
     align-items: center;
     padding: 14px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 10px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     text-decoration: none;
     transition: all 0.2s ease;
     margin-top: 8px;
 }
 
 .link-button:hover {
-    background: #2f2f2f;
-    border-color: #4a4a4a;
+    background: var(--card-bg-hover);
+    border-color: var(--card-border-hover);
 }
 
 .link-button span:first-child {
@@ -2269,7 +2314,7 @@ body.about-page-active {
 }
 
 .link-arrow {
-    color: #6a6a6a;
+    color: var(--text-secondary);
     font-size: 18px;
 }
 
@@ -2314,17 +2359,17 @@ body.about-page-active {
 .admin-search-box input {
     width: 100%;
     padding: 12px 16px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 8px;
-    color: #e0e0e0;
+    color: var(--input-color);
     font-size: 16px;
     outline: none;
     transition: border-color 0.2s;
 }
 
 .admin-search-box input:focus {
-    border-color: #6a6a6a;
+    border-color: var(--card-border-hover);
 }
 
 .admin-stats {
@@ -2332,7 +2377,7 @@ body.about-page-active {
     gap: 12px;
     margin-bottom: 16px;
     padding: 10px;
-    background: #2a2a2a;
+    background: var(--card-bg-hover);
     border-radius: 8px;
 }
 
@@ -2376,7 +2421,7 @@ body.about-page-active {
 .card-title {
     font-weight: 600;
     font-size: 16px;
-    color: #fff;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2522,17 +2567,17 @@ body.about-page-active {
 
 .admin-user-card:active {
     transform: scale(0.98);
-    background: #2f2f2f;
+    background: var(--card-bg-hover);
 }
 
 .admin-user-card:hover {
-    border-color: #4a4a4a;
+    border-color: var(--card-border-hover);
 }
 
 .admin-user-id {
     font-size: 15px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     margin-bottom: 6px;
 }
 
@@ -2540,13 +2585,13 @@ body.about-page-active {
     display: flex;
     gap: 12px;
     font-size: 12px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
 }
 
 .admin-user-subscriptions {
     margin-top: 6px;
     font-size: 12px;
-    color: #6a6a6a;
+    color: var(--text-secondary);
 }
 
 .admin-user-detail-section {
@@ -2567,7 +2612,7 @@ body.about-page-active {
 
 .form-group label {
     font-size: 14px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
@@ -2579,10 +2624,10 @@ body.about-page-active {
 .form-group textarea {
     width: 100%;
     padding: 12px;
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 10px;
-    color: #fff;
+    color: var(--input-color);
     font-size: 16px; /* 16px предотвращает зум в iOS */
     font-family: inherit;
     outline: none;
@@ -2612,10 +2657,10 @@ body.about-page-active {
     flex-direction: row !important;
     align-items: center;
     gap: 12px !important;
-    background: #1a1a1a;
+    background: var(--input-bg);
     padding: 14px;
     border-radius: 10px;
-    border: 1px solid #333;
+    border: 1px solid var(--input-border);
     cursor: pointer;
     margin-bottom: 16px;
 }
@@ -2632,21 +2677,21 @@ body.about-page-active {
     margin: 0;
     cursor: pointer;
     font-size: 15px;
-    color: #fff;
+    color: var(--text-primary);
     flex: 1;
 }
 
 /* Чекбокс «Запомнить меня» на форме входа — свой вид */
 .checkbox-group-login {
-    background: #2a2a2a;
-    border-color: #3a3a3a;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     padding: 14px 16px;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .checkbox-group-login:hover {
-    border-color: #4a4a4a;
-    background: #2f2f2f;
+    border-color: var(--card-border-hover);
+    background: var(--card-bg-hover);
 }
 
 .checkbox-group-login input[type="checkbox"] {
@@ -2657,16 +2702,16 @@ body.about-page-active {
     min-width: 22px;
     min-height: 22px;
     margin: 0;
-    border: 2px solid #4a4a4a;
+    border: 2px solid var(--input-border);
     border-radius: 6px;
-    background: #1a1a1a;
+    background: var(--input-bg);
     cursor: pointer;
     transition: border-color 0.2s ease, background 0.2s ease;
     position: relative;
 }
 
 .checkbox-group-login input[type="checkbox"]:hover {
-    border-color: #5a5a5a;
+    border-color: var(--card-border-hover);
 }
 
 .checkbox-group-login input[type="checkbox"]:checked {
@@ -2680,7 +2725,7 @@ body.about-page-active {
 
 .checkbox-group-login label {
     font-size: 15px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     user-select: none;
 }
 
@@ -2816,7 +2861,7 @@ body.about-page-active {
 }
 
 .admin-detail-label {
-    color: #a0a0a0;
+    color: var(--text-secondary);
     font-size: 12px;
 }
 
@@ -2894,7 +2939,7 @@ body.about-page-active {
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     font-size: 14px;
     font-weight: 500;
 }
@@ -2903,10 +2948,10 @@ body.about-page-active {
 .form-group select {
     width: 100%;
     padding: 12px 16px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 8px;
-    color: #e0e0e0;
+    color: var(--input-color);
     font-size: 16px;
     outline: none;
     transition: border-color 0.2s;
@@ -2918,10 +2963,10 @@ body.about-page-active {
     min-width: 0;
     min-height: 48px;
     padding: 12px 16px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 8px;
-    color: #e0e0e0;
+    color: var(--input-color);
     font-size: 16px;
     outline: none;
     transition: border-color 0.2s;
@@ -2934,7 +2979,7 @@ body.about-page-active {
 .form-group input:focus,
 .form-group select:focus,
 .form-group input[type="datetime-local"]:focus {
-    border-color: #6a6a6a;
+    border-color: var(--card-border-hover);
     outline: none;
 }
 
@@ -3106,14 +3151,14 @@ body.about-page-active {
 .chip button {
     border: none;
     background: transparent;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     cursor: pointer;
     font-size: 14px;
     padding: 0;
 }
 
 .chip button:hover {
-    color: #f5f5f5;
+    color: var(--text-primary);
 }
 
 .highlight-match {
@@ -3122,7 +3167,7 @@ body.about-page-active {
 
 .broadcast-empty-state {
     font-size: 14px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
 }
 
 .pagination {
@@ -3138,7 +3183,7 @@ body.about-page-active {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 6px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
@@ -3149,8 +3194,8 @@ body.about-page-active {
 }
 
 .pagination button.active {
-    background: #4a4a4a;
-    border-color: #6a6a6a;
+    background: var(--card-bg-hover);
+    border-color: var(--card-border-hover);
 }
 
 .pagination button:disabled {
@@ -3161,7 +3206,7 @@ body.about-page-active {
 .delete-section {
     margin-top: 32px;
     padding-top: 24px;
-    border-top: 1px solid #3a3a3a;
+    border-top: 1px solid var(--card-border);
 }
 
 /* Стили для вкладок */
@@ -3169,7 +3214,7 @@ body.about-page-active {
     display: flex;
     gap: 8px;
     margin-bottom: 24px;
-    border-bottom: 1px solid #3a3a3a;
+    border-bottom: 1px solid var(--card-border);
 }
 
 .tab-button {
@@ -3178,7 +3223,7 @@ body.about-page-active {
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
@@ -3187,8 +3232,8 @@ body.about-page-active {
 }
 
 .tab-button.active {
-    color: #f5f5f5;
-    border-bottom-color: #6a6a6a;
+    color: var(--text-primary);
+    border-bottom-color: var(--card-border-hover);
 }
 
 .tab-button:active {
@@ -3215,7 +3260,7 @@ body.about-page-active {
 .keys-header h3 {
     font-size: 18px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
 }
 
 .keys-items {
@@ -3233,13 +3278,13 @@ body.about-page-active {
 }
 
 .key-item:hover {
-    border-color: #4a4a4a;
+    border-color: var(--card-border-hover);
 }
 
 .key-server {
     font-size: 16px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     margin-bottom: 8px;
 }
 
@@ -3251,20 +3296,20 @@ body.about-page-active {
 
 .key-email-code {
     flex: 1;
-    background: #1a1a1a;
-    border: 1px solid #3a3a3a;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     padding: 8px 12px;
     font-family: 'Courier New', monospace;
     font-size: 14px;
-    color: #e0e0e0;
+    color: var(--text-primary);
     word-break: break-all;
     overflow-wrap: break-word;
 }
 
 .btn-copy-key {
-    background: #3a3a3a;
-    border: 1px solid #4a4a4a;
+    background: var(--card-bg-hover);
+    border: 1px solid var(--card-border);
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 16px;
@@ -3275,22 +3320,22 @@ body.about-page-active {
 
 .btn-copy-key:active {
     transform: scale(0.95);
-    background: #2a2a2a;
+    background: var(--input-bg);
 }
 
 .keys-summary {
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid #3a3a3a;
+    border-top: 1px solid var(--card-border);
     font-size: 14px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     text-align: center;
 }
 
 .empty-state {
     text-align: center;
     padding: 40px 20px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
 }
 
 .empty-state p {
@@ -3300,7 +3345,7 @@ body.about-page-active {
 .delete-section h3 {
     font-size: 18px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     margin-bottom: 8px;
 }
 
@@ -3351,7 +3396,7 @@ body.about-page-active {
 
 .stat-card-title {
     font-size: 12px;
-    color: #a0a0a0;
+    color: var(--text-secondary);
     margin-bottom: 8px;
     font-weight: 500;
 }
@@ -3359,7 +3404,7 @@ body.about-page-active {
 .stat-card-value {
     font-size: 24px;
     font-weight: 700;
-    color: #f5f5f5;
+    color: var(--text-primary);
     margin-bottom: 6px;
 }
 
@@ -3377,7 +3422,7 @@ body.about-page-active {
 
 .stat-card-subtitle {
     font-size: 12px;
-    color: #6a6a6a;
+    color: var(--text-secondary);
 }
 
 /* Админ-панель: главный экран — минимализм, ровные строки */
@@ -3400,7 +3445,7 @@ body.about-page-active {
 .admin-panel-section-title {
     font-size: 15px;
     font-weight: 500;
-    color: #888;
+    color: var(--text-secondary);
     margin: 0 0 12px 0;
     padding-left: 12px;
     letter-spacing: 0.02em;
@@ -3430,8 +3475,8 @@ body.about-page-active {
     padding: 14px 20px;
     background: none;
     border: none;
-    border-bottom: 1px solid #333;
-    color: #e0e0e0;
+    border-bottom: 1px solid var(--card-border);
+    color: var(--text-primary);
     font-size: 16px;
     font-family: inherit;
     text-align: left;
@@ -3445,11 +3490,11 @@ body.about-page-active {
 }
 
 .admin-panel-row:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--card-bg-hover);
 }
 
 .admin-panel-row:active {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--card-bg-hover);
 }
 
 .admin-panel-row-label {
@@ -3461,13 +3506,13 @@ body.about-page-active {
     flex-shrink: 0;
     margin-left: 12px;
     font-size: 20px;
-    color: #888;
+    color: var(--text-secondary);
     transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .admin-panel-row:hover .admin-panel-row-chevron {
     transform: translateX(3px);
-    color: #a0a0a0;
+    color: var(--text-primary);
 }
 
 @media (max-width: 600px) {
@@ -3492,7 +3537,7 @@ body.about-page-active {
 }
 
 .server-load-card:hover {
-    border-color: #4a4a4a;
+    border-color: var(--card-border-hover);
 }
 
 .server-load-card-header {
@@ -3506,7 +3551,7 @@ body.about-page-active {
 .server-load-card-name {
     font-weight: 600;
     font-size: 15px;
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .server-load-card-percent {
@@ -3529,7 +3574,7 @@ body.about-page-active {
 
 .server-load-progress-track {
     height: 8px;
-    background: #252525;
+    background: var(--card-bg-hover);
     border-radius: 4px;
     overflow: hidden;
     margin-bottom: 8px;
@@ -3555,7 +3600,7 @@ body.about-page-active {
 
 .server-load-card-details {
     font-size: 12px;
-    color: #6a6a6a;
+    color: var(--text-secondary);
 }
 
 

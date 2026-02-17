@@ -1063,7 +1063,7 @@ function aboutPageDispose() {
     var pageEl = document.getElementById('page-about');
     if (pageEl) pageEl.classList.remove('about-bg-light');
     document.body.classList.remove('about-page-active');
-    document.body.style.backgroundColor = '#1a1a1a';
+    document.body.style.backgroundColor = '';
     aboutPageState = null;
 }
 
@@ -1919,7 +1919,8 @@ class CustomGlobe {
     // Рисует точки крупных городов (серые)
     drawMajorCities(ctx) {
         const cities = this.getMajorCities();
-        const grayColor = '#888'; // Серый цвет
+        var isLight = typeof getTheme === 'function' && getTheme() === 'light';
+        const grayColor = isLight ? '#666' : '#888'; // Серый цвет
         const size = 4; // Размер точки меньше, чем у серверов
         
         cities.forEach(city => {
@@ -1929,7 +1930,7 @@ class CustomGlobe {
             // Все города — одинаковый стиль (серые точки)
             ctx.fillStyle = grayColor;
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
-            ctx.strokeStyle = '#666';
+            ctx.strokeStyle = isLight ? '#999' : '#666';
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
@@ -1946,8 +1947,8 @@ class CustomGlobe {
             
             ctx.imageSmoothingEnabled = false;
             
-            ctx.fillStyle = '#fff';
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillStyle = isLight ? '#1a1a1a' : '#fff';
+            ctx.strokeStyle = isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)';
             ctx.lineWidth = 2;
             ctx.lineJoin = 'round';
             ctx.strokeText(label, labelX, labelY);
@@ -2130,13 +2131,18 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
+        var isLight = typeof getTheme === 'function' && getTheme() === 'light';
+        var bgColor = isLight ? '#f5f5f5' : '#1a1a1a';
+        var globeGradient = isLight ? ['#e8e8ec', '#d8d8e0', '#c8c8d0'] : ['#25282c', '#1c1e22', '#141618'];
+        var globeStroke = isLight ? '#c8c8d0' : '#2e3036';
+        var labelColor = isLight ? '#1a1a1a' : '#fff';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
         const height = this.canvas.height / dpr;
         
         // Очищаем canvas
-        ctx.fillStyle = '#1a1a1a';
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, width, height);
         
         // Рисуем круг глобуса (цвет карточек #1c1e22)
@@ -2147,20 +2153,20 @@ class CustomGlobe {
         // Внешний круг (граница) - применяем zoom к радиусу
         const scaledRadius = this.radius * this.zoom;
         const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, scaledRadius);
-        gradient.addColorStop(0, '#25282c');
-        gradient.addColorStop(0.5, '#1c1e22');
-        gradient.addColorStop(1, '#141618');
+        gradient.addColorStop(0, globeGradient[0]);
+        gradient.addColorStop(0.5, globeGradient[1]);
+        gradient.addColorStop(1, globeGradient[2]);
         
         ctx.beginPath();
         ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
-        ctx.strokeStyle = '#2e3036';
+        ctx.strokeStyle = globeStroke;
         ctx.lineWidth = 2 / this.zoom; // Компенсируем толщину линии при зуме
         ctx.stroke();
         
         // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
-        ctx.strokeStyle = '#2e3036';
+        ctx.strokeStyle = globeStroke;
         ctx.lineWidth = 1 / this.zoom; // Компенсируем толщину линии при зуме
         
         // Меридианы (вертикальные линии)
@@ -2239,7 +2245,7 @@ class CustomGlobe {
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
             // Обводка
-            ctx.strokeStyle = '#fff';
+            ctx.strokeStyle = isLight ? '#1a1a1a' : '#fff';
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
@@ -2276,7 +2282,7 @@ class CustomGlobe {
                 const labelY = Math.round(pos.y);
                 
                 // Рисуем текст без фона (или с очень прозрачным фоном для читаемости)
-                ctx.fillStyle = '#fff';
+                ctx.fillStyle = labelColor;
                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
                 ctx.lineWidth = 1.5;
                 ctx.lineJoin = 'round';
