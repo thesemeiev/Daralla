@@ -3041,161 +3041,76 @@ body.about-page-active {
 
 .admin-subscription-card {
     background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
+    border: none;
+    border-bottom: 1px solid var(--card-border);
+    border-radius: 0;
+    padding: 12px 0;
+    margin-bottom: 0;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s;
 }
 
-.admin-subscription-card:active {
-    transform: scale(0.98);
+.admin-subscription-card:last-child {
+    border-bottom: none;
 }
 
 .admin-subscription-card:hover {
-    border-color: var(--card-border-hover);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.admin-subscription-card:active {
+    background-color: rgba(255, 255, 255, 0.06);
+    transform: none;
+}
+
+.admin-subscription-row-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-subscription-row-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
 }
 
 .admin-subscription-name {
     font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-}
-
-.admin-subscription-status {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
     font-weight: 500;
-    margin-bottom: 8px;
-}
-
-.admin-subscription-status.active {
-    background: #2d5a2d;
-    color: #7fcf7f;
-}
-
-.admin-subscription-status.expired {
-    background: #5a2d2d;
-    color: #cf7f7f;
-}
-
-.admin-subscription-status.canceled,
-.admin-subscription-status.deleted {
-    background: #4a4a4a;
-    color: #a0a0a0;
-}
-
-.admin-subscription-status.deleted {
-    background: #5a2d2d;
-    color: #cf7f7f;
-}
-
-.admin-subscription-info {
-    font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.8;
-}
-
-/* Компактный вид строки подписки в админке */
-.admin-subscription-row-main {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.admin-subscription-row-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.admin-subscription-row-name {
-    font-size: 14px;
-    font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-right: 8px;
 }
 
-.admin-subscription-row-right {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
-    flex-shrink: 0;
-    text-align: right;
+.admin-subscription-owner-id {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 .admin-subscription-time-left {
     font-size: 13px;
-    font-weight: 600;
-}
-
-.time-left-ok {
-    color: #7fcf7f;
-}
-
-.time-left-warning {
-    color: #ffca28;
-}
-
-.time-left-danger {
-    color: #ff5c5c;
-}
-
-[data-theme="light"] .time-left-ok {
-    color: #1a7a2e;
-}
-
-[data-theme="light"] .time-left-warning {
-    color: #c58a00;
-}
-
-[data-theme="light"] .time-left-danger {
-    color: #c44;
-}
-
-.admin-subscription-row-meta {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 6px;
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.admin-subscription-owner {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-weight: 500;
     white-space: nowrap;
+    text-align: right;
 }
 
-.admin-subscription-dates {
-    opacity: 0.9;
-}
+.time-left-ok { color: #4caf50; }
+.time-left-warning { color: #ff9800; }
+.time-left-danger { color: #f44336; }
+
+[data-theme="light"] .time-left-ok { color: #2e7d32; }
+[data-theme="light"] .time-left-warning { color: #f57c00; }
+[data-theme="light"] .time-left-danger { color: #d32f2f; }
 
 @media (max-width: 480px) {
-    .admin-subscription-row-top {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .admin-subscription-row-right {
-        align-items: flex-start;
-    }
-
-    .admin-subscription-row-meta {
-        flex-direction: column;
-        align-items: flex-start;
+    .admin-subscription-card {
+        padding: 10px 0;
     }
 }
 

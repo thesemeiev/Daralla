@@ -3184,26 +3184,9 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
                 const card = document.createElement('div');
                 card.className = 'admin-subscription-card';
                 card.onclick = () => {
-                    // Запоминаем источник перехода для корректного «Назад»
                     previousAdminPage = 'admin-subscriptions';
                     showAdminSubscriptionEdit(sub.id);
                 };
-
-                const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
-                const statusClass = sub.status === 'deleted'
-                    ? 'deleted'
-                    : sub.status === 'canceled'
-                        ? 'canceled'
-                        : (isSubActive ? 'active' : 'expired');
-                const statusLabel = sub.status === 'active'
-                    ? 'Активна'
-                    : sub.status === 'expired'
-                        ? 'Истекла'
-                        : sub.status === 'trial'
-                            ? 'Пробная'
-                            : sub.status === 'deleted'
-                                ? 'Удалена'
-                                : 'Отменена';
 
                 // Оставшееся время
                 let timeLeftLabel = '';
@@ -3212,45 +3195,25 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
                     const remaining = sub.expires_at - now;
                     const days = Math.floor(remaining / (24 * 60 * 60));
                     timeLeftLabel = formatTimeRemaining(sub.expires_at);
+                    
                     if (remaining <= 0 || days < 1) {
                         timeLeftClass = 'time-left-danger';
                     } else if (days < 7) {
                         timeLeftClass = 'time-left-danger';
                     } else if (days < 30) {
                         timeLeftClass = 'time-left-warning';
-                    } else {
-                        timeLeftClass = 'time-left-ok';
                     }
                 }
 
-                const ownerLabelParts = [];
-                if (sub.user_id) ownerLabelParts.push(`ID: ${escapeHtml(sub.user_id)}`);
-                if (sub.username) ownerLabelParts.push(`Логин: ${escapeHtml(sub.username)}`);
-                const ownerLabel = ownerLabelParts.join(' · ');
+                const ownerDisplay = sub.user_id ? `ID: ${sub.user_id}` : (sub.username || '');
 
                 card.innerHTML = `
                     <div class="admin-subscription-row-main">
-                        <div class="admin-subscription-row-top">
-                            <div class="admin-subscription-row-name">${escapeHtml(sub.name || '')}</div>
-                            <div class="admin-subscription-row-right">
-                                ${timeLeftLabel ? `
-                                    <span
-                                        class="admin-subscription-time-left ${timeLeftClass}"
-                                        title="${escapeHtml(sub.expires_at_formatted || '')}"
-                                    >
-                                        ${escapeHtml(timeLeftLabel)}
-                                    </span>
-                                ` : ''}
-                                <span class="admin-subscription-status ${statusClass}">${statusLabel}</span>
-                            </div>
+                        <div class="admin-subscription-row-left">
+                            <div class="admin-subscription-name">${escapeHtml(sub.name || 'Без названия')}</div>
+                            ${ownerDisplay ? `<div class="admin-subscription-owner-id">${escapeHtml(ownerDisplay)}</div>` : ''}
                         </div>
-                        <div class="admin-subscription-row-meta">
-                            ${ownerLabel ? `<span class="admin-subscription-owner">${ownerLabel}</span>` : ''}
-                            <span class="admin-subscription-dates">
-                                Создана: ${escapeHtml(sub.created_at_formatted || '')}
-                                ${sub.expires_at_formatted ? ` · До: ${escapeHtml(sub.expires_at_formatted)}` : ''}
-                            </span>
-                        </div>
+                        ${timeLeftLabel ? `<div class="admin-subscription-time-left ${timeLeftClass}">${escapeHtml(timeLeftLabel)}</div>` : ''}
                     </div>
                 `;
 
