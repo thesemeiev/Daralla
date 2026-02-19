@@ -3179,10 +3179,15 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
         listEl.innerHTML = '';
 
         if (data.subscriptions && data.subscriptions.length > 0) {
+            const now = Math.floor(Date.now() / 1000);
             data.subscriptions.forEach(sub => {
                 const card = document.createElement('div');
                 card.className = 'admin-subscription-card';
-                card.onclick = () => showAdminSubscriptionEdit(sub.id);
+                card.onclick = () => {
+                    // Запоминаем источник перехода для корректного «Назад»
+                    previousAdminPage = 'admin-subscriptions';
+                    showAdminSubscriptionEdit(sub.id);
+                };
 
                 const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
                 const statusClass = sub.status === 'deleted'
@@ -3200,20 +3205,53 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
                                 ? 'Удалена'
                                 : 'Отменена';
 
+                // Оставшееся время
+                let timeLeftLabel = '';
+                let timeLeftClass = 'time-left-ok';
+                if (sub.expires_at) {
+                    const remaining = sub.expires_at - now;
+                    const days = Math.floor(remaining / (24 * 60 * 60));
+                    timeLeftLabel = formatTimeRemaining(sub.expires_at);
+                    if (remaining <= 0 || days < 1) {
+                        timeLeftClass = 'time-left-danger';
+                    } else if (days < 7) {
+                        timeLeftClass = 'time-left-danger';
+                    } else if (days < 30) {
+                        timeLeftClass = 'time-left-warning';
+                    } else {
+                        timeLeftClass = 'time-left-ok';
+                    }
+                }
+
                 const ownerLabelParts = [];
                 if (sub.user_id) ownerLabelParts.push(`ID: ${escapeHtml(sub.user_id)}`);
                 if (sub.username) ownerLabelParts.push(`Логин: ${escapeHtml(sub.username)}`);
                 const ownerLabel = ownerLabelParts.join(' · ');
 
                 card.innerHTML = `
-                    <div class="admin-subscription-name">${escapeHtml(sub.name || '')}</div>
-                    <div class="admin-subscription-status ${statusClass}">${statusLabel}</div>
-                    <div class="admin-subscription-info">
-                        <div>Создана: ${escapeHtml(sub.created_at_formatted || '')}</div>
-                        <div>Истекает: ${escapeHtml(sub.expires_at_formatted || '')}</div>
-                        <div>Устройств: ${sub.device_limit || 0}</div>
+                    <div class="admin-subscription-row-main">
+                        <div class="admin-subscription-row-top">
+                            <div class="admin-subscription-row-name">${escapeHtml(sub.name || '')}</div>
+                            <div class="admin-subscription-row-right">
+                                ${timeLeftLabel ? `
+                                    <span
+                                        class="admin-subscription-time-left ${timeLeftClass}"
+                                        title="${escapeHtml(sub.expires_at_formatted || '')}"
+                                    >
+                                        ${escapeHtml(timeLeftLabel)}
+                                    </span>
+                                ` : ''}
+                                <span class="admin-subscription-status ${statusClass}">${statusLabel}</span>
+                            </div>
+                        </div>
+                        <div class="admin-subscription-row-meta">
+                            ${ownerLabel ? `<span class="admin-subscription-owner">${ownerLabel}</span>` : ''}
+                            <span class="admin-subscription-dates">
+                                Создана: ${escapeHtml(sub.created_at_formatted || '')}
+                                ${sub.expires_at_formatted ? ` · До: ${escapeHtml(sub.expires_at_formatted)}` : ''}
+                            </span>
+                        </div>
                     </div>
-                    ${ownerLabel ? `<div class="admin-subscription-owner hint">${ownerLabel}</div>` : ''}
                 `;
 
                 listEl.appendChild(card);
@@ -3570,7 +3608,12 @@ let originalSubscriptionData = null;
 
 async function showAdminSubscriptionEdit(subId) {
     try {
-        previousAdminPage = 'admin-user-detail';
+        // Источник перехода: список подписок или детали пользователя
+        if (currentPage === 'admin-subscriptions') {
+            previousAdminPage = 'admin-subscriptions';
+        } else {
+            previousAdminPage = 'admin-user-detail';
+        }
         currentEditingSubscriptionId = subId;
         showPage('admin-subscription-edit', { id: String(subId) });
         
@@ -3980,7 +4023,15 @@ function copyToClipboard(text, button) {
 function goBackFromSubscriptionEdit() {
     // Сбрасываем активную вкладку на "Параметры"
     switchSubscriptionTab('params');
-    if (previousAdminPage === 'admin-user-detail') {
+    if (previousAdminPage === 'admin-subscriptions') {
+        // Возврат к списку подписок с сохранёнными фильтрами и страницей
+        showPage('admin-subscriptions', {
+            page: currentAdminSubscriptionsPage,
+            status: currentAdminSubscriptionsStatus || '',
+            owner: currentAdminSubscriptionsOwnerQuery || '',
+            long: currentAdminSubscriptionsLongOnly ? '1' : ''
+        });
+    } else if (previousAdminPage === 'admin-user-detail') {
         // Нужно перезагрузить информацию о пользователе
         if (currentAdminUserDetailUserId) {
             showAdminUserDetail(currentAdminUserDetailUserId);
