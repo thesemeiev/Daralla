@@ -725,7 +725,7 @@ function showPage(pageName, params) {
                 currentAdminSubscriptionsOwnerQuery = String(params.owner || '');
             }
             if (params.long !== undefined) {
-                currentAdminSubscriptionsLongOnly = params.long === '1' || params.long === true;
+                // Legacy parameter ignored
             }
         }
         loadAdminSubscriptions(subPage);
@@ -3091,7 +3091,6 @@ let previousAdminPage = 'admin-users';
 let currentAdminSubscriptionsPage = 1;
 let currentAdminSubscriptionsStatus = '';
 let currentAdminSubscriptionsOwnerQuery = '';
-let currentAdminSubscriptionsLongOnly = false;
 let adminSubscriptionsSearchTimeout;
 
 // Проверка прав админа
@@ -3142,9 +3141,6 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
         if (options.ownerQuery !== undefined) {
             currentAdminSubscriptionsOwnerQuery = options.ownerQuery;
         }
-        if (options.longOnly !== undefined) {
-            currentAdminSubscriptionsLongOnly = !!options.longOnly;
-        }
 
         const response = await apiFetch('/api/admin/subscriptions', {
             method: 'POST',
@@ -3155,8 +3151,7 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
                 page,
                 limit: 20,
                 status: currentAdminSubscriptionsStatus || undefined,
-                owner_query: currentAdminSubscriptionsOwnerQuery || undefined,
-                long_only: currentAdminSubscriptionsLongOnly
+                owner_query: currentAdminSubscriptionsOwnerQuery || undefined
             })
         });
 
@@ -3244,18 +3239,13 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
         if (ownerInput && ownerInput.value !== (currentAdminSubscriptionsOwnerQuery || '')) {
             ownerInput.value = currentAdminSubscriptionsOwnerQuery || '';
         }
-        const longOnlyCheckbox = document.getElementById('admin-subscriptions-long-only');
-        if (longOnlyCheckbox) {
-            longOnlyCheckbox.checked = currentAdminSubscriptionsLongOnly;
-        }
 
         // Обновляем hash для возможности возврата на ту же страницу
         try {
             location.hash = buildHash('admin-subscriptions', {
                 page: String(page),
                 status: currentAdminSubscriptionsStatus || '',
-                owner: currentAdminSubscriptionsOwnerQuery || '',
-                long: currentAdminSubscriptionsLongOnly ? '1' : ''
+                owner: currentAdminSubscriptionsOwnerQuery || ''
             });
         } catch (e) {}
     } catch (error) {
@@ -3284,20 +3274,6 @@ function reloadAdminSubscriptionsWithFilters() {
     if (statusSelect) {
         currentAdminSubscriptionsStatus = statusSelect.value || '';
     }
-    const longOnlyCheckbox = document.getElementById('admin-subscriptions-long-only');
-    if (longOnlyCheckbox) {
-        currentAdminSubscriptionsLongOnly = !!longOnlyCheckbox.checked;
-    }
-    loadAdminSubscriptions(1);
-}
-
-function toggleAdminSubscriptionsLongOnly(fromCheckbox) {
-    const longOnlyCheckbox = document.getElementById('admin-subscriptions-long-only');
-    if (!longOnlyCheckbox) return;
-    if (!fromCheckbox) {
-        longOnlyCheckbox.checked = !longOnlyCheckbox.checked;
-    }
-    currentAdminSubscriptionsLongOnly = !!longOnlyCheckbox.checked;
     loadAdminSubscriptions(1);
 }
 
@@ -3991,8 +3967,7 @@ function goBackFromSubscriptionEdit() {
         showPage('admin-subscriptions', {
             page: currentAdminSubscriptionsPage,
             status: currentAdminSubscriptionsStatus || '',
-            owner: currentAdminSubscriptionsOwnerQuery || '',
-            long: currentAdminSubscriptionsLongOnly ? '1' : ''
+            owner: currentAdminSubscriptionsOwnerQuery || ''
         });
     } else if (previousAdminPage === 'admin-user-detail') {
         // Нужно перезагрузить информацию о пользователе

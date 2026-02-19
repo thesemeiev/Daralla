@@ -3039,12 +3039,51 @@ body.about-page-active {
     font-weight: 500;
 }
 
+/* Admin Toolbar */
+.admin-toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.admin-search-box {
+    flex: 2;
+    margin-bottom: 0;
+}
+
+.admin-filter-item {
+    flex: 1;
+    min-width: 150px;
+}
+
+.admin-select-styled {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    transition: border-color 0.2s;
+}
+
+.admin-select-styled:focus {
+    border-color: var(--card-border-hover);
+}
+
 .admin-subscription-card {
     background: var(--card-bg);
     border: none;
     border-bottom: 1px solid var(--card-border);
     border-radius: 0;
-    padding: 12px 0;
+    padding: 14px 4px;
     margin-bottom: 0;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -3073,13 +3112,13 @@ body.about-page-active {
 .admin-subscription-row-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex: 1;
     min-width: 0;
 }
 
 .admin-subscription-name {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--text-primary);
     white-space: nowrap;
@@ -3091,13 +3130,15 @@ body.about-page-active {
     font-size: 13px;
     color: var(--text-secondary);
     white-space: nowrap;
+    opacity: 0.8;
 }
 
 .admin-subscription-time-left {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
     text-align: right;
+    min-width: 60px;
 }
 
 .time-left-ok { color: #4caf50; }
@@ -3109,8 +3150,23 @@ body.about-page-active {
 [data-theme="light"] .time-left-danger { color: #d32f2f; }
 
 @media (max-width: 480px) {
+    .admin-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .admin-search-box, .admin-filter-item {
+        flex: auto;
+        width: 100%;
+    }
+
     .admin-subscription-card {
-        padding: 10px 0;
+        padding: 12px 0;
+    }
+    
+    .admin-subscription-name {
+        font-size: 14px;
     }
 }
 
