@@ -4052,7 +4052,83 @@ body.about-page-active {
     color: var(--text-secondary);
 }
 
+/* ── Admin Dashboard ── */
 
+.dashboard-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.dashboard-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dashboard-card-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.dashboard-card-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.dashboard-card-trend {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.dashboard-card-trend.trend-up {
+    color: #34c759;
+}
+
+.dashboard-card-trend.trend-down {
+    color: #ff3b30;
+}
+
+.dashboard-chart-section,
+.dashboard-servers-section {
+    margin-bottom: 20px;
+}
+
+.dashboard-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 10px 0;
+}
+
+.dashboard-chart-wrap {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 12px;
+    height: 200px;
+    position: relative;
+}
+
+.dashboard-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.dashboard-gateway-split {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    text-align: center;
+}
 
 /* ── Notification Rules ── */
 

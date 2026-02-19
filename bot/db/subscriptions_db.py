@@ -299,7 +299,9 @@ async def get_subscription_statistics():
             row = await cur.fetchone()
             total_users = row['count'] if row else 0
 
-        async with db.execute("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'active'") as cur:
+        async with db.execute(
+            "SELECT COUNT(*) as count FROM subscriptions WHERE status = 'active' AND expires_at > ?", (now,)
+        ) as cur:
             row = await cur.fetchone()
             active_subscriptions = row['count'] if row else 0
 
@@ -323,12 +325,17 @@ async def get_subscription_statistics():
             SELECT COUNT(DISTINCT u.id) as count 
             FROM users u 
             JOIN subscriptions s ON u.id = s.subscriber_id 
-            WHERE s.status = 'active'
-        """) as cur:
+            WHERE s.status = 'active' AND s.expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             users_with_active_subs = row['count'] if row else 0
 
-        async with db.execute("SELECT COUNT(*) as count FROM subscription_servers") as cur:
+        async with db.execute("""
+            SELECT COUNT(*) as count 
+            FROM subscription_servers ss
+            JOIN subscriptions s ON ss.subscription_id = s.id
+            WHERE s.status != 'deleted'
+        """) as cur:
             row = await cur.fetchone()
             total_server_clients = row['count'] if row else 0
 
@@ -336,17 +343,17 @@ async def get_subscription_statistics():
             SELECT COUNT(*) as count 
             FROM subscription_servers ss
             JOIN subscriptions s ON ss.subscription_id = s.id
-            WHERE s.status = 'active'
-        """) as cur:
+            WHERE s.status = 'active' AND s.expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             active_server_clients = row['count'] if row else 0
 
         async with db.execute("""
             SELECT period, price, COUNT(*) as count
             FROM subscriptions
-            WHERE status = 'active' AND price > 0
+            WHERE status = 'active' AND expires_at > ? AND price > 0
             GROUP BY period, price
-        """) as cur:
+        """, (now,)) as cur:
             rows = await cur.fetchall()
 
         mrr = 0.0
@@ -366,10 +373,8 @@ async def get_subscription_statistics():
         async with db.execute("""
             SELECT period, price, COUNT(*) as count
             FROM subscriptions
-            WHERE status IN ('active', 'expired')
-            AND price > 0
-            AND created_at <= ?
-            AND (expires_at >= ? OR status = 'active')
+            WHERE price > 0 AND status != 'deleted'
+            AND created_at <= ? AND expires_at >= ?
             GROUP BY period, price
         """, (month_ago_timestamp, month_ago_timestamp)) as cur:
             prev_rows = await cur.fetchall()
@@ -577,6 +582,7 @@ async def get_subscriptions_page(
 
 async def get_subscription_types_statistics():
     """Возвращает статистику по типам активных подписок (trial vs purchased, month vs 3month)."""
+    now = int(datetime.datetime.now().timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
@@ -584,47 +590,40 @@ async def get_subscription_types_statistics():
             SELECT COUNT(*) as count 
             FROM subscriptions 
             WHERE (status = 'trial' OR (status = 'active' AND price = 0))
-        """) as cur:
+            AND expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             trial_active = row['count'] if row else 0
 
         async with db.execute("""
             SELECT COUNT(*) as count 
             FROM subscriptions 
-            WHERE status = 'active' 
-            AND price > 0
-            AND status != 'trial'
-        """) as cur:
+            WHERE status = 'active' AND price > 0 AND expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             purchased_active = row['count'] if row else 0
 
         async with db.execute("""
             SELECT COUNT(*) as count 
             FROM subscriptions 
-            WHERE status = 'active' 
-            AND period = 'month'
-            AND price > 0
-            AND status != 'trial'
-        """) as cur:
+            WHERE status = 'active' AND period = 'month' AND price > 0 AND expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             month_active = row['count'] if row else 0
 
         async with db.execute("""
             SELECT COUNT(*) as count 
             FROM subscriptions 
-            WHERE status = 'active' 
-            AND period = '3month'
-            AND price > 0
-            AND status != 'trial'
-        """) as cur:
+            WHERE status = 'active' AND period = '3month' AND price > 0 AND expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             month3_active = row['count'] if row else 0
 
         async with db.execute("""
             SELECT COUNT(*) as count 
             FROM subscriptions 
-            WHERE status = 'active'
-        """) as cur:
+            WHERE status = 'active' AND expires_at > ?
+        """, (now,)) as cur:
             row = await cur.fetchone()
             total_active = row['count'] if row else 0
 
@@ -635,6 +634,25 @@ async def get_subscription_types_statistics():
             '3month_active': month3_active,
             'total_active': total_active
         }
+
+
+async def get_daily_revenue(days: int = 30):
+    """Возвращает выручку по дням за указанный период."""
+    now = int(datetime.datetime.now().timestamp())
+    start_ts = now - (days * 24 * 60 * 60)
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT DATE(created_at, 'unixepoch') as date,
+                   SUM(price) as revenue,
+                   COUNT(*) as count
+            FROM subscriptions
+            WHERE created_at >= ? AND price > 0 AND status != 'deleted'
+            GROUP BY DATE(created_at, 'unixepoch')
+            ORDER BY date ASC
+        """, (start_ts,)) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 
 async def get_subscription_dynamics_data(days: int = 30):

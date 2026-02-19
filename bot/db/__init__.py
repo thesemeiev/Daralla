@@ -17,7 +17,8 @@ from .config_db import init_config_db, get_config, set_config, get_all_config
 from .payments_db import (
     init_payments_db, add_payment, get_payment_by_id, update_payment_status,
     update_payment_activation, get_all_pending_payments, get_pending_payment,
-    cleanup_old_payments, cleanup_expired_pending_payments, get_payments_by_user
+    cleanup_old_payments, cleanup_expired_pending_payments, get_payments_by_user,
+    get_revenue_by_gateway,
 )
 from .users_db import (
     init_users_db, get_all_user_ids, register_simple_user, is_known_user,
@@ -77,6 +78,7 @@ from .subscriptions_db import (
     get_subscription_dynamics_data,
     get_subscription_conversion_data,
     get_conversion_data,
+    get_daily_revenue,
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
@@ -111,7 +113,7 @@ __all__ = [
     'init_config_db', 'init_users_db', 'init_servers_db', 'init_subscriptions_db',
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
-    'get_payments_by_user',
+    'get_payments_by_user', 'get_revenue_by_gateway',
     'get_all_user_ids', 'register_simple_user', 'is_known_user', 'get_config', 'set_config', 'get_all_config',
     'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
     'get_daily_notification_stats', 'get_notification_settings',
@@ -140,7 +142,7 @@ __all__ = [
     'get_subscription_servers', 'add_subscription_server', 'remove_subscription_server',
     'get_subscription_statistics', 'get_subscription_types_statistics',
     'get_subscription_dynamics_data', 'get_subscription_conversion_data',
-    'get_conversion_data',
+    'get_conversion_data', 'get_daily_revenue',
     'init_servers_db', 'get_servers_config', 'get_server_by_id', 'get_server_groups',
     'get_least_loaded_group_id', 'check_and_run_initial_migration',
     'save_server_load_snapshot', 'get_server_load_averages', 'cleanup_old_server_load_history',

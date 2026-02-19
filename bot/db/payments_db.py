@@ -146,6 +146,33 @@ async def cleanup_expired_pending_payments(minutes_old: int = 60) -> int:
         logger.error(f"CLEANUP_EXPIRED_PENDING_PAYMENTS error: {e}")
         return 0
 
+async def get_revenue_by_gateway(days: int = 30) -> dict:
+    """Возвращает выручку по платёжным шлюзам за период."""
+    start_ts = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
+    result = {}
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT meta FROM payments
+                WHERE status = 'succeeded' AND activated = 1 AND created_at >= ?
+            """, (start_ts,)) as cur:
+                rows = await cur.fetchall()
+                for row in rows:
+                    meta = {}
+                    if row['meta']:
+                        try:
+                            meta = json.loads(row['meta'])
+                        except Exception:
+                            pass
+                    gateway = meta.get('gateway', 'yookassa')
+                    price = float(meta.get('price', 0))
+                    result[gateway] = result.get(gateway, 0) + price
+    except Exception as e:
+        logger.error(f"GET_REVENUE_BY_GATEWAY error: {e}")
+    return result
+
+
 async def get_payments_by_user(user_id: str, limit: int = 50) -> list:
     """Возвращает все платежи пользователя"""
     try:

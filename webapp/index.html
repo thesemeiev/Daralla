@@ -12,6 +12,7 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
     <link rel="stylesheet" href="/style.css?v=11">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
 </head>
 <body>
@@ -466,16 +467,44 @@
             </header>
             
             <div id="admin-stats-content" class="admin-panel-content">
-                <section class="admin-panel-section admin-panel-section-analytics">
-                    <h2 class="admin-panel-section-title">Аналитика</h2>
-                    <div class="admin-panel-rows">
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-servers-analytics')">
-                            <span class="admin-panel-row-label">Аналитика серверов</span>
-                            <span class="admin-panel-row-chevron">›</span>
-                        </button>
+                <div id="admin-stats-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
+
+                <div id="admin-dashboard" style="display: none;">
+                    <div class="dashboard-cards">
+                        <div class="dashboard-card">
+                            <span class="dashboard-card-label">MRR</span>
+                            <span class="dashboard-card-value" id="dash-mrr">—</span>
+                            <span class="dashboard-card-trend" id="dash-mrr-trend"></span>
+                        </div>
+                        <div class="dashboard-card">
+                            <span class="dashboard-card-label">Активных подписок</span>
+                            <span class="dashboard-card-value" id="dash-active-subs">—</span>
+                        </div>
+                        <div class="dashboard-card">
+                            <span class="dashboard-card-label">Пользователи</span>
+                            <span class="dashboard-card-value" id="dash-users">—</span>
+                            <span class="dashboard-card-trend" id="dash-users-trend"></span>
+                        </div>
+                        <div class="dashboard-card">
+                            <span class="dashboard-card-label">Конверсия</span>
+                            <span class="dashboard-card-value" id="dash-conversion">—</span>
+                        </div>
                     </div>
-                </section>
-                
+
+                    <section class="dashboard-chart-section">
+                        <h3 class="dashboard-section-title">Выручка за 30 дней</h3>
+                        <div class="dashboard-chart-wrap">
+                            <canvas id="dash-revenue-chart"></canvas>
+                        </div>
+                        <div class="dashboard-gateway-split" id="dash-gateway-split"></div>
+                    </section>
+
+                    <section class="dashboard-servers-section">
+                        <h3 class="dashboard-section-title">Серверы</h3>
+                        <div id="dash-servers-load" class="servers-load-list"></div>
+                    </section>
+                </div>
+
                 <section class="admin-panel-section admin-panel-section-management">
                     <h2 class="admin-panel-section-title">Управление</h2>
                     <div class="admin-panel-rows">
@@ -671,27 +700,6 @@
         </div>
 
         <!-- АДМИН-ПАНЕЛЬ: Аналитика серверов -->
-        <div id="page-admin-servers-analytics" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
-            </header>
-            
-            <div id="admin-servers-analytics-loading" class="loading">
-                <div class="spinner"></div>
-                <p>Загрузка...</p>
-            </div>
-            
-            <div id="admin-servers-analytics-error" class="error" style="display: none;">
-                <p>Ошибка загрузки данных</p>
-                <button onclick="loadServersAnalyticsPage()">Повторить</button>
-            </div>
-            
-            <div id="admin-servers-analytics-content" class="admin-page-content" style="display: none;">
-                <h2 style="margin: 0 0 16px 0;">Нагрузка на канал серверов</h2>
-                <div id="servers-load-list" class="servers-load-list"></div>
-            </div>
-        </div>
-
         <!-- АДМИН-ПАНЕЛЬ: Список подписок -->
         <div id="page-admin-subscriptions" class="page" style="display: none;">
             <header>

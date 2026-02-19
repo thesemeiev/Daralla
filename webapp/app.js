@@ -455,7 +455,7 @@ var ROUTE_PAGE_NAMES = new Set([
     'landing', 'login', 'register',
     'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'choose-payment-method', 'payment',
     'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
-    'admin-stats', 'admin-servers-analytics', 'admin-users', 'admin-broadcast',
+    'admin-stats', 'admin-users', 'admin-broadcast',
     'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
     'admin-events'
 ]);
@@ -573,8 +573,7 @@ function showPage(pageName, params) {
         showPage('subscriptions', params);
         return;
     }
-    // Очищаем интервалы при уходе со страницы аналитики серверов
-    if (currentPage === 'admin-servers-analytics' && pageName !== 'admin-servers-analytics' && serverLoadChartInterval) {
+    if (currentPage === 'admin-stats' && pageName !== 'admin-stats' && serverLoadChartInterval) {
         clearInterval(serverLoadChartInterval);
         serverLoadChartInterval = null;
     }
@@ -731,8 +730,6 @@ function showPage(pageName, params) {
         loadAdminSubscriptions(subPage);
     } else if (pageName === 'admin-stats') {
         loadAdminStats();
-    } else if (pageName === 'admin-servers-analytics') {
-        loadServersAnalyticsPage();
     } else if (pageName === 'admin-broadcast') {
         loadBroadcastPage();
     } else if (pageName === 'admin-server-management') {
@@ -4662,70 +4659,160 @@ function showError(elementId, message) {
 }
 
 // Главный экран админ-панели (две карточки «Аналитика» и «Управление») — данных не грузим
-function loadAdminStats() {
-    const contentEl = document.getElementById('admin-stats-content');
-    if (contentEl) contentEl.style.display = 'block';
-}
+let dashRevenueChart = null;
 
-// Загрузка страницы «Аналитика серверов»
-async function loadServersAnalyticsPage() {
+async function loadAdminStats() {
+    const loadingEl = document.getElementById('admin-stats-loading');
+    const dashboardEl = document.getElementById('admin-dashboard');
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (dashboardEl) dashboardEl.style.display = 'none';
+
     try {
-        const loadingEl = document.getElementById('admin-servers-analytics-loading');
-        const errorEl = document.getElementById('admin-servers-analytics-error');
-        const contentEl = document.getElementById('admin-servers-analytics-content');
-        if (loadingEl) loadingEl.style.display = 'block';
-        if (errorEl) errorEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'none';
-        
-        await loadServerLoadChart();
-        
+        const response = await apiFetch('/api/admin/stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        if (!result.success) throw new Error('API error');
+        const s = result.stats;
+
+        document.getElementById('dash-mrr').textContent = formatRub(s.mrr || 0);
+        const mrrPct = s.mrr_change_percent || 0;
+        const mrrTrendEl = document.getElementById('dash-mrr-trend');
+        if (mrrPct > 0) {
+            mrrTrendEl.textContent = `+${mrrPct.toFixed(1)}%`;
+            mrrTrendEl.className = 'dashboard-card-trend trend-up';
+        } else if (mrrPct < 0) {
+            mrrTrendEl.textContent = `${mrrPct.toFixed(1)}%`;
+            mrrTrendEl.className = 'dashboard-card-trend trend-down';
+        } else {
+            mrrTrendEl.textContent = '';
+        }
+
+        document.getElementById('dash-active-subs').textContent = s.subscriptions.active;
+        document.getElementById('dash-users').textContent = s.users.total;
+        const usersTrendEl = document.getElementById('dash-users-trend');
+        if (s.users.new_30d > 0) {
+            usersTrendEl.textContent = `+${s.users.new_30d} за 30д`;
+            usersTrendEl.className = 'dashboard-card-trend trend-up';
+        } else {
+            usersTrendEl.textContent = '';
+        }
+        document.getElementById('dash-conversion').textContent = (s.conversion_rate || 0) + '%';
+
+        renderRevenueChart(s.daily_revenue || []);
+        renderGatewaySplit(s.gateway_split || {});
+
+        await loadDashboardServers();
+
         if (loadingEl) loadingEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'block';
-        
+        if (dashboardEl) dashboardEl.style.display = 'block';
+
         if (serverLoadChartInterval) clearInterval(serverLoadChartInterval);
         serverLoadChartInterval = setInterval(() => {
-            if (currentPage === 'admin-servers-analytics') {
-                loadServerLoadChart();
-            }
+            if (currentPage === 'admin-stats') loadDashboardServers();
         }, 2 * 60 * 1000);
-    } catch (error) {
-        console.error('Ошибка загрузки аналитики серверов:', error);
-        const loadingEl = document.getElementById('admin-servers-analytics-loading');
+    } catch (err) {
+        console.error('Dashboard load error:', err);
         if (loadingEl) loadingEl.style.display = 'none';
-        showError('admin-servers-analytics-error', 'Ошибка загрузки данных');
+        if (dashboardEl) dashboardEl.style.display = 'block';
     }
 }
 
-// Загрузка списка нагрузки на серверы (карточки с progress bar)
-async function loadServerLoadChart() {
-    const container = document.getElementById('servers-load-list');
+function formatRub(v) {
+    return Math.round(v).toLocaleString('ru-RU') + ' ₽';
+}
+
+function renderRevenueChart(data) {
+    const ctx = document.getElementById('dash-revenue-chart');
+    if (!ctx) return;
+    if (dashRevenueChart) { dashRevenueChart.destroy(); dashRevenueChart = null; }
+
+    const labels = data.map(d => {
+        const parts = d.date.split('-');
+        return parts[2] + '.' + parts[1];
+    });
+    const values = data.map(d => d.revenue || 0);
+
+    const isDark = document.body.classList.contains('dark') ||
+        getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim().startsWith('#1');
+
+    dashRevenueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: isDark ? 'rgba(99,132,255,0.6)' : 'rgba(54,120,220,0.7)',
+                borderRadius: 4,
+                maxBarThickness: 18,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: {
+                callbacks: { label: (c) => formatRub(c.raw) }
+            }},
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 7,
+                        color: isDark ? '#888' : '#666',
+                        font: { size: 11 }
+                    }
+                },
+                y: {
+                    grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
+                    ticks: {
+                        callback: (v) => v >= 1000 ? (v / 1000) + 'k' : v,
+                        color: isDark ? '#888' : '#666',
+                        font: { size: 11 }
+                    },
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+}
+
+function renderGatewaySplit(gw) {
+    const el = document.getElementById('dash-gateway-split');
+    if (!el) return;
+    const entries = Object.entries(gw);
+    if (entries.length === 0) { el.textContent = ''; return; }
+    const total = entries.reduce((s, [, v]) => s + v, 0);
+    if (total === 0) { el.textContent = ''; return; }
+    const names = { yookassa: 'YooKassa', cryptocloud: 'CryptoCloud' };
+    el.textContent = entries.map(([k, v]) => {
+        const pct = Math.round(v / total * 100);
+        return `${names[k] || k}: ${formatRub(v)} (${pct}%)`;
+    }).join('  ·  ');
+}
+
+async function loadDashboardServers() {
+    const container = document.getElementById('dash-servers-load');
     if (!container) return;
     try {
         const response = await apiFetch('/api/admin/charts/server-load', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
-
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки данных');
-        }
-
+        if (!response.ok) throw new Error('Ошибка загрузки данных');
         const result = await response.json();
         if (!result.success || !result.data) {
             container.innerHTML = '<p class="empty-hint">Нет данных</p>';
             return;
         }
-
         const serverData = result.data.servers || [];
         if (serverData.length === 0) {
-            container.innerHTML = '<p class="empty-hint">Нет данных о нагрузке на серверы</p>';
+            container.innerHTML = '<p class="empty-hint">Нет данных о нагрузке</p>';
             return;
         }
-
         const getLoadClass = (p) => (p >= 80 ? 'high' : p >= 50 ? 'medium' : 'low');
-
         container.innerHTML = serverData.map((item) => {
             const pct = item.load_percentage ?? 0;
             const online = item.online_clients ?? 0;
