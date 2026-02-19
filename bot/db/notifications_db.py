@@ -23,7 +23,7 @@ def render_structured_template(raw: str, *, expires_at: int = None) -> str:
         if expires_at:
             expiry_dt = datetime.datetime.fromtimestamp(expires_at)
             replacements['time_remaining'] = calculate_time_remaining(expires_at)
-            replacements['expiry_line'] = f"\U0001f4c5 Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>"
+            replacements['expiry_line'] = f"Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>"
         else:
             replacements['time_remaining'] = ''
             replacements['expiry_line'] = ''
@@ -45,15 +45,15 @@ def render_structured_template(raw: str, *, expires_at: int = None) -> str:
     if show_time or show_expiry:
         if show_time:
             if expires_at:
-                parts.append(f"\u23f3 Осталось: <b>{calculate_time_remaining(expires_at)}</b>")
+                parts.append(f"Осталось: <b>{calculate_time_remaining(expires_at)}</b>")
             else:
-                parts.append("\u23f3 Осталось: <b>—</b>")
+                parts.append("Осталось: <b>—</b>")
         if show_expiry:
             if expires_at:
                 expiry_dt = datetime.datetime.fromtimestamp(expires_at)
-                parts.append(f"\U0001f4c5 Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>")
+                parts.append(f"Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>")
             else:
-                parts.append("\U0001f4c5 Истекает: <b>—</b>")
+                parts.append("Истекает: <b>—</b>")
         parts.append('')
 
     if body:

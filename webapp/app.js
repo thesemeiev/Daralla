@@ -1764,11 +1764,7 @@ function notifParseTemplate(raw) {
 
 function notifCardPreviewText(rule) {
     var t = notifParseTemplate(rule.message_template);
-    var parts = [];
-    if (t.title) parts.push(t.title);
-    if (t.body) parts.push(t.body);
-    var text = parts.join(' — ');
-    return text.length > 100 ? text.substring(0, 100) + '…' : text;
+    return t.title || t.body || '—';
 }
 
 function renderNotifTriggerChips(eventType) {
@@ -1851,8 +1847,8 @@ function updateNotifPreview() {
 
     var html = '';
     if (title) html += '<b>' + escapeHtml(title) + '</b>\n\n';
-    if (showTime) html += '⏳ Осталось: <b>2 дня 14 часов</b>\n';
-    if (showExpiry) html += '📅 Истекает: <b>25.02.2026 18:00</b>\n';
+    if (showTime) html += 'Осталось: <b>2 дня 14 часов</b>\n';
+    if (showExpiry) html += 'Истекает: <b>25.02.2026 18:00</b>\n';
     if ((showTime || showExpiry) && body) html += '\n';
     if (body) html += escapeHtml(body);
 
