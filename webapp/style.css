@@ -3144,10 +3144,12 @@ body.about-page-active {
 .time-left-ok { color: #4caf50; }
 .time-left-warning { color: #ff9800; }
 .time-left-danger { color: #f44336; }
+.time-left-deleted { color: #9e9e9e; text-decoration: line-through; }
 
 [data-theme="light"] .time-left-ok { color: #2e7d32; }
 [data-theme="light"] .time-left-warning { color: #f57c00; }
 [data-theme="light"] .time-left-danger { color: #d32f2f; }
+[data-theme="light"] .time-left-deleted { color: #757575; }
 
 @media (max-width: 480px) {
     .admin-toolbar {

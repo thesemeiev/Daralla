@@ -3186,7 +3186,11 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
                 // Оставшееся время
                 let timeLeftLabel = '';
                 let timeLeftClass = 'time-left-ok';
-                if (sub.expires_at) {
+                
+                if (sub.status === 'deleted') {
+                    timeLeftLabel = 'Удалена';
+                    timeLeftClass = 'time-left-deleted';
+                } else if (sub.expires_at) {
                     const remaining = sub.expires_at - now;
                     const days = Math.floor(remaining / (24 * 60 * 60));
                     timeLeftLabel = formatTimeRemaining(sub.expires_at);
