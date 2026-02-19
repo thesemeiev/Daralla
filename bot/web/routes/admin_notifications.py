@@ -46,7 +46,13 @@ def create_blueprint(bot_app):
         if not message_template:
             return jsonify({"error": "message_template is required"}), 400, _cors_headers()
 
-        rule_id = await create_notification_rule(event_type, int(trigger_hours), message_template)
+        trigger_hours = int(trigger_hours)
+        if event_type == 'expiry_warning' and trigger_hours > 0:
+            trigger_hours = -trigger_hours
+        elif event_type == 'no_subscription' and trigger_hours < 0:
+            trigger_hours = abs(trigger_hours)
+
+        rule_id = await create_notification_rule(event_type, trigger_hours, message_template)
         rule = await get_notification_rule_by_id(rule_id)
         return jsonify({"rule": rule}), 201, _cors_headers()
 
@@ -77,6 +83,14 @@ def create_blueprint(bot_app):
         if not fields:
             return jsonify({"error": "No fields to update"}), 400, _cors_headers()
 
+        et = fields.get('event_type', existing['event_type'])
+        if 'trigger_hours' in fields:
+            th = fields['trigger_hours']
+            if et == 'expiry_warning' and th > 0:
+                fields['trigger_hours'] = -th
+            elif et == 'no_subscription' and th < 0:
+                fields['trigger_hours'] = abs(th)
+
         await update_notification_rule(rule_id, **fields)
         rule = await get_notification_rule_by_id(rule_id)
         return jsonify({"rule": rule}), 200, _cors_headers()
@@ -89,7 +103,7 @@ def create_blueprint(bot_app):
             return jsonify({"error": "Rule not found"}), 404, _cors_headers()
         return jsonify({"ok": True}), 200, _cors_headers()
 
-    @bp.route("/api/admin/notification-rules/test", methods=["POST", "OPTIONS"])
+    @bp.route("/api/admin/notification-rules-test", methods=["POST", "OPTIONS"])
     @admin_route
     async def api_test_send(request, admin_id):
         data = await request.get_json(silent=True) or {}

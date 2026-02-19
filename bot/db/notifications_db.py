@@ -12,12 +12,13 @@ logger = logging.getLogger(__name__)
 
 def render_structured_template(raw: str, *, expires_at: int = None) -> str:
     """Render a message_template (JSON structured or legacy format-string) into final HTML."""
+    from bot.utils import calculate_time_remaining
+
     try:
         obj = json.loads(raw)
         if not isinstance(obj, dict) or 'title' not in obj:
             raise ValueError
     except (json.JSONDecodeError, ValueError):
-        from bot.utils import calculate_time_remaining
         replacements = {}
         if expires_at:
             expiry_dt = datetime.datetime.fromtimestamp(expires_at)
@@ -44,7 +45,6 @@ def render_structured_template(raw: str, *, expires_at: int = None) -> str:
     if show_time or show_expiry:
         if show_time:
             if expires_at:
-                from bot.utils import calculate_time_remaining
                 parts.append(f"\u23f3 Осталось: <b>{calculate_time_remaining(expires_at)}</b>")
             else:
                 parts.append("\u23f3 Осталось: <b>—</b>")
@@ -287,49 +287,4 @@ async def get_notification_rule_by_id(rule_id: int):
             return dict(row) if row else None
 
 
-async def seed_default_notification_rules():
-    """Fills notification_rules with legacy defaults if the table is empty."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT COUNT(*) FROM notification_rules") as cur:
-            (count,) = await cur.fetchone()
-        if count > 0:
-            return
-
-    defaults = [
-        (
-            'expiry_warning', -72,
-            json.dumps({
-                "title": "Напоминание: ваша подписка истекает!",
-                "body": "Продлите подписку заранее, чтобы не прерывать использование VPN.",
-                "show_time_remaining": True,
-                "show_expiry_date": True
-            }, ensure_ascii=False),
-        ),
-        (
-            'expiry_warning', -24,
-            json.dumps({
-                "title": "Ваша подписка истекает!",
-                "body": "Продлите подписку заранее, чтобы не прерывать использование VPN.",
-                "show_time_remaining": True,
-                "show_expiry_date": True
-            }, ensure_ascii=False),
-        ),
-        (
-            'expiry_warning', -1,
-            json.dumps({
-                "title": "СРОЧНО! Ваша подписка истекает!",
-                "body": "Продлите подписку сейчас, чтобы не потерять доступ к VPN.",
-                "show_time_remaining": True,
-                "show_expiry_date": True
-            }, ensure_ascii=False),
-        ),
-    ]
-    now = int(datetime.datetime.now().timestamp())
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.executemany(
-            "INSERT INTO notification_rules (event_type, trigger_hours, message_template, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
-            [(et, th, tpl, now) for et, th, tpl in defaults],
-        )
-        await db.commit()
-    logger.info("Seeded %d default notification rules", len(defaults))
 

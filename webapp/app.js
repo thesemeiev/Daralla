@@ -2035,7 +2035,7 @@ async function testSendNotificationRule() {
     var btn = document.querySelector('.btn-outline[onclick*="testSend"]');
     if (btn) { btn.disabled = true; btn.textContent = 'Отправка…'; }
     try {
-        var resp = await apiFetch('/api/admin/notification-rules/test', {
+        var resp = await apiFetch('/api/admin/notification-rules-test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message_template: template })

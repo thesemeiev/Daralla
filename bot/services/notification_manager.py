@@ -24,7 +24,6 @@ from ..db import (
     is_subscription_notification_sent,
     mark_subscription_notification_sent,
     get_active_notification_rules,
-    seed_default_notification_rules,
 )
 from ..utils import calculate_time_remaining
 from ..db.notifications_db import render_structured_template
@@ -52,7 +51,6 @@ class NotificationManager:
         """Инициализация менеджера уведомлений"""
         try:
             await init_notifications_db()
-            await seed_default_notification_rules()
             
             settings = await get_notification_settings()
             for key, default_value in self.default_settings.items():
@@ -136,33 +134,41 @@ class NotificationManager:
             settings = await get_notification_settings()
             check_interval = int(settings.get('check_interval', '300'))
 
-            for rule in rules:
+            expiry_rules = [r for r in rules if r['event_type'] == 'expiry_warning']
+            no_sub_rules = [r for r in rules if r['event_type'] == 'no_subscription']
+
+            subscriptions = None
+            if expiry_rules:
+                from ..db.subscriptions_db import get_all_active_subscriptions
+                subscriptions = await get_all_active_subscriptions()
+
+            for rule in expiry_rules:
                 try:
-                    if rule['event_type'] == 'expiry_warning':
-                        await self._process_expiry_rule(rule, check_interval)
-                    elif rule['event_type'] == 'no_subscription':
-                        await self._process_no_sub_rule(rule, check_interval)
+                    await self._process_expiry_rule(rule, check_interval, subscriptions or [])
+                except Exception as e:
+                    logger.error(f"Ошибка обработки правила {rule.get('id')}: {e}")
+
+            for rule in no_sub_rules:
+                try:
+                    await self._process_no_sub_rule(rule, check_interval)
                 except Exception as e:
                     logger.error(f"Ошибка обработки правила {rule.get('id')}: {e}")
         except Exception as e:
             logger.error(f"Ошибка в _check_expiring_subscriptions: {e}")
 
-    async def _process_expiry_rule(self, rule: dict, check_interval: int):
+    async def _process_expiry_rule(self, rule: dict, check_interval: int, subscriptions: list):
         """Обрабатывает правило типа expiry_warning.
 
         trigger_hours отрицательное (напр. -72 = за 3 дня до истечения).
         Находим подписки, истекающие в окне [now + offset, now + offset + interval].
         """
-        from ..db.subscriptions_db import get_all_active_subscriptions
+        if not subscriptions:
+            return
 
         now_ts = int(time.time())
         offset_seconds = abs(rule['trigger_hours']) * 3600
         window_start = now_ts + offset_seconds - check_interval
         window_end = now_ts + offset_seconds + check_interval
-
-        subscriptions = await get_all_active_subscriptions()
-        if not subscriptions:
-            return
 
         notification_type = f"rule_{rule['id']}"
         notifications_sent = 0
