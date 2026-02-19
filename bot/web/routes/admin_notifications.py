@@ -1,8 +1,9 @@
 """
-Quart Blueprint: CRUD for notification rules.
+Quart Blueprint: CRUD for notification rules + test send.
 """
 import logging
 
+import telegram
 from quart import Blueprint, request, jsonify
 
 from bot.web.routes.admin_common import _cors_headers, admin_route
@@ -12,7 +13,9 @@ from bot.db.notifications_db import (
     update_notification_rule,
     delete_notification_rule,
     get_notification_rule_by_id,
+    render_structured_template,
 )
+from bot.db.users_db import get_telegram_chat_id_for_notification
 
 logger = logging.getLogger(__name__)
 
@@ -85,5 +88,29 @@ def create_blueprint(bot_app):
         if not deleted:
             return jsonify({"error": "Rule not found"}), 404, _cors_headers()
         return jsonify({"ok": True}), 200, _cors_headers()
+
+    @bp.route("/api/admin/notification-rules/test", methods=["POST", "OPTIONS"])
+    @admin_route
+    async def api_test_send(request, admin_id):
+        data = await request.get_json(silent=True) or {}
+        raw_template = (data.get("message_template") or "").strip()
+        if not raw_template:
+            return jsonify({"error": "message_template is required"}), 400, _cors_headers()
+
+        import time
+        sample_expiry = int(time.time()) + 3 * 86400
+        message_text = render_structured_template(raw_template, expires_at=sample_expiry)
+
+        chat_id = await get_telegram_chat_id_for_notification(admin_id)
+        if not chat_id:
+            return jsonify({"error": "Не удалось найти ваш Telegram chat_id"}), 400, _cors_headers()
+
+        try:
+            bot = bot_app.bot
+            await bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML")
+            return jsonify({"ok": True}), 200, _cors_headers()
+        except telegram.error.TelegramError as e:
+            logger.error("Test send failed for admin %s: %s", admin_id, e)
+            return jsonify({"error": f"Telegram error: {e}"}), 500, _cors_headers()
 
     return bp

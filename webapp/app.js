@@ -1717,11 +1717,33 @@ function deleteAdminEvent(eventId) {
 // ── Notification Rules ──
 
 var notifRuleEditingId = null;
+var notifSelectedTriggerHours = null;
 
 var NOTIF_EVENT_LABELS = {
     'expiry_warning': 'Истекает подписка',
     'no_subscription': 'Нет подписки'
 };
+
+var NOTIF_TRIGGER_PRESETS = {
+    'expiry_warning': [
+        { label: '3 дня', hours: 72 },
+        { label: '1 день', hours: 24 },
+        { label: '6 часов', hours: 6 },
+        { label: '1 час', hours: 1 },
+    ],
+    'no_subscription': [
+        { label: '1 день', hours: 24 },
+        { label: '3 дня', hours: 72 },
+        { label: '7 дней', hours: 168 },
+        { label: '14 дней', hours: 336 },
+    ]
+};
+
+function pluralDays(n) {
+    if (n % 10 === 1 && n % 100 !== 11) return 'день';
+    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дня';
+    return 'дней';
+}
 
 function notifTriggerLabel(rule) {
     var h = Math.abs(rule.trigger_hours);
@@ -1732,10 +1754,110 @@ function notifTriggerLabel(rule) {
     return h + ' ч.';
 }
 
-function pluralDays(n) {
-    if (n % 10 === 1 && n % 100 !== 11) return 'день';
-    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дня';
-    return 'дней';
+function notifParseTemplate(raw) {
+    try {
+        var obj = JSON.parse(raw);
+        if (obj && typeof obj.title === 'string') return obj;
+    } catch (e) { /* legacy */ }
+    return { title: '', body: raw, show_time_remaining: false, show_expiry_date: false };
+}
+
+function notifCardPreviewText(rule) {
+    var t = notifParseTemplate(rule.message_template);
+    var parts = [];
+    if (t.title) parts.push(t.title);
+    if (t.body) parts.push(t.body);
+    var text = parts.join(' — ');
+    return text.length > 100 ? text.substring(0, 100) + '…' : text;
+}
+
+function renderNotifTriggerChips(eventType) {
+    var container = document.getElementById('notif-trigger-chips');
+    var presets = NOTIF_TRIGGER_PRESETS[eventType] || [];
+    container.innerHTML = presets.map(function (p) {
+        return '<button type="button" class="notif-chip" data-hours="' + p.hours + '" onclick="selectNotifTriggerChip(this,' + p.hours + ')">' + p.label + '</button>';
+    }).join('') + '<button type="button" class="notif-chip" data-hours="custom" onclick="selectNotifTriggerCustom(this)">Другое</button>';
+}
+
+function selectNotifTriggerChip(btn, hours) {
+    notifSelectedTriggerHours = hours;
+    document.querySelectorAll('#notif-trigger-chips .notif-chip').forEach(function (c) { c.classList.remove('selected'); });
+    btn.classList.add('selected');
+    document.getElementById('notif-trigger-custom-wrap').style.display = 'none';
+    document.getElementById('notif-rule-trigger-value').removeAttribute('required');
+}
+
+function selectNotifTriggerCustom(btn) {
+    notifSelectedTriggerHours = null;
+    document.querySelectorAll('#notif-trigger-chips .notif-chip').forEach(function (c) { c.classList.remove('selected'); });
+    btn.classList.add('selected');
+    document.getElementById('notif-trigger-custom-wrap').style.display = 'block';
+    var inp = document.getElementById('notif-rule-trigger-value');
+    inp.setAttribute('required', '');
+    inp.focus();
+}
+
+function getNotifTriggerHours() {
+    if (notifSelectedTriggerHours) return notifSelectedTriggerHours;
+    var val = parseInt(document.getElementById('notif-rule-trigger-value').value, 10);
+    var unit = document.getElementById('notif-rule-trigger-unit').value;
+    if (!val || val < 1) return 0;
+    return unit === 'days' ? val * 24 : val;
+}
+
+function setNotifTriggerFromHours(absHours, eventType) {
+    renderNotifTriggerChips(eventType);
+    var presets = NOTIF_TRIGGER_PRESETS[eventType] || [];
+    var matched = presets.find(function (p) { return p.hours === absHours; });
+    if (matched) {
+        notifSelectedTriggerHours = matched.hours;
+        var chips = document.querySelectorAll('#notif-trigger-chips .notif-chip');
+        chips.forEach(function (c) {
+            if (parseInt(c.getAttribute('data-hours'), 10) === matched.hours) c.classList.add('selected');
+        });
+        document.getElementById('notif-trigger-custom-wrap').style.display = 'none';
+    } else {
+        notifSelectedTriggerHours = null;
+        var customBtn = document.querySelector('#notif-trigger-chips .notif-chip[data-hours="custom"]');
+        if (customBtn) customBtn.classList.add('selected');
+        document.getElementById('notif-trigger-custom-wrap').style.display = 'block';
+        if (absHours % 24 === 0 && absHours >= 24) {
+            document.getElementById('notif-rule-trigger-value').value = absHours / 24;
+            document.getElementById('notif-rule-trigger-unit').value = 'days';
+        } else {
+            document.getElementById('notif-rule-trigger-value').value = absHours;
+            document.getElementById('notif-rule-trigger-unit').value = 'hours';
+        }
+    }
+}
+
+function onNotifRuleEventTypeChange() {
+    var et = document.getElementById('notif-rule-event-type').value;
+    renderNotifTriggerChips(et);
+    notifSelectedTriggerHours = null;
+    document.getElementById('notif-trigger-custom-wrap').style.display = 'none';
+    var hint = document.getElementById('notif-rule-trigger-hint');
+    hint.textContent = et === 'expiry_warning'
+        ? 'За сколько ДО истечения подписки отправить уведомление'
+        : 'Через сколько ПОСЛЕ потери подписки отправить уведомление';
+    updateNotifPreview();
+}
+
+function updateNotifPreview() {
+    var title = (document.getElementById('notif-rule-title').value || '').trim();
+    var body = (document.getElementById('notif-rule-body').value || '').trim();
+    var showTime = document.getElementById('notif-rule-show-time').checked;
+    var showExpiry = document.getElementById('notif-rule-show-expiry').checked;
+
+    var html = '';
+    if (title) html += '<b>' + escapeHtml(title) + '</b>\n\n';
+    if (showTime) html += '⏳ Осталось: <b>2 дня 14 часов</b>\n';
+    if (showExpiry) html += '📅 Истекает: <b>25.02.2026 18:00</b>\n';
+    if ((showTime || showExpiry) && body) html += '\n';
+    if (body) html += escapeHtml(body);
+
+    var bubble = document.getElementById('notif-preview-bubble');
+    bubble.innerHTML = html || '<span style="opacity:0.4">Начните вводить текст…</span>';
 }
 
 async function loadNotificationRules() {
@@ -1762,6 +1884,7 @@ async function loadNotificationRules() {
             var badge = rule.event_type === 'expiry_warning' ? 'badge-warning' : 'badge-info';
             var direction = rule.event_type === 'expiry_warning' ? 'до истечения' : 'после потери подписки';
             var activeClass = rule.is_active ? 'active' : 'inactive';
+            var preview = escapeHtml(notifCardPreviewText(rule));
             return '<div class="admin-notification-card ' + activeClass + '" data-id="' + rule.id + '">' +
                 '<div class="notif-rule-header">' +
                     '<span class="notif-rule-badge ' + badge + '">' + escapeHtml(NOTIF_EVENT_LABELS[rule.event_type] || rule.event_type) + '</span>' +
@@ -1772,7 +1895,7 @@ async function loadNotificationRules() {
                     '</label>' +
                 '</div>' +
                 '<div class="notif-rule-trigger">' + notifTriggerLabel(rule) + ' ' + direction + '</div>' +
-                '<div class="notif-rule-template">' + escapeHtml(rule.message_template).substring(0, 120) + (rule.message_template.length > 120 ? '…' : '') + '</div>' +
+                '<div class="notif-rule-template">' + preview + '</div>' +
                 '<div class="notif-rule-actions">' +
                     '<button class="btn-secondary btn-sm" onclick="showNotificationRuleForm(' + rule.id + ')">Изменить</button>' +
                     '<button class="btn-danger btn-sm" onclick="deleteNotificationRule(' + rule.id + ')">Удалить</button>' +
@@ -1788,14 +1911,17 @@ async function loadNotificationRules() {
 
 async function showNotificationRuleForm(ruleId) {
     notifRuleEditingId = ruleId || null;
-    var title = document.getElementById('admin-notification-form-title');
+    notifSelectedTriggerHours = null;
+
+    var formTitle = document.getElementById('admin-notification-form-title');
     var eventTypeEl = document.getElementById('notif-rule-event-type');
-    var triggerValEl = document.getElementById('notif-rule-trigger-value');
-    var triggerUnitEl = document.getElementById('notif-rule-trigger-unit');
-    var templateEl = document.getElementById('notif-rule-template');
+    var titleEl = document.getElementById('notif-rule-title');
+    var bodyEl = document.getElementById('notif-rule-body');
+    var showTimeEl = document.getElementById('notif-rule-show-time');
+    var showExpiryEl = document.getElementById('notif-rule-show-expiry');
     var activeEl = document.getElementById('notif-rule-active');
 
-    title.textContent = ruleId ? 'Изменить правило' : 'Создать правило';
+    formTitle.textContent = ruleId ? 'Изменить правило' : 'Создать правило';
 
     if (ruleId) {
         try {
@@ -1804,38 +1930,32 @@ async function showNotificationRuleForm(ruleId) {
             var rule = (data.rules || []).find(function (r) { return r.id === ruleId; });
             if (rule) {
                 eventTypeEl.value = rule.event_type;
-                var absH = Math.abs(rule.trigger_hours);
-                if (absH % 24 === 0 && absH >= 24) {
-                    triggerValEl.value = absH / 24;
-                    triggerUnitEl.value = 'days';
-                } else {
-                    triggerValEl.value = absH;
-                    triggerUnitEl.value = 'hours';
-                }
-                templateEl.value = rule.message_template;
+                var t = notifParseTemplate(rule.message_template);
+                titleEl.value = t.title || '';
+                bodyEl.value = t.body || '';
+                showTimeEl.checked = !!t.show_time_remaining;
+                showExpiryEl.checked = !!t.show_expiry_date;
                 activeEl.checked = !!rule.is_active;
+
+                var hint = document.getElementById('notif-rule-trigger-hint');
+                hint.textContent = rule.event_type === 'expiry_warning'
+                    ? 'За сколько ДО истечения подписки отправить уведомление'
+                    : 'Через сколько ПОСЛЕ потери подписки отправить уведомление';
+                setNotifTriggerFromHours(Math.abs(rule.trigger_hours), rule.event_type);
             }
         } catch (e) { /* ignore */ }
     } else {
         eventTypeEl.value = 'expiry_warning';
-        triggerValEl.value = '';
-        triggerUnitEl.value = 'days';
-        templateEl.value = '';
+        titleEl.value = '';
+        bodyEl.value = '';
+        showTimeEl.checked = true;
+        showExpiryEl.checked = true;
         activeEl.checked = true;
+        onNotifRuleEventTypeChange();
     }
 
-    updateNotifRuleTriggerHint();
+    updateNotifPreview();
     showModal('admin-notification-form-modal');
-}
-
-function updateNotifRuleTriggerHint() {
-    var et = document.getElementById('notif-rule-event-type').value;
-    var hint = document.getElementById('notif-rule-trigger-hint');
-    if (et === 'expiry_warning') {
-        hint.textContent = 'За сколько дней/часов ДО истечения подписки отправить уведомление';
-    } else {
-        hint.textContent = 'Через сколько дней/часов ПОСЛЕ потери подписки отправить уведомление';
-    }
 }
 
 function closeNotificationRuleForm() {
@@ -1843,24 +1963,31 @@ function closeNotificationRuleForm() {
     notifRuleEditingId = null;
 }
 
+function buildNotifTemplate() {
+    return JSON.stringify({
+        title: (document.getElementById('notif-rule-title').value || '').trim(),
+        body: (document.getElementById('notif-rule-body').value || '').trim(),
+        show_time_remaining: document.getElementById('notif-rule-show-time').checked,
+        show_expiry_date: document.getElementById('notif-rule-show-expiry').checked
+    });
+}
+
 async function saveNotificationRule(e) {
     e.preventDefault();
     var eventType = document.getElementById('notif-rule-event-type').value;
-    var triggerVal = parseInt(document.getElementById('notif-rule-trigger-value').value, 10);
-    var triggerUnit = document.getElementById('notif-rule-trigger-unit').value;
-    var template = document.getElementById('notif-rule-template').value.trim();
+    var hours = getNotifTriggerHours();
+    var titleVal = (document.getElementById('notif-rule-title').value || '').trim();
+    var bodyVal = (document.getElementById('notif-rule-body').value || '').trim();
     var isActive = document.getElementById('notif-rule-active').checked;
 
-    if (!triggerVal || triggerVal < 1) { alert('Укажите время срабатывания'); return; }
-    if (!template) { alert('Укажите шаблон сообщения'); return; }
+    if (!hours) { alert('Укажите время срабатывания'); return; }
+    if (!titleVal && !bodyVal) { alert('Заполните заголовок или текст сообщения'); return; }
 
-    var hours = triggerUnit === 'days' ? triggerVal * 24 : triggerVal;
     var triggerHours = eventType === 'expiry_warning' ? -hours : hours;
-
     var payload = {
         event_type: eventType,
         trigger_hours: triggerHours,
-        message_template: template,
+        message_template: buildNotifTemplate(),
         is_active: isActive
     };
 
@@ -1901,6 +2028,29 @@ function toggleNotificationRule(ruleId, isActive) {
     }).then(function (r) {
         if (!r.ok) { alert('Ошибка'); loadNotificationRules(); }
     }).catch(function () { alert('Ошибка сети'); loadNotificationRules(); });
+}
+
+async function testSendNotificationRule() {
+    var template = buildNotifTemplate();
+    var btn = document.querySelector('.btn-outline[onclick*="testSend"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Отправка…'; }
+    try {
+        var resp = await apiFetch('/api/admin/notification-rules/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message_template: template })
+        });
+        var d = await resp.json().catch(function () { return {}; });
+        if (resp.ok) {
+            if (btn) { btn.textContent = 'Отправлено ✓'; setTimeout(function () { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }, 2000); }
+        } else {
+            alert(d.error || 'Ошибка отправки');
+            if (btn) { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }
+        }
+    } catch (err) {
+        alert('Ошибка сети');
+        if (btn) { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }
+    }
 }
 
 // Функция отображения серверов

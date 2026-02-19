@@ -4199,6 +4199,109 @@ body.about-page-active {
     width: auto !important;
 }
 
+/* Outline button */
+
+.btn-outline {
+    width: 100%;
+    padding: 10px 20px;
+    border: 1.5px solid var(--accent-color, #4caf50);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--accent-color, #4caf50);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    background: rgba(76, 175, 80, 0.08);
+}
+
+.btn-outline:active {
+    transform: scale(0.98);
+}
+
+.btn-outline:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Trigger chips */
+
+.notif-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.notif-chip {
+    padding: 7px 16px;
+    border-radius: 20px;
+    border: 1.5px solid var(--card-border);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.notif-chip:hover {
+    border-color: var(--accent-color, #4caf50);
+    color: var(--accent-color, #4caf50);
+}
+
+.notif-chip.selected {
+    background: var(--accent-color, #4caf50);
+    border-color: var(--accent-color, #4caf50);
+    color: #fff;
+}
+
+/* Checkbox rows */
+
+.notif-check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.notif-check-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-color, #4caf50);
+    flex-shrink: 0;
+}
+
+/* Preview bubble */
+
+.notif-preview-bubble {
+    background: #1e3a5f;
+    color: #e8edf2;
+    border-radius: 12px 12px 12px 4px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-line;
+    word-break: break-word;
+    min-height: 48px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+[data-theme="light"] .notif-preview-bubble {
+    background: #e1ffc7;
+    color: #1a1a1a;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.notif-preview-bubble b {
+    font-weight: 600;
+}
+
 .web-only {
     display: none !important;
 }

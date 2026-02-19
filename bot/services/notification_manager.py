@@ -27,6 +27,7 @@ from ..db import (
     seed_default_notification_rules,
 )
 from ..utils import calculate_time_remaining
+from ..db.notifications_db import render_structured_template
 
 logger = logging.getLogger(__name__)
 
@@ -238,20 +239,10 @@ class NotificationManager:
 
     # ── sending ──
 
-    def _render_template(self, template: str, *, expires_at: int = None) -> str:
-        """Подставляет плейсхолдеры в шаблон сообщения."""
-        replacements = {}
-        if expires_at:
-            expiry_dt = datetime.datetime.fromtimestamp(expires_at)
-            replacements['time_remaining'] = calculate_time_remaining(expires_at)
-            replacements['expiry_line'] = f"📅 Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>"
-        else:
-            replacements['time_remaining'] = ''
-            replacements['expiry_line'] = ''
-        try:
-            return template.format(**replacements)
-        except KeyError:
-            return template
+    @staticmethod
+    def _render_template(template: str, *, expires_at: int = None) -> str:
+        """Подставляет плейсхолдеры в шаблон сообщения (JSON или legacy)."""
+        return render_structured_template(template, expires_at=expires_at)
 
     async def _send_rule_notification(
         self, rule: dict, user_id: str, subscription_id: int,

@@ -1,12 +1,65 @@
 """
 Модуль работы с уведомлениями (Единая БД)
 """
+import json
 import aiosqlite
 import logging
 import datetime
 from . import DB_PATH
 
 logger = logging.getLogger(__name__)
+
+
+def render_structured_template(raw: str, *, expires_at: int = None) -> str:
+    """Render a message_template (JSON structured or legacy format-string) into final HTML."""
+    try:
+        obj = json.loads(raw)
+        if not isinstance(obj, dict) or 'title' not in obj:
+            raise ValueError
+    except (json.JSONDecodeError, ValueError):
+        from bot.utils import calculate_time_remaining
+        replacements = {}
+        if expires_at:
+            expiry_dt = datetime.datetime.fromtimestamp(expires_at)
+            replacements['time_remaining'] = calculate_time_remaining(expires_at)
+            replacements['expiry_line'] = f"\U0001f4c5 Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>"
+        else:
+            replacements['time_remaining'] = ''
+            replacements['expiry_line'] = ''
+        try:
+            return raw.format(**replacements)
+        except KeyError:
+            return raw
+
+    title = obj.get('title', '')
+    body = obj.get('body', '')
+    show_time = obj.get('show_time_remaining', False)
+    show_expiry = obj.get('show_expiry_date', False)
+
+    parts = []
+    if title:
+        parts.append(f"<b>{title}</b>")
+        parts.append('')
+
+    if show_time or show_expiry:
+        if show_time:
+            if expires_at:
+                from bot.utils import calculate_time_remaining
+                parts.append(f"\u23f3 Осталось: <b>{calculate_time_remaining(expires_at)}</b>")
+            else:
+                parts.append("\u23f3 Осталось: <b>—</b>")
+        if show_expiry:
+            if expires_at:
+                expiry_dt = datetime.datetime.fromtimestamp(expires_at)
+                parts.append(f"\U0001f4c5 Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>")
+            else:
+                parts.append("\U0001f4c5 Истекает: <b>—</b>")
+        parts.append('')
+
+    if body:
+        parts.append(body)
+
+    return '\n'.join(parts).strip()
 
 async def init_notifications_db():
     """Инициализирует таблицы уведомлений в единой БД"""
@@ -245,24 +298,30 @@ async def seed_default_notification_rules():
     defaults = [
         (
             'expiry_warning', -72,
-            '<b>Напоминание: ваша подписка истекает!</b>\n\n'
-            'Осталось: <b>{time_remaining}</b>\n'
-            '{expiry_line}\n'
-            'Продлите подписку заранее, чтобы не прерывать использование VPN.'
+            json.dumps({
+                "title": "Напоминание: ваша подписка истекает!",
+                "body": "Продлите подписку заранее, чтобы не прерывать использование VPN.",
+                "show_time_remaining": True,
+                "show_expiry_date": True
+            }, ensure_ascii=False),
         ),
         (
             'expiry_warning', -24,
-            '<b>Ваша подписка истекает!</b>\n\n'
-            'Осталось: <b>{time_remaining}</b>\n'
-            '{expiry_line}\n'
-            'Продлите подписку заранее, чтобы не прерывать использование VPN.'
+            json.dumps({
+                "title": "Ваша подписка истекает!",
+                "body": "Продлите подписку заранее, чтобы не прерывать использование VPN.",
+                "show_time_remaining": True,
+                "show_expiry_date": True
+            }, ensure_ascii=False),
         ),
         (
             'expiry_warning', -1,
-            '<b>СРОЧНО! Ваша подписка истекает!</b>\n\n'
-            'Осталось: <b>{time_remaining}</b>\n'
-            '{expiry_line}\n'
-            'Продлите подписку сейчас, чтобы не потерять доступ к VPN.'
+            json.dumps({
+                "title": "СРОЧНО! Ваша подписка истекает!",
+                "body": "Продлите подписку сейчас, чтобы не потерять доступ к VPN.",
+                "show_time_remaining": True,
+                "show_expiry_date": True
+            }, ensure_ascii=False),
         ),
     ]
     now = int(datetime.datetime.now().timestamp())

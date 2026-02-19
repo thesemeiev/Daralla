@@ -87,6 +87,7 @@ from .notifications_db import (
     get_all_notification_rules, get_active_notification_rules,
     create_notification_rule, update_notification_rule, delete_notification_rule,
     get_notification_rule_by_id, seed_default_notification_rules,
+    render_structured_template,
 )
 async def init_all_db():
     """Инициализирует все таблицы в единой базе данных"""
