@@ -52,7 +52,17 @@ def create_blueprint(bot_app):
         elif event_type == 'no_subscription' and trigger_hours < 0:
             trigger_hours = abs(trigger_hours)
 
-        rule_id = await create_notification_rule(event_type, trigger_hours, message_template)
+        repeat_every_hours = int(data.get("repeat_every_hours") or 0)
+        max_repeats = int(data.get("max_repeats") or 1)
+        if repeat_every_hours < 0:
+            repeat_every_hours = 0
+        if max_repeats < 1:
+            max_repeats = 1
+
+        rule_id = await create_notification_rule(
+            event_type, trigger_hours, message_template,
+            repeat_every_hours=repeat_every_hours, max_repeats=max_repeats,
+        )
         rule = await get_notification_rule_by_id(rule_id)
         return jsonify({"rule": rule}), 201, _cors_headers()
 
@@ -79,6 +89,10 @@ def create_blueprint(bot_app):
             fields["message_template"] = tpl
         if "is_active" in data:
             fields["is_active"] = 1 if data["is_active"] else 0
+        if "repeat_every_hours" in data:
+            fields["repeat_every_hours"] = max(0, int(data["repeat_every_hours"] or 0))
+        if "max_repeats" in data:
+            fields["max_repeats"] = max(1, int(data["max_repeats"] or 1))
 
         if not fields:
             return jsonify({"error": "No fields to update"}), 400, _cors_headers()

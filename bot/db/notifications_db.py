@@ -106,9 +106,22 @@ async def init_notifications_db():
                 trigger_hours INTEGER NOT NULL,
                 message_template TEXT NOT NULL,
                 is_active INTEGER DEFAULT 1,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                repeat_every_hours INTEGER DEFAULT 0,
+                max_repeats INTEGER DEFAULT 1
             )
         ''')
+
+        # Миграция: добавляем столбцы если их нет (для существующих БД)
+        try:
+            await db.execute("ALTER TABLE notification_rules ADD COLUMN repeat_every_hours INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE notification_rules ADD COLUMN max_repeats INTEGER DEFAULT 1")
+        except Exception:
+            pass
+
         await db.commit()
 
 async def record_notification_metrics(notification_type: str, success: bool = True, is_blocked: bool = False):
@@ -246,19 +259,21 @@ async def get_active_notification_rules():
             return [dict(r) for r in await cur.fetchall()]
 
 
-async def create_notification_rule(event_type: str, trigger_hours: int, message_template: str) -> int:
+async def create_notification_rule(event_type: str, trigger_hours: int, message_template: str,
+                                   repeat_every_hours: int = 0, max_repeats: int = 1) -> int:
     now = int(datetime.datetime.now().timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute('''
-            INSERT INTO notification_rules (event_type, trigger_hours, message_template, is_active, created_at)
-            VALUES (?, ?, ?, 1, ?)
-        ''', (event_type, trigger_hours, message_template, now))
+            INSERT INTO notification_rules
+                (event_type, trigger_hours, message_template, is_active, created_at, repeat_every_hours, max_repeats)
+            VALUES (?, ?, ?, 1, ?, ?, ?)
+        ''', (event_type, trigger_hours, message_template, now, repeat_every_hours, max_repeats))
         await db.commit()
         return cursor.lastrowid
 
 
 async def update_notification_rule(rule_id: int, **fields):
-    allowed = {'event_type', 'trigger_hours', 'message_template', 'is_active'}
+    allowed = {'event_type', 'trigger_hours', 'message_template', 'is_active', 'repeat_every_hours', 'max_repeats'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
@@ -285,6 +300,28 @@ async def get_notification_rule_by_id(rule_id: int):
         async with db.execute("SELECT * FROM notification_rules WHERE id = ?", (rule_id,)) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
+
+
+async def get_notification_send_count(user_id: str, subscription_id: int, notification_type: str) -> int:
+    """Сколько раз данное уведомление было отправлено пользователю"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM sent_notifications WHERE user_id = ? AND subscription_id = ? AND notification_type = ?",
+            (user_id, subscription_id, notification_type)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 0
+
+
+async def get_last_notification_send_time(user_id: str, subscription_id: int, notification_type: str) -> int | None:
+    """Timestamp последней отправки уведомления пользователю"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT MAX(sent_at) FROM sent_notifications WHERE user_id = ? AND subscription_id = ? AND notification_type = ?",
+            (user_id, subscription_id, notification_type)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
 
 
 

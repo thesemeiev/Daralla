@@ -87,6 +87,7 @@ from .notifications_db import (
     get_all_notification_rules, get_active_notification_rules,
     create_notification_rule, update_notification_rule, delete_notification_rule,
     get_notification_rule_by_id,
+    get_notification_send_count, get_last_notification_send_time,
     render_structured_template,
 )
 async def init_all_db():
@@ -119,6 +120,7 @@ __all__ = [
     'get_all_notification_rules', 'get_active_notification_rules',
     'create_notification_rule', 'update_notification_rule', 'delete_notification_rule',
     'get_notification_rule_by_id',
+    'get_notification_send_count', 'get_last_notification_send_time',
     'TG_USER_ID_HEX_LEN', 'generate_user_id', 'generate_tg_user_id', 'get_or_create_subscriber', 'get_user_by_id', 'get_user_by_username',
     'resolve_user_by_query', 'get_user_growth_data', 'get_user_server_usage', 'register_web_user',
     'update_user_auth_token', 'get_user_by_auth_token', 'get_user_by_username_or_id',

@@ -24,6 +24,8 @@ from ..db import (
     is_subscription_notification_sent,
     mark_subscription_notification_sent,
     get_active_notification_rules,
+    get_notification_send_count,
+    get_last_notification_send_time,
 )
 from ..utils import calculate_time_remaining
 from ..db.notifications_db import render_structured_template
@@ -160,28 +162,34 @@ class NotificationManager:
         """Обрабатывает правило типа expiry_warning.
 
         trigger_hours отрицательное (напр. -72 = за 3 дня до истечения).
-        Находим подписки, истекающие в окне [now + offset, now + offset + interval].
+        Находим подписки, истекающие в пределах |trigger_hours| от текущего момента.
+        Повторная отправка управляется repeat_every_hours / max_repeats.
         """
         if not subscriptions:
             return
 
         now_ts = int(time.time())
         offset_seconds = abs(rule['trigger_hours']) * 3600
-        window_start = now_ts + offset_seconds - check_interval
-        window_end = now_ts + offset_seconds + check_interval
-
+        repeat_every = rule.get('repeat_every_hours', 0)
+        max_repeats = rule.get('max_repeats', 1)
         notification_type = f"rule_{rule['id']}"
         notifications_sent = 0
 
         for sub in subscriptions:
-            if not (window_start <= sub['expires_at'] <= window_end):
+            expires_at = sub['expires_at']
+            if expires_at <= now_ts or expires_at > now_ts + offset_seconds:
                 continue
             try:
                 user_id = sub['user_id']
                 subscription_id = sub['id']
+                if not await self._should_send(
+                    user_id, subscription_id, notification_type,
+                    repeat_every, max_repeats, now_ts,
+                ):
+                    continue
                 success = await self._send_rule_notification(
                     rule, user_id, subscription_id, notification_type,
-                    expires_at=sub['expires_at'],
+                    expires_at=expires_at,
                 )
                 if success:
                     notifications_sent += 1
@@ -195,12 +203,14 @@ class NotificationManager:
         """Обрабатывает правило типа no_subscription.
 
         trigger_hours положительное (напр. 168 = через 7 дней после потери подписки).
-        Находим пользователей без активных подписок, чья «дата потери» попадает в окно.
+        Находим пользователей без активных подписок, ставших неактивными >= trigger_hours назад.
+        Повторная отправка управляется repeat_every_hours / max_repeats.
         """
         now_ts = int(time.time())
         offset_seconds = rule['trigger_hours'] * 3600
-        window_start = now_ts - offset_seconds - check_interval
-        window_end = now_ts - offset_seconds + check_interval
+        cutoff = now_ts - offset_seconds
+        repeat_every = rule.get('repeat_every_hours', 0)
+        max_repeats = rule.get('max_repeats', 1)
 
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
@@ -217,20 +227,23 @@ class NotificationManager:
                       AND s2.expires_at > ?
                 )
                 GROUP BY u.id
-                HAVING became_inactive_at BETWEEN ? AND ?
-            ''', (now_ts, window_start, window_end)) as cur:
+                HAVING became_inactive_at <= ?
+            ''', (now_ts, cutoff)) as cur:
                 rows = await cur.fetchall()
 
         if not rows:
             return
 
-        notification_type = f"nosub_rule_{rule['id']}"
+        notification_type = f"rule_{rule['id']}"
         notifications_sent = 0
 
         for row in rows:
             try:
                 user_id = row['user_id']
-                if await is_subscription_notification_sent(user_id, 0, notification_type):
+                if not await self._should_send(
+                    user_id, 0, notification_type,
+                    repeat_every, max_repeats, now_ts,
+                ):
                     continue
                 success = await self._send_rule_notification(
                     rule, user_id, 0, notification_type,
@@ -242,6 +255,26 @@ class NotificationManager:
 
         if notifications_sent > 0:
             logger.info(f"Правило {rule['id']} (no_subscription): отправлено {notifications_sent} уведомлений")
+
+    # ── repeat logic ──
+
+    @staticmethod
+    async def _should_send(
+        user_id: str, subscription_id: int, notification_type: str,
+        repeat_every_hours: int, max_repeats: int, now_ts: int,
+    ) -> bool:
+        """Определяет, нужно ли отправлять уведомление с учётом повторов."""
+        count = await get_notification_send_count(user_id, subscription_id, notification_type)
+        if count >= max_repeats:
+            return False
+        if count == 0:
+            return True
+        if repeat_every_hours <= 0:
+            return False
+        last_sent = await get_last_notification_send_time(user_id, subscription_id, notification_type)
+        if last_sent is None:
+            return True
+        return (now_ts - last_sent) >= repeat_every_hours * 3600
 
     # ── sending ──
 
@@ -256,9 +289,6 @@ class NotificationManager:
     ) -> bool:
         """Универсальная отправка уведомления по правилу."""
         try:
-            if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
-                return False
-
             from ..db.users_db import get_telegram_chat_id_for_notification
             chat_id = await get_telegram_chat_id_for_notification(user_id)
             if chat_id is None:

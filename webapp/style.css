@@ -4111,6 +4111,13 @@ body.about-page-active {
     margin-bottom: 6px;
 }
 
+.notif-rule-repeat-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    opacity: 0.75;
+}
+
 .notif-rule-template {
     font-size: 13px;
     color: var(--text-secondary);

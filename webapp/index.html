@@ -577,6 +577,29 @@
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="form-group">
+                        <label class="notif-check-row">
+                            <input type="checkbox" id="notif-rule-repeat" onchange="toggleRepeatFields()">
+                            <span>Повторять уведомление</span>
+                        </label>
+                        <div id="notif-repeat-fields" style="display: none; margin-top: 10px;">
+                            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                <span style="white-space: nowrap; font-size: 14px;">Каждые</span>
+                                <input type="number" id="notif-rule-repeat-value" min="1" value="3" style="width: 70px;">
+                                <select id="notif-rule-repeat-unit" style="width: 120px;">
+                                    <option value="hours">Часов</option>
+                                    <option value="days" selected>Дней</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="white-space: nowrap; font-size: 14px;">Макс. отправок</span>
+                                <input type="number" id="notif-rule-max-repeats" min="1" value="5" style="width: 70px;">
+                            </div>
+                            <p class="hint" style="margin: 6px 0 0; font-size: 12px; opacity: 0.6;">
+                                Первая отправка по времени срабатывания, затем повтор с указанным интервалом до максимума.
+                            </p>
+                        </div>
+                    </div>
                     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
                         <button type="button" class="btn-outline" onclick="testSendNotificationRule()">Отправить тест мне</button>
                         <div style="display: flex; gap: 12px;">

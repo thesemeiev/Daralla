@@ -1747,7 +1747,11 @@ function pluralDays(n) {
 
 function notifTriggerLabel(rule) {
     var h = Math.abs(rule.trigger_hours);
-    if (h % 24 === 0) {
+    return notifFormatHours(h);
+}
+
+function notifFormatHours(h) {
+    if (h % 24 === 0 && h >= 24) {
         var d = h / 24;
         return d + ' ' + pluralDays(d);
     }
@@ -1891,6 +1895,9 @@ async function loadNotificationRules() {
                     '</label>' +
                 '</div>' +
                 '<div class="notif-rule-trigger">' + notifTriggerLabel(rule) + ' ' + direction + '</div>' +
+                (rule.repeat_every_hours > 0 && rule.max_repeats > 1
+                    ? '<div class="notif-rule-repeat-info">Повтор: каждые ' + notifFormatHours(rule.repeat_every_hours) + ', макс. ' + rule.max_repeats + ' раз</div>'
+                    : '') +
                 '<div class="notif-rule-template">' + preview + '</div>' +
                 '<div class="notif-rule-actions">' +
                     '<button class="btn-secondary btn-sm" onclick="showNotificationRuleForm(' + rule.id + ')">Изменить</button>' +
@@ -1932,6 +1939,7 @@ async function showNotificationRuleForm(ruleId) {
                 showTimeEl.checked = !!t.show_time_remaining;
                 showExpiryEl.checked = !!t.show_expiry_date;
                 activeEl.checked = !!rule.is_active;
+                setRepeatData(rule.repeat_every_hours || 0, rule.max_repeats || 1);
 
                 var hint = document.getElementById('notif-rule-trigger-hint');
                 hint.textContent = rule.event_type === 'expiry_warning'
@@ -1947,6 +1955,7 @@ async function showNotificationRuleForm(ruleId) {
         showTimeEl.checked = true;
         showExpiryEl.checked = true;
         activeEl.checked = true;
+        setRepeatData(0, 1);
         onNotifRuleEventTypeChange();
     }
 
@@ -1957,6 +1966,44 @@ async function showNotificationRuleForm(ruleId) {
 function closeNotificationRuleForm() {
     closeModal('admin-notification-form-modal');
     notifRuleEditingId = null;
+}
+
+function toggleRepeatFields() {
+    var show = document.getElementById('notif-rule-repeat').checked;
+    document.getElementById('notif-repeat-fields').style.display = show ? 'block' : 'none';
+}
+
+function getRepeatData() {
+    if (!document.getElementById('notif-rule-repeat').checked) {
+        return { repeat_every_hours: 0, max_repeats: 1 };
+    }
+    var val = parseInt(document.getElementById('notif-rule-repeat-value').value) || 1;
+    var unit = document.getElementById('notif-rule-repeat-unit').value;
+    var hours = unit === 'days' ? val * 24 : val;
+    var maxR = parseInt(document.getElementById('notif-rule-max-repeats').value) || 1;
+    return { repeat_every_hours: hours, max_repeats: Math.max(1, maxR) };
+}
+
+function setRepeatData(repeatEveryHours, maxRepeats) {
+    var repeatEl = document.getElementById('notif-rule-repeat');
+    if (repeatEveryHours > 0 && maxRepeats > 1) {
+        repeatEl.checked = true;
+        toggleRepeatFields();
+        if (repeatEveryHours % 24 === 0 && repeatEveryHours >= 24) {
+            document.getElementById('notif-rule-repeat-value').value = repeatEveryHours / 24;
+            document.getElementById('notif-rule-repeat-unit').value = 'days';
+        } else {
+            document.getElementById('notif-rule-repeat-value').value = repeatEveryHours;
+            document.getElementById('notif-rule-repeat-unit').value = 'hours';
+        }
+        document.getElementById('notif-rule-max-repeats').value = maxRepeats;
+    } else {
+        repeatEl.checked = false;
+        toggleRepeatFields();
+        document.getElementById('notif-rule-repeat-value').value = 3;
+        document.getElementById('notif-rule-repeat-unit').value = 'days';
+        document.getElementById('notif-rule-max-repeats').value = 5;
+    }
 }
 
 function buildNotifTemplate() {
@@ -1980,11 +2027,14 @@ async function saveNotificationRule(e) {
     if (!titleVal && !bodyVal) { alert('Заполните заголовок или текст сообщения'); return; }
 
     var triggerHours = eventType === 'expiry_warning' ? -hours : hours;
+    var repeat = getRepeatData();
     var payload = {
         event_type: eventType,
         trigger_hours: triggerHours,
         message_template: buildNotifTemplate(),
-        is_active: isActive
+        is_active: isActive,
+        repeat_every_hours: repeat.repeat_every_hours,
+        max_repeats: repeat.max_repeats
     };
 
     try {
