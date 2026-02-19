@@ -739,6 +739,8 @@ function showPage(pageName, params) {
         loadServerManagement();
     } else if (pageName === 'admin-events') {
         loadAdminEventsPage();
+    } else if (pageName === 'admin-notifications') {
+        loadNotificationRules();
     } else if (pageName === 'choose-payment-method') {
         currentPaymentPeriod = currentPaymentPeriod || 'month';
         updateReferralCodeBlockVisibility();
@@ -1711,6 +1713,196 @@ function deleteAdminEvent(eventId) {
         if (r.ok) loadAdminEventsPage(); else alert('Ошибка удаления');
     }).catch(function () { alert('Ошибка сети'); });
 }
+
+// ── Notification Rules ──
+
+var notifRuleEditingId = null;
+
+var NOTIF_EVENT_LABELS = {
+    'expiry_warning': 'Истекает подписка',
+    'no_subscription': 'Нет подписки'
+};
+
+function notifTriggerLabel(rule) {
+    var h = Math.abs(rule.trigger_hours);
+    if (h % 24 === 0) {
+        var d = h / 24;
+        return d + ' ' + pluralDays(d);
+    }
+    return h + ' ч.';
+}
+
+function pluralDays(n) {
+    if (n % 10 === 1 && n % 100 !== 11) return 'день';
+    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дня';
+    return 'дней';
+}
+
+async function loadNotificationRules() {
+    var loadingEl = document.getElementById('admin-notifications-loading');
+    var listEl = document.getElementById('admin-notifications-list');
+    var errorEl = document.getElementById('admin-notifications-error');
+    loadingEl.style.display = 'block';
+    listEl.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    try {
+        var response = await apiFetch('/api/admin/notification-rules', { method: 'GET' });
+        if (!response.ok) throw new Error('Ошибка загрузки');
+        var data = await response.json();
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+
+        if (!data.rules || data.rules.length === 0) {
+            listEl.innerHTML = '<p style="text-align:center;opacity:0.5;">Нет правил</p>';
+            return;
+        }
+
+        listEl.innerHTML = data.rules.map(function (rule) {
+            var badge = rule.event_type === 'expiry_warning' ? 'badge-warning' : 'badge-info';
+            var direction = rule.event_type === 'expiry_warning' ? 'до истечения' : 'после потери подписки';
+            var activeClass = rule.is_active ? 'active' : 'inactive';
+            return '<div class="admin-notification-card ' + activeClass + '" data-id="' + rule.id + '">' +
+                '<div class="notif-rule-header">' +
+                    '<span class="notif-rule-badge ' + badge + '">' + escapeHtml(NOTIF_EVENT_LABELS[rule.event_type] || rule.event_type) + '</span>' +
+                    '<label class="toggle-switch toggle-sm" onclick="event.stopPropagation()">' +
+                        '<input type="checkbox" ' + (rule.is_active ? 'checked' : '') +
+                        ' onchange="toggleNotificationRule(' + rule.id + ', this.checked)">' +
+                        '<span class="toggle-slider"></span>' +
+                    '</label>' +
+                '</div>' +
+                '<div class="notif-rule-trigger">' + notifTriggerLabel(rule) + ' ' + direction + '</div>' +
+                '<div class="notif-rule-template">' + escapeHtml(rule.message_template).substring(0, 120) + (rule.message_template.length > 120 ? '…' : '') + '</div>' +
+                '<div class="notif-rule-actions">' +
+                    '<button class="btn-secondary btn-sm" onclick="showNotificationRuleForm(' + rule.id + ')">Изменить</button>' +
+                    '<button class="btn-danger btn-sm" onclick="deleteNotificationRule(' + rule.id + ')">Удалить</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    } catch (e) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = 'Ошибка загрузки правил';
+        errorEl.style.display = 'block';
+    }
+}
+
+async function showNotificationRuleForm(ruleId) {
+    notifRuleEditingId = ruleId || null;
+    var title = document.getElementById('admin-notification-form-title');
+    var eventTypeEl = document.getElementById('notif-rule-event-type');
+    var triggerValEl = document.getElementById('notif-rule-trigger-value');
+    var triggerUnitEl = document.getElementById('notif-rule-trigger-unit');
+    var templateEl = document.getElementById('notif-rule-template');
+    var activeEl = document.getElementById('notif-rule-active');
+
+    title.textContent = ruleId ? 'Изменить правило' : 'Создать правило';
+
+    if (ruleId) {
+        try {
+            var resp = await apiFetch('/api/admin/notification-rules', { method: 'GET' });
+            var data = await resp.json();
+            var rule = (data.rules || []).find(function (r) { return r.id === ruleId; });
+            if (rule) {
+                eventTypeEl.value = rule.event_type;
+                var absH = Math.abs(rule.trigger_hours);
+                if (absH % 24 === 0 && absH >= 24) {
+                    triggerValEl.value = absH / 24;
+                    triggerUnitEl.value = 'days';
+                } else {
+                    triggerValEl.value = absH;
+                    triggerUnitEl.value = 'hours';
+                }
+                templateEl.value = rule.message_template;
+                activeEl.checked = !!rule.is_active;
+            }
+        } catch (e) { /* ignore */ }
+    } else {
+        eventTypeEl.value = 'expiry_warning';
+        triggerValEl.value = '';
+        triggerUnitEl.value = 'days';
+        templateEl.value = '';
+        activeEl.checked = true;
+    }
+
+    updateNotifRuleTriggerHint();
+    showModal('admin-notification-form-modal');
+}
+
+function updateNotifRuleTriggerHint() {
+    var et = document.getElementById('notif-rule-event-type').value;
+    var hint = document.getElementById('notif-rule-trigger-hint');
+    if (et === 'expiry_warning') {
+        hint.textContent = 'За сколько дней/часов ДО истечения подписки отправить уведомление';
+    } else {
+        hint.textContent = 'Через сколько дней/часов ПОСЛЕ потери подписки отправить уведомление';
+    }
+}
+
+function closeNotificationRuleForm() {
+    closeModal('admin-notification-form-modal');
+    notifRuleEditingId = null;
+}
+
+async function saveNotificationRule(e) {
+    e.preventDefault();
+    var eventType = document.getElementById('notif-rule-event-type').value;
+    var triggerVal = parseInt(document.getElementById('notif-rule-trigger-value').value, 10);
+    var triggerUnit = document.getElementById('notif-rule-trigger-unit').value;
+    var template = document.getElementById('notif-rule-template').value.trim();
+    var isActive = document.getElementById('notif-rule-active').checked;
+
+    if (!triggerVal || triggerVal < 1) { alert('Укажите время срабатывания'); return; }
+    if (!template) { alert('Укажите шаблон сообщения'); return; }
+
+    var hours = triggerUnit === 'days' ? triggerVal * 24 : triggerVal;
+    var triggerHours = eventType === 'expiry_warning' ? -hours : hours;
+
+    var payload = {
+        event_type: eventType,
+        trigger_hours: triggerHours,
+        message_template: template,
+        is_active: isActive
+    };
+
+    try {
+        var url = '/api/admin/notification-rules';
+        var method = 'POST';
+        if (notifRuleEditingId) {
+            url += '/' + notifRuleEditingId;
+            method = 'PUT';
+        }
+        var resp = await apiFetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (resp.ok) {
+            closeNotificationRuleForm();
+            loadNotificationRules();
+        } else {
+            var d = await resp.json().catch(function () { return {}; });
+            alert(d.error || 'Ошибка сохранения');
+        }
+    } catch (err) { alert('Ошибка сети'); }
+}
+
+function deleteNotificationRule(ruleId) {
+    if (!confirm('Удалить правило уведомления?')) return;
+    apiFetch('/api/admin/notification-rules/' + ruleId, { method: 'DELETE' }).then(function (r) {
+        if (r.ok) loadNotificationRules(); else alert('Ошибка удаления');
+    }).catch(function () { alert('Ошибка сети'); });
+}
+
+function toggleNotificationRule(ruleId, isActive) {
+    apiFetch('/api/admin/notification-rules/' + ruleId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: isActive })
+    }).then(function (r) {
+        if (!r.ok) { alert('Ошибка'); loadNotificationRules(); }
+    }).catch(function () { alert('Ошибка сети'); loadNotificationRules(); });
+}
+
 // Функция отображения серверов
 // Переменная для хранения экземпляра глобуса
 let serverGlobe = null;

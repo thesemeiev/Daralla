@@ -499,8 +499,73 @@
                             <span class="admin-panel-row-label">Управление событиями</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-notifications')">
+                            <span class="admin-panel-row-label">Управление уведомлениями</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Уведомления -->
+        <div id="page-admin-notifications" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+            </header>
+            <div id="admin-notifications-content" class="admin-page-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 style="margin: 0; font-size: 18px;">Правила уведомлений</h2>
+                    <button type="button" class="btn-primary" onclick="showNotificationRuleForm()">Добавить</button>
+                </div>
+                <div id="admin-notifications-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
+                <div id="admin-notifications-error" class="error" style="display: none;"></div>
+                <div id="admin-notifications-list" style="display: none;"></div>
+            </div>
+        </div>
+        <div id="admin-notification-form-modal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 520px;">
+                <h2 id="admin-notification-form-title">Создать правило</h2>
+                <form id="admin-notification-form" onsubmit="saveNotificationRule(event)">
+                    <div class="form-group">
+                        <label for="notif-rule-event-type">Тип события</label>
+                        <select id="notif-rule-event-type" required onchange="updateNotifRuleTriggerHint()">
+                            <option value="expiry_warning">Истекает подписка</option>
+                            <option value="no_subscription">Нет подписки</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="notif-rule-trigger-value">Время срабатывания</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" id="notif-rule-trigger-value" required min="1" placeholder="Число" style="flex: 1;">
+                            <select id="notif-rule-trigger-unit" style="width: 120px;">
+                                <option value="hours">Часов</option>
+                                <option value="days" selected>Дней</option>
+                            </select>
+                        </div>
+                        <p class="hint" style="margin: 6px 0 0; font-size: 12px; opacity: 0.6;" id="notif-rule-trigger-hint">
+                            За сколько дней/часов ДО истечения подписки отправить уведомление
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="notif-rule-template">Шаблон сообщения (HTML)</label>
+                        <textarea id="notif-rule-template" rows="6" required placeholder="Текст уведомления..."></textarea>
+                        <p class="hint" style="margin: 6px 0 0; font-size: 12px; opacity: 0.6;">
+                            Плейсхолдеры: {time_remaining} — оставшееся время, {expiry_line} — строка с датой истечения
+                        </p>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <label for="notif-rule-active" style="margin: 0;">Активно</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notif-rule-active" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button type="button" class="btn-secondary" onclick="closeNotificationRuleForm()">Отмена</button>
+                        <button type="submit" class="btn-primary" style="flex:1;">Сохранить</button>
+                    </div>
+                </form>
             </div>
         </div>
 

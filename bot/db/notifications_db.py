@@ -44,6 +44,18 @@ async def init_notifications_db():
                 updated_at INTEGER
             )
         ''')
+
+        # Правила уведомлений (динамическая конфигурация)
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS notification_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                trigger_hours INTEGER NOT NULL,
+                message_template TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at INTEGER NOT NULL
+            )
+        ''')
         await db.commit()
 
 async def record_notification_metrics(notification_type: str, success: bool = True, is_blocked: bool = False):
@@ -159,4 +171,106 @@ async def clear_subscription_notifications(subscription_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM sent_notifications WHERE subscription_id = ?", (subscription_id,))
         await db.commit()
+
+
+# ── notification_rules CRUD ──
+
+async def get_all_notification_rules():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM notification_rules ORDER BY event_type, trigger_hours"
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+
+async def get_active_notification_rules():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM notification_rules WHERE is_active = 1 ORDER BY event_type, trigger_hours"
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+
+async def create_notification_rule(event_type: str, trigger_hours: int, message_template: str) -> int:
+    now = int(datetime.datetime.now().timestamp())
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute('''
+            INSERT INTO notification_rules (event_type, trigger_hours, message_template, is_active, created_at)
+            VALUES (?, ?, ?, 1, ?)
+        ''', (event_type, trigger_hours, message_template, now))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def update_notification_rule(rule_id: int, **fields):
+    allowed = {'event_type', 'trigger_hours', 'message_template', 'is_active'}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return False
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [rule_id]
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            f"UPDATE notification_rules SET {set_clause} WHERE id = ?", values
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def delete_notification_rule(rule_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("DELETE FROM notification_rules WHERE id = ?", (rule_id,))
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def get_notification_rule_by_id(rule_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM notification_rules WHERE id = ?", (rule_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def seed_default_notification_rules():
+    """Fills notification_rules with legacy defaults if the table is empty."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM notification_rules") as cur:
+            (count,) = await cur.fetchone()
+        if count > 0:
+            return
+
+    defaults = [
+        (
+            'expiry_warning', -72,
+            '<b>Напоминание: ваша подписка истекает!</b>\n\n'
+            'Осталось: <b>{time_remaining}</b>\n'
+            '{expiry_line}\n'
+            'Продлите подписку заранее, чтобы не прерывать использование VPN.'
+        ),
+        (
+            'expiry_warning', -24,
+            '<b>Ваша подписка истекает!</b>\n\n'
+            'Осталось: <b>{time_remaining}</b>\n'
+            '{expiry_line}\n'
+            'Продлите подписку заранее, чтобы не прерывать использование VPN.'
+        ),
+        (
+            'expiry_warning', -1,
+            '<b>СРОЧНО! Ваша подписка истекает!</b>\n\n'
+            'Осталось: <b>{time_remaining}</b>\n'
+            '{expiry_line}\n'
+            'Продлите подписку сейчас, чтобы не потерять доступ к VPN.'
+        ),
+    ]
+    now = int(datetime.datetime.now().timestamp())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.executemany(
+            "INSERT INTO notification_rules (event_type, trigger_hours, message_template, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
+            [(et, th, tpl, now) for et, th, tpl in defaults],
+        )
+        await db.commit()
+    logger.info("Seeded %d default notification rules", len(defaults))
 

@@ -6,12 +6,15 @@
 import asyncio
 import datetime
 import logging
+import time
 
+import aiosqlite
 import telegram
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup
 from typing import List
 
 from ..db import (
+    DB_PATH,
     init_notifications_db,
     record_notification_metrics,
     cleanup_old_notifications,
@@ -20,8 +23,10 @@ from ..db import (
     set_notification_setting,
     is_subscription_notification_sent,
     mark_subscription_notification_sent,
+    get_active_notification_rules,
+    seed_default_notification_rules,
 )
-from ..utils import UIMessages, calculate_time_remaining
+from ..utils import calculate_time_remaining
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +40,9 @@ class NotificationManager:
         self.admin_ids = admin_ids
         self.is_running = False
         
-        # Настройки уведомлений по умолчанию
         self.default_settings = {
-            'check_interval': '300',  # 5 минут
-            'cleanup_interval': '86400',  # 24 часа
+            'check_interval': '300',
+            'cleanup_interval': '86400',
             'days_to_keep': '30',
             'enable_metrics': 'true'
         }
@@ -47,8 +51,8 @@ class NotificationManager:
         """Инициализация менеджера уведомлений"""
         try:
             await init_notifications_db()
+            await seed_default_notification_rules()
             
-            # Загружаем настройки
             settings = await get_notification_settings()
             for key, default_value in self.default_settings.items():
                 if key not in settings:
@@ -69,7 +73,6 @@ class NotificationManager:
         
         self.is_running = True
         
-        # Запускаем задачи
         asyncio.create_task(self._expiry_notifications_task())
         asyncio.create_task(self._cleanup_task())
         asyncio.create_task(self._metrics_task())
@@ -79,7 +82,7 @@ class NotificationManager:
     async def _expiry_notifications_task(self):
         """Задача для проверки истекающих подписок"""
         logger.info("Запуск задачи уведомлений об истечении подписок")
-        await asyncio.sleep(10) # Даем боту загрузиться
+        await asyncio.sleep(10)
         
         while self.is_running:
             try:
@@ -104,7 +107,6 @@ class NotificationManager:
                 if deleted_count > 0:
                     logger.info(f"Очищено {deleted_count} старых записей уведомлений")
                 
-                # Ждем сутки
                 await asyncio.sleep(86400)
                 
             except Exception as e:
@@ -116,93 +118,170 @@ class NotificationManager:
         while self.is_running:
             try:
                 await self._collect_metrics()
-                # Собираем метрики каждые 12 часов
                 await asyncio.sleep(43200)
             except Exception as e:
                 logger.error(f"Ошибка в задаче метрик: {e}")
                 await asyncio.sleep(3600)
     
+    # ── rule-based engine ──
+
     async def _check_expiring_subscriptions(self):
-        """Проверяет активные подписки на истечение и отправляет уведомления"""
+        """Загружает активные правила и обрабатывает каждое."""
         try:
-            from ..db.subscriptions_db import get_all_active_subscriptions
-            subscriptions = await get_all_active_subscriptions()
-            
-            if not subscriptions:
+            rules = await get_active_notification_rules()
+            if not rules:
                 return
-            
-            now = datetime.datetime.now()
-            notifications_sent = 0
-            
-            for sub in subscriptions:
+
+            settings = await get_notification_settings()
+            check_interval = int(settings.get('check_interval', '300'))
+
+            for rule in rules:
                 try:
-                    user_id = sub['user_id']
-                    expires_at = sub['expires_at']
-                    subscription_id = sub['id']
-                    
-                    expiry_time = datetime.datetime.fromtimestamp(expires_at)
-                    time_diff = expiry_time - now
-                    
-                    notification_type = None
-                    if time_diff.total_seconds() > 0:
-                        if time_diff.total_seconds() <= 3600:
-                            notification_type = "1hour"
-                        elif time_diff.total_seconds() <= 86400:
-                            notification_type = "1day"
-                        elif time_diff.total_seconds() <= 259200:
-                            notification_type = "3days"
-                    
-                    if notification_type:
-                        time_remaining = calculate_time_remaining(expires_at)
-                        success = await self._send_subscription_expiry_notification(
-                            user_id, subscription_id, notification_type, time_remaining,
-                            time_diff.days, expiry_time
-                        )
-                        if success:
-                            notifications_sent += 1
-                            
+                    if rule['event_type'] == 'expiry_warning':
+                        await self._process_expiry_rule(rule, check_interval)
+                    elif rule['event_type'] == 'no_subscription':
+                        await self._process_no_sub_rule(rule, check_interval)
                 except Exception as e:
-                    logger.error(f"Ошибка обработки подписки {sub.get('id')}: {e}")
-            
-            if notifications_sent > 0:
-                logger.info(f"Отправлено {notifications_sent} уведомлений")
-                
+                    logger.error(f"Ошибка обработки правила {rule.get('id')}: {e}")
         except Exception as e:
             logger.error(f"Ошибка в _check_expiring_subscriptions: {e}")
-    
-    async def _send_subscription_expiry_notification(
-        self, user_id: str, subscription_id: int, notification_type: str,
-        time_remaining: str, days_until_expiry: int, expiry_datetime=None
-    ) -> bool:
-        """Отправляет уведомление об истекающей подписке"""
+
+    async def _process_expiry_rule(self, rule: dict, check_interval: int):
+        """Обрабатывает правило типа expiry_warning.
+
+        trigger_hours отрицательное (напр. -72 = за 3 дня до истечения).
+        Находим подписки, истекающие в окне [now + offset, now + offset + interval].
+        """
+        from ..db.subscriptions_db import get_all_active_subscriptions
+
+        now_ts = int(time.time())
+        offset_seconds = abs(rule['trigger_hours']) * 3600
+        window_start = now_ts + offset_seconds - check_interval
+        window_end = now_ts + offset_seconds + check_interval
+
+        subscriptions = await get_all_active_subscriptions()
+        if not subscriptions:
+            return
+
+        notification_type = f"rule_{rule['id']}"
+        notifications_sent = 0
+
+        for sub in subscriptions:
+            if not (window_start <= sub['expires_at'] <= window_end):
+                continue
+            try:
+                user_id = sub['user_id']
+                subscription_id = sub['id']
+                success = await self._send_rule_notification(
+                    rule, user_id, subscription_id, notification_type,
+                    expires_at=sub['expires_at'],
+                )
+                if success:
+                    notifications_sent += 1
+            except Exception as e:
+                logger.error(f"Ошибка при отправке expiry rule {rule['id']} для sub {sub.get('id')}: {e}")
+
+        if notifications_sent > 0:
+            logger.info(f"Правило {rule['id']} (expiry_warning): отправлено {notifications_sent} уведомлений")
+
+    async def _process_no_sub_rule(self, rule: dict, check_interval: int):
+        """Обрабатывает правило типа no_subscription.
+
+        trigger_hours положительное (напр. 168 = через 7 дней после потери подписки).
+        Находим пользователей без активных подписок, чья «дата потери» попадает в окно.
+        """
+        now_ts = int(time.time())
+        offset_seconds = rule['trigger_hours'] * 3600
+        window_start = now_ts - offset_seconds - check_interval
+        window_end = now_ts - offset_seconds + check_interval
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute('''
+                SELECT u.user_id,
+                       COALESCE(MAX(s.expires_at), u.first_seen) AS became_inactive_at
+                FROM users u
+                LEFT JOIN subscriptions s
+                    ON s.subscriber_id = u.id AND s.status != 'deleted'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM subscriptions s2
+                    WHERE s2.subscriber_id = u.id
+                      AND s2.status = 'active'
+                      AND s2.expires_at > ?
+                )
+                GROUP BY u.id
+                HAVING became_inactive_at BETWEEN ? AND ?
+            ''', (now_ts, window_start, window_end)) as cur:
+                rows = await cur.fetchall()
+
+        if not rows:
+            return
+
+        notification_type = f"nosub_rule_{rule['id']}"
+        notifications_sent = 0
+
+        for row in rows:
+            try:
+                user_id = row['user_id']
+                if await is_subscription_notification_sent(user_id, 0, notification_type):
+                    continue
+                success = await self._send_rule_notification(
+                    rule, user_id, 0, notification_type,
+                )
+                if success:
+                    notifications_sent += 1
+            except Exception as e:
+                logger.error(f"Ошибка при отправке no_sub rule {rule['id']} для user {row['user_id']}: {e}")
+
+        if notifications_sent > 0:
+            logger.info(f"Правило {rule['id']} (no_subscription): отправлено {notifications_sent} уведомлений")
+
+    # ── sending ──
+
+    def _render_template(self, template: str, *, expires_at: int = None) -> str:
+        """Подставляет плейсхолдеры в шаблон сообщения."""
+        replacements = {}
+        if expires_at:
+            expiry_dt = datetime.datetime.fromtimestamp(expires_at)
+            replacements['time_remaining'] = calculate_time_remaining(expires_at)
+            replacements['expiry_line'] = f"📅 Истекает: <b>{expiry_dt.strftime('%d.%m.%Y %H:%M')}</b>"
+        else:
+            replacements['time_remaining'] = ''
+            replacements['expiry_line'] = ''
         try:
-            # Проверка отправки за последние 24 часа для защиты от спама
+            return template.format(**replacements)
+        except KeyError:
+            return template
+
+    async def _send_rule_notification(
+        self, rule: dict, user_id: str, subscription_id: int,
+        notification_type: str, *, expires_at: int = None,
+    ) -> bool:
+        """Универсальная отправка уведомления по правилу."""
+        try:
             if await is_subscription_notification_sent(user_id, subscription_id, notification_type):
                 return False
-            
+
             from ..db.users_db import get_telegram_chat_id_for_notification
             chat_id = await get_telegram_chat_id_for_notification(user_id)
             if chat_id is None:
-                logger.debug(f"Пропуск уведомления для user_id={user_id}: нет Telegram (веб-only без привязки)")
                 return False
-            
-            message_text = UIMessages.subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime)
-            
-            # Создаем кнопку для открытия мини-приложения
+
+            message_text = self._render_template(rule['message_template'], expires_at=expires_at)
+
             from ..utils import UIButtons
-            webapp_button = UIButtons.create_webapp_button(
-                action='extend_subscription',
-                params=subscription_id,
-                text="Открыть в приложении"
-            )
-            
-            # Создаем клавиатуру только с deep link кнопкой
             buttons = []
-            if webapp_button:
-                buttons.append([webapp_button])
-            
+            if subscription_id:
+                webapp_button = UIButtons.create_webapp_button(
+                    action='extend_subscription',
+                    params=subscription_id,
+                    text="Открыть в приложении"
+                )
+                if webapp_button:
+                    buttons.append([webapp_button])
+
             keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-            
+
             try:
                 await self.bot.send_message(
                     chat_id=chat_id,
@@ -210,19 +289,16 @@ class NotificationManager:
                     parse_mode="HTML",
                     reply_markup=keyboard
                 )
-                
                 await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
                 await record_notification_metrics(notification_type, True)
                 return True
-                
+
             except (telegram.error.Forbidden, telegram.error.BadRequest) as e:
-                # Если бот заблокирован, помечаем в метриках
                 is_blocked = "Chat not found" in str(e) or isinstance(e, telegram.error.Forbidden)
                 await record_notification_metrics(notification_type, False, is_blocked=is_blocked)
-                # Чтобы больше не пытаться слать этому пользователю сегодня
                 await mark_subscription_notification_sent(user_id, subscription_id, notification_type)
                 return False
-                
+
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
             return False
