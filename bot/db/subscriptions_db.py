@@ -489,6 +489,84 @@ async def get_all_subscriptions_by_user(user_id: str, include_deleted: bool = Fa
             return [dict(row) for row in rows]
 
 
+async def get_subscriptions_page(
+    page: int = 1,
+    limit: int = 20,
+    status: str | None = None,
+    owner_query: str | None = None,
+    long_only: bool = False,
+    long_days: int = 180,
+):
+    """
+    Возвращает страницу подписок для админки с возможностью фильтрации.
+
+    - status: фильтр по статусу подписки (active/expired/deleted/trial и т.п.)
+    - owner_query: подстрочный поиск по user_id или username владельца
+    - long_only: если True, оставляет только "долгие" подписки (длительность >= long_days)
+    """
+    if page < 1:
+        page = 1
+    if limit <= 0:
+        limit = 20
+    offset = (page - 1) * limit
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        base_where = ["1=1"]
+        params: list[object] = []
+
+        if status:
+            base_where.append("s.status = ?")
+            params.append(status)
+
+        if owner_query:
+            q = f"%{owner_query.strip()}%"
+            base_where.append("(u.user_id LIKE ? OR (u.username IS NOT NULL AND u.username LIKE ?))")
+            params.extend([q, q])
+
+        if long_only:
+            # Разница в секундах между датой истечения и создания
+            min_duration_seconds = long_days * 24 * 60 * 60
+            base_where.append("(s.expires_at - s.created_at) >= ?")
+            params.append(min_duration_seconds)
+
+        where_sql = " AND ".join(base_where)
+
+        count_query = f"""
+            SELECT COUNT(*) as count
+            FROM subscriptions s
+            JOIN users u ON s.subscriber_id = u.id
+            WHERE {where_sql}
+        """
+        async with db.execute(count_query, params) as cur:
+            row = await cur.fetchone()
+            total = row["count"] if row else 0
+
+        query = f"""
+            SELECT
+                s.*,
+                u.user_id,
+                u.username
+            FROM subscriptions s
+            JOIN users u ON s.subscriber_id = u.id
+            WHERE {where_sql}
+            ORDER BY s.expires_at DESC
+            LIMIT ? OFFSET ?
+        """
+        page_params = params + [limit, offset]
+        async with db.execute(query, page_params) as cur:
+            rows = await cur.fetchall()
+
+        subscriptions = [dict(row) for row in rows]
+        return {
+            "items": subscriptions,
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }
+
+
 async def get_subscription_types_statistics():
     """Возвращает статистику по типам активных подписок (trial vs purchased, month vs 3month)."""
     async with aiosqlite.connect(DB_PATH) as db:

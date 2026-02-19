@@ -479,6 +479,10 @@
                 <section class="admin-panel-section admin-panel-section-management">
                     <h2 class="admin-panel-section-title">Управление</h2>
                     <div class="admin-panel-rows">
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-subscriptions')">
+                            <span class="admin-panel-row-label">Управление подписками</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-users')">
                             <span class="admin-panel-row-label">Управление пользователями</span>
                             <span class="admin-panel-row-chevron">›</span>
@@ -578,6 +582,66 @@
             <div id="admin-servers-analytics-content" class="admin-page-content" style="display: none;">
                 <h2 style="margin: 0 0 16px 0;">Нагрузка на канал серверов</h2>
                 <div id="servers-load-list" class="servers-load-list"></div>
+            </div>
+        </div>
+
+        <!-- АДМИН-ПАНЕЛЬ: Список подписок -->
+        <div id="page-admin-subscriptions" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+            </header>
+
+            <div class="admin-search-box">
+                <input
+                    type="text"
+                    id="admin-subscriptions-owner-search"
+                    placeholder="Поиск по владельцу (ID или логин)..."
+                    oninput="handleAdminSubscriptionsSearch()"
+                >
+            </div>
+
+            <div class="admin-filters-row">
+                <div class="admin-filter-item">
+                    <label for="admin-subscriptions-status" class="hint">Статус</label>
+                    <select id="admin-subscriptions-status" onchange="reloadAdminSubscriptionsWithFilters()">
+                        <option value="">Все</option>
+                        <option value="active">Активные</option>
+                        <option value="expired">Истёкшие</option>
+                        <option value="deleted">Удалённые</option>
+                        <option value="trial">Пробные</option>
+                    </select>
+                </div>
+                <div class="admin-filter-item checkbox-filter" onclick="toggleAdminSubscriptionsLongOnly()">
+                    <input
+                        type="checkbox"
+                        id="admin-subscriptions-long-only"
+                        onclick="event.stopPropagation(); toggleAdminSubscriptionsLongOnly(true);"
+                    >
+                    <label for="admin-subscriptions-long-only">Только долгие (≥ 180 дней)</label>
+                </div>
+            </div>
+
+            <div id="admin-subscriptions-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Загрузка подписок...</p>
+            </div>
+
+            <div id="admin-subscriptions-error" class="error" style="display: none;">
+                <p>Ошибка загрузки данных</p>
+                <button onclick="loadAdminSubscriptions()">Повторить</button>
+            </div>
+
+            <div id="admin-subscriptions-content" class="admin-page-content" style="display: none;">
+                <div class="admin-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Всего:</span>
+                        <span class="stat-value" id="admin-subscriptions-total">0</span>
+                    </div>
+                </div>
+
+                <div id="admin-subscriptions-list"></div>
+
+                <div id="admin-subscriptions-pagination" class="pagination" style="display: none;"></div>
             </div>
         </div>
 

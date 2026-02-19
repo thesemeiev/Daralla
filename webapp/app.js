@@ -547,6 +547,15 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         if (searchEl) searchEl.value = p.search || '';
         return true;
     }
+    if (pageName === 'admin-subscriptions') {
+        showPage('admin-subscriptions', {
+            page: p.page,
+            status: p.status,
+            owner: p.owner,
+            long: p.long
+        });
+        return true;
+    }
     showPage(pageName);
     return true;
 }
@@ -704,6 +713,22 @@ function showPage(pageName, params) {
             ? String(params.search)
             : currentAdminUserSearch;
         loadAdminUsers(page, search);
+    } else if (pageName === 'admin-subscriptions') {
+        var subPage = (params && params.page != null)
+            ? (Number(params.page) || 1)
+            : currentAdminSubscriptionsPage;
+        if (params) {
+            if (params.status !== undefined) {
+                currentAdminSubscriptionsStatus = String(params.status || '');
+            }
+            if (params.owner !== undefined) {
+                currentAdminSubscriptionsOwnerQuery = String(params.owner || '');
+            }
+            if (params.long !== undefined) {
+                currentAdminSubscriptionsLongOnly = params.long === '1' || params.long === true;
+            }
+        }
+        loadAdminSubscriptions(subPage);
     } else if (pageName === 'admin-stats') {
         loadAdminStats();
     } else if (pageName === 'admin-servers-analytics') {
@@ -3062,6 +3087,13 @@ let currentAdminUserSearch = '';
 let currentEditingSubscriptionId = null;
 let previousAdminPage = 'admin-users';
 
+// Состояние страницы подписок в админке
+let currentAdminSubscriptionsPage = 1;
+let currentAdminSubscriptionsStatus = '';
+let currentAdminSubscriptionsOwnerQuery = '';
+let currentAdminSubscriptionsLongOnly = false;
+let adminSubscriptionsSearchTimeout;
+
 // Проверка прав админа
 // Функция проверки прав админа
 async function checkAdminAccess() {
@@ -3091,6 +3123,212 @@ async function checkAdminAccess() {
         console.error('Ошибка проверки прав админа:', error);
         return false;
     }
+}
+
+// Загрузка списка подписок
+async function loadAdminSubscriptions(page = 1, options = {}) {
+    try {
+        const loadingEl = document.getElementById('admin-subscriptions-loading');
+        const contentEl = document.getElementById('admin-subscriptions-content');
+        const errorEl = document.getElementById('admin-subscriptions-error');
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (contentEl) contentEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'none';
+
+        // Обновляем состояние фильтров из options (если переданы)
+        if (options.status !== undefined) {
+            currentAdminSubscriptionsStatus = options.status;
+        }
+        if (options.ownerQuery !== undefined) {
+            currentAdminSubscriptionsOwnerQuery = options.ownerQuery;
+        }
+        if (options.longOnly !== undefined) {
+            currentAdminSubscriptionsLongOnly = !!options.longOnly;
+        }
+
+        const response = await apiFetch('/api/admin/subscriptions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                page,
+                limit: 20,
+                status: currentAdminSubscriptionsStatus || undefined,
+                owner_query: currentAdminSubscriptionsOwnerQuery || undefined,
+                long_only: currentAdminSubscriptionsLongOnly
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки подписок');
+        }
+
+        const data = await response.json();
+
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
+
+        // Обновляем статистику
+        const totalEl = document.getElementById('admin-subscriptions-total');
+        if (totalEl) totalEl.textContent = data.total || 0;
+
+        // Отображаем список подписок
+        const listEl = document.getElementById('admin-subscriptions-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (data.subscriptions && data.subscriptions.length > 0) {
+            data.subscriptions.forEach(sub => {
+                const card = document.createElement('div');
+                card.className = 'admin-subscription-card';
+                card.onclick = () => showAdminSubscriptionEdit(sub.id);
+
+                const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
+                const statusClass = sub.status === 'deleted'
+                    ? 'deleted'
+                    : sub.status === 'canceled'
+                        ? 'canceled'
+                        : (isSubActive ? 'active' : 'expired');
+                const statusLabel = sub.status === 'active'
+                    ? 'Активна'
+                    : sub.status === 'expired'
+                        ? 'Истекла'
+                        : sub.status === 'trial'
+                            ? 'Пробная'
+                            : sub.status === 'deleted'
+                                ? 'Удалена'
+                                : 'Отменена';
+
+                const ownerLabelParts = [];
+                if (sub.user_id) ownerLabelParts.push(`ID: ${escapeHtml(sub.user_id)}`);
+                if (sub.username) ownerLabelParts.push(`Логин: ${escapeHtml(sub.username)}`);
+                const ownerLabel = ownerLabelParts.join(' · ');
+
+                card.innerHTML = `
+                    <div class="admin-subscription-name">${escapeHtml(sub.name || '')}</div>
+                    <div class="admin-subscription-status ${statusClass}">${statusLabel}</div>
+                    <div class="admin-subscription-info">
+                        <div>Создана: ${escapeHtml(sub.created_at_formatted || '')}</div>
+                        <div>Истекает: ${escapeHtml(sub.expires_at_formatted || '')}</div>
+                        <div>Устройств: ${sub.device_limit || 0}</div>
+                    </div>
+                    ${ownerLabel ? `<div class="admin-subscription-owner hint">${ownerLabel}</div>` : ''}
+                `;
+
+                listEl.appendChild(card);
+            });
+
+            // Пагинация
+            if (data.pages > 1) {
+                showAdminSubscriptionsPagination(data.page, data.pages);
+            } else {
+                const pagEl = document.getElementById('admin-subscriptions-pagination');
+                if (pagEl) pagEl.style.display = 'none';
+            }
+        } else {
+            listEl.innerHTML = '<div class="empty"><p>Подписки не найдены</p></div>';
+            const pagEl = document.getElementById('admin-subscriptions-pagination');
+            if (pagEl) pagEl.style.display = 'none';
+        }
+
+        currentAdminSubscriptionsPage = page;
+
+        // Синхронизируем фильтры в UI
+        const statusSelect = document.getElementById('admin-subscriptions-status');
+        if (statusSelect && statusSelect.value !== (currentAdminSubscriptionsStatus || '')) {
+            statusSelect.value = currentAdminSubscriptionsStatus || '';
+        }
+        const ownerInput = document.getElementById('admin-subscriptions-owner-search');
+        if (ownerInput && ownerInput.value !== (currentAdminSubscriptionsOwnerQuery || '')) {
+            ownerInput.value = currentAdminSubscriptionsOwnerQuery || '';
+        }
+        const longOnlyCheckbox = document.getElementById('admin-subscriptions-long-only');
+        if (longOnlyCheckbox) {
+            longOnlyCheckbox.checked = currentAdminSubscriptionsLongOnly;
+        }
+
+        // Обновляем hash для возможности возврата на ту же страницу
+        try {
+            location.hash = buildHash('admin-subscriptions', {
+                page: String(page),
+                status: currentAdminSubscriptionsStatus || '',
+                owner: currentAdminSubscriptionsOwnerQuery || '',
+                long: currentAdminSubscriptionsLongOnly ? '1' : ''
+            });
+        } catch (e) {}
+    } catch (error) {
+        console.error('Ошибка загрузки подписок:', error);
+        const loadingEl = document.getElementById('admin-subscriptions-loading');
+        const errorEl = document.getElementById('admin-subscriptions-error');
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'block';
+    }
+}
+
+// Поиск по владельцу
+function handleAdminSubscriptionsSearch() {
+    clearTimeout(adminSubscriptionsSearchTimeout);
+    const input = document.getElementById('admin-subscriptions-owner-search');
+    const value = input ? input.value.trim() : '';
+    adminSubscriptionsSearchTimeout = setTimeout(() => {
+        currentAdminSubscriptionsOwnerQuery = value;
+        loadAdminSubscriptions(1);
+    }, 500);
+}
+
+// Применение фильтров (статус и т.п.)
+function reloadAdminSubscriptionsWithFilters() {
+    const statusSelect = document.getElementById('admin-subscriptions-status');
+    if (statusSelect) {
+        currentAdminSubscriptionsStatus = statusSelect.value || '';
+    }
+    const longOnlyCheckbox = document.getElementById('admin-subscriptions-long-only');
+    if (longOnlyCheckbox) {
+        currentAdminSubscriptionsLongOnly = !!longOnlyCheckbox.checked;
+    }
+    loadAdminSubscriptions(1);
+}
+
+function toggleAdminSubscriptionsLongOnly(fromCheckbox) {
+    const longOnlyCheckbox = document.getElementById('admin-subscriptions-long-only');
+    if (!longOnlyCheckbox) return;
+    if (!fromCheckbox) {
+        longOnlyCheckbox.checked = !longOnlyCheckbox.checked;
+    }
+    currentAdminSubscriptionsLongOnly = !!longOnlyCheckbox.checked;
+    loadAdminSubscriptions(1);
+}
+
+// Пагинация для подписок
+function showAdminSubscriptionsPagination(currentPage, totalPages) {
+    const paginationEl = document.getElementById('admin-subscriptions-pagination');
+    if (!paginationEl) return;
+    paginationEl.style.display = 'flex';
+    paginationEl.innerHTML = '';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '←';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => loadAdminSubscriptions(currentPage - 1);
+    paginationEl.appendChild(prevBtn);
+
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.textContent = i;
+        pageBtn.className = i === currentPage ? 'active' : '';
+        pageBtn.onclick = () => loadAdminSubscriptions(i);
+        paginationEl.appendChild(pageBtn);
+    }
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '→';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => loadAdminSubscriptions(currentPage + 1);
+    paginationEl.appendChild(nextBtn);
 }
 
 // Обновление UI, зависящего от прав админа (профиль и старая кнопка в навбаре)

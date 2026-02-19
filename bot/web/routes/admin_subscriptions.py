@@ -18,6 +18,7 @@ from bot.db.subscriptions_db import (
     update_subscription_status,
     update_subscription_device_limit,
     remove_subscription_server,
+    get_subscriptions_page,
 )
 from bot.db.notifications_db import clear_subscription_notifications
 from bot.handlers.api_support.webhook_auth import get_server_manager, get_subscription_manager
@@ -28,6 +29,90 @@ logger = logging.getLogger(__name__)
 
 def create_blueprint(bot_app):
     bp = Blueprint("admin_subscriptions", __name__)
+
+    @bp.route("/api/admin/subscriptions", methods=["POST", "OPTIONS"])
+    @admin_route
+    async def api_admin_subscriptions(request, admin_id):
+        """
+        Возвращает страницу подписок для админки с базовыми фильтрами.
+        """
+        data = await request.get_json(silent=True) or {}
+        try:
+            page = int(data.get("page", 1))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            limit = int(data.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+
+        status = (data.get("status") or "").strip() or None
+        owner_query = (data.get("owner_query") or "").strip() or None
+        long_only = bool(data.get("long_only", False))
+
+        result = await get_subscriptions_page(
+            page=page,
+            limit=limit,
+            status=status,
+            owner_query=owner_query,
+            long_only=long_only,
+        )
+
+        total = result.get("total", 0)
+        items = result.get("items") or []
+
+        subscriptions = []
+        for sub in items:
+            created_at = sub.get("created_at") or 0
+            expires_at = sub.get("expires_at") or 0
+            created_at_formatted = datetime.datetime.fromtimestamp(created_at).strftime(
+                "%d.%m.%Y %H:%M"
+            ) if created_at else ""
+            expires_at_formatted = datetime.datetime.fromtimestamp(expires_at).strftime(
+                "%d.%m.%Y %H:%M"
+            ) if expires_at else ""
+
+            name = (sub.get("name") or "").strip() or f"Подписка {sub.get('id')}"
+
+            subscriptions.append(
+                {
+                    "id": sub.get("id"),
+                    "name": name,
+                    "status": sub.get("status"),
+                    "period": sub.get("period"),
+                    "device_limit": sub.get("device_limit"),
+                    "created_at": created_at,
+                    "created_at_formatted": created_at_formatted,
+                    "expires_at": expires_at,
+                    "expires_at_formatted": expires_at_formatted,
+                    "price": sub.get("price"),
+                    "token": sub.get("subscription_token"),
+                    "user_id": sub.get("user_id"),
+                    "username": sub.get("username"),
+                }
+            )
+
+        pages = (total + limit - 1) // limit if limit > 0 else 0
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "subscriptions": subscriptions,
+                    "total": total,
+                    "page": result.get("page", page),
+                    "limit": result.get("limit", limit),
+                    "pages": pages,
+                    "filters": {
+                        "status": status,
+                        "owner_query": owner_query,
+                        "long_only": long_only,
+                    },
+                }
+            ),
+            200,
+            _cors_headers(),
+        )
 
     @bp.route("/api/admin/subscription/<int:sub_id>", methods=["POST", "OPTIONS"])
     @admin_route
