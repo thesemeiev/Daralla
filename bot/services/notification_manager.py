@@ -21,7 +21,6 @@ from ..db import (
     get_notification_stats,
     get_notification_settings,
     set_notification_setting,
-    is_subscription_notification_sent,
     mark_subscription_notification_sent,
     get_active_notification_rules,
     get_notification_send_count,

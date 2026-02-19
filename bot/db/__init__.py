@@ -83,7 +83,7 @@ from .notifications_db import (
     get_notification_stats, get_daily_notification_stats,
     get_notification_settings, set_notification_setting,
     is_subscription_notification_sent, mark_subscription_notification_sent,
-    clear_subscription_notifications,
+    clear_subscription_notifications, reset_no_sub_notifications,
     get_all_notification_rules, get_active_notification_rules,
     create_notification_rule, update_notification_rule, delete_notification_rule,
     get_notification_rule_by_id,

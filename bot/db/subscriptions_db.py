@@ -70,7 +70,15 @@ async def create_subscription(subscriber_id: int, period: str, device_limit: int
         ) as cur:
             sub_id = cur.lastrowid
             await db.commit()
-            return sub_id, token
+
+        # Сбрасываем счётчик no_subscription уведомлений для этого пользователя
+        async with db.execute("SELECT user_id FROM users WHERE id = ?", (subscriber_id,)) as cur:
+            user_row = await cur.fetchone()
+        if user_row:
+            from .notifications_db import reset_no_sub_notifications
+            await reset_no_sub_notifications(user_row[0])
+
+        return sub_id, token
 
 
 async def get_all_active_subscriptions():

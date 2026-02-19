@@ -122,6 +122,19 @@ async def init_notifications_db():
         except Exception:
             pass
 
+        # Индекс для быстрого поиска отправленных уведомлений
+        await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_sent_notif_lookup
+            ON sent_notifications(user_id, subscription_id, notification_type)
+        ''')
+
+        # Миграция: переименовываем nosub_rule_* → rule_* для единообразия
+        await db.execute('''
+            UPDATE sent_notifications
+            SET notification_type = REPLACE(notification_type, 'nosub_rule_', 'rule_')
+            WHERE notification_type LIKE 'nosub_rule_%'
+        ''')
+
         await db.commit()
 
 async def record_notification_metrics(notification_type: str, success: bool = True, is_blocked: bool = False):
@@ -142,7 +155,10 @@ async def record_notification_metrics(notification_type: str, success: bool = Tr
 async def cleanup_old_notifications(days: int = 30):
     cutoff = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("DELETE FROM sent_notifications WHERE sent_at < ?", (cutoff,))
+        cursor = await db.execute(
+            "DELETE FROM sent_notifications WHERE sent_at < ? AND notification_type NOT LIKE 'rule_%'",
+            (cutoff,),
+        )
         deleted_count = cursor.rowcount
         await db.commit()
         return deleted_count
@@ -236,6 +252,17 @@ async def mark_subscription_notification_sent(user_id: str, subscription_id: int
 async def clear_subscription_notifications(subscription_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM sent_notifications WHERE subscription_id = ?", (subscription_id,))
+        await db.commit()
+
+
+async def reset_no_sub_notifications(user_id: str):
+    """Сбрасывает счётчик no_subscription уведомлений при покупке подписки,
+    чтобы цикл повторов начался заново если пользователь снова уйдёт."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM sent_notifications WHERE user_id = ? AND subscription_id = 0 AND notification_type LIKE 'rule_%'",
+            (user_id,),
+        )
         await db.commit()
 
 
