@@ -636,25 +636,6 @@ async def get_subscription_types_statistics():
         }
 
 
-async def get_daily_revenue(days: int = 30):
-    """Возвращает выручку по дням за указанный период."""
-    now = int(datetime.datetime.now().timestamp())
-    start_ts = now - (days * 24 * 60 * 60)
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("""
-            SELECT DATE(created_at, 'unixepoch') as date,
-                   SUM(price) as revenue,
-                   COUNT(*) as count
-            FROM subscriptions
-            WHERE created_at >= ? AND price > 0 AND status != 'deleted'
-            GROUP BY DATE(created_at, 'unixepoch')
-            ORDER BY date ASC
-        """, (start_ts,)) as cur:
-            rows = await cur.fetchall()
-            return [dict(r) for r in rows]
-
-
 async def get_subscription_dynamics_data(days: int = 30):
     """Возвращает динамику подписок по дням: trial_active, purchased_active, trial_created, purchased_created."""
     async with aiosqlite.connect(DB_PATH) as db:

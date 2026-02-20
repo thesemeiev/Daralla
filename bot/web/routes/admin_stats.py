@@ -9,8 +9,8 @@ from quart import Blueprint, request, jsonify
 
 from bot.web.routes.admin_common import _cors_headers, admin_route
 from bot.db import DB_PATH
-from bot.db.subscriptions_db import get_subscription_statistics, get_daily_revenue
-from bot.db.payments_db import get_revenue_by_gateway
+from bot.db.subscriptions_db import get_subscription_statistics
+from bot.db.payments_db import get_revenue_by_gateway, get_daily_revenue
 
 logger = logging.getLogger(__name__)
 
