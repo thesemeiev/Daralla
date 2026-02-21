@@ -7,7 +7,6 @@ from quart import Blueprint, request, jsonify
 
 from bot.web.routes.admin_common import _cors_headers, admin_route
 from bot.db.users_db import get_user_growth_data
-from bot.db.servers_db import get_server_load_data
 from bot.db.subscriptions_db import (
     get_conversion_data,
     get_subscription_types_statistics,
@@ -25,14 +24,14 @@ def _get_server_info():
     if not server_manager:
         return {}
     server_info_map = {}
-    for location, servers in server_manager.servers_by_location.items():
-        for server in servers:
-            server_name = server["name"]
-            display_name = server["config"].get("display_name", server_name)
-            server_info_map[server_name] = {
-                "display_name": display_name,
-                "location": location,
-            }
+    for server in server_manager.servers:
+        server_name = server["name"]
+        display_name = server["config"].get("display_name", server_name)
+        location = server["config"].get("location") or "Other"
+        server_info_map[server_name] = {
+            "display_name": display_name,
+            "location": location,
+        }
     return server_info_map
 
 
@@ -51,7 +50,8 @@ def create_blueprint(bot_app):
     @admin_route
     async def api_admin_charts_server_load(request, admin_id):
         await request.get_json(silent=True) or {}
-        server_load_data = await get_server_load_data()
+        sm = get_server_manager()
+        server_load_data = await sm.get_server_load_data() if sm else []
         logger.info("Получены данные о нагрузке для %s серверов", len(server_load_data))
         if not server_load_data:
             logger.warning("server_load_data пуст, возвращаем пустой ответ")

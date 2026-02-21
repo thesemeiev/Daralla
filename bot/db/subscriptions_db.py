@@ -29,7 +29,8 @@ async def init_subscriptions_db():
                 price REAL NOT NULL,
                 name TEXT,
                 group_id INTEGER,
-                FOREIGN KEY (subscriber_id) REFERENCES users(id)
+                FOREIGN KEY (subscriber_id) REFERENCES users(id),
+                FOREIGN KEY (group_id) REFERENCES server_groups(id)
             )
         """)
 
@@ -50,18 +51,13 @@ async def init_subscriptions_db():
 
 
 async def create_subscription(subscriber_id: int, period: str, device_limit: int, price: float, expires_at: int, name: str = None, group_id: int = None):
-    """Создаёт новую подписку. Если group_id не передан — подставляется группа по умолчанию (активная, приоритет is_default)."""
+    """Создаёт новую подписку. Если group_id не передан — выбирается через resolve_group_id
+    (балансировка → дефолтная группа)."""
+    from .servers_db import resolve_group_id
     token = uuid.uuid4().hex[:24]
     now = int(datetime.datetime.now().timestamp())
+    group_id = await resolve_group_id(group_id)
     async with aiosqlite.connect(DB_PATH) as db:
-        if group_id is None:
-            async with db.execute(
-                """SELECT id FROM server_groups WHERE is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1"""
-            ) as cur:
-                row = await cur.fetchone()
-                if row is not None:
-                    group_id = row[0]
-                    logger.debug(f"create_subscription: подставлена группа по умолчанию group_id={group_id}")
         async with db.execute(
             """INSERT INTO subscriptions 
                (subscriber_id, status, period, device_limit, created_at, expires_at, subscription_token, price, name, group_id)

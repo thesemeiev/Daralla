@@ -101,7 +101,7 @@ def create_blueprint(bot_app):
                 bot_module = get_bot_module()
                 server_manager = getattr(bot_module, "server_manager", None) if bot_module else None
                 if server_manager:
-                    new_config = await ServerProvider.get_all_servers_by_location()
+                    new_config = await ServerProvider.get_all_servers_by_group()
                     server_manager.init_from_config(new_config)
             except Exception as mgr_e:
                 logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
@@ -125,7 +125,7 @@ def create_blueprint(bot_app):
             bot_module = get_bot_module()
             server_manager = getattr(bot_module, "server_manager", None) if bot_module else None
             if server_manager:
-                new_config = await ServerProvider.get_all_servers_by_location()
+                new_config = await ServerProvider.get_all_servers_by_group()
                 server_manager.init_from_config(new_config)
         except Exception as mgr_e:
             logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)

@@ -155,124 +155,6 @@ async def cleanup_old_server_load_history(days: int = 7):
             logger.error(f"Ошибка очистки истории нагрузки: {e}")
 
 
-async def get_server_load_data():
-    """
-    Возвращает данные о нагрузке на серверы (количество онлайн клиентов на каждом сервере)
-    Использует X-UI API для получения реальных данных о количестве клиентов в онлайне
-    Возвращает список словарей с ключами: server_name, online_clients, total_active, offline_clients
-    """
-    def get_server_manager():
-        """Получает server_manager из bot.py"""
-        try:
-            import sys
-            import importlib
-
-            bot_module = None
-
-            if 'bot.bot' in sys.modules:
-                bot_module = sys.modules['bot.bot']
-                logger.debug("Найден bot.bot в sys.modules")
-            elif 'bot' in sys.modules:
-                bot_module = sys.modules['bot']
-                if hasattr(bot_module, 'bot'):
-                    bot_module = bot_module.bot
-                    logger.debug("Найден bot через sys.modules['bot']")
-
-            if not bot_module:
-                try:
-                    import bot.bot as bot_module
-                    logger.debug("Импортирован bot.bot через абсолютный импорт")
-                except ImportError as e:
-                    logger.debug(f"Не удалось импортировать bot.bot: {e}")
-
-            if not bot_module:
-                try:
-                    bot_module = importlib.import_module('bot.bot')
-                    logger.debug("Импортирован bot.bot через importlib")
-                except ImportError as e:
-                    logger.debug(f"Не удалось импортировать через importlib: {e}")
-
-            if bot_module:
-                server_mgr = getattr(bot_module, 'server_manager', None)
-                logger.info(f"server_manager получен: {server_mgr is not None}")
-                if server_mgr:
-                    logger.info(f"Количество серверов: {len(server_mgr.servers) if hasattr(server_mgr, 'servers') else 0}")
-                return server_mgr
-            else:
-                logger.warning("Не удалось найти модуль bot.bot")
-                return None
-        except Exception as e:
-            logger.error(f"Ошибка получения server_manager: {e}", exc_info=True)
-            return None
-
-    server_manager = get_server_manager()
-    if not server_manager:
-        logger.warning("server_manager недоступен, возвращаем пустые данные")
-        return []
-
-    if not hasattr(server_manager, 'servers') or not server_manager.servers:
-        logger.warning("server_manager.servers пуст или недоступен")
-        return []
-
-    server_data = []
-
-    logger.info(f"Обработка {len(server_manager.servers)} серверов")
-    for server in server_manager.servers:
-        server_name = server.get("name", "Unknown")
-        xui = server.get("x3")
-
-        logger.debug(f"Обработка сервера {server_name}, xui доступен: {xui is not None}")
-
-        if not xui:
-            logger.warning(f"Сервер {server_name}: XUI объект недоступен")
-            server_data.append({
-                'server_name': server_name,
-                'online_clients': 0,
-                'total_active': 0,
-                'offline_clients': 0
-            })
-            continue
-
-        try:
-            logger.debug(f"Получение данных о нагрузке с сервера {server_name}")
-            total_active, online_count, offline_count = await xui.get_online_clients_count()
-
-            logger.info(f"Сервер {server_name}: активных={total_active}, онлайн={online_count}, офлайн={offline_count}")
-
-            capacity = (server.get("config") or {}).get("max_concurrent_clients") or 50
-            if capacity <= 0:
-                capacity = 50
-            load_percentage = min(100, round((online_count / capacity) * 100, 1))
-
-            averages = await get_server_load_averages(period_hours=24)
-            server_avg = averages.get(server_name, {})
-
-            server_data.append({
-                'server_name': server_name,
-                'online_clients': online_count,
-                'total_active': total_active,
-                'offline_clients': offline_count,
-                'avg_online_24h': server_avg.get('avg_online', 0),
-                'max_online_24h': server_avg.get('max_online', 0),
-                'min_online_24h': server_avg.get('min_online', 0),
-                'samples_24h': server_avg.get('samples', 0),
-                'load_percentage': load_percentage
-            })
-        except Exception as e:
-            logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}", exc_info=True)
-            server_data.append({
-                'server_name': server_name,
-                'online_clients': 0,
-                'total_active': 0,
-                'offline_clients': 0
-            })
-
-    logger.info(f"Возвращаем данные для {len(server_data)} серверов")
-    server_data.sort(key=lambda x: x['online_clients'], reverse=True)
-
-    return server_data
-
-
 # ==================== ГРУППЫ СЕРВЕРОВ И КОНФИГУРАЦИЯ ====================
 
 async def get_server_groups(only_active: bool = True):
@@ -319,18 +201,22 @@ async def get_server_by_id(server_id: int):
 
 
 async def add_server_group(name: str, description: str = None, is_default: bool = False):
-    """Добавляет новую группу серверов"""
+    """Добавляет новую группу серверов (атомарно сбрасывает старый дефолт)."""
     async with aiosqlite.connect(DB_PATH) as db:
-        if is_default:
-            await db.execute("UPDATE server_groups SET is_default = 0")
-
-        async with db.execute(
-            "INSERT INTO server_groups (name, description, is_default) VALUES (?, ?, ?)",
-            (name, description, 1 if is_default else 0)
-        ) as cur:
-            group_id = cur.lastrowid
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            if is_default:
+                await db.execute("UPDATE server_groups SET is_default = 0")
+            async with db.execute(
+                "INSERT INTO server_groups (name, description, is_default) VALUES (?, ?, ?)",
+                (name, description, 1 if is_default else 0)
+            ) as cur:
+                group_id = cur.lastrowid
             await db.commit()
             return group_id
+        except Exception:
+            await db.rollback()
+            raise
 
 
 async def add_server_config(group_id: int, name: str, host: str, login: str, password: str,
@@ -372,8 +258,34 @@ async def get_least_loaded_group_id():
             return row[0] if row else None
 
 
+async def get_default_group_id():
+    """Возвращает ID дефолтной активной группы (is_default DESC, id ASC)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id FROM server_groups WHERE is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1"
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+
+async def resolve_group_id(group_id: int | None) -> int | None:
+    """Единая точка выбора группы серверов.
+    Приоритет: явно переданный group_id → наименее загруженная группа → дефолтная группа.
+    """
+    if group_id is not None:
+        return group_id
+    resolved = await get_least_loaded_group_id()
+    if resolved is not None:
+        logger.info(f"resolve_group_id: выбрана наименее загруженная группа {resolved}")
+        return resolved
+    fallback = await get_default_group_id()
+    if fallback is not None:
+        logger.info(f"resolve_group_id: fallback на дефолтную группу {fallback}")
+    return fallback
+
+
 async def update_server_group(group_id: int, name: str = None, description: str = None, is_active: int = None, is_default: int = None):
-    """Обновляет информацию о группе серверов"""
+    """Обновляет информацию о группе серверов (атомарно сбрасывает старый дефолт)."""
     async with aiosqlite.connect(DB_PATH) as db:
         updates = []
         params = []
@@ -387,18 +299,24 @@ async def update_server_group(group_id: int, name: str = None, description: str 
             updates.append("is_active = ?")
             params.append(is_active)
         if is_default is not None:
-            if is_default == 1:
-                await db.execute("UPDATE server_groups SET is_default = 0")
             updates.append("is_default = ?")
             params.append(is_default)
 
-        if updates:
+        if not updates:
+            return False
+
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            if is_default == 1:
+                await db.execute("UPDATE server_groups SET is_default = 0")
             params.append(group_id)
             query = f"UPDATE server_groups SET {', '.join(updates)} WHERE id = ?"
             await db.execute(query, params)
             await db.commit()
             return True
-        return False
+        except Exception:
+            await db.rollback()
+            raise
 
 
 async def update_server_config(server_id: int, **kwargs):
@@ -435,6 +353,14 @@ async def update_server_config(server_id: int, **kwargs):
                     logger.info(f"Обновлено {updated_count} записей в subscription_servers: '{old_name}' -> '{new_name}'")
                 else:
                     logger.debug(f"Нет записей в subscription_servers для обновления: '{old_name}' -> '{new_name}'")
+
+                async with db.execute(
+                    "UPDATE server_load_history SET server_name = ? WHERE server_name = ?",
+                    (new_name, old_name)
+                ) as cur:
+                    history_updated = cur.rowcount
+                if history_updated > 0:
+                    logger.info(f"Обновлено {history_updated} записей в server_load_history: '{old_name}' -> '{new_name}'")
 
             await db.commit()
             return True

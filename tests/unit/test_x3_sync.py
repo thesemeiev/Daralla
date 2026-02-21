@@ -28,15 +28,14 @@ def mock_xui():
 @pytest.fixture
 def server_manager_with_mock_xui(mock_xui):
     """MultiServerManager with one server that has mock_xui (no real X3)."""
-    # Build structure that server_manager expects: servers_by_location and servers
     server_info = {
         "name": "test-server",
         "x3": mock_xui,
         "config": {},
         "group_id": None,
     }
-    manager = MultiServerManager(servers_by_location=None)
-    manager.servers_by_location = {"default": [server_info]}
+    manager = MultiServerManager(servers_by_group=None)
+    manager.servers_by_group = {0: [server_info]}
     manager.servers = [server_info]
     return manager
 
@@ -82,14 +81,14 @@ def mock_xui_for_ensure():
 @pytest.fixture
 def server_manager_for_ensure(mock_xui_for_ensure):
     """MultiServerManager that returns mock_xui for get_server_by_name('srv1')."""
-    manager = MultiServerManager(servers_by_location=None)
+    manager = MultiServerManager(servers_by_group=None)
     server_info = {
         "name": "srv1",
         "x3": mock_xui_for_ensure,
         "config": {},
         "group_id": None,
     }
-    manager.servers_by_location = {"default": [server_info]}
+    manager.servers_by_group = {0: [server_info]}
     manager.servers = [server_info]
     return manager
 

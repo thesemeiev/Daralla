@@ -455,28 +455,28 @@ def create_blueprint(bot_app):
             servers_info = []
             if server_manager:
                 health_status = server_manager.get_server_health_status()
-                for location, servers in server_manager.servers_by_location.items():
-                    for server in servers:
-                        server_name = server["name"]
-                        display_name = server["config"].get("display_name", server_name)
-                        map_label = server["config"].get("map_label")
-                        lat = server["config"].get("lat")
-                        lng = server["config"].get("lng")
-                        if lat is not None and lng is not None:
-                            usage_data = server_usage.get(server_name, {"count": 0, "percentage": 0})
-                            status_info = health_status.get(server_name, {})
-                            status = status_info.get("status", "unknown")
-                            servers_info.append({
-                                "name": server_name,
-                                "display_name": display_name,
-                                "map_label": map_label,
-                                "location": location,
-                                "lat": lat,
-                                "lng": lng,
-                                "usage_count": usage_data["count"],
-                                "usage_percentage": usage_data["percentage"],
-                                "status": status,
-                            })
+                for server in server_manager.servers:
+                    server_name = server["name"]
+                    display_name = server["config"].get("display_name", server_name)
+                    map_label = server["config"].get("map_label")
+                    location = server["config"].get("location") or "Other"
+                    lat = server["config"].get("lat")
+                    lng = server["config"].get("lng")
+                    if lat is not None and lng is not None:
+                        usage_data = server_usage.get(server_name, {"count": 0, "percentage": 0})
+                        status_info = health_status.get(server_name, {})
+                        status = status_info.get("status", "unknown")
+                        servers_info.append({
+                            "name": server_name,
+                            "display_name": display_name,
+                            "map_label": map_label,
+                            "location": location,
+                            "lat": lat,
+                            "lng": lng,
+                            "usage_count": usage_data["count"],
+                            "usage_percentage": usage_data["percentage"],
+                            "status": status,
+                        })
             return jsonify({"success": True, "servers": servers_info}), 200, _cors_headers()
         except Exception as e:
             logger.error("Ошибка в API /api/user/server-usage: %s", e, exc_info=True)

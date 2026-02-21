@@ -96,28 +96,22 @@ class SubscriptionManager:
             group_id,
         )
 
-        # 1. Если group_id не указан, выбираем наименее загруженную группу
-        if group_id is None:
-            from ..db.servers_db import get_least_loaded_group_id
-            group_id = await get_least_loaded_group_id()
-            logger.info(f"Автоматически выбрана группа серверов: {group_id}")
-
-        # 2. Получаем/создаём подписчика
+        # 1. Получаем/создаём подписчика (group_id разрешается внутри create_subscription через resolve_group_id)
         subscriber_id = await get_or_create_subscriber(user_id)
 
-        # 3. Считаем срок действия, если не передан
+        # 2. Считаем срок действия, если не передан
         if expires_at is None:
             days = 90 if period == "3month" else 30
             now = int(datetime.datetime.now().timestamp())
             expires_at = now + days * 24 * 60 * 60
 
-        # 4. Если имя не указано, генерируем автоматически
+        # 3. Если имя не указано, генерируем автоматически
         if not name:
             existing_subs = await get_all_active_subscriptions_by_user(user_id)
             subscription_number = len(existing_subs) + 1
             name = f"Подписка {subscription_number}"
 
-        # 5. Создаём запись подписки
+        # 4. Создаём запись подписки
         subscription_id, token = await create_subscription(
             subscriber_id=subscriber_id,
             period=period,
@@ -128,7 +122,7 @@ class SubscriptionManager:
             group_id=group_id
         )
 
-        # 6. Получаем созданную подписку
+        # 5. Получаем созданную подписку
         from ..db.subscriptions_db import get_subscription_by_id_only
         sub_dict = await get_subscription_by_id_only(subscription_id)
         
@@ -137,7 +131,7 @@ class SubscriptionManager:
             subscription_id,
             token,
             user_id,
-            group_id,
+            sub_dict.get("group_id"),
         )
         return sub_dict, token
 

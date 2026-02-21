@@ -138,7 +138,7 @@ async def init_server_managers():
             return
         
         # Загружаем конфиг из БД
-        config = await ServerProvider.get_all_servers_by_location()
+        config = await ServerProvider.get_all_servers_by_group()
         server_manager.init_from_config(config)
         logger.info("Менеджер серверов успешно инициализирован из БД")
     except Exception as e:
