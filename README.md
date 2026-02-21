@@ -146,7 +146,7 @@ cp .env.example .env
 ### Запуск
 
 ```bash
-python -m bot.bot
+python -m bot
 ```
 
 Стартуют:

@@ -33,4 +33,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Запускаем бота (Telegram polling + веб-сервер Quart/Hypercorn на 5000)
-CMD ["python", "-m", "bot.bot"]
+CMD ["python", "-m", "bot"]

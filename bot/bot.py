@@ -201,7 +201,9 @@ async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFA
 
 
 # Регистрируем команды
-if __name__ == '__main__':
+def run():
+    """Точка входа: создание приложения, Quart/Hypercorn, обработчики и запуск polling."""
+    global app
     # Создаем HTTPXRequest с увеличенными таймаутами для стабильной работы
     http_request = HTTPXRequest(
         connection_pool_size=8,  # Размер пула соединений
@@ -210,9 +212,9 @@ if __name__ == '__main__':
         write_timeout=30.0,      # Таймаут на отправку данных
         pool_timeout=30.0        # Таймаут ожидания свободного соединения в пуле
     )
-    
+
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
-    
+
     # Quart + Hypercorn (ASGI) вместо Flask
     quart_app = create_quart_app(app)
     webhook_port = int(os.getenv("WEBHOOK_PORT", "5000"))
@@ -230,16 +232,20 @@ if __name__ == '__main__':
     webhook_thread = threading.Thread(target=run_webhook, daemon=True)
     webhook_thread.start()
     logger.info("Webhook сервер (Quart + Hypercorn) запущен на порту %s", webhook_port)
-    
+
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CallbackQueryHandler(link_telegram_confirm_callback, pattern="^link_confirm_"))
-    
+
     # Текстовые сообщения в ЛС — предлагаем открыть приложение
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, open_mini_app_fallback_text))
-    
+
     # Fallback для старых callback-кнопок (не перехватываем link_confirm_ — привязка Telegram)
     app.add_handler(CallbackQueryHandler(open_mini_app_fallback, pattern=r"^(?!link_confirm_).*$"))
-    
+
     app.run_polling()
+
+
+if __name__ == '__main__':
+    run()
