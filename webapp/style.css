@@ -1878,6 +1878,7 @@ h1 {
 
 /* Страница "О нас" — обычный скролл, блоки выезжают с боков */
 body.about-page-active {
+    padding-top: 0 !important;
     transition: background-color 0.4s ease-out;
 }
 .page-about-scroll {
@@ -2491,6 +2492,7 @@ body.about-page-active {
         padding: 16px 12px calc(200px + env(safe-area-inset-bottom)) 12px;
     }
     body.about-page-active {
+        padding-top: 0 !important;
         padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
     }
     
@@ -3882,7 +3884,7 @@ body.about-page-active {
 
 /* Админ-панель: главный экран — минимализм, ровные строки */
 .admin-panel-content {
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 0 16px 0;
+    padding: 0 0 16px 0;
 }
 
 .admin-page-content {
