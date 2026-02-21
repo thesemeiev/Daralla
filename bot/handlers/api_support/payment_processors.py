@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 def get_globals():
-    """Получает глобальные переменные из bot.py через общий хелпер."""
-    from .webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
-    bot_module = get_bot_module()
+    """Получает сервисы из AppContext."""
+    from ...app_context import get_ctx
+    ctx = get_ctx()
     return {
-        'server_manager': get_server_manager(),
-        'notification_manager': getattr(bot_module, 'notification_manager', None) if bot_module else None,
-        'subscription_manager': get_subscription_manager(),
+        'server_manager': ctx.server_manager,
+        'notification_manager': ctx.notification_manager,
+        'subscription_manager': ctx.subscription_manager,
     }
 
 
@@ -596,11 +596,10 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             import os
             webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
 
-            # Получаем главное название VPN для параметра в URL
             try:
-                from ... import bot as bot_module
-                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', os.getenv('VPN_BRAND_NAME', 'Daralla VPN'))
-            except (ImportError, AttributeError):
+                from ...app_context import get_ctx
+                vpn_brand_name = get_ctx().vpn_brand_name
+            except RuntimeError:
                 vpn_brand_name = os.getenv('VPN_BRAND_NAME', 'Daralla VPN').strip()
             
             # Формируем subscription URL

@@ -10,7 +10,7 @@ from quart import Blueprint, request, jsonify
 from bot.web.routes.admin_common import _cors_headers, admin_route
 from bot.db import get_all_user_ids
 from bot.db.users_db import get_telegram_chat_id_for_notification
-from bot.handlers.api_support.webhook_auth import get_bot_module
+from bot.app_context import get_ctx
 from bot.utils import UIButtons
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,7 @@ def create_blueprint(bot_app):
             return jsonify({"error": "Message text is required"}), 400, _cors_headers()
 
         user_ids = data.get("user_ids", [])
-        bot_module = get_bot_module()
-        ADMIN_IDS = getattr(bot_module, "ADMIN_IDS", []) if bot_module else []
+        ADMIN_IDS = get_ctx().admin_ids
         admin_set = set(str(a) for a in ADMIN_IDS)
 
         if user_ids:

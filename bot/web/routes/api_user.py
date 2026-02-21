@@ -110,13 +110,10 @@ def create_blueprint(bot_app):
                         )
                         trial_created = True
                         logger.info("Пробная подписка создана: subscription_id=%s", subscription_id)
-                        from bot.handlers.api_support.webhook_auth import (
-                            get_server_manager,
-                            get_subscription_manager,
-                        )
-
-                        subscription_manager = get_subscription_manager()
-                        server_manager = get_server_manager()
+                        from bot.app_context import get_ctx
+                        _ctx = get_ctx()
+                        subscription_manager = _ctx.subscription_manager
+                        server_manager = _ctx.server_manager
                         if subscription_manager and server_manager:
                             sub_dict = await get_subscription_by_id_only(subscription_id)
                             group_id = sub_dict.get("group_id") if sub_dict else None
@@ -448,10 +445,10 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401
             from bot.db.users_db import get_user_server_usage
-            from bot.handlers.api_support.webhook_auth import get_server_manager
+            from bot.app_context import get_ctx
 
             server_usage = await get_user_server_usage(user_id)
-            server_manager = get_server_manager()
+            server_manager = get_ctx().server_manager
             servers_info = []
             if server_manager:
                 health_status = server_manager.get_server_health_status()

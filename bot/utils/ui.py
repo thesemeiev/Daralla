@@ -15,11 +15,9 @@ def get_site_urls():
     """
     webapp_url = None
     try:
-        import sys
-        bot_module = sys.modules.get('bot.bot')
-        if bot_module:
-            webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-    except (ImportError, AttributeError):
+        from ..app_context import get_ctx
+        webapp_url = get_ctx().webapp_url
+    except (RuntimeError, ImportError):
         pass
     
     # Нормализуем URL - добавляем завершающий слеш если его нет (для Telegram Web App обязательно)
@@ -69,14 +67,11 @@ class UIButtons:
     @staticmethod
     def main_menu_buttons():
         """Кнопки главного меню (Mini App + канал)."""
-        # Получаем WEBAPP_URL из bot.py
         webapp_url = None
         try:
-            import sys
-            bot_module = sys.modules.get('bot.bot')
-            if bot_module:
-                webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-        except (ImportError, AttributeError):
+            from ..app_context import get_ctx
+            webapp_url = get_ctx().webapp_url
+        except (RuntimeError, ImportError):
             pass
         
         buttons = []
@@ -108,14 +103,11 @@ class UIButtons:
         Returns:
             InlineKeyboardButton или None, если WEBAPP_URL недоступен
         """
-        # Получаем WEBAPP_URL из bot.py
         webapp_url = None
         try:
-            import sys
-            bot_module = sys.modules.get('bot.bot')
-            if bot_module:
-                webapp_url = getattr(bot_module, 'WEBAPP_URL', None)
-        except (ImportError, AttributeError):
+            from ..app_context import get_ctx
+            webapp_url = get_ctx().webapp_url
+        except (RuntimeError, ImportError):
             pass
         
         if not webapp_url:
@@ -149,14 +141,11 @@ class UIMessages:
     def welcome_message(is_new_user=False):
         """Приветственное сообщение"""
         # Разный заголовок для нового и существующего пользователя
-        # Получаем название бренда из bot.py
         vpn_brand_name = "Daralla VPN"
         try:
-            import sys
-            bot_module = sys.modules.get('bot.bot')
-            if bot_module:
-                vpn_brand_name = getattr(bot_module, 'VPN_BRAND_NAME', 'Daralla VPN')
-        except (ImportError, AttributeError):
+            from ..app_context import get_ctx
+            vpn_brand_name = get_ctx().vpn_brand_name
+        except (RuntimeError, ImportError):
             pass
         
         if is_new_user:

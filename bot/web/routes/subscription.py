@@ -53,9 +53,9 @@ def create_subscription_blueprint(bot_app):
         logger.info("Входящий запрос subscription: token=%s, method=%s", token, request.method)
 
         try:
-            from bot.handlers.api_support.webhook_auth import get_subscription_manager
+            from bot.app_context import get_ctx
 
-            subscription_manager = get_subscription_manager()
+            subscription_manager = get_ctx().subscription_manager
             if not subscription_manager:
                 logger.error("subscription_manager не доступен")
                 return "Service unavailable", 503
@@ -99,14 +99,7 @@ def create_subscription_blueprint(bot_app):
                     logger.warning("  - %s: %s", s["server_name"], s["client_email"])
                 return "No servers available", 503
 
-            from bot.handlers.api_support.webhook_auth import get_bot_module
-
-            bot_module = get_bot_module()
-            vpn_brand_name = (
-                getattr(bot_module, "VPN_BRAND_NAME", "Daralla VPN")
-                if bot_module
-                else os.getenv("VPN_BRAND_NAME", "Daralla VPN")
-            )
+            vpn_brand_name = get_ctx().vpn_brand_name
 
             clean_name = re.sub(r"[^\w\s-]", "", vpn_brand_name)
             domain_name = re.sub(r"\s+", "-", clean_name.strip()).lower()
@@ -134,9 +127,7 @@ def create_subscription_blueprint(bot_app):
             )
 
             try:
-                from bot.handlers.api_support.webhook_auth import get_server_manager
-
-                server_manager = get_server_manager()
+                server_manager = get_ctx().server_manager
                 if server_manager and servers:
                     for s in servers:
                         server_name = s["server_name"]

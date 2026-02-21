@@ -126,17 +126,16 @@ def verify_telegram_init_data(init_data: str):
 
 async def check_admin_access_async(user_id: str) -> bool:
     """
-    Async-версия проверки прав админа для Quart. Та же логика, что check_admin_access:
+    Async-версия проверки прав админа для Quart.
     user_id в ADMIN_IDS или у пользователя telegram_id в ADMIN_IDS.
     """
     try:
-        from ... import bot as bot_module
+        from ...app_context import get_ctx
         from ...db.users_db import get_user_by_id
-        ADMIN_IDS = getattr(bot_module, "ADMIN_IDS", [])
+        ctx = get_ctx()
+        admin_set = {str(a) for a in ctx.admin_ids}
 
         user_id_str = str(user_id)
-        admin_set = {str(a) for a in ADMIN_IDS}
-
         if user_id_str in admin_set:
             logger.info("Пользователь %s является админом (по user_id)", user_id)
             return True
@@ -155,26 +154,19 @@ async def check_admin_access_async(user_id: str) -> bool:
         return False
 
 
-def get_bot_module():
-    """Возвращает модуль bot.bot для доступа к глобальным объектам (server_manager, subscription_manager и т.д.)."""
+def get_server_manager():
+    """Возвращает server_manager из AppContext или None."""
     try:
-        import sys
-        bot_module = sys.modules.get('bot.bot')
-        if bot_module is not None:
-            return bot_module
-        from ... import bot as bot_module
-        return bot_module
-    except (ImportError, AttributeError):
+        from ...app_context import get_ctx
+        return get_ctx().server_manager
+    except RuntimeError:
         return None
 
 
-def get_server_manager():
-    """Возвращает server_manager из bot.bot или None."""
-    bot_module = get_bot_module()
-    return getattr(bot_module, 'server_manager', None) if bot_module else None
-
-
 def get_subscription_manager():
-    """Возвращает subscription_manager из bot.bot или None."""
-    bot_module = get_bot_module()
-    return getattr(bot_module, 'subscription_manager', None) if bot_module else None
+    """Возвращает subscription_manager из AppContext или None."""
+    try:
+        from ...app_context import get_ctx
+        return get_ctx().subscription_manager
+    except RuntimeError:
+        return None

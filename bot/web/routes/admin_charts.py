@@ -14,13 +14,13 @@ from bot.db.subscriptions_db import (
     get_subscription_conversion_data,
 )
 from bot.db.notifications_db import get_notification_stats, get_daily_notification_stats
-from bot.handlers.api_support.webhook_auth import get_server_manager
+from bot.app_context import get_ctx
 
 logger = logging.getLogger(__name__)
 
 
 def _get_server_info():
-    server_manager = get_server_manager()
+    server_manager = get_ctx().server_manager
     if not server_manager:
         return {}
     server_info_map = {}
@@ -50,7 +50,7 @@ def create_blueprint(bot_app):
     @admin_route
     async def api_admin_charts_server_load(request, admin_id):
         await request.get_json(silent=True) or {}
-        sm = get_server_manager()
+        sm = get_ctx().server_manager
         server_load_data = await sm.get_server_load_data() if sm else []
         logger.info("Получены данные о нагрузке для %s серверов", len(server_load_data))
         if not server_load_data:

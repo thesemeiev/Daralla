@@ -114,12 +114,22 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-# Глобальный экземпляр менеджера серверов (подписки и выбор серверов используют его)
+# === ИНИЦИАЛИЗАЦИЯ AppContext ===
+from .app_context import AppContext, set_ctx, get_ctx
+
 server_manager = MultiServerManager()
-# Менеджер подписок
 subscription_manager = SubscriptionManager(server_manager)
-# Менеджер синхронизации
 sync_manager = SyncManager(server_manager, subscription_manager)
+
+_app_ctx = AppContext(
+    server_manager=server_manager,
+    subscription_manager=subscription_manager,
+    sync_manager=sync_manager,
+    admin_ids=ADMIN_IDS,
+    webapp_url=WEBAPP_URL,
+    vpn_brand_name=VPN_BRAND_NAME,
+)
+set_ctx(_app_ctx)
 
 # Инициализация менеджеров серверов из БД
 async def init_server_managers():
@@ -198,14 +208,6 @@ if __name__ == '__main__':
     
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
     
-    # Сохраняем app в глобальную переменную для доступа из других модулей
-    import sys
-    sys.modules[__name__].app = app
-
-    # Сохраняем модуль как bot.bot до старта веб-сервера (нужно для get_bot_module в роутах)
-    if 'bot.bot' not in sys.modules or sys.modules['bot.bot'] is not sys.modules[__name__]:
-        sys.modules['bot.bot'] = sys.modules[__name__]
-
     # Quart + Hypercorn (ASGI) вместо Flask
     quart_app = create_quart_app(app)
     webhook_port = int(os.getenv("WEBHOOK_PORT", "5000"))

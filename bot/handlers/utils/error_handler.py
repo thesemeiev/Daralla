@@ -9,25 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_globals():
-    """Получает глобальные переменные из bot.py"""
+    """Получает конфигурацию из AppContext."""
     try:
-        import sys
-        import importlib
-        # Пытаемся получить модуль bot.bot
-        if 'bot.bot' in sys.modules:
-            bot_module = sys.modules['bot.bot']
-        else:
-            # Если модуль еще не загружен, импортируем его
-            bot_module = importlib.import_module('bot.bot')
-        
-        return {
-            'ADMIN_IDS': getattr(bot_module, 'ADMIN_IDS', []),
-        }
-    except (ImportError, AttributeError) as e:
-        logger.warning(f"Не удалось получить глобальные переменные: {e}")
-        return {
-            'ADMIN_IDS': [],
-        }
+        from ...app_context import get_ctx
+        ctx = get_ctx()
+        return {'ADMIN_IDS': ctx.admin_ids}
+    except RuntimeError:
+        logger.warning("AppContext не инициализирован, ADMIN_IDS пустой")
+        return {'ADMIN_IDS': []}
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

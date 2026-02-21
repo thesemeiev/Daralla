@@ -13,6 +13,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 DB_PATH = os.environ.get('DARALLA_TEST_DB', os.path.join(DATA_DIR, 'daralla.db'))
 
 # Импортируем все функции из подмодулей
+from .migrations import run_migrations
 from .config_db import init_config_db, get_config, set_config, get_all_config
 from .payments_db import (
     init_payments_db, add_payment, get_payment_by_id, update_payment_status,
@@ -93,23 +94,17 @@ from .notifications_db import (
     render_structured_template,
 )
 async def init_all_db():
-    """Инициализирует все таблицы в единой базе данных"""
+    """Инициализирует схему БД через систему миграций."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    logger.info(f"Инициализация единой базы данных: {DB_PATH}")
-    
-    # Последовательно вызываем инициализацию каждой части
-    # Все они теперь будут открывать один и тот же файл DB_PATH
-    await init_config_db()
-    await init_users_db()
-    await init_servers_db()
-    await init_subscriptions_db()
-    await init_payments_db()
-    await init_notifications_db()
-    
-    logger.info("Единая база данных daralla.db успешно инициализирована")
+    logger.info(f"Инициализация базы данных: {DB_PATH}")
+
+    applied = await run_migrations()
+    if applied:
+        logger.info("Применено %d миграций", applied)
+    logger.info("База данных daralla.db готова")
 
 __all__ = [
-    'init_all_db', 'DB_PATH', 'DATA_DIR',
+    'init_all_db', 'run_migrations', 'DB_PATH', 'DATA_DIR',
     'init_config_db', 'init_users_db', 'init_servers_db', 'init_subscriptions_db',
     'add_payment', 'get_payment_by_id', 'update_payment_status', 'update_payment_activation',
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',

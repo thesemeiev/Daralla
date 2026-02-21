@@ -25,16 +25,14 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Импортируем глобальные переменные из bot.py
-# Это временное решение до полного рефакторинга
 def get_globals():
-    """Получает глобальные переменные из bot.py через общий хелпер."""
-    from ..api_support.webhook_auth import get_bot_module, get_server_manager, get_subscription_manager
-    bot_module = get_bot_module()
+    """Получает сервисы из AppContext."""
+    from ...app_context import get_ctx
+    ctx = get_ctx()
     return {
-        'server_manager': get_server_manager(),
-        'subscription_manager': get_subscription_manager(),
-        'WEBAPP_URL': getattr(bot_module, 'WEBAPP_URL', None) if bot_module else None,
+        'server_manager': ctx.server_manager,
+        'subscription_manager': ctx.subscription_manager,
+        'WEBAPP_URL': ctx.webapp_url,
     }
 
 

@@ -72,8 +72,8 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401, CORS_HEADERS
 
-            from bot.handlers.api_support.webhook_auth import get_server_manager
-            server_manager = get_server_manager()
+            from bot.app_context import get_ctx
+            server_manager = get_ctx().server_manager
             if not server_manager:
                 return jsonify({"error": "Server manager not available"}), 503, CORS_HEADERS
 
@@ -84,11 +84,10 @@ def create_blueprint(bot_app):
 
         except Exception as e:
             logger.error("Ошибка в API /api/servers: %s", e, exc_info=True)
-            # При любой ошибке отдаём частичный ответ из последних известных статусов
             server_manager = None
             try:
-                from bot.handlers.api_support.webhook_auth import get_server_manager
-                server_manager = get_server_manager()
+                from bot.app_context import get_ctx
+                server_manager = get_ctx().server_manager
             except Exception:
                 pass
             if server_manager and getattr(server_manager, "servers", None):

@@ -51,8 +51,6 @@ class NotificationManager:
     async def initialize(self):
         """Инициализация менеджера уведомлений"""
         try:
-            await init_notifications_db()
-            
             settings = await get_notification_settings()
             for key, default_value in self.default_settings.items():
                 if key not in settings:

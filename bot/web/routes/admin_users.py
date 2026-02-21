@@ -17,7 +17,7 @@ from bot.db.payments_db import get_payments_by_user
 from bot.db.subscriptions_db import update_subscription_expiry
 from bot.db.users_db import delete_user_completely
 from bot.db.subscriptions_db import get_subscription_servers
-from bot.handlers.api_support.webhook_auth import get_server_manager, get_subscription_manager
+from bot.app_context import get_ctx
 
 logger = logging.getLogger(__name__)
 
@@ -160,8 +160,9 @@ def create_blueprint(bot_app):
         expires_at = data.get("expires_at")
         if period not in ("month", "3month"):
             return jsonify({"error": "Invalid period. Must be \"month\" or \"3month\""}), 400, _cors_headers()
-        subscription_manager = get_subscription_manager()
-        server_manager = get_server_manager()
+        ctx = get_ctx()
+        subscription_manager = ctx.subscription_manager
+        server_manager = ctx.server_manager
         if not subscription_manager:
             return jsonify({"error": "Subscription manager not available"}), 503, _cors_headers()
         if not server_manager:
@@ -266,7 +267,7 @@ def create_blueprint(bot_app):
         if not confirm:
             return jsonify({"error": "Confirmation required"}), 400, _cors_headers()
         all_subscriptions = await get_all_subscriptions_by_user(user_id, include_deleted=True)
-        server_manager = get_server_manager()
+        server_manager = get_ctx().server_manager
 
         async def delete_all_clients_from_servers():
             deleted = []

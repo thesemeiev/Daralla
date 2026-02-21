@@ -117,17 +117,13 @@ async def server_health_monitor(app, server_manager, admin_ids):
 async def on_startup(app):
     """Инициализация бота при запуске"""
     try:
-        import sys
-        # Получаем объекты напрямую из модуля bot.bot
-        bot_module = sys.modules.get('bot.bot')
-        if not bot_module:
-            import importlib
-            bot_module = importlib.import_module('bot.bot')
-        
-        server_manager = getattr(bot_module, 'server_manager', None)
-        subscription_manager = getattr(bot_module, 'subscription_manager', None)
-        sync_manager = getattr(bot_module, 'sync_manager', None)
-        admin_ids = getattr(bot_module, 'ADMIN_IDS', [])
+        from ..app_context import get_ctx
+        ctx = get_ctx()
+
+        server_manager = ctx.server_manager
+        subscription_manager = ctx.subscription_manager
+        sync_manager = ctx.sync_manager
+        admin_ids = ctx.admin_ids
         
         logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
         
@@ -146,16 +142,15 @@ async def on_startup(app):
             logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
 
         # 1.1 Инициализация менеджеров серверов из БД
-        init_server_managers = getattr(bot_module, 'init_server_managers', None)
-        if init_server_managers:
-            await init_server_managers()
-            logger.info("Менеджеры серверов инициализированы из БД")
+        from ..bot import init_server_managers
+        await init_server_managers()
+        logger.info("Менеджеры серверов инициализированы из БД")
         
         # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
         await notification_manager.initialize()
         await notification_manager.start()
-        bot_module.notification_manager = notification_manager
+        ctx.notification_manager = notification_manager
         logger.info("Менеджер уведомлений запущен")
         # Устанавливаем задачу периодического бекапа БД (каждые 2 часа)
         try:

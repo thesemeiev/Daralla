@@ -20,7 +20,7 @@ from bot.db.servers_db import (
 )
 from bot.services.server_provider import ServerProvider
 from bot.services.xui_service import X3
-from bot.handlers.api_support.webhook_auth import get_bot_module
+from bot.app_context import get_ctx
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +98,10 @@ def create_blueprint(bot_app):
                 max_concurrent_clients=data.get("max_concurrent_clients"),
             )
             try:
-                bot_module = get_bot_module()
-                server_manager = getattr(bot_module, "server_manager", None) if bot_module else None
-                if server_manager:
+                sm = get_ctx().server_manager
+                if sm:
                     new_config = await ServerProvider.get_all_servers_by_group()
-                    server_manager.init_from_config(new_config)
+                    sm.init_from_config(new_config)
             except Exception as mgr_e:
                 logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
             return jsonify({"success": True, "server_id": server_id}), 200, _cors_headers()
@@ -122,11 +121,10 @@ def create_blueprint(bot_app):
         client_flow_changed = old_flow != new_flow
         await update_server_config(server_id, **update_data)
         try:
-            bot_module = get_bot_module()
-            server_manager = getattr(bot_module, "server_manager", None) if bot_module else None
-            if server_manager:
+            sm = get_ctx().server_manager
+            if sm:
                 new_config = await ServerProvider.get_all_servers_by_group()
-                server_manager.init_from_config(new_config)
+                sm.init_from_config(new_config)
         except Exception as mgr_e:
             logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
         return jsonify({
@@ -174,8 +172,7 @@ def create_blueprint(bot_app):
     @bp.route("/api/admin/sync-all", methods=["POST", "OPTIONS"])
     @admin_route
     async def api_admin_sync_all(request, admin_id):
-        bot_module = get_bot_module()
-        sync_manager = getattr(bot_module, "sync_manager", None) if bot_module else None
+        sync_manager = get_ctx().sync_manager
         if not sync_manager:
             return jsonify({"error": "Sync manager not available"}), 503, _cors_headers()
         stats = await sync_manager.sync_all_subscriptions(auto_fix=True)

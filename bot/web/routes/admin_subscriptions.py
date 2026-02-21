@@ -21,7 +21,7 @@ from bot.db.subscriptions_db import (
     get_subscriptions_page,
 )
 from bot.db.notifications_db import clear_subscription_notifications
-from bot.handlers.api_support.webhook_auth import get_server_manager, get_subscription_manager
+from bot.app_context import get_ctx
 from bot.handlers.api_support.payment_processors import get_globals
 
 logger = logging.getLogger(__name__)
@@ -330,7 +330,7 @@ def create_blueprint(bot_app):
         if not sub:
             return jsonify({"error": "Subscription not found"}), 404, _cors_headers()
         servers = await get_subscription_servers(sub_id)
-        subscription_manager = get_subscription_manager()
+        subscription_manager = get_ctx().subscription_manager
         if not subscription_manager:
             return jsonify({"error": "Subscription manager not available"}), 503, _cors_headers()
 
@@ -391,7 +391,7 @@ def create_blueprint(bot_app):
         if not sub:
             return jsonify({"error": "Subscription not found"}), 404, _cors_headers()
         servers = await get_subscription_servers(sub_id)
-        server_manager = get_server_manager()
+        server_manager = get_ctx().server_manager
 
         async def delete_clients_from_servers():
             deleted = []
