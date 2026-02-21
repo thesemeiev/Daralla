@@ -128,8 +128,10 @@
     color: #c44;
 }
 
+@media (hover: hover) and (pointer: fine) {
 [data-theme="light"] .btn-danger:hover {
     background: rgba(220, 53, 69, 0.25);
+}
 }
 
 [data-theme="light"] .btn-danger:active {
@@ -373,9 +375,11 @@
     color: #fff;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .landing-btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(74, 158, 255, 0.35);
+}
 }
 
 .landing-btn-secondary {
@@ -384,9 +388,11 @@
     border: 1px solid var(--card-border);
 }
 
+@media (hover: hover) and (pointer: fine) {
 .landing-btn-secondary:hover {
     border-color: var(--card-border-hover);
     color: var(--text-primary);
+}
 }
 
 .landing-back-link {
@@ -399,8 +405,10 @@
     margin-top: 8px;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .landing-back-link:hover {
     color: var(--text-primary);
+}
 }
 
 .landing-scroll-hint {
@@ -652,8 +660,10 @@ h1 {
     transition: background 0.2s ease;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .error button:hover {
     background: var(--card-border-hover);
+}
 }
 
 .hint {
@@ -682,8 +692,10 @@ h1 {
     font: inherit;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .profile-card:hover {
     border-color: var(--card-border-hover);
+}
 }
 
 .profile-card:active {
@@ -892,9 +904,11 @@ h1 {
     background: var(--card-bg-hover);
 }
 
+@media (hover: hover) and (pointer: fine) {
 .subscription-card:hover {
     border-color: var(--card-border-hover);
     background: var(--card-bg-hover);
+}
 }
 
 /* .active = статус подписки «Активна», не выделение; фон как у остальных карточек */
@@ -1232,8 +1246,10 @@ h1 {
     transition: background 0.2s ease;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .action-button:hover {
     background: var(--card-border-hover);
+}
 }
 
 .action-button:active {
@@ -1310,11 +1326,13 @@ h1 {
     color: var(--text-secondary) !important;
     background-color: var(--input-bg) !important;
 }
+@media (hover: hover) and (pointer: fine) {
 .payment-method-segment:hover,
 #page-buy-subscription .payment-method-segment:hover,
 #page-extend-subscription .payment-method-segment:hover {
     color: var(--text-primary) !important;
     background-color: var(--card-bg-hover) !important;
+}
 }
 .payment-method-segment-selected,
 .payment-method-segment.payment-method-segment-selected,
@@ -1396,10 +1414,12 @@ h1 {
     -webkit-appearance: none;
     appearance: none;
 }
+@media (hover: hover) and (pointer: fine) {
 .choose-option-card:hover {
     border-color: var(--card-border-hover);
     background: var(--card-bg-hover);
     color: var(--text-primary);
+}
 }
 .choose-option-card-selected,
 .choose-option-card.choose-option-card-selected {
@@ -1456,15 +1476,16 @@ h1 {
     flex-direction: column;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .plan-card:hover {
     border-color: var(--card-border-hover);
 }
-
 .plan-card .btn-primary:hover {
     background: #4a9eff;
     color: #fff;
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(74, 158, 255, 0.3);
+}
 }
 
 .plan-header {
@@ -1703,8 +1724,10 @@ h1 {
     transform: scale(0.95);
 }
 
+@media (hover: hover) and (pointer: fine) {
 .nav-item:hover:not(.active) {
     color: var(--nav-text-active);
+}
 }
 
 .nav-icon {
@@ -1935,9 +1958,11 @@ body.about-page-active {
     border-color: rgba(0, 0, 0, 0.08);
     color: #1a1a1a;
 }
+@media (hover: hover) and (pointer: fine) {
 .page-about-scroll.about-bg-light .about-contact-card:hover {
     background: rgba(221, 220, 226, 0.85);
     border-color: rgba(0, 0, 0, 0.12);
+}
 }
 .page-about-scroll.about-bg-light .about-contact-card-label {
     color: #555;
@@ -2128,18 +2153,20 @@ body.about-page-active {
 .about-contact-card:nth-child(1) { transition-delay: 0s; }
 .about-contact-card:nth-child(2) { transition-delay: 0.08s; }
 .about-contact-card:nth-child(3) { transition-delay: 0.16s; }
+@media (hover: hover) and (pointer: fine) {
 .about-contact-card:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.22);
     transform: translateY(-2px) scale(1.02);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
 }
+.page-about-scroll.about-bg-light .about-contact-card:hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+}
+}
 .about-contact-card:active {
     transform: translateY(0) scale(0.98);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-}
-.page-about-scroll.about-bg-light .about-contact-card:hover {
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
 }
 .page-about-scroll.about-bg-light .about-contact-card:active {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
@@ -2166,8 +2193,10 @@ body.about-page-active {
 .page-about-scroll.about-bg-light .about-link {
     color: #1a1a1a;
 }
+@media (hover: hover) and (pointer: fine) {
 .page-about-scroll.about-bg-light .about-link:hover {
     color: var(--about-accent, #0d6efd);
+}
 }
 .about-link {
     display: inline-block;
@@ -2176,9 +2205,11 @@ body.about-page-active {
     text-decoration: none;
     transition: color 0.2s, transform 0.2s;
 }
+@media (hover: hover) and (pointer: fine) {
 .about-link:hover {
     color: #fff;
     transform: translateX(4px);
+}
 }
 /* Адаптив: страница О нас. На мобильном — фиксируем высоту по 100vh (как фигурка по ширине), чтобы адресная строка не дергала блоки */
 @media (max-width: 768px) {
@@ -2300,8 +2331,10 @@ body.about-page-active {
     outline: none;
     -webkit-tap-highlight-color: transparent;
 }
+@media (hover: hover) and (pointer: fine) {
 .theme-btn:hover {
     background: var(--card-border-hover);
+}
 }
 .theme-btn:active {
     transform: scale(0.96);
@@ -2317,9 +2350,11 @@ body.about-page-active {
     color: #e0e0e0;
     border-color: #3a3a3e;
 }
+@media (hover: hover) and (pointer: fine) {
 [data-theme="light"] .theme-btn[data-theme="dark"]:not(.active):hover {
     background: #35353a;
     border-color: #45454a;
+}
 }
 
 /* Кнопка светлой темы в тёмной теме — остаётся светлой */
@@ -2328,17 +2363,21 @@ body.about-page-active {
     color: #1a1a1a;
     border-color: #d0d0d8;
 }
+@media (hover: hover) and (pointer: fine) {
 .theme-btn[data-theme="light"]:not(.active):hover {
     background: #f0f0f4;
     border-color: #c8c8d0;
+}
 }
 [data-theme="light"] .theme-btn[data-theme="light"]:not(.active) {
     background: var(--card-bg-hover);
     color: var(--text-primary);
     border-color: var(--card-border);
 }
+@media (hover: hover) and (pointer: fine) {
 [data-theme="light"] .theme-btn[data-theme="light"]:not(.active):hover {
     background: var(--card-border-hover);
+}
 }
 
 .about-section p {
@@ -2405,9 +2444,11 @@ body.about-page-active {
     text-align: center;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .instruction-platform-btn:hover {
     background: var(--card-bg-hover);
     border-color: #4a9eff;
+}
 }
 
 .instruction-platform-btn:active {
@@ -2444,8 +2485,10 @@ body.about-page-active {
     text-decoration: none;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .instruction-detail a:hover {
     text-decoration: underline;
+}
 }
 
 .instruction-detail ul {
@@ -2472,9 +2515,11 @@ body.about-page-active {
     margin-top: 8px;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .link-button:hover {
     background: var(--card-bg-hover);
     border-color: var(--card-border-hover);
+}
 }
 
 .link-button span:first-child {
@@ -2658,10 +2703,6 @@ body.about-page-active {
     color: var(--text-primary);
     border-color: var(--card-border);
 }
-.server-action-btn.btn-secondary:hover {
-    background: var(--card-bg-hover);
-    color: var(--text-primary);
-}
 .server-action-btn.btn-danger {
     background: #3a2020;
     color: #e07a7a;
@@ -2669,9 +2710,15 @@ body.about-page-active {
     width: auto;
     margin: 0;
 }
+@media (hover: hover) and (pointer: fine) {
+.server-action-btn.btn-secondary:hover {
+    background: var(--card-bg-hover);
+    color: var(--text-primary);
+}
 .server-action-btn.btn-danger:hover {
     background: #4a2828;
     color: #f09090;
+}
 }
 .server-action-btn:active {
     transform: scale(0.98);
@@ -2708,8 +2755,10 @@ body.about-page-active {
     font-weight: 500;
     border-radius: 8px;
 }
+@media (hover: hover) and (pointer: fine) {
 .group-detail-add-btn:hover {
     background: #5a5a5a;
+}
 }
 
 .small-btn {
@@ -2740,8 +2789,10 @@ body.about-page-active {
     background: var(--card-bg-hover);
 }
 
+@media (hover: hover) and (pointer: fine) {
 .admin-user-card:hover {
     border-color: var(--card-border-hover);
+}
 }
 
 .admin-user-id {
@@ -2859,9 +2910,11 @@ body.about-page-active {
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .checkbox-group-login:hover {
     border-color: var(--card-border-hover);
     background: var(--card-bg-hover);
+}
 }
 
 .checkbox-group-login input[type="checkbox"] {
@@ -2880,8 +2933,10 @@ body.about-page-active {
     position: relative;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .checkbox-group-login input[type="checkbox"]:hover {
     border-color: var(--card-border-hover);
+}
 }
 
 .checkbox-group-login input[type="checkbox"]:checked {
@@ -2969,10 +3024,12 @@ body.about-page-active {
     transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
+@media (hover: hover) and (pointer: fine) {
 #login-form .form-actions button[type="submit"]:hover,
 #register-form .form-actions button[type="submit"]:hover {
     transform: scale(1.02);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
 }
 
 #login-form .form-actions button[type="submit"]:active,
@@ -3095,8 +3152,10 @@ body.about-page-active {
     border-bottom: none;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .admin-subscription-card:hover {
     background-color: rgba(255, 255, 255, 0.03);
+}
 }
 
 .admin-subscription-card:active {
@@ -3249,10 +3308,12 @@ body.about-page-active {
     color: #fff;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .btn-primary:hover {
     background: #5aaeff;
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(74, 158, 255, 0.4);
+}
 }
 
 .btn-primary:active {
@@ -3266,10 +3327,12 @@ body.about-page-active {
     border: 1px solid var(--card-border);
 }
 
+@media (hover: hover) and (pointer: fine) {
 .btn-secondary:hover {
     background: var(--card-bg-hover);
     border-color: var(--card-border-hover);
     color: var(--text-primary);
+}
 }
 
 .btn-secondary:active {
@@ -3378,9 +3441,11 @@ body.about-page-active {
     cursor: pointer;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .broadcast-mode .radio-option:hover {
     border-color: var(--card-border-hover);
     background: var(--card-bg-hover);
+}
 }
 
 .chip-container {
@@ -3410,8 +3475,10 @@ body.about-page-active {
     padding: 0;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .chip button:hover {
     color: var(--text-primary);
+}
 }
 
 .highlight-match {
@@ -3590,8 +3657,10 @@ body.about-page-active {
     transition: background 0.2s;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .broadcast-user-card:hover {
     background: var(--card-bg-hover);
+}
 }
 
 .broadcast-user-id {
@@ -3787,8 +3856,10 @@ body.about-page-active {
     transition: border-color 0.2s;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .key-item:hover {
     border-color: var(--card-border-hover);
+}
 }
 
 .key-server {
@@ -3946,8 +4017,14 @@ body.about-page-active {
     border-bottom: none;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .admin-panel-row:hover {
     background: var(--card-bg-hover);
+}
+.admin-panel-row:hover .admin-panel-row-chevron {
+    transform: translateX(3px);
+    color: var(--text-primary);
+}
 }
 
 .admin-panel-row:active {
@@ -3967,11 +4044,6 @@ body.about-page-active {
     transition: transform 0.2s ease, color 0.2s ease;
 }
 
-.admin-panel-row:hover .admin-panel-row-chevron {
-    transform: translateX(3px);
-    color: var(--text-primary);
-}
-
 /* Стили для списка нагрузки серверов (карточки с progress bar) */
 .servers-load-list {
     display: flex;
@@ -3987,8 +4059,10 @@ body.about-page-active {
     transition: border-color 0.2s, background 0.2s;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .server-load-card:hover {
     border-color: var(--card-border-hover);
+}
 }
 
 .server-load-card-header {
@@ -4299,8 +4373,10 @@ body.about-page-active {
     transition: all 0.2s;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .btn-outline:hover {
     background: rgba(76, 175, 80, 0.08);
+}
 }
 
 .btn-outline:active {
@@ -4332,9 +4408,11 @@ body.about-page-active {
     transition: all 0.15s;
 }
 
+@media (hover: hover) and (pointer: fine) {
 .notif-chip:hover {
     border-color: var(--accent-color, #4caf50);
     color: var(--accent-color, #4caf50);
+}
 }
 
 .notif-chip.selected {
