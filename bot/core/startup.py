@@ -145,7 +145,13 @@ async def on_startup(app):
         from ..bot import init_server_managers
         await init_server_managers()
         logger.info("Менеджеры серверов инициализированы из БД")
-        
+        # После init_server_managers контекст может быть перезаписан повторной загрузкой bot.bot —
+        # используем актуальный контекст с заполненным server_manager для всех дальнейших шагов
+        ctx = get_ctx()
+        server_manager = ctx.server_manager
+        sync_manager = ctx.sync_manager
+        subscription_manager = ctx.subscription_manager
+
         # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
         await notification_manager.initialize()
