@@ -62,6 +62,13 @@ class SyncManager:
             stats["errors"].append(f"sync_servers_with_config: {e}")
 
         # Шаг 2. Синхронизируем expiry и limitIp для каждого клиента (параллельно с лимитом)
+        if not self.server_manager.servers:
+            logger.warning(
+                "Список серверов пуст — шаг синхронизации клиентов пропущен. "
+                "Убедитесь, что init_server_managers() выполнился и в БД есть активные серверы."
+            )
+            return stats
+
         active_subs = await get_all_active_subscriptions()
         stats["subscriptions_checked"] = len(active_subs)
 

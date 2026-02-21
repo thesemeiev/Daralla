@@ -131,25 +131,30 @@ _app_ctx = AppContext(
 )
 set_ctx(_app_ctx)
 
-# Инициализация менеджеров серверов из БД
+# Инициализация менеджеров серверов из БД (всегда используем экземпляр из контекста)
 async def init_server_managers():
     try:
         from .services.server_provider import ServerProvider
         from .db.servers_db import check_and_run_initial_migration
-        
+
+        ctx = get_ctx()
+        sm = ctx.server_manager
+        if not sm:
+            logger.error("Ошибка инициализации: server_manager в контексте отсутствует")
+            return
+
         # Проверяем, есть ли серверы в БД
         has_servers = await check_and_run_initial_migration()
-        
+
         if not has_servers:
             logger.warning("⚠️ В БД нет серверов. Серверы должны быть добавлены через админ-панель.")
             logger.warning("⚠️ Покупка VPN будет недоступна до добавления серверов.")
-            # Инициализируем менеджер с пустым конфигом
-            server_manager.init_from_config({})
+            sm.init_from_config({})
             return
-        
-        # Загружаем конфиг из БД
+
+        # Загружаем конфиг из БД и инициализируем тот же экземпляр, что используется в sync/роутах
         config = await ServerProvider.get_all_servers_by_group()
-        server_manager.init_from_config(config)
+        sm.init_from_config(config)
         logger.info("Менеджер серверов успешно инициализирован из БД")
     except Exception as e:
         logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
