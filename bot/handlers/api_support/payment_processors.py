@@ -144,6 +144,15 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 logger.error(f"Попытка продлить чужую подписку: user_id={user_id}, subscription_id={extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
                 return
+
+            if sub.get("status") == "deleted":
+                logger.warning(
+                    "Продление удалённой подписки: subscription_id=%s, user_id=%s, payment_id=%s. Платёж засчитан, подписка не продлевается.",
+                    extension_subscription_id, user_id, payment_id,
+                )
+                await update_payment_status(payment_id, "succeeded")
+                await update_payment_activation(payment_id, 1)
+                return
             
             # Получаем информацию о подписке
             servers = await get_subscription_servers(extension_subscription_id)

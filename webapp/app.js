@@ -1209,8 +1209,8 @@ async function loadSubscriptions() {
     if (subscriptionsEl) subscriptionsEl.style.display = 'none';
     
     try {
-        // Запрашиваем подписки через защищенный API
-        const response = await apiFetch(`/api/subscriptions`);
+        // Запрашиваем подписки через защищенный API (cache-busting — всегда свежий список, без удалённых)
+        const response = await apiFetch(`/api/subscriptions?_t=${Date.now()}`);
         
         if (response.status === 401 && platform.isTelegram()) {
             // Если в Telegram получили 401 - значит аккаунт не найден (был отвязан)

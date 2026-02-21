@@ -214,12 +214,15 @@ def create_blueprint(bot_app):
                     else 0,
                 })
             formatted_subs.sort(key=lambda x: (x["status"] != "active", -x["created_at"]))
-            return jsonify({
+            resp = jsonify({
                 "success": True,
                 "subscriptions": formatted_subs,
                 "total": len(formatted_subs),
                 "active": len([s for s in formatted_subs if s["status"] == "active"]),
-            }), 200, _cors_headers()
+            })
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+            return resp, 200, _cors_headers()
         except Exception as e:
             logger.error("Ошибка в API /api/subscriptions: %s", e, exc_info=True)
             return jsonify({"error": "Internal server error"}), 500, _cors_headers()
@@ -239,6 +242,14 @@ def create_blueprint(bot_app):
             gateway = (data.get("gateway") or "yookassa").strip().lower()
             if not period or period not in ("month", "3month"):
                 return jsonify({"error": 'Invalid period. Use "month" or "3month"'}), 400
+            # Запрет продления удалённой подписки (защита от устаревшего списка на клиенте)
+            if subscription_id:
+                from bot.db.subscriptions_db import get_subscription_by_id
+                sub = await get_subscription_by_id(int(subscription_id), user_id)
+                if not sub:
+                    return jsonify({"error": "Подписка не найдена или вам недоступна"}), 404, _cors_headers()
+                if sub.get("status") == "deleted":
+                    return jsonify({"error": "Подписка удалена. Продление невозможно. Оформите новую подписку."}), 400, _cors_headers()
             referrer_user_id = None
             if referrer_code:
                 try:
