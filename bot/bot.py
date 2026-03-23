@@ -205,9 +205,14 @@ def run():
     """Точка входа: создание приложения, Quart/Hypercorn, обработчики и запуск polling."""
     global app
     # БД и X-UI до старта webhook: иначе Quart принимает запросы раньше post_init и server_manager пуст.
+    # Не asyncio.run(): он закрывает event loop; в Python 3.10+ на MainThread после этого нет текущего loop,
+    # и app.run_polling() (PTB) падает на asyncio.get_event_loop().
     import asyncio
     from .core.startup import ensure_db_and_servers_ready
-    asyncio.run(ensure_db_and_servers_ready())
+
+    _loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_loop)
+    _loop.run_until_complete(ensure_db_and_servers_ready())
 
     # Создаем HTTPXRequest с увеличенными таймаутами для стабильной работы
     http_request = HTTPXRequest(
