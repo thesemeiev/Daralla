@@ -261,6 +261,26 @@ async def get_subscription_servers(subscription_id: int):
             return [dict(row) for row in rows]
 
 
+async def get_subscription_servers_for_subscription_ids(subscription_ids: list) -> dict:
+    """Все строки subscription_servers для набора подписок одним запросом: sub_id -> [rows]."""
+    if not subscription_ids:
+        return {}
+    unique = list(dict.fromkeys(int(x) for x in subscription_ids))
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        placeholders = ",".join("?" * len(unique))
+        q = f"SELECT * FROM subscription_servers WHERE subscription_id IN ({placeholders}) ORDER BY subscription_id, server_name"
+        async with db.execute(q, unique) as cur:
+            rows = await cur.fetchall()
+    by_id = {sid: [] for sid in unique}
+    for row in rows:
+        d = dict(row)
+        sid = d["subscription_id"]
+        if sid in by_id:
+            by_id[sid].append(d)
+    return by_id
+
+
 async def add_subscription_server(subscription_id: int, server_name: str, client_email: str, client_id: str = None):
     """Добавляет связь подписки с сервером. Идемпотентно: не создаёт дубль по (subscription_id, server_name)."""
     async with aiosqlite.connect(DB_PATH) as db:

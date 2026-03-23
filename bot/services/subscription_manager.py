@@ -9,7 +9,8 @@ import datetime
 import json
 import logging
 import time
-from typing import Optional, Tuple, List
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..db.users_db import get_or_create_subscriber
 from ..db.subscriptions_db import (
@@ -18,6 +19,7 @@ from ..db.subscriptions_db import (
     get_all_active_subscriptions_by_user,
     get_subscription_by_id_only,
     get_subscription_servers,
+    get_subscription_servers_for_subscription_ids,
     remove_subscription_server,
     get_all_active_subscriptions,
     get_subscriptions_to_sync,
@@ -28,6 +30,45 @@ from .server_manager import MultiServerManager
 logger = logging.getLogger(__name__)
 
 _PROTOCOL_PREFIXES = ('vless://', 'trojan://', 'vmess://', 'ss://', 'socks://')
+
+
+def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dict[str, Any]]:
+    """
+    Снимок клиентов с панели из ответа xui.list() (поле obj).
+    email -> {expiry_sec, limit_ip}; при дубликате email последний inbound в обходе перезаписывает.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for inbound in list_payload.get("obj") or []:
+        try:
+            settings = json.loads(inbound.get("settings") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for client in settings.get("clients") or []:
+            email = client.get("email")
+            if not email:
+                continue
+            email = str(email)
+            expiry_ms = client.get("expiryTime") or 0
+            if not expiry_ms or int(expiry_ms) <= 0:
+                expiry_sec = None
+            else:
+                expiry_sec = int(expiry_ms) // 1000
+            out[email] = {"expiry_sec": expiry_sec, "limit_ip": client.get("limitIp")}
+    return out
+
+
+def panel_entry_from_snapshot(email_map: Optional[Dict[str, Dict[str, Any]]], client_email: str) -> Optional[dict]:
+    """None — нет снимка, ходим в API как раньше. Иначе запись для ensure_client_on_server."""
+    if email_map is None:
+        return None
+    row = email_map.get(client_email)
+    if row is None:
+        return {"on_panel": False}
+    return {
+        "on_panel": True,
+        "expiry_sec": row["expiry_sec"],
+        "limit_ip": row.get("limit_ip"),
+    }
 
 
 def _normalize_subscription_link(link: str) -> str:
@@ -170,6 +211,7 @@ class SubscriptionManager:
         expires_at: int,
         token: str,
         device_limit: int = None,
+        panel_entry: Optional[dict] = None,
     ) -> Tuple[bool, bool]:
         """
         Гарантирует наличие клиента на сервере.
@@ -177,14 +219,8 @@ class SubscriptionManager:
         Если клиента нет - создает его.
         Если клиент есть - проверяет и синхронизирует время истечения и limitIp.
         
-        Args:
-            subscription_id: ID подписки
-            server_name: Имя сервера
-            client_email: Email клиента
-            user_id: ID пользователя Telegram
-            expires_at: Время истечения подписки (timestamp)
-            token: Токен подписки
-            device_limit: Лимит устройств/IP (если None, получается из подписки)
+        panel_entry: снимок с панели из одного list() на сервер. None — как раньше (client_exists + get_*).
+        dict: {"on_panel": bool, "expiry_sec": int|None, "limit_ip": int|None} при on_panel True.
         
         Returns:
             Tuple[bool, bool]:
@@ -212,28 +248,29 @@ class SubscriptionManager:
             server_config = self.server_manager.get_server_config(server_name)
             client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
             
-            # Проверяем существование клиента
-            if await xui.client_exists(client_email):
-                logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
-                
+            if panel_entry is not None:
+                on_panel = bool(panel_entry.get("on_panel"))
+            else:
+                on_panel = await xui.client_exists(client_email)
+
+            if on_panel:
+                if panel_entry is not None:
+                    logger.debug("Клиент %s на сервере %s (снимок list)", client_email, server_name)
+                    server_expiry = panel_entry.get("expiry_sec")
+                else:
+                    logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
+                    server_expiry = await xui.get_client_expiry_time(client_email)
+
                 # Проверяем и синхронизируем время истечения
                 # ВАЖНО: БД - источник истины. Мы синхронизируем серверы С БД, но НЕ изменяем БД на основе данных с сервера
                 try:
-                    server_expiry = await xui.get_client_expiry_time(client_email)
-                    current_time = int(time.time())
-                    
-                    # Допустимая разница в секундах (5 минут) - чтобы не синхронизировать из-за небольших расхождений
                     tolerance = 5 * 60
-                    
+
                     if server_expiry:
-                        # Проверяем разницу между временем на сервере и в БД
                         time_diff = abs(server_expiry - expires_at)
-                        
+
                         if time_diff > tolerance:
-                            # Время отличается значительно - синхронизируем сервер с БД
-                            # БД - источник истины, поэтому мы всегда приводим сервер к значению БД
                             if server_expiry < expires_at:
-                                # Время на сервере меньше, чем в БД - продлеваем на сервере до значения БД
                                 days_to_add = (expires_at - server_expiry) // (24 * 60 * 60)
                                 if days_to_add > 0:
                                     logger.info(
@@ -246,9 +283,6 @@ class SubscriptionManager:
                                         f"(продлено до значения БД)"
                                     )
                             else:
-                                # Время на сервере больше, чем в БД - устанавливаем точное время из БД
-                                # Это может произойти если админ вручную продлил ключ на сервере
-                                # Но БД остается источником истины, поэтому уменьшаем время на сервере до значения БД
                                 logger.info(
                                     f"Синхронизация времени истечения на сервере {server_name}: "
                                     f"устанавливаем точное время из БД (сервер: {server_expiry}, БД: {expires_at})"
@@ -270,43 +304,47 @@ class SubscriptionManager:
                                         f"Ошибка установки точного времени на сервере {server_name}: {set_expiry_e}"
                                     )
                         else:
-                            # Время совпадает (в пределах допуска) - синхронизация не требуется
                             logger.debug(
                                 f"Время истечения на сервере {server_name} совпадает с БД "
                                 f"(разница: {time_diff} сек, допуск: {tolerance} сек)"
                             )
                 except Exception as sync_e:
                     logger.warning(f"Ошибка синхронизации времени на сервере {server_name}: {sync_e}")
-                
-                # Проверяем и синхронизируем limitIp
+
                 try:
-                    client_info = await xui.get_client_info(client_email)
-                    if client_info:
-                        # Получаем текущий limitIp (если не установлен, получаем None, а не 0)
-                        # Это важно, чтобы правильно определить, нужно ли устанавливать limitIp
-                        current_limit_ip = client_info['client'].get('limitIp')
-                        # Если limitIp отсутствует (None), равен 0, или отличается от device_limit - синхронизируем
-                        if current_limit_ip is None or current_limit_ip == 0 or current_limit_ip != device_limit:
-                            current_limit_display = current_limit_ip if current_limit_ip is not None else "не установлен"
-                            logger.info(
-                                f"Синхронизация limitIp на сервере {server_name} для клиента {client_email}: "
-                                f"{current_limit_display} -> {device_limit}"
-                            )
-                            try:
-                                await xui.updateClientLimitIp(client_email, device_limit, flow=client_flow)
-                                logger.info(f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}")
-                            except Exception as update_e:
-                                logger.error(f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}")
-                        else:
-                            logger.debug(f"limitIp для клиента {client_email} на сервере {server_name} уже равен {device_limit}, синхронизация не требуется")
+                    if panel_entry is not None:
+                        current_limit_ip = panel_entry.get("limit_ip")
                     else:
-                        logger.warning(f"Не удалось получить информацию о клиенте {client_email} на сервере {server_name} для синхронизации limitIp")
+                        client_info = await xui.get_client_info(client_email)
+                        current_limit_ip = client_info["client"].get("limitIp") if client_info else None
+
+                    if current_limit_ip is None or current_limit_ip == 0 or current_limit_ip != device_limit:
+                        current_limit_display = current_limit_ip if current_limit_ip is not None else "не установлен"
+                        logger.info(
+                            f"Синхронизация limitIp на сервере {server_name} для клиента {client_email}: "
+                            f"{current_limit_display} -> {device_limit}"
+                        )
+                        try:
+                            await xui.updateClientLimitIp(client_email, device_limit, flow=client_flow)
+                            logger.info(
+                                f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}"
+                            )
+                        except Exception as update_e:
+                            logger.error(
+                                f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}"
+                            )
+                    else:
+                        logger.debug(
+                            f"limitIp для клиента {client_email} на сервере {server_name} уже равен {device_limit}, "
+                            f"синхронизация не требуется"
+                        )
                 except Exception as limit_sync_e:
-                    logger.warning(f"Ошибка синхронизации limitIp на сервере {server_name} для клиента {client_email}: {limit_sync_e}")
-                
-                return True, False  # Клиент существует, не создавали
+                    logger.warning(
+                        f"Ошибка синхронизации limitIp на сервере {server_name} для клиента {client_email}: {limit_sync_e}"
+                    )
+
+                return True, False
             else:
-                # Клиент не найден - создаем его
                 logger.info(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
                 current_time = int(time.time())
                 days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
@@ -504,9 +542,13 @@ class SubscriptionManager:
             "servers_removed": 0,
             "clients_created": 0,
             "clients_restored": 0,
+            "total_servers_checked": 0,
+            "total_servers_synced": 0,
+            "subscriptions_synced": 0,
             "errors": [],
         }
-        
+
+        # Фаза 1: только БД (связи подписка–сервер) и удаление клиентов с выбывших нод
         for sub in all_subscriptions:
             subscription_id = sub["id"]
             user_id = sub["user_id"]
@@ -514,28 +556,22 @@ class SubscriptionManager:
             expires_at = sub["expires_at"]
             device_limit = sub.get("device_limit", 1)
             group_id = sub.get("group_id")
-            
-            # Если у подписки нет group_id, пропускаем
+
             if group_id is None:
                 logger.warning(f"Подписка {subscription_id} не имеет group_id, пропускаем")
                 continue
-                
-            # Получаем список серверов для группы этой подписки
+
             group_servers = set(servers_by_group.get(group_id, []))
-            
+
             try:
-                # Получаем список серверов, привязанных к этой подписке в БД
                 current_servers = await get_subscription_servers(subscription_id)
                 current_server_names = {s["server_name"] for s in current_servers}
-                
-                # Определяем email клиента
-                client_email = None
+
                 if current_servers:
                     client_email = current_servers[0]["client_email"]
                 else:
                     client_email = f"{user_id}_{subscription_id}"
-                
-                # Шаг 1: Последовательно добавляем связи в БД (без гонок)
+
                 for server_name in group_servers:
                     if server_name not in current_server_names:
                         try:
@@ -546,57 +582,143 @@ class SubscriptionManager:
                                 client_id=None,
                             )
                             stats["servers_added"] += 1
-                            logger.info(f"Добавлена связь подписки {subscription_id} с сервером {server_name} в БД")
+                            logger.info(
+                                f"Добавлена связь подписки {subscription_id} с сервером {server_name} в БД"
+                            )
                         except Exception as e:
                             stats["errors"].append(f"Подписка {subscription_id}, server {server_name}: {e}")
 
-                # Шаг 2: Параллельно гарантируем наличие клиента на сервере (Semaphore + gather)
-                if auto_create_clients and group_servers:
-                    sem = asyncio.Semaphore(15)
-
-                    async def do_ensure(server_name):
-                        async with sem:
-                            return server_name, await self.ensure_client_on_server(
-                                subscription_id=subscription_id,
-                                server_name=server_name,
-                                client_email=client_email,
-                                user_id=user_id,
-                                expires_at=expires_at,
-                                token=token,
-                                device_limit=device_limit,
-                            )
-
-                    ensure_results = await asyncio.gather(
-                        *[do_ensure(server_name) for server_name in group_servers],
-                        return_exceptions=True,
-                    )
-                    for res in ensure_results:
-                        if isinstance(res, Exception):
-                            stats["errors"].append(f"Подписка {subscription_id}: {res}")
-                        else:
-                            server_name, (client_exists, client_created) = res
-                            if client_created:
-                                stats["clients_created"] += 1
-                            elif client_exists:
-                                stats["clients_restored"] += 1
-                
-                # Удаляем связи с серверами, которых нет в ГРУППЕ или в конфиге
                 servers_to_remove = current_server_names - group_servers
                 for server_name in servers_to_remove:
                     try:
                         await remove_subscription_server(subscription_id, server_name)
                         stats["servers_removed"] += 1
-                        logger.info(f"Удалена связь подписки {subscription_id} с сервером {server_name} (не в группе или удален)")
-                        
-                        # Также удаляем клиента с сервера, если он там есть
+                        logger.info(
+                            f"Удалена связь подписки {subscription_id} с сервером {server_name} "
+                            f"(не в группе или удален)"
+                        )
+
                         xui, _ = self.server_manager.get_server_by_name(server_name)
                         if xui:
                             await xui.deleteClient(client_email)
                     except Exception as e:
-                        logger.error(f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}")
+                        logger.error(
+                            f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}"
+                        )
             except Exception as e:
                 stats["errors"].append(f"Подписка {subscription_id}: {e}")
-        
+
+        # Фаза 2: один list() на X-UI сервер, затем ensure с снимком (без лишних get_by_email).
+        # auto_create_clients=False: как прежний шаг 2 sync_all — только активные подписки (без второго полного прохода).
+        subs_for_ensure = all_subscriptions if auto_create_clients else await get_all_active_subscriptions()
+
+        if subs_for_ensure:
+            sync_sub_ids = [s["id"] for s in subs_for_ensure if s.get("group_id") is not None]
+            servers_by_sub = await get_subscription_servers_for_subscription_ids(sync_sub_ids)
+
+            ensure_tasks: List[dict] = []
+            for sub in subs_for_ensure:
+                subscription_id = sub["id"]
+                user_id = sub["user_id"]
+                token = sub["subscription_token"]
+                expires_at = sub["expires_at"]
+                device_limit = sub.get("device_limit", 1)
+                group_id = sub.get("group_id")
+                if group_id is None:
+                    continue
+                group_servers = set(servers_by_group.get(group_id, []))
+                if not group_servers:
+                    continue
+                cur = servers_by_sub.get(subscription_id, [])
+                client_email = cur[0]["client_email"] if cur else f"{user_id}_{subscription_id}"
+                for server_name in group_servers:
+                    ensure_tasks.append(
+                        {
+                            "subscription_id": subscription_id,
+                            "server_name": server_name,
+                            "client_email": client_email,
+                            "user_id": user_id,
+                            "expires_at": expires_at,
+                            "token": token,
+                            "device_limit": device_limit,
+                        }
+                    )
+
+            stats["total_servers_checked"] = len(ensure_tasks)
+            sub_total: Dict[int, int] = defaultdict(int)
+            sub_ok: Dict[int, int] = defaultdict(int)
+            for t in ensure_tasks:
+                sub_total[t["subscription_id"]] += 1
+
+            by_server: Dict[str, List[dict]] = defaultdict(list)
+            for t in ensure_tasks:
+                by_server[t["server_name"]].append(t)
+
+            async def process_server(server_name: str, tasks: List[dict]):
+                xui, _ = self.server_manager.get_server_by_name(server_name)
+                if xui is None:
+                    return [(t, Exception(f"Сервер {server_name} недоступен")) for t in tasks]
+                email_map = None
+                try:
+                    data = await xui.list()
+                    email_map = clients_by_email_from_xui_list_response(data)
+                except Exception as e:
+                    logger.warning(
+                        "list() для сервера %s не удался, ensure по API на клиента: %s",
+                        server_name,
+                        e,
+                    )
+                sem = asyncio.Semaphore(15)
+
+                async def one(t: dict):
+                    async with sem:
+                        pe = panel_entry_from_snapshot(email_map, t["client_email"])
+                        try:
+                            r = await self.ensure_client_on_server(
+                                subscription_id=t["subscription_id"],
+                                server_name=server_name,
+                                client_email=t["client_email"],
+                                user_id=t["user_id"],
+                                expires_at=t["expires_at"],
+                                token=t["token"],
+                                device_limit=t["device_limit"],
+                                panel_entry=pe,
+                            )
+                            return (t, r)
+                        except Exception as e:
+                            return (t, e)
+
+                return await asyncio.gather(*[one(t) for t in tasks])
+
+            batches = await asyncio.gather(
+                *[process_server(sn, tl) for sn, tl in by_server.items()],
+                return_exceptions=True,
+            )
+
+            for batch in batches:
+                if isinstance(batch, Exception):
+                    stats["errors"].append(str(batch))
+                    continue
+                for pair in batch:
+                    t, outcome = pair
+                    if isinstance(outcome, Exception):
+                        stats["errors"].append(
+                            f"Подписка {t['subscription_id']}, server {t['server_name']}: {outcome}"
+                        )
+                        continue
+                    client_exists, client_created = outcome
+                    if client_created:
+                        stats["clients_created"] += 1
+                    elif client_exists:
+                        stats["clients_restored"] += 1
+                    if client_exists:
+                        stats["total_servers_synced"] += 1
+                        sub_ok[t["subscription_id"]] += 1
+
+            for sid, total in sub_total.items():
+                if total > 0 and sub_ok.get(sid, 0) == total:
+                    stats["subscriptions_synced"] += 1
+
         logger.info(
             f"Синхронизация завершена: "
             f"проверено {stats['subscriptions_checked']} подписок, "
@@ -604,8 +726,9 @@ class SubscriptionManager:
             f"удалено {stats['servers_removed']} серверов, "
             f"создано {stats['clients_created']} клиентов, "
             f"восстановлено {stats['clients_restored']} клиентов, "
+            f"серверов (ensure) {stats['total_servers_checked']}, "
             f"ошибок {len(stats['errors'])}"
         )
-        
+
         return stats
 

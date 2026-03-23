@@ -1,14 +1,11 @@
 """
 Менеджер синхронизации данных между БД и серверами X-UI
 """
-import asyncio
 import json
 import logging
 import time
-from typing import List, Dict, Any
 
 from ..db.subscriptions_db import (
-    get_all_active_subscriptions,
     get_subscriptions_to_sync,
     get_subscription_servers,
     update_subscription_status,
@@ -49,96 +46,31 @@ class SyncManager:
             "errors": [],
         }
 
-        # Шаг 1. Синхронизируем список серверов в подписках с конфигом
+        # Синхронизация БД ↔ группы серверов + ensure по панелям (один list() на сервер, без второго прохода)
         try:
             cfg_stats = await self.subscription_manager.sync_servers_with_config(
                 auto_create_clients=auto_fix
             )
             if cfg_stats:
+                stats["subscriptions_checked"] = cfg_stats.get(
+                    "subscriptions_checked", stats["subscriptions_checked"]
+                )
+                stats["subscriptions_synced"] = cfg_stats.get("subscriptions_synced", 0)
+                stats["total_servers_checked"] = cfg_stats.get("total_servers_checked", 0)
+                stats["total_servers_synced"] = cfg_stats.get("total_servers_synced", 0)
                 stats["total_clients_created"] += cfg_stats.get("clients_created", 0)
                 stats["errors"].extend(cfg_stats.get("errors", []))
         except Exception as e:
             logger.error("Ошибка sync_servers_with_config: %s", e)
             stats["errors"].append(f"sync_servers_with_config: {e}")
 
-        # Шаг 2. Синхронизируем expiry и limitIp для каждого клиента (параллельно с лимитом)
         if not self.server_manager.servers:
             logger.warning(
-                "Список серверов пуст — шаг синхронизации клиентов пропущен. "
+                "Список серверов пуст — очистка сирот может быть некорректной. "
                 "Убедитесь, что init_server_managers() выполнился и в БД есть активные серверы."
             )
-            return stats
 
-        active_subs = await get_all_active_subscriptions()
-        stats["subscriptions_checked"] = len(active_subs)
-
-        now = int(time.time())
-        # Собираем все пары (подписка, сервер) для параллельной обработки
-        items = []
-        sub_server_count = {}
-        for sub in active_subs:
-            sub_id = sub["id"]
-            expires_at = sub["expires_at"]
-            user_id = sub["user_id"]
-            token = sub["subscription_token"]
-            device_limit = sub.get("device_limit", 1)
-
-            if expires_at < now:
-                continue
-
-            servers = await get_subscription_servers(sub_id)
-            stats["total_servers_checked"] += len(servers)
-            sub_server_count[sub_id] = len(servers)
-
-            for s_info in servers:
-                items.append((
-                    sub_id,
-                    expires_at,
-                    user_id,
-                    token,
-                    device_limit,
-                    s_info["server_name"],
-                    s_info["client_email"],
-                ))
-
-        sem = asyncio.Semaphore(15)
-
-        async def do_one(sub_id, expires_at, user_id, token, device_limit, server_name, client_email):
-            async with sem:
-                return await self.subscription_manager.ensure_client_on_server(
-                    subscription_id=sub_id,
-                    server_name=server_name,
-                    client_email=client_email,
-                    user_id=user_id,
-                    expires_at=expires_at,
-                    token=token,
-                    device_limit=device_limit,
-                )
-
-        if items:
-            results = await asyncio.gather(
-                *[do_one(*item) for item in items],
-                return_exceptions=True,
-            )
-            sub_synced_count = {sid: 0 for sid in sub_server_count}
-            for item, result in zip(items, results):
-                sub_id, _, _, _, _, server_name, _ = item
-                if isinstance(result, Exception):
-                    err_msg = f"sub {sub_id}, server {server_name}: {result}"
-                    logger.error("Ошибка sync_all_subscriptions: %s", err_msg)
-                    stats["errors"].append(err_msg)
-                else:
-                    exists, created = result
-                    if exists:
-                        sub_synced_count[sub_id] = sub_synced_count.get(sub_id, 0) + 1
-                        stats["total_servers_synced"] += 1
-                    if created:
-                        stats["total_clients_created"] += 1
-            for sub_id, total in sub_server_count.items():
-                if total > 0 and sub_synced_count.get(sub_id, 0) == total:
-                    stats["subscriptions_synced"] += 1
-
-        # Шаг 3. Очистка сиротских клиентов (не связанных с активными подписками)
+        # Очистка сиротских клиентов (не связанных с подписками из get_subscriptions_to_sync)
         try:
             orphaned_stats = await self.cleanup_orphaned_clients()
             stats["orphaned_clients_deleted"] = orphaned_stats.get("deleted_count", 0)
