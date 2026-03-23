@@ -204,6 +204,11 @@ async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFA
 def run():
     """Точка входа: создание приложения, Quart/Hypercorn, обработчики и запуск polling."""
     global app
+    # БД и X-UI до старта webhook: иначе Quart принимает запросы раньше post_init и server_manager пуст.
+    import asyncio
+    from .core.startup import ensure_db_and_servers_ready
+    asyncio.run(ensure_db_and_servers_ready())
+
     # Создаем HTTPXRequest с увеличенными таймаутами для стабильной работы
     http_request = HTTPXRequest(
         connection_pool_size=8,  # Размер пула соединений

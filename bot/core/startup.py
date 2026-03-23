@@ -10,6 +10,35 @@ from ..services import NotificationManager
 
 logger = logging.getLogger(__name__)
 
+# Защита от повторной инициализации: bot.run() вызывает ensure_db_and_servers_ready до webhook,
+# затем on_startup — второй вызов пропускается.
+_bootstrap_completed = False
+
+
+async def ensure_db_and_servers_ready():
+    """
+    БД + менеджер серверов из конфига. Нужно до приёма HTTP (Quart стартует в отдельном потоке раньше post_init).
+    """
+    global _bootstrap_completed
+    if _bootstrap_completed:
+        return
+    await init_all_db()
+
+    try:
+        from bot.events import EVENTS_MODULE_ENABLED
+        if EVENTS_MODULE_ENABLED:
+            from bot.events.db.migrations import init_events_tables
+            await init_events_tables()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
+
+    from ..bot import init_server_managers
+    await init_server_managers()
+    logger.info("БД и менеджер серверов готовы (до приёма HTTP-запросов)")
+    _bootstrap_completed = True
+
 
 async def notify_admin(bot, admin_ids, text):
     """Отправляет уведомление всем администраторам"""
@@ -126,25 +155,8 @@ async def on_startup(app):
         admin_ids = ctx.admin_ids
         
         logger.info("=== НАЧАЛО ИНИЦИАЛИЗАЦИИ БОТА ===")
-        
-        # 1. Инициализация БД
-        await init_all_db()
 
-        # 1.0.0 Модуль событий: таблицы (если включён)
-        try:
-            from bot.events import EVENTS_MODULE_ENABLED
-            if EVENTS_MODULE_ENABLED:
-                from bot.events.db.migrations import init_events_tables
-                await init_events_tables()
-        except ImportError:
-            pass
-        except Exception as e:
-            logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
-
-        # 1.1 Инициализация менеджеров серверов из БД
-        from ..bot import init_server_managers
-        await init_server_managers()
-        logger.info("Менеджеры серверов инициализированы из БД")
+        await ensure_db_and_servers_ready()
         # После init_server_managers контекст может быть перезаписан повторной загрузкой bot.bot —
         # используем актуальный контекст с заполненным server_manager для всех дальнейших шагов
         ctx = get_ctx()
