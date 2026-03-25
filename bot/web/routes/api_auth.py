@@ -8,6 +8,7 @@ import logging
 import os
 import secrets
 
+import aiosqlite
 from quart import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -59,9 +60,18 @@ def create_blueprint(bot_app):
             resp = jsonify({"success": True, "token": token, "user_id": user_id})
             _set_auth_cookie(resp, token, remember=True)
             return resp
+        except ValueError as e:
+            logger.warning("Ошибка регистрации (валидация): %s", e)
+            return jsonify({"error": str(e)}), 400
+        except aiosqlite.IntegrityError:
+            logger.info("Ошибка регистрации: username уже существует")
+            return jsonify({"error": "Пользователь с таким логином уже существует"}), 409
+        except aiosqlite.Error as e:
+            logger.error("Ошибка регистрации (БД): %s", e)
+            return jsonify({"error": "Database error"}), 500
         except Exception as e:
             logger.error("Ошибка регистрации: %s", e)
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": "Internal server error"}), 500
 
     @bp.route("/api/auth/login", methods=["POST", "OPTIONS"])
     async def api_auth_login():
@@ -92,9 +102,15 @@ def create_blueprint(bot_app):
             })
             _set_auth_cookie(resp, token, remember=remember)
             return resp
+        except ValueError as e:
+            logger.warning("Ошибка входа (валидация): %s", e)
+            return jsonify({"error": str(e)}), 400
+        except aiosqlite.Error as e:
+            logger.error("Ошибка входа (БД): %s", e)
+            return jsonify({"error": "Database error"}), 500
         except Exception as e:
             logger.error("Ошибка входа: %s", e)
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": "Internal server error"}), 500
 
     @bp.route("/api/auth/verify", methods=["POST", "OPTIONS"])
     async def api_auth_verify():
@@ -114,8 +130,15 @@ def create_blueprint(bot_app):
                 "user_id": user["user_id"],
                 "username": user.get("username"),
             })
+        except (TypeError, ValueError) as e:
+            logger.warning("Ошибка verify (валидация): %s", e)
+            return jsonify({"error": "Invalid request"}), 400
+        except aiosqlite.Error as e:
+            logger.error("Ошибка verify (БД): %s", e)
+            return jsonify({"error": "Database error"}), 500
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Ошибка verify: %s", e)
+            return jsonify({"error": "Internal server error"}), 500
 
     @bp.route("/api/auth/logout", methods=["POST", "OPTIONS"])
     async def api_auth_logout():

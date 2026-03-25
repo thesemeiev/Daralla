@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import gzip
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ async def _send_db_file(bot, admin_id: int, db_path: Path):
             logger.exception("Ошибка при сжатии бекапа, отправлю оригинал")
             gz_path = db_path
 
-        filename = f"{db_path.name}.{datetime.utcnow().strftime('%Y%m%d%H%M')}.gz" if gz_path != db_path else db_path.name
+        filename = f"{db_path.name}.{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}.gz" if gz_path != db_path else db_path.name
         with gz_path.open('rb') as f:
             await bot.send_document(chat_id=admin_id, document=f, filename=filename)
 

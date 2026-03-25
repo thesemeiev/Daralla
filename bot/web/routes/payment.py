@@ -65,6 +65,9 @@ def create_blueprint(bot_app):
                 if info:
                     asyncio.create_task(_process_webhook(bot_app, payment_id, our_status))
             return jsonify({"status": "ok"}), 200
+        except (TypeError, ValueError) as e:
+            logger.warning("CryptoCloud webhook invalid payload: %s", e)
+            return jsonify({"status": "error"}), 400
         except Exception as e:
             logger.error("CryptoCloud webhook error: %s", e, exc_info=True)
             return jsonify({"status": "error"}), 500
@@ -81,7 +84,7 @@ def create_blueprint(bot_app):
     @bp.route("/webhook/yookassa", methods=["POST"])
     async def yookassa_webhook():
         try:
-            data = await request.get_json()
+            data = await request.get_json(silent=True)
             logger.info("WEBHOOK: Получен webhook от YooKassa")
             logger.info("WEBHOOK: Данные: %s", data)
             logger.info("WEBHOOK: Заголовки: %s", dict(request.headers))
@@ -112,7 +115,9 @@ def create_blueprint(bot_app):
             asyncio.create_task(_process_webhook(bot_app, payment_id, status))
 
             return jsonify({"status": "ok"})
-
+        except (TypeError, ValueError) as e:
+            logger.warning("YooKassa webhook invalid payload: %s", e)
+            return jsonify({"status": "error"}), 400
         except Exception as e:
             logger.error("Ошибка в webhook: %s", e, exc_info=True)
             return jsonify({"status": "error"}), 500
@@ -124,5 +129,7 @@ async def _process_webhook(bot_app, payment_id, status):
     """Background task: run process_payment_webhook and log errors."""
     try:
         await process_payment_webhook(bot_app, payment_id, status)
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error("Ошибка обработки платежа в webhook: %s", e, exc_info=True)

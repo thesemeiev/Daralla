@@ -5,7 +5,7 @@ import json
 import logging
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 import aiosqlite
 
 from bot.db import DB_PATH
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _now_iso():
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _generate_referral_code(length: int = 6) -> str:

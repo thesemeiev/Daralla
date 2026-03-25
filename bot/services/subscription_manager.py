@@ -86,7 +86,7 @@ def _normalize_subscription_link(link: str) -> str:
         decoded = raw.decode('utf-8')
         if decoded.startswith(_PROTOCOL_PREFIXES):
             return decoded
-    except Exception:
+    except (ValueError, TypeError):
         pass
     return s
 
@@ -299,7 +299,7 @@ class SubscriptionManager:
                                             f"Не удалось установить точное время на сервере {server_name}: "
                                             f"клиент не найден"
                                         )
-                                except Exception as set_expiry_e:
+                                except (RuntimeError, ValueError, TypeError) as set_expiry_e:
                                     logger.error(
                                         f"Ошибка установки точного времени на сервере {server_name}: {set_expiry_e}"
                                     )
@@ -308,7 +308,7 @@ class SubscriptionManager:
                                 f"Время истечения на сервере {server_name} совпадает с БД "
                                 f"(разница: {time_diff} сек, допуск: {tolerance} сек)"
                             )
-                except Exception as sync_e:
+                except (RuntimeError, ValueError, TypeError) as sync_e:
                     logger.warning(f"Ошибка синхронизации времени на сервере {server_name}: {sync_e}")
 
                 try:
@@ -329,7 +329,7 @@ class SubscriptionManager:
                             logger.info(
                                 f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}"
                             )
-                        except Exception as update_e:
+                        except (RuntimeError, ValueError, TypeError) as update_e:
                             logger.error(
                                 f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}"
                             )
@@ -338,7 +338,7 @@ class SubscriptionManager:
                             f"limitIp для клиента {client_email} на сервере {server_name} уже равен {device_limit}, "
                             f"синхронизация не требуется"
                         )
-                except Exception as limit_sync_e:
+                except (RuntimeError, ValueError, TypeError, KeyError) as limit_sync_e:
                     logger.warning(
                         f"Ошибка синхронизации limitIp на сервере {server_name} для клиента {client_email}: {limit_sync_e}"
                     )
@@ -383,7 +383,7 @@ class SubscriptionManager:
                                 f"Не удалось установить точное время истечения для клиента {client_email} "
                                 f"на сервере {server_name}: клиент не найден"
                             )
-                    except Exception as set_expiry_e:
+                    except (RuntimeError, ValueError, TypeError) as set_expiry_e:
                         logger.warning(
                             f"Ошибка установки точного времени истечения для клиента {client_email} "
                             f"на сервере {server_name}: {set_expiry_e}"
@@ -395,7 +395,7 @@ class SubscriptionManager:
                 logger.error(f"Не удалось создать клиента на сервере {server_name}: неизвестная ошибка")
                 return False, False
                     
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e:
             logger.error(f"Ошибка ensure_client_on_server для {server_name}: {e}")
             return False, False
 
@@ -493,14 +493,14 @@ class SubscriptionManager:
                                 resolved_name,
                                 client_email,
                             )
-                except Exception as link_e:
+                except (RuntimeError, ValueError, TypeError, KeyError) as link_e:
                     logger.error(
                         "Ошибка получения ссылок для server=%s, email=%s: %s",
                         resolved_name,
                         client_email,
                         link_e,
                     )
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 logger.error(
                     "Не удалось получить сервер %s для подписки %s: %s",
                     server_name,
@@ -585,7 +585,7 @@ class SubscriptionManager:
                             logger.info(
                                 f"Добавлена связь подписки {subscription_id} с сервером {server_name} в БД"
                             )
-                        except Exception as e:
+                        except (RuntimeError, ValueError, TypeError) as e:
                             stats["errors"].append(f"Подписка {subscription_id}, server {server_name}: {e}")
 
                 servers_to_remove = current_server_names - group_servers
@@ -601,11 +601,11 @@ class SubscriptionManager:
                         xui, _ = self.server_manager.get_server_by_name(server_name)
                         if xui:
                             await xui.deleteClient(client_email)
-                    except Exception as e:
+                    except (RuntimeError, ValueError, TypeError, KeyError) as e:
                         logger.error(
                             f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}"
                         )
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 stats["errors"].append(f"Подписка {subscription_id}: {e}")
 
         # Фаза 2: один list() на X-UI сервер, затем ensure с снимком (без лишних get_by_email).
@@ -662,7 +662,7 @@ class SubscriptionManager:
                 try:
                     data = await xui.list()
                     email_map = clients_by_email_from_xui_list_response(data)
-                except Exception as e:
+                except (RuntimeError, ValueError, TypeError) as e:
                     logger.warning(
                         "list() для сервера %s не удался, ensure по API на клиента: %s",
                         server_name,
@@ -685,7 +685,7 @@ class SubscriptionManager:
                                 panel_entry=pe,
                             )
                             return (t, r)
-                        except Exception as e:
+                        except (RuntimeError, ValueError, TypeError, KeyError) as e:
                             return (t, e)
 
                 return await asyncio.gather(*[one(t) for t in tasks])

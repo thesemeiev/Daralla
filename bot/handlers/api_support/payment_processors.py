@@ -75,7 +75,7 @@ async def process_payment_webhook(bot_app, payment_id, status):
             # Любой другой неуспешный статус
             await process_failed_payment(bot_app, payment_id, user_id, meta, status)
         
-    except Exception as e:
+    except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки webhook платежа {payment_id}: {e}")
 
 
@@ -96,7 +96,7 @@ async def process_successful_payment(bot_app, payment_id, user_id, meta):
             # Обработка новой покупки подписки
             await process_new_purchase_payment(bot_app, payment_id, user_id, meta, message_id)
             
-    except Exception as e:
+    except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки успешного платежа {payment_id}: {e}")
 
 
@@ -280,7 +280,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                 from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
                 if EVENTS_MODULE_ENABLED:
                     await events_on_payment_success(user_id, payment_id, meta)
-            except Exception as events_e:
+            except (ImportError, RuntimeError, ValueError) as events_e:
                 logger.debug("events.on_payment_success (extension): %s", events_e)
             
             # Отправляем уведомление о продлении подписки
@@ -341,7 +341,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                         )
                         logger.info(f"Отправлено новое сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
                     
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError) as e:
                 logger.error(f"Ошибка отправки уведомления о продлении подписки: {e}")
             
             return
@@ -351,7 +351,7 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             await update_payment_status(payment_id, 'failed')
             return
                     
-    except Exception as e:
+    except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки продления подписки {payment_id}: {e}")
 
 
@@ -687,7 +687,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     try:
                         meta_dict = json.loads(payment_info['meta'])
                         stored_message_id = meta_dict.get('message_id')
-                    except:
+                    except (TypeError, ValueError, json.JSONDecodeError):
                         pass
             
             # Используем message_id из webhook или из базы данных
@@ -706,7 +706,7 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                         menu_type=MenuTypes.PAYMENT_SUCCESS
                     )
                     logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о подписке")
-                except Exception as edit_error:
+                except (RuntimeError, ValueError, TypeError) as edit_error:
                     error_str = str(edit_error).lower()
                     if "no text" in error_str or "can't be edited" in error_str:
                         logger.debug(f"Сообщение {actual_message_id} уже отредактировано как медиа, пропускаем: {edit_error}")
@@ -724,10 +724,10 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
             elif not actual_message_id:
                 logger.info(f"Платеж из мини-приложения для user_id={user_id} - сообщение в бот не отправляется (нет message_id)")
                 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e:
             logger.error(f"Ошибка отправки информации о подписке пользователю: {e}")
             
-    except Exception as e:
+    except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки новой покупки {payment_id}: {e}")
         await update_payment_status(payment_id, 'failed')
 
@@ -764,7 +764,7 @@ async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
             )
             logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {user_id}")
                     
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, KeyError) as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
 
 
@@ -840,6 +840,6 @@ async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
             )
             logger.info(f"Отправлено сообщение об ошибке пользователю {user_id}")
             
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, KeyError) as e:
         logger.error(f"Ошибка обработки неудачного платежа {payment_id}: {e}")
 

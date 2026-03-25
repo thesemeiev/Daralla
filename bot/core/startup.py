@@ -31,7 +31,7 @@ async def ensure_db_and_servers_ready():
             await init_events_tables()
     except ImportError:
         pass
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:
         logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
 
     from ..bot import init_server_managers
@@ -55,7 +55,7 @@ async def notify_admin(bot, admin_ids, text):
                     disable_web_page_preview=True
                 )
                 logger.info(f"Успешно отправлено уведомление админу {admin_id}")
-        except Exception as e:
+        except (TimeoutError, RuntimeError) as e:
             logger.error(f'Ошибка при отправке уведомления админу {admin_id}: {e}')
 
 
@@ -76,7 +76,7 @@ async def notify_server_issues(bot, admin_ids, server_name, issue_type, details=
         
         await notify_admin(bot, admin_ids, message)
         
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:
         logger.error(f"Ошибка отправки уведомления о проблеме с сервером: {e}")
 
 
@@ -137,6 +137,8 @@ async def server_health_monitor(app, server_manager, admin_ids):
                             "Сервер недоступен более 15 минут"
                         )
             
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.error(f"Ошибка в мониторинге серверов: {e}")
         
@@ -175,7 +177,7 @@ async def on_startup(app):
             from ..services.backup import install_backup_task
             install_backup_task(app, interval_seconds=2 * 60 * 60)
             logger.info("Backup task установлен")
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.warning(f"Не удалось установить backup task: {e}")
         logger.info("=== ИНИЦИАЛИЗАЦИЯ БОТА ЗАВЕРШЕНА ===")
         
@@ -195,6 +197,6 @@ async def on_startup(app):
         
         asyncio.create_task(initial_sync())
         
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger.error(f"Ошибка инициализации бота: {e}")
         raise

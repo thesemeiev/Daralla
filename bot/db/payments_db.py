@@ -35,7 +35,7 @@ async def add_payment(payment_id: str, user_id: str, status: str, meta: dict = N
             ''', (payment_id, user_id, status, now, meta_json))
             await db.commit()
             return True
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"ADD_PAYMENT error: {e}")
         return False
 
@@ -48,10 +48,13 @@ async def get_payment_by_id(payment_id: str) -> dict:
                 if row:
                     res = dict(row)
                     if res['meta']:
-                        res['meta'] = json.loads(res['meta'])
+                        try:
+                            res['meta'] = json.loads(res['meta'])
+                        except (TypeError, json.JSONDecodeError):
+                            res['meta'] = {}
                     return res
                 return None
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"GET_PAYMENT_BY_ID error: {e}")
         return None
 
@@ -61,7 +64,7 @@ async def update_payment_status(payment_id: str, status: str) -> bool:
             await db.execute('UPDATE payments SET status = ? WHERE payment_id = ?', (status, payment_id))
             await db.commit()
             return True
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"UPDATE_PAYMENT_STATUS error: {e}")
         return False
 
@@ -71,7 +74,7 @@ async def update_payment_activation(payment_id: str, activated: bool) -> bool:
             await db.execute('UPDATE payments SET activated = ? WHERE payment_id = ?', (1 if activated else 0, payment_id))
             await db.commit()
             return True
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"UPDATE_PAYMENT_ACTIVATION error: {e}")
         return False
 
@@ -82,7 +85,7 @@ async def get_all_pending_payments() -> list:
             async with db.execute("SELECT * FROM payments WHERE status = 'pending'") as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"GET_ALL_PENDING_PAYMENTS error: {e}")
         return []
 
@@ -100,7 +103,10 @@ async def get_pending_payment(user_id: str, period: str = None) -> dict:
                     for row in rows:
                         res = dict(row)
                         if res['meta']:
-                            meta = json.loads(res['meta'])
+                            try:
+                                meta = json.loads(res['meta'])
+                            except (TypeError, json.JSONDecodeError):
+                                meta = {}
                             if meta.get('type') == period:
                                 res['meta'] = meta
                                 return res
@@ -115,10 +121,13 @@ async def get_pending_payment(user_id: str, period: str = None) -> dict:
                     if row:
                         res = dict(row)
                         if res['meta']:
-                            res['meta'] = json.loads(res['meta'])
+                            try:
+                                res['meta'] = json.loads(res['meta'])
+                            except (TypeError, json.JSONDecodeError):
+                                res['meta'] = {}
                         return res
                     return None
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"GET_PENDING_PAYMENT error: {e}")
         return None
 
@@ -130,7 +139,7 @@ async def cleanup_old_payments(days: int = 30) -> int:
             count = cursor.rowcount
             await db.commit()
             return count
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"CLEANUP_OLD_PAYMENTS error: {e}")
         return 0
 
@@ -142,7 +151,7 @@ async def cleanup_expired_pending_payments(minutes_old: int = 60) -> int:
             count = cursor.rowcount
             await db.commit()
             return count
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"CLEANUP_EXPIRED_PENDING_PAYMENTS error: {e}")
         return 0
 
@@ -163,7 +172,7 @@ async def get_daily_revenue(days: int = 30) -> list:
                     if row['meta']:
                         try:
                             meta = json.loads(row['meta'])
-                        except Exception:
+                        except (TypeError, json.JSONDecodeError):
                             pass
                     price = float(meta.get('price', 0))
                     if price <= 0:
@@ -173,7 +182,7 @@ async def get_daily_revenue(days: int = 30) -> list:
                         result[date_key] = {'date': date_key, 'revenue': 0, 'count': 0}
                     result[date_key]['revenue'] += price
                     result[date_key]['count'] += 1
-    except Exception as e:
+    except (aiosqlite.Error, ValueError, TypeError) as e:
         logger.error(f"GET_DAILY_REVENUE error: {e}")
     return sorted(result.values(), key=lambda x: x['date'])
 
@@ -195,12 +204,12 @@ async def get_revenue_by_gateway(days: int = 30) -> dict:
                     if row['meta']:
                         try:
                             meta = json.loads(row['meta'])
-                        except Exception:
+                        except (TypeError, json.JSONDecodeError):
                             pass
                     gateway = meta.get('gateway', 'yookassa')
                     price = float(meta.get('price', 0))
                     result[gateway] = result.get(gateway, 0) + price
-    except Exception as e:
+    except (aiosqlite.Error, ValueError, TypeError) as e:
         logger.error(f"GET_REVENUE_BY_GATEWAY error: {e}")
     return result
 
@@ -221,10 +230,10 @@ async def get_payments_by_user(user_id: str, limit: int = 50) -> list:
                     if res['meta']:
                         try:
                             res['meta'] = json.loads(res['meta'])
-                        except:
+                        except (TypeError, json.JSONDecodeError):
                             res['meta'] = {}
                     result.append(res)
                 return result
-    except Exception as e:
+    except aiosqlite.Error as e:
         logger.error(f"GET_PAYMENTS_BY_USER error: {e}")
         return []

@@ -60,7 +60,7 @@ class SyncManager:
                 stats["total_servers_synced"] = cfg_stats.get("total_servers_synced", 0)
                 stats["total_clients_created"] += cfg_stats.get("clients_created", 0)
                 stats["errors"].extend(cfg_stats.get("errors", []))
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             logger.error("Ошибка sync_servers_with_config: %s", e)
             stats["errors"].append(f"sync_servers_with_config: {e}")
 
@@ -76,7 +76,7 @@ class SyncManager:
             stats["orphaned_clients_deleted"] = orphaned_stats.get("deleted_count", 0)
             if orphaned_stats.get("errors"):
                 stats["errors"].extend(orphaned_stats["errors"])
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             logger.error("Ошибка cleanup_orphaned_clients: %s", e)
             stats["errors"].append(f"cleanup_orphaned_clients: {e}")
 
@@ -199,7 +199,7 @@ class SyncManager:
                         if xui:
                             await xui.deleteClient(client_email)
                         logger.debug(f"Удален клиент {client_email} с сервера {server_name}")
-                except Exception as e:
+                except (RuntimeError, ValueError, TypeError) as e:
                     logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
             
             # 2. Удаляем из БД (полное удаление)
@@ -317,7 +317,7 @@ class SyncManager:
                             for attempt in range(max_delete_attempts):
                                 try:
                                     deleted = await xui.deleteClient(client_email)
-                                except Exception as e:
+                                except (RuntimeError, ValueError, TypeError) as e:
                                     error_msg = (
                                         f"Ошибка удаления сиротского клиента {client_email} с {server_name} "
                                         f"(попытка {attempt + 1}/{max_delete_attempts}): {e}"
@@ -355,12 +355,12 @@ class SyncManager:
                     except json.JSONDecodeError as e:
                         logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id', 'unknown')} на сервере {server_name}: {e}")
                         continue
-                    except Exception as e:
+                    except (RuntimeError, ValueError, TypeError, KeyError) as e:
                         error_msg = f"Ошибка обработки inbound на сервере {server_name}: {e}"
                         logger.error(error_msg)
                         stats['errors'].append(error_msg)
             
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 error_msg = f"Ошибка проверки сервера {server_name}: {e}"
                 logger.error(error_msg)
                 stats['errors'].append(error_msg)

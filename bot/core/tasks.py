@@ -29,6 +29,8 @@ async def sync_task_loop(sync_manager):
     while True:
         try:
             await sync_manager.run_sync()
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.error(f"Ошибка в цикле синхронизации: {e}")
         
@@ -41,6 +43,8 @@ async def notifications_task_loop(notification_manager):
         try:
             # Метод внутри сам проверяет, кому пора слать
             await notification_manager._check_expiring_subscriptions()
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.error(f"Ошибка в цикле уведомлений: {e}")
             
@@ -63,6 +67,8 @@ async def payments_cleanup_loop():
                 deleted = await cleanup_old_payments(days=30)
                 if deleted > 0:
                     logger.info(f"Удалено {deleted} старых записей платежей (старше 30 дней)")
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.error(f"Ошибка в очистке платежей: {e}")
             
@@ -81,6 +87,8 @@ async def server_load_snapshot_loop(server_manager):
     # Очищаем старую историю при запуске (старше 7 дней)
     try:
         await cleanup_old_server_load_history(days=7)
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error(f"Ошибка очистки старой истории нагрузки: {e}")
     
@@ -121,6 +129,8 @@ async def server_load_snapshot_loop(server_manager):
                     servers_saved += 1
                     logger.debug(f"Сохранен снимок нагрузки для {server_name}: онлайн={online_count}, активных={total_active}")
                     
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     servers_failed += 1
                     logger.warning(f"Ошибка сохранения снимка нагрузки для {server_name}: {e}")
@@ -136,9 +146,13 @@ async def server_load_snapshot_loop(server_manager):
                     await cleanup_old_server_load_history(days=7)
                     last_cleanup = current_time
                     logger.info("Очищена старая история нагрузки на серверы (старше 7 дней)")
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     logger.error(f"Ошибка очистки истории нагрузки: {e}")
             
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.error(f"Ошибка в цикле сохранения снимков нагрузки: {e}", exc_info=True)
         
