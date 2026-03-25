@@ -188,15 +188,6 @@ async def on_startup(app):
         # 4. Запуск мониторинга здоровья серверов
         asyncio.create_task(server_health_monitor(app, server_manager, admin_ids))
         
-        # 5. Первоначальная синхронизация через 30 секунд
-        async def initial_sync():
-            await asyncio.sleep(30)
-            if subscription_manager:
-                logger.info("Выполнение первоначальной синхронизации серверов...")
-                await subscription_manager.sync_servers_with_config(auto_create_clients=True)
-        
-        asyncio.create_task(initial_sync())
-        
     except (RuntimeError, ValueError, OSError) as e:
         logger.error(f"Ошибка инициализации бота: {e}")
         raise
