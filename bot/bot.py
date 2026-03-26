@@ -1,90 +1,142 @@
-"""
-Точка входа бота. Порядок: конфиг → утилиты → сервисы → обработчики → запуск.
-"""
 import logging
 import os
-import sys
-import threading
 from logging.handlers import RotatingFileHandler
+from dotenv import load_dotenv
+import pathlib
 
-from telegram import Update, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters,
-)
+# === ИМПОРТ УТИЛИТ ===
+from .utils import UIButtons, check_private_chat, set_image_paths
+
+# === ИМПОРТ СЕРВИСОВ ===
+from .services import NotificationManager, SubscriptionManager, RemnaWaveService
+
+# === ИМПОРТ ОБРАБОТЧИКОВ ===
+from .handlers.commands import start
+from .handlers.callbacks import link_telegram_confirm_callback
+
+
+# Определяем путь к файлу .env
+current_dir = pathlib.Path(__file__).parent
+project_root = current_dir.parent
+env_path = project_root / '.env'
+
+# Загружаем .env из корня проекта (если файл существует)
+# В Docker переменные уже передаются через environment:, но загрузка из файла
+# может быть полезна для локальной разработки
+if env_path.exists():
+    load_dotenv(env_path, override=False)  # override=False - не перезаписывать существующие переменные
+else:
+    # В Docker это нормально, так как переменные передаются через environment:
+    pass
+
+import threading
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 from telegram.request import HTTPXRequest
 from yookassa import Configuration
 
-# 1. Foundation: конфиг и пути
-from . import config
+Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
+Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
 
-config.validate_required()
-config.ensure_dirs()
-Configuration.account_id = config.YOOKASSA_SHOP_ID
-Configuration.secret_key = config.YOOKASSA_SECRET_KEY
+from .db import DATA_DIR
 
-if not config.YOOKASSA_SHOP_ID or not config.YOOKASSA_SECRET_KEY:
+
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
+YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Поддержка нескольких админов через переменную окружения
+ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
+ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
+
+# WEBHOOK_URL — только для приёма webhook YooKassa (например https://daralla.ru/webhook/yookassa).
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+
+# URL мини-приложения для кнопок «Открыть в приложении» (меню, уведомления, рассылка).
+# Задаётся отдельно в .env как WEBAPP_URL (например https://daralla.ru/). Не выводится из WEBHOOK_URL.
+_env_webapp = (os.getenv("WEBAPP_URL") or "").strip()
+WEBAPP_URL = (_env_webapp.rstrip("/") + "/") if _env_webapp else None
+
+# Пути к изображениям для меню: главное меню (/start), успех и ошибка (уведомления о платежах)
+IMAGE_PATHS = {
+    'main_menu': os.getenv("IMAGE_MAIN_MENU", "images/main_menu.jpg"),
+    'payment_success': os.getenv("IMAGE_PAYMENT_SUCCESS", "images/payment_success.jpg"),
+    'payment_failed': os.getenv("IMAGE_PAYMENT_FAILED", "images/payment_failed.jpg"),
+}
+
+# Устанавливаем пути к изображениям в утилитах
+set_image_paths(IMAGE_PATHS)
+
+# Проверяем наличие обязательных переменных
+if not TELEGRAM_TOKEN:
+    raise ValueError(
+        "TELEGRAM_TOKEN не найден в переменных окружения!\n"
+        "В Docker: убедитесь, что файл .env существует в корне проекта и содержит TELEGRAM_TOKEN.\n"
+        "Docker Compose автоматически загружает переменные из .env файла."
+    )
+
+if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
     print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
 
-# 2. Логирование (config.ensure_dirs() уже создал LOGS_DIR)
-app_log_path = str(config.APP_LOG_PATH)
+# Главное название бренда для VPN клиента
+# Это название будет использоваться для всех серверов в подписке
+VPN_BRAND_NAME = os.getenv("VPN_BRAND_NAME", "Daralla VPN").strip()
+
+# Runtime доступа управляется через RemnaWaveService.
+
+# Настраиваем файловый лог с ротацией в папке data/logs
+logs_dir = os.path.join(DATA_DIR, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+app_log_path = os.path.join(logs_dir, 'bot.log')
 
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
+
 file_handler = RotatingFileHandler(
     app_log_path,
     maxBytes=1_048_576,
     backupCount=3,
-    encoding="utf-8",
-    delay=True,
+    encoding='utf-8',
+    delay=True
 )
-file_handler.setLevel(logging.WARNING)
+# Пишем в файл также INFO-сообщения, чтобы лучше видеть историю продакшена.
+file_handler.setLevel(logging.INFO)
+
+# Базовый формат логов с именем логгера — проще отлаживать и искать по модулям.
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[console_handler, file_handler],
+    format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
+    handlers=[console_handler, file_handler]
 )
 logger = logging.getLogger(__name__)
 
-# 3. Утилиты (пути к изображениям для меню)
-from .utils import UIButtons, check_private_chat, set_image_paths
+# Урезаем шум от httpx/httpcore до WARNING, чтобы логи не забивались
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-set_image_paths(config.IMAGE_PATHS)
+# === ИНИЦИАЛИЗАЦИЯ AppContext ===
+from .app_context import AppContext, set_ctx, get_ctx
 
-# 4. Сервисы (подписки через Remnawave)
-from .services import NotificationManager
+remnawave_service = RemnaWaveService()
+subscription_manager = SubscriptionManager(remnawave_service)
 
-# 4.1 Единый контекст приложения
-from .context import AppContext
-
-app_context = AppContext(
-    notification_manager=None,
-    admin_ids=config.ADMIN_IDS,
-    telegram_app=None,
-    config=config,
+_app_ctx = AppContext(
+    subscription_manager=subscription_manager,
+    remnawave_service=remnawave_service,
+    admin_ids=ADMIN_IDS,
+    webapp_url=WEBAPP_URL,
+    vpn_brand_name=VPN_BRAND_NAME,
 )
+set_ctx(_app_ctx)
 
-# Реэкспорт конфига для кода, читающего из bot.bot (WEBAPP_URL, ADMIN_IDS и т.д.)
-TELEGRAM_TOKEN = config.TELEGRAM_TOKEN
-ADMIN_IDS = config.ADMIN_IDS
-WEBHOOK_URL = config.WEBHOOK_URL
-WEBAPP_URL = config.WEBAPP_URL
-IMAGE_PATHS = config.IMAGE_PATHS
-VPN_BRAND_NAME = config.VPN_BRAND_NAME
-DATA_DIR = str(config.DATA_DIR)
+from .web.app_quart import create_quart_app
 
-# 5. Обработчики
-from .handlers.commands import start
-from .handlers.callbacks import link_telegram_confirm_callback
-from .handlers.webhooks import create_webhook_app
+
+
 from .handlers.utils import error_handler
+
 from .core import on_startup
 
-# Глобальный менеджер уведомлений (инициализируется в on_startup)
+# Глобальный менеджер уведомлений
 notification_manager = None
 
 # Глобальный объект приложения (будет инициализирован в main)
@@ -99,18 +151,15 @@ async def open_mini_app_fallback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer()
         btn = UIButtons.create_webapp_button(text="Открыть в приложении")
         kb = InlineKeyboardMarkup([[btn]]) if btn else None
-        if query.message:
-            await query.message.reply_text(
-                "Пожалуйста, откройте приложение для управления подписками и оплатой.",
-                reply_markup=kb,
-            )
+        await query.message.reply_text(
+            "Пожалуйста, откройте приложение для управления подписками и оплатой.",
+            reply_markup=kb,
+        )
 
 
 async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ответ на текстовое сообщение в ЛС: предлагаем открыть приложение."""
     if not await check_private_chat(update):
-        return
-    if not update.message:
         return
     btn = UIButtons.create_webapp_button(text="Открыть в приложении")
     kb = InlineKeyboardMarkup([[btn]]) if btn else None
@@ -120,8 +169,21 @@ async def open_mini_app_fallback_text(update: Update, context: ContextTypes.DEFA
     )
 
 
-# --- Запуск (main) ---
-if __name__ == "__main__":
+# Регистрируем команды
+def run():
+    """Точка входа: создание приложения, Quart/Hypercorn, обработчики и запуск polling."""
+    global app
+    # БД до старта webhook.
+    # Не asyncio.run(): он закрывает event loop; в Python 3.10+ на MainThread после этого нет текущего loop,
+    # и app.run_polling() (PTB) падает на asyncio.get_event_loop().
+    import asyncio
+    from .core.startup import ensure_db_and_servers_ready
+
+    _loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_loop)
+    _loop.run_until_complete(ensure_db_and_servers_ready())
+
+    # Создаем HTTPXRequest с увеличенными таймаутами для стабильной работы
     http_request = HTTPXRequest(
         connection_pool_size=8,  # Размер пула соединений
         connect_timeout=30.0,    # Таймаут на установку соединения (увеличен с дефолтных 5)
@@ -129,35 +191,40 @@ if __name__ == "__main__":
         write_timeout=30.0,      # Таймаут на отправку данных
         pool_timeout=30.0        # Таймаут ожидания свободного соединения в пуле
     )
-    
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
-    setattr(sys.modules[__name__], "app", app)
-    app_context.telegram_app = app
 
-    # Создаем Flask приложение для webhook'ов (контекст передаётся в маршруты через app.config)
-    webhook_app = create_webhook_app(app, app_context)
-    
-    # Запускаем webhook сервер в отдельном потоке
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).request(http_request).post_init(on_startup).build()
+
+    # Quart + Hypercorn (ASGI) вместо Flask
+    quart_app = create_quart_app(app)
+    webhook_port = int(os.getenv("WEBHOOK_PORT", "5000"))
+
     def run_webhook():
-        webhook_app.run(host='0.0.0.0', port=5000, debug=False)
-    
+        import asyncio
+        from hypercorn.config import Config
+        from hypercorn.asyncio import serve
+        config = Config()
+        config.bind = [f"0.0.0.0:{webhook_port}"]
+        # shutdown_trigger prevents Hypercorn from installing signal handlers (which only work in main thread)
+        shutdown_trigger = lambda: asyncio.Future()
+        asyncio.run(serve(quart_app, config, shutdown_trigger=shutdown_trigger))
+
     webhook_thread = threading.Thread(target=run_webhook, daemon=True)
     webhook_thread.start()
-    logger.info("Webhook сервер запущен на порту 5000")
-    
-    # Сохраняем модуль как bot.bot для доступа из других модулей (get_globals, WEBAPP_URL и т.д.)
-    if 'bot.bot' not in sys.modules or sys.modules['bot.bot'] is not sys.modules[__name__]:
-        sys.modules['bot.bot'] = sys.modules[__name__]
-    
+    logger.info("Webhook сервер (Quart + Hypercorn) запущен на порту %s", webhook_port)
+
     # Добавляем глобальную обработку ошибок
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CallbackQueryHandler(link_telegram_confirm_callback, pattern="^link_confirm_"))
-    
+
     # Текстовые сообщения в ЛС — предлагаем открыть приложение
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, open_mini_app_fallback_text))
-    
+
     # Fallback для старых callback-кнопок (не перехватываем link_confirm_ — привязка Telegram)
     app.add_handler(CallbackQueryHandler(open_mini_app_fallback, pattern=r"^(?!link_confirm_).*$"))
-    
+
     app.run_polling()
+
+
+if __name__ == '__main__':
+    run()

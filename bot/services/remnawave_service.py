@@ -1,314 +1,150 @@
 """
-Remnawave API client.
-
-This module is intentionally isolated from the rest of the codebase:
-- Domain code uses account_id / identities.
-- This adapter translates our needs to Remnawave HTTP API.
+Runtime-сервис работы с RemnaWave.
 """
-
 from __future__ import annotations
 
-import datetime
 import logging
 import os
 import time
-from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import httpx
+
+from ..db.remnawave_db import get_binding_by_subscription, upsert_binding
 
 logger = logging.getLogger(__name__)
 
 
-class RemnawaveError(RuntimeError):
-    pass
+class RemnaWaveService:
+    def __init__(self) -> None:
+        self.api_url = (os.getenv("REMNAWAVE_API_URL") or "").rstrip("/")
+        self.api_key = (os.getenv("REMNAWAVE_API_KEY") or "").strip()
+        self.link_template = (
+            os.getenv("REMNAWAVE_SUBSCRIPTION_URL_TEMPLATE")
+            or os.getenv("SUBSCRIPTION_URL", "").rstrip("/") + "/sub/{token}"
+        )
 
-
-@dataclass
-class RemnawaveConfig:
-    base_url: str
-    admin_username: str
-    admin_password: str
-    api_token: Optional[str] = None  # если задан — используем его для API вместо login
-    timeout_seconds: int = 20
-
-
-def is_remnawave_configured() -> bool:
-    """True если Remnawave настроен (используем его как источник подписок)."""
-    try:
-        load_remnawave_config()
-        return True
-    except Exception:
-        return False
-
-
-def load_remnawave_config() -> RemnawaveConfig:
-    base_url = (os.getenv("REMNAWAVE_BASE_URL") or "").strip().rstrip("/")
-    if not base_url:
-        raise RemnawaveError("REMNAWAVE_BASE_URL is not set")
-    admin_username = (os.getenv("REMNAWAVE_ADMIN_USERNAME") or "").strip()
-    admin_password = (os.getenv("REMNAWAVE_ADMIN_PASSWORD") or "").strip()
-    api_token = (os.getenv("REMNAWAVE_API_TOKEN") or "").strip() or None
-    if not api_token and (not admin_username or not admin_password):
-        raise RemnawaveError("REMNAWAVE_API_TOKEN or REMNAWAVE_ADMIN_USERNAME/REMNAWAVE_ADMIN_PASSWORD must be set")
-    timeout = os.getenv("REMNAWAVE_TIMEOUT_SECONDS")
-    try:
-        timeout_seconds = int(timeout) if timeout else 20
-    except ValueError:
-        timeout_seconds = 20
-    return RemnawaveConfig(
-        base_url=base_url,
-        admin_username=admin_username,
-        admin_password=admin_password,
-        api_token=api_token,
-        timeout_seconds=timeout_seconds,
-    )
-
-
-class RemnawaveClient:
-    """
-    Minimal Remnawave client used by the bot.
-
-    Auth strategy (per plan): Admin JWT via POST /api/auth/login.
-    We re-login automatically on 401.
-    """
-
-    def __init__(self, cfg: RemnawaveConfig):
-        self.cfg = cfg
-        self._client = httpx.AsyncClient(timeout=cfg.timeout_seconds)
-        self._admin_jwt: Optional[str] = None
-        self._last_login_at: float = 0.0
+    def log_runtime_readiness(self) -> None:
+        api_ready = bool(self.api_url and self.api_key)
+        template_ready = bool(self.link_template)
+        logger.info(
+            "RemnaWave runtime readiness: api_ready=%s api_url_set=%s api_key_set=%s link_template_set=%s",
+            api_ready,
+            bool(self.api_url),
+            bool(self.api_key),
+            template_ready,
+        )
 
     def _headers(self) -> dict[str, str]:
-        h = {"Accept": "application/json"}
-        token = self.cfg.api_token or self._admin_jwt
-        if token:
-            h["Authorization"] = f"Bearer {token}"
-        return h
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
-    async def login(self, force: bool = False) -> None:
-        # Avoid hammering login in tight loops.
-        if not force and self._admin_jwt and (time.time() - self._last_login_at) < 30:
-            return
-        url = f"{self.cfg.base_url}/api/auth/login"
-        payload = {"username": self.cfg.admin_username, "password": self.cfg.admin_password}
-        r = await self._client.post(url, json=payload)
-        if r.status_code >= 400:
-            raise RemnawaveError(f"Remnawave login failed: HTTP {r.status_code}: {r.text[:300]}")
-        data = _safe_json(r)
-        # We don't know exact response shape. Common variants:
-        # { token: '...' } / { accessToken: '...' } / { jwt: '...' } / { data: { token: '...' } } / { response: { accessToken: '...' } }
-        resp = data.get("response") or data.get("data") or {}
-        token = (
-            data.get("token")
-            or data.get("accessToken")
-            or data.get("jwt")
-            or resp.get("token")
-            or resp.get("accessToken")
-        )
-        if not token or not isinstance(token, str):
-            raise RemnawaveError("Remnawave login: cannot find token in response")
-        self._admin_jwt = token
-        self._last_login_at = time.time()
-
-    async def request(self, method: str, path: str, *, json: Any | None = None, params: dict[str, Any] | None = None) -> Any:
-        if not path.startswith("/"):
-            path = "/" + path
-        url = f"{self.cfg.base_url}{path}"
-        if not self.cfg.api_token:
-            await self.login()
-        r = await self._client.request(
-            method=method.upper(),
-            url=url,
-            headers=self._headers(),
-            json=json,
-            params=params,
-        )
-        if r.status_code == 401 and not self.cfg.api_token:
-            # JWT expired/invalid, retry once after re-login.
-            await self.login(force=True)
-            r = await self._client.request(
-                method=method.upper(),
-                url=url,
+    async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.api_url:
+            return {}
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                f"{self.api_url}{path}",
+                json=payload,
                 headers=self._headers(),
-                json=json,
-                params=params,
             )
-        if r.status_code >= 400:
-            raise RemnawaveError(f"Remnawave request failed: {method} {path} HTTP {r.status_code}: {r.text[:300]}")
-        return _safe_json(r)
+            response.raise_for_status()
+            return response.json() if response.content else {}
 
-    # ---- High-level methods (minimal) ----
-
-    async def get_user_by_telegram_id(self, telegram_id: str) -> dict[str, Any] | None:
-        telegram_id = str(telegram_id)
-        data = await self.request("GET", f"/api/users/by-telegram-id/{telegram_id}")
-        return _unwrap_optional_object(data)
-
-    async def get_user_by_username(self, username: str) -> dict[str, Any] | None:
-        uname = (username or "").strip()
-        if not uname:
-            return None
-        data = await self.request("GET", f"/api/users/by-username/{uname}")
-        return _unwrap_optional_object(data)
-
-    async def create_user(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """
-        Create user in Remnawave.
-        Payload shape is Remnawave-specific; we pass it through.
-        Returns unwrapped user object (supports response/obj/data wrappers).
-        """
-        data = await self.request("POST", "/api/users", json=payload)
-        unwrapped = _unwrap_optional_object(data)
-        if unwrapped is not None:
-            return unwrapped
-        return data
-
-    async def patch_user(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self.request("PATCH", "/api/users", json=payload)
-
-    async def delete_user(self, user_uuid: str) -> None:
-        """
-        Удаляет пользователя в Remnawave (подписка аннулируется).
-        При 404 (User not found) не бросает исключение — считаем успехом.
-        """
-        if not user_uuid:
-            return
-        path = f"/api/users/{user_uuid}"
-        if not path.startswith("/"):
-            path = "/" + path
-        url = f"{self.cfg.base_url}{path}"
-        if not self.cfg.api_token:
-            await self.login()
-        r = await self._client.delete(url, headers=self._headers())
-        if r.status_code == 401 and not self.cfg.api_token:
-            await self.login(force=True)
-            r = await self._client.delete(url, headers=self._headers())
-        if r.status_code == 404:
-            logger.info("Remnawave user %s already deleted (404)", user_uuid)
-            return
-        if r.status_code >= 400:
-            raise RemnawaveError(f"Remnawave DELETE {path} HTTP {r.status_code}: {r.text[:300]}")
-
-    async def get_sub_info(self, short_uuid: str) -> dict[str, Any]:
-        return await self.request("GET", f"/api/sub/{short_uuid}/info")
-
-    async def get_sub_raw(self, short_uuid: str) -> str:
-        # Some endpoints return plain text (subscription) rather than JSON.
-        if not short_uuid:
-            raise RemnawaveError("shortUuid is required")
-        url = f"{self.cfg.base_url}/api/sub/{short_uuid}"
-        if not self.cfg.api_token:
-            await self.login()
-        r = await self._client.get(url, headers=self._headers())
-        if r.status_code == 401 and not self.cfg.api_token:
-            await self.login(force=True)
-            r = await self._client.get(url, headers=self._headers())
-        if r.status_code >= 400:
-            raise RemnawaveError(f"Remnawave sub fetch failed: HTTP {r.status_code}: {r.text[:300]}")
-        return r.text
-
-    async def update_user_expiry(
+    async def ensure_active_access(
         self,
-        user_uuid: str,
-        expire_at_unix_ts: int,
-        device_limit: Optional[int] = None,
-    ) -> dict[str, Any]:
-        """
-        Set user subscription expiry (and optionally device limit).
-        expire_at_unix_ts: Unix timestamp in seconds.
-        Remnawave expects expireAt as ISO 8601 string.
-        """
-        expire_at_iso = datetime.datetime.utcfromtimestamp(expire_at_unix_ts).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        payload: dict[str, Any] = {
-            "uuid": user_uuid,
-            "expireAt": expire_at_iso,
-        }
-        if device_limit is not None:
-            payload["deviceLimit"] = device_limit
-        return await self.patch_user(payload)
+        *,
+        subscription_id: int,
+        user_id: str,
+        token: str,
+        expires_at: int,
+        device_limit: int,
+    ) -> bool:
+        binding = await get_binding_by_subscription(subscription_id)
+        panel_user_id = binding["panel_user_id"] if binding else f"local-{subscription_id}"
+        subscription_url = None
 
-    async def update_user_telegram_id(self, user_uuid: str, telegram_id: Optional[int]) -> dict[str, Any]:
-        """
-        Set or clear telegramId for a user in Remnawave.
-        telegram_id=None clears the field (e.g. after unlink).
-        """
-        payload: dict[str, Any] = {"uuid": user_uuid, "telegramId": telegram_id}
-        return await self.patch_user(payload)
+        if self.api_url and self.api_key:
+            payload = {
+                "panel_user_id": panel_user_id,
+                "local_user_id": user_id,
+                "subscription_id": subscription_id,
+                "subscription_token": token,
+                "expires_at": expires_at,
+                "device_limit": device_limit,
+            }
+            try:
+                result = await self._post("/api/integration/subscription/ensure", payload)
+                panel_user_id = str(result.get("panel_user_id") or panel_user_id)
+                subscription_url = result.get("subscription_url")
+            except Exception as exc:
+                logger.error("RemnaWave ensure_access error: %s", exc)
+                return False
+        elif not self.link_template:
+            logger.error("REMNAWAVE_* env is not configured")
+            return False
 
-    def get_nodes(self) -> list[dict[str, Any]]:
-        """
-        Возвращает список нод Remnawave (GET /api/nodes).
-        Каждая нода: uuid, name, address, port, is_connected, is_disabled, country_code, etc.
-        """
-        # Keep synchronous facade for callers that may expect sync; use request in async contexts instead.
-        raise RemnawaveError("get_nodes() is async; use get_nodes_async()")
+        if not subscription_url and self.link_template:
+            subscription_url = self.link_template.format(token=token)
 
-    async def get_nodes_async(self) -> list[dict[str, Any]]:
-        data = await self.request("GET", "/api/nodes")
-        if isinstance(data, list):
-            return data
-        for key in ("response", "obj", "data", "nodes"):
-            v = data.get(key) if isinstance(data, dict) else None
-            if isinstance(v, list):
-                return v
-        return []
+        await upsert_binding(
+            subscription_id=subscription_id,
+            user_id=user_id,
+            panel_user_id=panel_user_id,
+            subscription_url=subscription_url,
+            now_ts=int(time.time()),
+        )
+        return True
 
-    async def extend_user_by_days(
-        self,
-        user_uuid: str,
-        short_uuid: str,
-        add_days: int,
-        device_limit: Optional[int] = None,
-    ) -> int:
-        """
-        Add days to current expiry. Returns new expiry Unix timestamp (seconds).
-        If current expiry cannot be read, uses current time as base.
-        """
-        now_ts = int(time.time())
-        base_ts = now_ts
-        try:
-            from .subscription_service import _parse_expiry_to_timestamp
-            info = await self.get_sub_info(short_uuid)
-            # Remnawave OpenAPI: GetSubscriptionInfoResponseDto has response.user.expiresAt
-            obj = info.get("response") or info.get("obj") or info.get("data") or info
-            raw_exp = obj.get("expiresAt") or obj.get("expires_at") or obj.get("expiryTime") or 0
-            if not raw_exp and isinstance(obj.get("user"), dict):
-                raw_exp = obj["user"].get("expiresAt") or obj["user"].get("expires_at") or 0
-            exp_ts = _parse_expiry_to_timestamp(raw_exp)
-            if exp_ts > 0:
-                base_ts = max(exp_ts, now_ts)
-        except Exception as e:
-            logger.warning("Remnawave get_sub_info for extend failed, using now: %s", e)
-        new_expiry = base_ts + add_days * 24 * 60 * 60
-        await self.update_user_expiry(user_uuid, new_expiry, device_limit=device_limit)
-        return new_expiry
+    async def suspend_access(self, *, subscription_id: int) -> bool:
+        binding = await get_binding_by_subscription(subscription_id)
+        if not binding:
+            return True
+        if self.api_url and self.api_key:
+            try:
+                await self._post(
+                    "/api/integration/subscription/suspend",
+                    {"panel_user_id": binding["panel_user_id"]},
+                )
+            except Exception as exc:
+                logger.error("RemnaWave suspend_access error: %s", exc)
+                return False
+        return True
 
-
-def _safe_json(r: httpx.Response) -> dict[str, Any]:
-    try:
-        data = r.json()
-    except Exception as e:
-        raise RemnawaveError(f"Remnawave expected JSON, got non-JSON: {e}; body={r.text[:300]}")
-    if not isinstance(data, dict):
-        raise RemnawaveError("Remnawave expected JSON object response")
-    return data
-
-
-def _unwrap_optional_object(data: dict[str, Any]) -> dict[str, Any] | None:
-    # Heuristics for APIs that wrap response:
-    # { success: true, obj: {...} } / { data: {...} } / { response: {...} } / { user: {...} }
-    if data.get("success") is False:
+    async def get_subscription_link(self, *, subscription_id: int, token: str) -> str | None:
+        binding = await get_binding_by_subscription(subscription_id)
+        if self.api_url and self.api_key and binding:
+            try:
+                result = await self._post(
+                    "/api/integration/subscription/link",
+                    {"panel_user_id": binding["panel_user_id"]},
+                )
+                panel_link = result.get("subscription_url")
+                if panel_link:
+                    return panel_link
+            except Exception as exc:
+                logger.warning("RemnaWave get_subscription_link fallback: %s", exc)
+        if binding and binding.get("subscription_url"):
+            return binding["subscription_url"]
+        if self.link_template:
+            return self.link_template.format(token=token)
         return None
-    for k in ("response", "obj", "data", "user"):
-        v = data.get(k)
-        if isinstance(v, dict):
-            return v
-        if v is None:
-            # If explicitly null, treat as not found
-            return None
-    # Sometimes API returns object directly (not wrapped)
-    if any(k in data for k in ("uuid", "id", "shortUuid", "username", "telegramId")):
-        return data
-    return None
 
+    async def get_usage(self, *, subscription_id: int) -> dict[str, int]:
+        binding = await get_binding_by_subscription(subscription_id)
+        if self.api_url and self.api_key and binding:
+            try:
+                result = await self._post(
+                    "/api/integration/subscription/usage",
+                    {"panel_user_id": binding["panel_user_id"]},
+                )
+                return {
+                    "upload": int(result.get("upload") or 0),
+                    "download": int(result.get("download") or 0),
+                    "total": int(result.get("total") or 0),
+                }
+            except Exception as exc:
+                logger.warning("RemnaWave get_usage fallback: %s", exc)
+        return {"upload": 0, "download": 0, "total": 0}

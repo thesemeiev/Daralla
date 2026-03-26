@@ -1,0 +1,107 @@
+"""Integration tests for payment webhook and successful payment flow."""
+import datetime
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from bot.db import (
+    add_payment,
+    get_all_subscriptions_by_user,
+    get_or_create_subscriber,
+    get_payment_by_id,
+)
+from bot.handlers.api_support.payment_processors import process_payment_webhook
+from bot.services.remnawave_service import RemnaWaveService
+from bot.services.subscription_manager import SubscriptionManager
+
+
+@pytest.fixture
+async def db_with_server(db):
+    """Keeps backward-compatible fixture name for payment tests."""
+    _ = uuid.uuid4().hex[:8]
+    yield
+
+
+@pytest.fixture
+def mock_bot_app():
+    """Minimal bot app mock for payment_processors (send_message, etc.)."""
+    app = MagicMock()
+    app.bot = MagicMock()
+    app.bot.send_message = AsyncMock()
+    app.bot.edit_message_text = AsyncMock()
+    return app
+
+
+@pytest.fixture
+def mock_managers():
+    """SubscriptionManager with RemnaWave no-op mocks for deterministic tests."""
+    sub_manager = SubscriptionManager(RemnaWaveService())
+    sub_manager.ensure_access = AsyncMock(return_value=True)
+    return {
+        "subscription_manager": sub_manager,
+        "notification_manager": MagicMock(),
+    }
+
+
+@pytest.mark.asyncio
+async def test_process_payment_webhook_idempotent(db_with_server, mock_bot_app, mock_managers):
+    """Calling process_payment_webhook twice with succeeded does not create duplicate subscription."""
+    user_id = "web_idemuser"
+    await get_or_create_subscriber(user_id)
+    payment_id = "pay_idem_001"
+    meta = {
+        "type": "month",
+        "device_limit": 1,
+        "unique_email": "idem@test.com",
+        "price": 100,
+    }
+    await add_payment(payment_id, user_id, "succeeded", meta=meta)
+
+    with patch(
+        "bot.handlers.api_support.payment_processors.get_globals",
+        return_value=mock_managers,
+    ):
+        await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
+        subs_after_first = await get_all_subscriptions_by_user(user_id, include_deleted=False)
+        await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
+        subs_after_second = await get_all_subscriptions_by_user(user_id, include_deleted=False)
+
+    assert len(subs_after_first) >= 1
+    assert len(subs_after_second) == len(subs_after_first)
+
+
+@pytest.mark.asyncio
+async def test_process_payment_webhook_new_purchase_creates_subscription(
+    db_with_server, mock_bot_app, mock_managers
+):
+    """process_payment_webhook with succeeded creates subscription and activates payment."""
+    user_id = "web_newbuyer"
+    await get_or_create_subscriber(user_id)
+    payment_id = "pay_new_002"
+    meta = {
+        "type": "month",
+        "device_limit": 1,
+        "unique_email": "new@test.com",
+        "price": 150,
+    }
+    await add_payment(payment_id, user_id, "succeeded", meta=meta)
+
+    with patch(
+        "bot.handlers.api_support.payment_processors.get_globals",
+        return_value=mock_managers,
+    ):
+        await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
+
+    payment = await get_payment_by_id(payment_id)
+    assert payment is not None
+    assert payment.get("activated") == 1
+
+    subs = await get_all_subscriptions_by_user(user_id, include_deleted=False)
+    assert len(subs) >= 1
+    sub = subs[0]
+    assert sub.get("status") == "active"
+    now = int(datetime.datetime.now().timestamp())
+    # expires_at roughly now + 30 days
+    assert sub.get("expires_at", 0) > now
+    assert sub.get("expires_at", 0) <= now + (35 * 24 * 60 * 60)
