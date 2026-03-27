@@ -39,7 +39,7 @@ def _parse_price(raw: str | None, fallback: int) -> int:
 
 async def refresh_prices_from_db() -> None:
     """Обновляет PRICE_MONTH, PRICE_3MONTH и словарь PRICES из БД (или env по умолчанию)."""
-    global PRICE_MONTH, PRICE_3MONTH, PRICES
+    global PRICE_MONTH, PRICE_3MONTH
     from bot.db.config_db import get_config
 
     pm = await get_config(CONFIG_KEY_PRICE_MONTH, None)

@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=13">
+    <link rel="stylesheet" href="/style.css?v=14">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -1346,6 +1346,57 @@
         </div>
     </div>
 
+    <!-- Универсальные диалоги приложения (вместо alert/confirm/prompt) -->
+    <div id="app-dialog" class="modal app-dialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+        <div class="modal-content app-dialog-panel" style="max-width: 420px;">
+            <h2 id="app-dialog-title">Сообщение</h2>
+            <div id="app-dialog-body" class="app-dialog-body hint" style="margin-top: 8px;"></div>
+            <div id="app-dialog-prompt-wrap" class="form-group" style="display: none; margin-top: 12px;">
+                <label id="app-dialog-prompt-label" for="app-dialog-prompt-input">Ввод</label>
+                <input type="text" id="app-dialog-prompt-input" class="app-dialog-prompt-input" autocomplete="off" />
+            </div>
+            <div class="form-actions app-dialog-footer" style="margin-top: 20px; flex-direction: row; gap: 10px;">
+                <button type="button" class="btn-secondary" id="app-dialog-btn-cancel" style="display: none; flex: 1;">Отмена</button>
+                <button type="button" class="btn-primary" id="app-dialog-btn-primary" style="flex: 1;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ссылка подписки скопирована -->
+    <div id="subscription-copy-success-modal" class="modal" style="display: none;" role="dialog" aria-modal="true">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>Ссылка скопирована</h2>
+            <p class="hint" style="margin-top: 10px; line-height: 1.5;">Вставьте её в ваше VPN-приложение (v2rayNG, Hiddify, Streisand и др.) в поле подписки или импорта по URL.</p>
+            <button type="button" class="btn-primary" style="width: 100%; margin-top: 18px;" onclick="closeModal('subscription-copy-success-modal')">Понятно</button>
+        </div>
+    </div>
+
+    <!-- Не удалось скопировать ссылку подписки — вручную -->
+    <div id="subscription-copy-manual-modal" class="modal" style="display: none;" role="dialog" aria-modal="true">
+        <div class="modal-content" style="max-width: 420px;">
+            <h2>Не удалось скопировать автоматически</h2>
+            <p class="hint" style="margin-top: 10px; line-height: 1.5;">Скопируйте ссылку вручную: выделите текст в поле ниже и используйте «Копировать» в меню браузера. Если не получается — обратитесь в поддержку через раздел «О приложении».</p>
+            <div class="form-group" style="margin-top: 12px;">
+                <label for="subscription-copy-manual-url">Ссылка подписки</label>
+                <input type="text" id="subscription-copy-manual-url" readonly class="app-copy-manual-field" onclick="this.select();" />
+            </div>
+            <button type="button" class="btn-primary" style="width: 100%; margin-top: 16px;" onclick="closeModal('subscription-copy-manual-modal')">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Универсальное ручное копирование (реферальный код и др.) -->
+    <div id="generic-copy-manual-modal" class="modal" style="display: none;" role="dialog" aria-modal="true">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2 id="generic-copy-manual-heading">Скопируйте вручную</h2>
+            <p class="hint" style="margin-top: 8px;">Выделите текст в поле ниже и скопируйте через меню браузера.</p>
+            <div class="form-group" style="margin-top: 12px;">
+                <label for="generic-copy-manual-url">Текст</label>
+                <input type="text" id="generic-copy-manual-url" readonly class="app-copy-manual-field" onclick="this.select();" />
+            </div>
+            <button type="button" class="btn-primary" style="width: 100%; margin-top: 16px;" onclick="closeModal('generic-copy-manual-modal')">Закрыть</button>
+        </div>
+    </div>
+
     <!-- Модальное окно: Отвязка Telegram -->
     <div id="unlink-telegram-modal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 400px;">
@@ -1365,6 +1416,6 @@
         </div>
     </div>
 
-    <script src="/app.js?v=11"></script>
+    <script src="/app.js?v=12"></script>
 </body>
 </html>

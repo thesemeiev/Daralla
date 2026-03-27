@@ -227,18 +227,12 @@ var platform = (function () {
             }
         },
         showAlert: function (msg) {
-            if (_isTelegram && _tg && typeof _tg.showAlert === 'function') {
-                try { _tg.showAlert(msg); } catch (e) { alert(msg); }
-            } else {
-                alert(msg);
-            }
+            appShowAlert(String(msg || ''), { title: 'Сообщение' });
         },
         showConfirm: function (msg, callback) {
-            if (_isTelegram && _tg && typeof _tg.showConfirm === 'function') {
-                try { _tg.showConfirm(msg, function (result) { if (typeof callback === 'function') callback(result); }); } catch (e) { if (typeof callback === 'function') callback(confirm(msg)); }
-            } else {
-                if (typeof callback === 'function') callback(confirm(msg)); else confirm(msg);
-            }
+            appShowConfirm(String(msg || ''), { title: 'Подтверждение' }).then(function (ok) {
+                if (typeof callback === 'function') callback(ok);
+            });
         }
     };
 })();
@@ -1114,6 +1108,196 @@ function closeModal(modalId) {
     }
 }
 
+/**
+ * Копирование в буфер: сначала Clipboard API, затем execCommand (Opera и др.).
+ * @param {string} text
+ * @returns {Promise<boolean>}
+ */
+function copyTextToClipboard(text) {
+    var s = String(text || '');
+    if (!s) return Promise.resolve(false);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(s).then(function () { return true; }).catch(function () {
+            return copyTextToClipboardExec(s);
+        });
+    }
+    return Promise.resolve(copyTextToClipboardExec(s));
+}
+
+function copyTextToClipboardExec(s) {
+    try {
+        var ta = document.createElement('textarea');
+        ta.value = s;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, s.length);
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+    } catch (e) {
+        console.warn('execCommand copy failed', e);
+        return false;
+    }
+}
+
+function _appDialogOnEscape(e) {
+    if (e.key !== 'Escape') return;
+    var modal = document.getElementById('app-dialog');
+    if (!modal || modal.style.display !== 'flex') return;
+    var cancelBtn = document.getElementById('app-dialog-btn-cancel');
+    if (cancelBtn && cancelBtn.style.display !== 'none') {
+        cancelBtn.click();
+    } else {
+        var p = document.getElementById('app-dialog-btn-primary');
+        if (p) p.click();
+    }
+}
+
+function appShowAlert(message, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+        var modal = document.getElementById('app-dialog');
+        if (!modal) {
+            resolve();
+            return;
+        }
+        var titleEl = document.getElementById('app-dialog-title');
+        var bodyEl = document.getElementById('app-dialog-body');
+        var promptWrap = document.getElementById('app-dialog-prompt-wrap');
+        var cancelBtn = document.getElementById('app-dialog-btn-cancel');
+        var primaryBtn = document.getElementById('app-dialog-btn-primary');
+        var input = document.getElementById('app-dialog-prompt-input');
+        titleEl.textContent = opts.title || 'Сообщение';
+        bodyEl.textContent = message || '';
+        bodyEl.style.whiteSpace = 'pre-wrap';
+        bodyEl.style.display = '';
+        promptWrap.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        primaryBtn.textContent = opts.okText || 'OK';
+        modal.classList.remove('app-dialog--error', 'app-dialog--success', 'app-dialog--info');
+        if (opts.variant === 'error') modal.classList.add('app-dialog--error');
+        else if (opts.variant === 'success') modal.classList.add('app-dialog--success');
+        else if (opts.variant === 'info') modal.classList.add('app-dialog--info');
+        function finish() {
+            primaryBtn.onclick = null;
+            document.removeEventListener('keydown', _appDialogOnEscape);
+            closeModal('app-dialog');
+            resolve();
+        }
+        primaryBtn.onclick = finish;
+        document.addEventListener('keydown', _appDialogOnEscape);
+        showModal('app-dialog');
+        try { input.blur(); } catch (err) {}
+    });
+}
+
+function appShowConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+        var modal = document.getElementById('app-dialog');
+        if (!modal) {
+            resolve(false);
+            return;
+        }
+        var titleEl = document.getElementById('app-dialog-title');
+        var bodyEl = document.getElementById('app-dialog-body');
+        var promptWrap = document.getElementById('app-dialog-prompt-wrap');
+        var cancelBtn = document.getElementById('app-dialog-btn-cancel');
+        var primaryBtn = document.getElementById('app-dialog-btn-primary');
+        titleEl.textContent = opts.title || 'Подтверждение';
+        bodyEl.textContent = message || '';
+        bodyEl.style.whiteSpace = 'pre-wrap';
+        bodyEl.style.display = '';
+        promptWrap.style.display = 'none';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = opts.cancelText || 'Отмена';
+        primaryBtn.textContent = opts.confirmText || 'Подтвердить';
+        modal.classList.remove('app-dialog--error', 'app-dialog--success', 'app-dialog--info');
+        function cleanup() {
+            primaryBtn.onclick = null;
+            cancelBtn.onclick = null;
+            document.removeEventListener('keydown', _appDialogOnEscape);
+            closeModal('app-dialog');
+        }
+        cancelBtn.onclick = function () { cleanup(); resolve(false); };
+        primaryBtn.onclick = function () { cleanup(); resolve(true); };
+        document.addEventListener('keydown', _appDialogOnEscape);
+        showModal('app-dialog');
+    });
+}
+
+/**
+ * @param {string} labelText — подпись к полю ввода
+ * @param {string} defaultValue
+ * @param {{ title?: string, hint?: string }} opts
+ * @returns {Promise<string|null>} null если отмена
+ */
+function appShowPrompt(labelText, defaultValue, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+        var modal = document.getElementById('app-dialog');
+        if (!modal) {
+            resolve(null);
+            return;
+        }
+        var titleEl = document.getElementById('app-dialog-title');
+        var bodyEl = document.getElementById('app-dialog-body');
+        var promptWrap = document.getElementById('app-dialog-prompt-wrap');
+        var cancelBtn = document.getElementById('app-dialog-btn-cancel');
+        var primaryBtn = document.getElementById('app-dialog-btn-primary');
+        var labelEl = document.getElementById('app-dialog-prompt-label');
+        var input = document.getElementById('app-dialog-prompt-input');
+        titleEl.textContent = opts.title || 'Ввод';
+        if (opts.hint) {
+            bodyEl.textContent = opts.hint;
+            bodyEl.style.display = '';
+        } else {
+            bodyEl.textContent = '';
+            bodyEl.style.display = 'none';
+        }
+        bodyEl.style.whiteSpace = 'pre-wrap';
+        promptWrap.style.display = '';
+        labelEl.textContent = labelText || '';
+        input.value = defaultValue != null ? String(defaultValue) : '';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = opts.cancelText || 'Отмена';
+        primaryBtn.textContent = opts.okText || 'Сохранить';
+        modal.classList.remove('app-dialog--error', 'app-dialog--success', 'app-dialog--info');
+        function cleanup() {
+            primaryBtn.onclick = null;
+            cancelBtn.onclick = null;
+            input.onkeydown = null;
+            document.removeEventListener('keydown', _appDialogOnEscape);
+            closeModal('app-dialog');
+        }
+        cancelBtn.onclick = function () { cleanup(); resolve(null); };
+        primaryBtn.onclick = function () {
+            var v = (input.value || '').trim();
+            cleanup();
+            resolve(v);
+        };
+        input.onkeydown = function (ev) {
+            if (ev.key === 'Enter') {
+                ev.preventDefault();
+                primaryBtn.click();
+            }
+        };
+        document.addEventListener('keydown', _appDialogOnEscape);
+        showModal('app-dialog');
+        setTimeout(function () {
+            try {
+                input.focus();
+                input.select();
+            } catch (e) {}
+        }, 50);
+    });
+}
+
 // Глобальная переменная для хранения текущей подписки
 let currentSubscriptionDetail = null;
 
@@ -1605,11 +1789,16 @@ function loadEventDetail(eventId) {
         if (contentEl) contentEl.innerHTML = '<p class="hint">Не удалось загрузить событие</p>';
     });
 }
-function copyEventReferralCode(code) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).then(function () { alert('Код скопирован'); }).catch(function () { prompt('Скопируйте код:', code); });
+async function copyEventReferralCode(code) {
+    var ok = await copyTextToClipboard(code);
+    if (ok) {
+        await appShowAlert('Код скопирован в буфер обмена.', { title: 'Готово', variant: 'success' });
     } else {
-        prompt('Скопируйте код:', code);
+        var el = document.getElementById('generic-copy-manual-url');
+        var h = document.getElementById('generic-copy-manual-heading');
+        if (el) el.value = code;
+        if (h) h.textContent = 'Скопируйте код вручную';
+        showModal('generic-copy-manual-modal');
     }
 }
 
@@ -1680,13 +1869,13 @@ function closeAdminEventForm() {
     document.getElementById('admin-event-form-modal').style.display = 'none';
     adminEventEditingId = null;
 }
-function submitAdminEventForm(event) {
+async function submitAdminEventForm(event) {
     event.preventDefault();
     var name = document.getElementById('admin-event-name').value.trim();
     var description = document.getElementById('admin-event-description').value.trim();
     var startAt = document.getElementById('admin-event-start').value;
     var endAt = document.getElementById('admin-event-end').value;
-    if (!startAt || !endAt) { alert('Укажите начало и окончание'); return; }
+    if (!startAt || !endAt) { await appShowAlert('Укажите начало и окончание', { title: 'Ошибка', variant: 'error' }); return; }
     if (startAt.length === 16) startAt += ':00';
     if (endAt.length === 16) endAt += ':00';
     var r1 = (document.getElementById('admin-event-reward1').value || '').trim();
@@ -1699,19 +1888,29 @@ function submitAdminEventForm(event) {
     var payload = { name: name, description: description, start_at: startAt, end_at: endAt, rewards: rewards };
     var url = adminEventEditingId ? '/api/events/admin/' + adminEventEditingId : '/api/events/admin/create';
     var method = adminEventEditingId ? 'PUT' : 'POST';
-    apiFetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(function (r) {
-        if (r.ok) { closeAdminEventForm(); loadAdminEventsPage(); } else { return r.json().then(function (d) { alert(d.error || 'Ошибка'); }); }
-    }).catch(function () { alert('Ошибка сети'); });
+    try {
+        var r = await apiFetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (r.ok) { closeAdminEventForm(); loadAdminEventsPage(); } else {
+            var d = await r.json().catch(function () { return {}; });
+            await appShowAlert(d.error || 'Ошибка', { title: 'Ошибка', variant: 'error' });
+        }
+    } catch (e) {
+        await appShowAlert('Ошибка сети', { title: 'Ошибка', variant: 'error' });
+    }
 }
-function deleteAdminEvent(eventId) {
-    if (!confirm('Удалить событие?')) return;
-    apiFetch('/api/events/admin/' + eventId, { method: 'DELETE' }).then(function (r) {
-        if (r.ok) loadAdminEventsPage(); else alert('Ошибка удаления');
-    }).catch(function () { alert('Ошибка сети'); });
+async function deleteAdminEvent(eventId) {
+    var ok = await appShowConfirm('Удалить событие?', { title: 'Подтверждение' });
+    if (!ok) return;
+    try {
+        var r = await apiFetch('/api/events/admin/' + eventId, { method: 'DELETE' });
+        if (r.ok) loadAdminEventsPage(); else await appShowAlert('Ошибка удаления', { variant: 'error' });
+    } catch (e) {
+        await appShowAlert('Ошибка сети', { variant: 'error' });
+    }
 }
 
 // ── Notification Rules ──
@@ -2023,8 +2222,8 @@ async function saveNotificationRule(e) {
     var bodyVal = (document.getElementById('notif-rule-body').value || '').trim();
     var isActive = document.getElementById('notif-rule-active').checked;
 
-    if (!hours) { alert('Укажите время срабатывания'); return; }
-    if (!titleVal && !bodyVal) { alert('Заполните заголовок или текст сообщения'); return; }
+    if (!hours) { await appShowAlert('Укажите время срабатывания', { title: 'Ошибка', variant: 'error' }); return; }
+    if (!titleVal && !bodyVal) { await appShowAlert('Заполните заголовок или текст сообщения', { title: 'Ошибка', variant: 'error' }); return; }
 
     var triggerHours = eventType === 'expiry_warning' ? -hours : hours;
     var repeat = getRepeatData();
@@ -2054,26 +2253,34 @@ async function saveNotificationRule(e) {
             loadNotificationRules();
         } else {
             var d = await resp.json().catch(function () { return {}; });
-            alert(d.error || 'Ошибка сохранения');
+            await appShowAlert(d.error || 'Ошибка сохранения', { title: 'Ошибка', variant: 'error' });
         }
-    } catch (err) { alert('Ошибка сети'); }
+    } catch (err) { await appShowAlert('Ошибка сети', { variant: 'error' }); }
 }
 
-function deleteNotificationRule(ruleId) {
-    if (!confirm('Удалить правило уведомления?')) return;
-    apiFetch('/api/admin/notification-rules/' + ruleId, { method: 'DELETE' }).then(function (r) {
-        if (r.ok) loadNotificationRules(); else alert('Ошибка удаления');
-    }).catch(function () { alert('Ошибка сети'); });
+async function deleteNotificationRule(ruleId) {
+    var ok = await appShowConfirm('Удалить правило уведомления?', { title: 'Подтверждение' });
+    if (!ok) return;
+    try {
+        var r = await apiFetch('/api/admin/notification-rules/' + ruleId, { method: 'DELETE' });
+        if (r.ok) loadNotificationRules(); else await appShowAlert('Ошибка удаления', { variant: 'error' });
+    } catch (e) {
+        await appShowAlert('Ошибка сети', { variant: 'error' });
+    }
 }
 
-function toggleNotificationRule(ruleId, isActive) {
-    apiFetch('/api/admin/notification-rules/' + ruleId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: isActive })
-    }).then(function (r) {
-        if (!r.ok) { alert('Ошибка'); loadNotificationRules(); }
-    }).catch(function () { alert('Ошибка сети'); loadNotificationRules(); });
+async function toggleNotificationRule(ruleId, isActive) {
+    try {
+        var r = await apiFetch('/api/admin/notification-rules/' + ruleId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+        });
+        if (!r.ok) { await appShowAlert('Ошибка', { variant: 'error' }); loadNotificationRules(); }
+    } catch (e) {
+        await appShowAlert('Ошибка сети', { variant: 'error' });
+        loadNotificationRules();
+    }
 }
 
 async function testSendNotificationRule() {
@@ -2090,11 +2297,11 @@ async function testSendNotificationRule() {
         if (resp.ok) {
             if (btn) { btn.textContent = 'Отправлено ✓'; setTimeout(function () { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }, 2000); }
         } else {
-            alert(d.error || 'Ошибка отправки');
+            await appShowAlert(d.error || 'Ошибка отправки', { variant: 'error' });
             if (btn) { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }
         }
     } catch (err) {
-        alert('Ошибка сети');
+        await appShowAlert('Ошибка сети', { variant: 'error' });
         if (btn) { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }
     }
 }
@@ -2873,32 +3080,24 @@ function renderServers(servers) {
 
 // Функция копирования ссылки подписки
 // Функция показа модального окна переименования подписки
-function showRenameSubscriptionModal() {
+async function showRenameSubscriptionModal() {
     if (!currentSubscriptionDetail) {
-        alert('Ошибка: информация о подписке не найдена');
+        await appShowAlert('Информация о подписке не найдена.', { title: 'Ошибка', variant: 'error' });
         return;
     }
-    
     const currentName = currentSubscriptionDetail.name;
-    const newName = prompt('Введите новое название подписки:', currentName);
-    
-    if (newName === null) {
-        // Пользователь отменил
-        return;
-    }
-    
+    const newName = await appShowPrompt('Название подписки', currentName, {
+        title: 'Переименование',
+        hint: 'Введите новое название подписки.',
+        okText: 'Сохранить'
+    });
+    if (newName === null) return;
     const trimmedName = newName.trim();
     if (!trimmedName) {
-        alert('Название не может быть пустым');
+        await appShowAlert('Название не может быть пустым.', { title: 'Ошибка', variant: 'error' });
         return;
     }
-    
-    if (trimmedName === currentName) {
-        // Имя не изменилось
-        return;
-    }
-    
-    // Вызываем функцию переименования
+    if (trimmedName === currentName) return;
     renameSubscription(currentSubscriptionDetail.id, trimmedName);
 }
 
@@ -2909,9 +3108,9 @@ let currentPaymentData = null;
 let currentPaymentPeriod = null;
 
 // Функция показа страницы продления подписки (сразу на оформление с карточками)
-function showExtendSubscriptionModal(subscriptionId) {
+async function showExtendSubscriptionModal(subscriptionId) {
     if (!subscriptionId) {
-        alert('Ошибка: ID подписки не найден');
+        await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
         return;
     }
     currentExtendSubscriptionId = subscriptionId;
@@ -3410,34 +3609,16 @@ async function renameSubscription(subId, newName) {
     }
 }
 
-function copySubscriptionLink(token) {
+async function copySubscriptionLink(token) {
     const webhookUrl = window.location.origin;
     const subscriptionUrl = `${webhookUrl}/sub/${token}`;
-    
-    var showCopyMessage = function (msg) { platform.showAlert(msg); };
-    // Копируем в буфер обмена
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(subscriptionUrl).then(() => {
-            showCopyMessage('Ссылка скопирована в буфер обмена!');
-        }).catch(err => {
-            console.error('Ошибка копирования:', err);
-            showCopyMessage('Ошибка копирования ссылки');
-        });
+    const ok = await copyTextToClipboard(subscriptionUrl);
+    if (ok) {
+        showModal('subscription-copy-success-modal');
     } else {
-        // Fallback для старых браузеров
-        const textarea = document.createElement('textarea');
-        textarea.value = subscriptionUrl;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            showCopyMessage('Ссылка скопирована в буфер обмена!');
-        } catch (err) {
-            showCopyMessage('Ошибка копирования ссылки');
-        }
-        document.body.removeChild(textarea);
+        var manualEl = document.getElementById('subscription-copy-manual-url');
+        if (manualEl) manualEl.value = subscriptionUrl;
+        showModal('subscription-copy-manual-modal');
     }
 }
 
@@ -4037,7 +4218,7 @@ async function showAdminSubscriptionEdit(subId) {
     } catch (error) {
         console.error('Ошибка загрузки подписки:', error);
         document.getElementById('admin-subscription-edit-loading').style.display = 'none';
-        alert('Ошибка загрузки подписки');
+        await appShowAlert('Не удалось загрузить подписку.', { title: 'Ошибка', variant: 'error' });
     }
 }
 
@@ -4053,7 +4234,7 @@ async function saveSubscriptionChanges(event) {
     }
     
     if (!currentEditingSubscriptionId || !originalSubscriptionData) {
-        alert('Ошибка: данные подписки не загружены');
+        await appShowAlert('Данные подписки не загружены.', { title: 'Ошибка', variant: 'error' });
         return;
     }
     
@@ -4112,8 +4293,7 @@ async function saveSubscriptionChanges(event) {
         // Показываем модальное окно
         document.getElementById('subscription-confirm-modal').style.display = 'flex';
     } else {
-        // Нет изменений - просто возвращаемся
-        alert('Нет изменений для сохранения');
+        await appShowAlert('Нет изменений для сохранения.', { title: 'Сообщение' });
     }
 }
 
@@ -4174,14 +4354,12 @@ async function confirmSaveSubscriptionChanges() {
         // Закрываем модальное окно
         closeSubscriptionConfirmModal();
         
-        // Показываем успешное сообщение
-        alert('Изменения сохранены и синхронизированы с серверами!');
+        await appShowAlert('Изменения сохранены и синхронизированы с серверами.', { title: 'Готово', variant: 'success' });
         
-        // Возвращаемся назад
         goBackFromSubscriptionEdit();
     } catch (error) {
         console.error('Ошибка сохранения подписки:', error);
-        alert('Ошибка сохранения: ' + error.message);
+        await appShowAlert('Ошибка сохранения: ' + error.message, { title: 'Ошибка', variant: 'error' });
         
         // Восстанавливаем кнопку при ошибке
         if (confirmBtn) {
@@ -4195,7 +4373,7 @@ async function confirmSaveSubscriptionChanges() {
 async function syncSubscription() {
     try {
         if (!currentEditingSubscriptionId) {
-            alert('Ошибка: ID подписки не найден');
+            await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
             return;
         }
         
@@ -4233,7 +4411,7 @@ async function syncSubscription() {
         syncBtn.textContent = 'Синхронизировать';
     } catch (error) {
         console.error('Ошибка синхронизации:', error);
-        alert('Ошибка синхронизации: ' + error.message);
+        await appShowAlert('Ошибка синхронизации: ' + error.message, { title: 'Ошибка', variant: 'error' });
         const syncBtn = document.querySelector('.btn-sync');
         syncBtn.disabled = false;
         syncBtn.textContent = 'Синхронизировать';
@@ -4310,43 +4488,24 @@ function loadSubscriptionKeys(servers) {
     keysListEl.innerHTML = html;
 }
 
-// Функция копирования в буфер обмена
-function copyToClipboard(text, button) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-            const originalText = button.textContent;
-            button.textContent = '✓';
-            button.style.color = '#4caf50';
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.style.color = '';
-            }, 2000);
-        }).catch(err => {
-            console.error('Ошибка копирования:', err);
-            alert('Не удалось скопировать');
-        });
+// Функция копирования в буфер обмена (админка)
+async function copyToClipboard(text, button) {
+    if (!button) return;
+    const ok = await copyTextToClipboard(text);
+    if (ok) {
+        const originalText = button.textContent;
+        button.textContent = '✓';
+        button.style.color = '#4caf50';
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.color = '';
+        }, 2000);
     } else {
-        // Fallback для старых браузеров
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            const originalText = button.textContent;
-            button.textContent = '✓';
-            button.style.color = '#4caf50';
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.style.color = '';
-            }, 2000);
-        } catch (err) {
-            console.error('Ошибка копирования:', err);
-            alert('Не удалось скопировать');
-        }
-        document.body.removeChild(textArea);
+        var el = document.getElementById('generic-copy-manual-url');
+        var h = document.getElementById('generic-copy-manual-heading');
+        if (el) el.value = text;
+        if (h) h.textContent = 'Скопируйте вручную';
+        showModal('generic-copy-manual-modal');
     }
 }
 
@@ -4530,7 +4689,7 @@ async function createSubscription(event) {
     
     try {
         if (!currentCreatingSubscriptionUserId) {
-            alert('Ошибка: ID пользователя не найден');
+            await appShowAlert('ID пользователя не найден.', { title: 'Ошибка', variant: 'error' });
             return;
         }
         
@@ -4572,7 +4731,7 @@ async function createSubscription(event) {
             message += `\n\nПредупреждение: не удалось создать клиентов на серверах: ${data.failed_servers.map(s => s.server).join(', ')}`;
         }
         
-        alert(message);
+        await appShowAlert(message, { title: 'Готово', variant: 'success' });
         
         // Сбрасываем кнопку до навигации, чтобы при повторном открытии формы она была в нужном состоянии
         const formEl = event.target;
@@ -4586,7 +4745,7 @@ async function createSubscription(event) {
         goBackFromCreateSubscription();
     } catch (error) {
         console.error('Ошибка создания подписки:', error);
-        alert('Ошибка создания: ' + error.message);
+        await appShowAlert('Ошибка создания: ' + error.message, { title: 'Ошибка', variant: 'error' });
         const formEl = event.target;
         const submitBtn = formEl && formEl.querySelector('button[type="submit"]');
         if (submitBtn) {
@@ -4597,24 +4756,22 @@ async function createSubscription(event) {
 }
 
 // Подтверждение удаления подписки
-function confirmDeleteSubscription() {
+async function confirmDeleteSubscription() {
     if (!currentEditingSubscriptionId) {
-        alert('Ошибка: ID подписки не найден');
+        await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
         return;
     }
-    
     const subscriptionName = document.getElementById('sub-name').value || `Подписка ${currentEditingSubscriptionId}`;
-    
-    if (confirm(`Вы уверены, что хотите удалить подписку "${subscriptionName}"?\n\nЭто действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.`)) {
-        deleteSubscription();
-    }
+    const msg = 'Вы уверены, что хотите удалить подписку «' + subscriptionName + '»?\n\nЭто действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.';
+    const ok = await appShowConfirm(msg, { title: 'Удаление подписки', confirmText: 'Удалить' });
+    if (ok) deleteSubscription();
 }
 
 // Удаление подписки
 async function deleteSubscription() {
     try {
         if (!currentEditingSubscriptionId) {
-            alert('Ошибка: ID подписки не найден');
+            await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
             return;
         }
         
@@ -4639,13 +4796,12 @@ async function deleteSubscription() {
         
         const data = await response.json();
         
-        alert('Подписка успешно удалена!');
+        await appShowAlert('Подписка успешно удалена.', { title: 'Готово', variant: 'success' });
         
-        // Возвращаемся назад
         goBackFromSubscriptionEdit();
     } catch (error) {
         console.error('Ошибка удаления подписки:', error);
-        alert('Ошибка удаления: ' + error.message);
+        await appShowAlert('Ошибка удаления: ' + error.message, { title: 'Ошибка', variant: 'error' });
         const deleteBtn = document.querySelector('.btn-danger');
         deleteBtn.disabled = false;
         deleteBtn.textContent = 'Удалить подписку';
@@ -5292,15 +5448,15 @@ async function handleWebAccessSetup(event) {
     const confirm = document.getElementById('web-access-password-confirm').value;
     
     if (username.length < 3) {
-        alert('Логин должен быть не менее 3 символов');
+        await appShowAlert('Логин должен быть не менее 3 символов', { title: 'Ошибка', variant: 'error' });
         return;
     }
     if (password.length < 6) {
-        alert('Пароль: минимум 8 символов, нужны буква и цифра');
+        await appShowAlert('Пароль: минимум 8 символов, нужны буква и цифра', { title: 'Ошибка', variant: 'error' });
         return;
     }
     if (password !== confirm) {
-        alert('Пароли не совпадают');
+        await appShowAlert('Пароли не совпадают', { title: 'Ошибка', variant: 'error' });
         return;
     }
 
@@ -5900,9 +6056,7 @@ async function sendBroadcast() {
     var confirmText = isSelectMode
         ? 'Вы уверены, что хотите отправить рассылку ' + broadcastSelectedUsers.length + ' выбранным пользователям?'
         : 'Вы уверены, что хотите отправить рассылку всем пользователям?';
-    var confirmed = await new Promise(function (resolve) {
-        platform.showConfirm(confirmText, resolve);
-    });
+    var confirmed = await appShowConfirm(confirmText, { title: 'Рассылка' });
     if (!confirmed) return;
     
     // Блокируем кнопку и показываем загрузку
@@ -6813,7 +6967,7 @@ async function loadServerManagement() {
     } catch (err) {
         console.error('Ошибка загрузки управления серверами:', err);
         if (loadingEl) loadingEl.style.display = 'none';
-        alert('Ошибка при загрузке данных: ' + err.message);
+        await appShowAlert('Ошибка при загрузке данных: ' + err.message, { title: 'Ошибка', variant: 'error' });
     }
 }
 
@@ -6955,11 +7109,11 @@ async function saveServerGroup(event) {
             closeModal('server-group-modal');
             loadServerGroups();
         } else {
-            alert('Ошибка: ' + result.error);
+            await appShowAlert('Ошибка: ' + result.error, { title: 'Ошибка', variant: 'error' });
         }
     } catch (err) {
         console.error('Ошибка сохранения группы:', err);
-        alert('Ошибка при сохранении');
+        await appShowAlert('Ошибка при сохранении', { title: 'Ошибка', variant: 'error' });
     }
 }
 
@@ -7060,7 +7214,7 @@ async function toggleServerActive(serverId, makeActive) {
         showAdminToast(parts.join(' · '));
     } catch (e) {
         input.checked = revertTo;
-        alert('Не удалось изменить: ' + (e.message || e));
+        await appShowAlert('Не удалось изменить: ' + (e.message || e), { title: 'Ошибка', variant: 'error' });
     } finally {
         input.disabled = false;
         delete input.dataset.busy;
@@ -7195,7 +7349,8 @@ async function saveServerConfig(event) {
             const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
             loadServersInGroup(currentSelectedGroupId, group.name);
             if (result.client_flow_changed && result.server_id) {
-                if (confirm('Обновить flow у существующих клиентов на этом сервере?')) {
+                var doSync = await appShowConfirm('Обновить flow у существующих клиентов на этом сервере?', { title: 'Синхронизация flow' });
+                if (doSync) {
                     try {
                         const syncRes = await apiFetch('/api/admin/server-config/sync-flow', {
                             method: 'POST',
@@ -7204,13 +7359,13 @@ async function saveServerConfig(event) {
                         });
                         const syncData = await syncRes.json();
                         if (syncData.success) {
-                            alert(`Обновлено клиентов: ${syncData.updated}${syncData.errors?.length ? '. Ошибки: ' + syncData.errors.slice(0, 3).join('; ') : ''}`);
+                            await appShowAlert('Обновлено клиентов: ' + syncData.updated + (syncData.errors?.length ? '. Ошибки: ' + syncData.errors.slice(0, 3).join('; ') : ''), { title: 'Готово', variant: 'success' });
                         } else {
-                            alert('Ошибка синхронизации flow: ' + (syncData.error || 'unknown'));
+                            await appShowAlert('Ошибка синхронизации flow: ' + (syncData.error || 'unknown'), { variant: 'error' });
                         }
                     } catch (e) {
                         console.error('sync-flow', e);
-                        alert('Ошибка при синхронизации flow');
+                        await appShowAlert('Ошибка при синхронизации flow', { variant: 'error' });
                     }
                 }
             }
@@ -7225,20 +7380,21 @@ async function saveServerConfig(event) {
                 }
                 var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');
                 if (result.sync_error) msg += '\nПредупреждение: ' + result.sync_error;
-                alert(msg);
+                await appShowAlert(msg, { title: 'Синхронизация' });
             }
         } else {
-            alert('Ошибка: ' + result.error);
+            await appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
         }
     } catch (err) {
         console.error('Ошибка сохранения сервера:', err);
-        alert('Ошибка при сохранении');
+        await appShowAlert('Ошибка при сохранении', { variant: 'error' });
     }
 }
 
 // Удаление сервера
 async function deleteServerConfig(serverId) {
-    if (!confirm('Вы уверены, что хотите удалить конфигурацию сервера? Это не удалит клиентов с самого сервера, но бот перестанет его использовать.')) return;
+    var okDel = await appShowConfirm('Вы уверены, что хотите удалить конфигурацию сервера? Это не удалит клиентов с самого сервера, но бот перестанет его использовать.', { title: 'Удаление сервера', confirmText: 'Удалить' });
+    if (!okDel) return;
 
     try {
         const response = await apiFetch('/api/admin/server-config/delete', {
@@ -7251,20 +7407,19 @@ async function deleteServerConfig(serverId) {
             const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
             loadServersInGroup(currentSelectedGroupId, group.name);
         } else {
-            alert('Ошибка: ' + result.error);
+            await appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
         }
     } catch (err) {
         console.error('Ошибка удаления сервера:', err);
-        alert('Ошибка при удалении');
+        await appShowAlert('Ошибка при удалении', { variant: 'error' });
     }
 }
 
 // Синхронизация всех серверов
 async function syncAllServers() {
-    platform.showConfirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.', function (ok) {
-        if (!ok) return;
-        runSyncAllServers();
-    });
+    var ok = await appShowConfirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.', { title: 'Синхронизация' });
+    if (!ok) return;
+    runSyncAllServers();
 }
 async function runSyncAllServers() {
     platform.mainButton.show('СИНХРОНИЗАЦИЯ...', function () {});

@@ -466,6 +466,36 @@ input, textarea, select {
     caret-color: currentColor;
 }
 
+/* Универсальные диалоги приложения — поверх остальных модалок */
+.app-dialog {
+    z-index: 10050;
+}
+
+.app-dialog .app-dialog-body {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.app-dialog--error #app-dialog-title {
+    color: #e57373;
+}
+
+.app-dialog--success #app-dialog-title {
+    color: #81c784;
+}
+
+.app-copy-manual-field {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-primary);
+}
+
 /* Модальное окно */
 .modal {
     position: fixed;
