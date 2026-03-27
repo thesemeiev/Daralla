@@ -591,6 +591,28 @@ async def merge_user_into_target(source_user_id: str, target_user_id: str) -> bo
             raise
 
 
+async def reconcile_users_telegram_id_with_link(telegram_id: str) -> None:
+    """
+    Приводит колонку users.telegram_id в соответствие с telegram_links.
+    Нужна после гонок TG-first регистрации, когда ссылка уже на одном user_id,
+    а UNIQUE на telegram_id сорвался на другом.
+    """
+    row = await get_telegram_link(telegram_id)
+    if not row:
+        return
+    uid = row["user_id"]
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET telegram_id = NULL WHERE telegram_id = ? AND user_id != ?",
+            (telegram_id, uid),
+        )
+        await db.execute(
+            "UPDATE users SET telegram_id = ? WHERE user_id = ?",
+            (telegram_id, uid),
+        )
+        await db.commit()
+
+
 async def link_telegram_to_account(telegram_id: str, target_user_id: str) -> dict:
     """
     Единая точка привязки Telegram к аккаунту (target_user_id).
@@ -601,6 +623,10 @@ async def link_telegram_to_account(telegram_id: str, target_user_id: str) -> dic
     previous_owner = None
     if existing and existing.get("user_id") != target_user_id:
         previous_owner = existing["user_id"]
+    # Иначе UNIQUE на users.telegram_id: старый владелец ещё держит тот же telegram_id в колонке,
+    # пока мы не сбросим его и не запишем на целевой аккаунт.
+    if previous_owner:
+        await update_user_telegram_id(previous_owner, None)
     await create_telegram_link(telegram_id, target_user_id)
     await update_user_telegram_id(target_user_id, telegram_id)
     if previous_owner:

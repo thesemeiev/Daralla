@@ -27,8 +27,18 @@ async def _send_db_file(bot, admin_id: int, db_path: Path):
             gz_path = db_path
 
         filename = f"{db_path.name}.{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}.gz" if gz_path != db_path else db_path.name
+        caption = (
+            "Daralla — резервная копия базы\n"
+            f"Файл: {filename}\n"
+            "Автоотправка по расписанию."
+        )
         with gz_path.open('rb') as f:
-            await bot.send_document(chat_id=admin_id, document=f, filename=filename)
+            await bot.send_document(
+                chat_id=admin_id,
+                document=f,
+                filename=filename,
+                caption=caption[:1024],
+            )
 
         # Удаляем временный файл если он был создан
         if gz_path != db_path and gz_path.exists():

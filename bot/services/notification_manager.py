@@ -334,14 +334,18 @@ class NotificationManager:
             if stats.get('total_sent', 0) > 0:
                 success_rate = stats.get('success_rate', 0)
                 if success_rate < 80:
-                    await self._notify_admin(f"Внимание! Низкий процент доставки уведомлений: {success_rate:.1f}%")
+                    await self._notify_admin(
+                        "Низкая доставляемость пользовательских уведомлений за последние 7 дней: "
+                        f"{success_rate:.1f}%. Имеет смысл проверить шаблоны, блокировки бота и лимиты Telegram."
+                    )
         except Exception as e:
             logger.error(f"Ошибка сбора метрик: {e}")
     
     async def _notify_admin(self, message: str):
-        """Отправляет уведомление админу"""
+        """Служебное сообщение администраторам (метрики и мониторинг рассылки)."""
+        text = f"Daralla — уведомления\n\n{message}"
         for admin_id in self.admin_ids:
             try:
-                await self.bot.send_message(chat_id=admin_id, text=f"[VPNBot NOTIFICATIONS]\n{message}")
+                await self.bot.send_message(chat_id=admin_id, text=text)
             except Exception:
                 pass

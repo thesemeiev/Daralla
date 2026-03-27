@@ -33,7 +33,8 @@ from .users_db import (
     create_telegram_link, delete_telegram_link, get_telegram_link,
     is_known_telegram_id, mark_telegram_id_known, update_user_telegram_id,
     get_telegram_chat_id_for_notification, merge_user_into_target,
-    link_telegram_to_account, rename_user_id, delete_user_completely,
+    link_telegram_to_account, reconcile_users_telegram_id_with_link,
+    rename_user_id, delete_user_completely,
 )
 from .servers_db import (
     init_servers_db,
@@ -128,6 +129,7 @@ __all__ = [
     'create_telegram_link', 'delete_telegram_link', 'get_telegram_link',
     'is_known_telegram_id', 'mark_telegram_id_known', 'update_user_telegram_id',
     'get_telegram_chat_id_for_notification', 'merge_user_into_target', 'link_telegram_to_account',
+    'reconcile_users_telegram_id_with_link',
     'rename_user_id', 'delete_user_completely',
     'create_subscription', 'get_all_active_subscriptions', 'get_subscriptions_to_sync',
     'get_all_active_subscriptions_by_user', 'get_all_subscriptions_by_user',

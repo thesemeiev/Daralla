@@ -6927,6 +6927,71 @@ async function loadServersInGroup(groupId, groupName) {
     }
 }
 
+/** Короткое уведомление внизу экрана (без блокирующего alert) */
+function showAdminToast(message, duration) {
+    duration = duration || 4500;
+    var el = document.getElementById('admin-toast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'admin-toast';
+        el.className = 'admin-toast';
+        el.setAttribute('role', 'status');
+        document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add('admin-toast--visible');
+    clearTimeout(showAdminToast._timer);
+    showAdminToast._timer = setTimeout(function () {
+        el.classList.remove('admin-toast--visible');
+    }, duration);
+}
+
+/** Быстрое вкл/выкл ноды с карточки (без открытия модалки) */
+async function toggleServerActive(serverId, makeActive) {
+    var input = document.querySelector('input[data-server-toggle="' + serverId + '"]');
+    if (!input || input.dataset.busy === '1') return;
+    input.dataset.busy = '1';
+    input.disabled = true;
+    var revertTo = !makeActive;
+    try {
+        var response = await apiFetch('/api/admin/server-config/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: serverId, is_active: makeActive ? 1 : 0 })
+        });
+        var result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Ошибка');
+        var srv = currentAdminServers.find(function (s) { return s.id === serverId; });
+        if (srv) srv.is_active = makeActive ? 1 : 0;
+        var row = input.closest('.server-power-cell');
+        var label = row && row.querySelector('.server-power-label');
+        if (label) {
+            label.textContent = makeActive ? 'В сети' : 'Отключён';
+            label.classList.toggle('is-off', !makeActive);
+        }
+        var hint = row && row.querySelector('.server-power-hint');
+        if (hint) hint.textContent = makeActive ? 'В подписках' : 'Не в ключах';
+        var card = input.closest('.server-card');
+        if (card) card.classList.toggle('server-card-muted', !makeActive);
+        var parts = [];
+        parts.push(makeActive ? 'Сервер включён' : 'Сервер выключен');
+        if (result.sync_stats) {
+            var s = result.sync_stats;
+            if (s.clients_created != null) parts.push('клиентов: +' + s.clients_created);
+            if (s.servers_added != null) parts.push('привязок: +' + s.servers_added);
+            if (s.servers_removed != null) parts.push('снято: ' + s.servers_removed);
+        }
+        if (result.sync_error) parts.push('Предупреждение: ' + result.sync_error);
+        showAdminToast(parts.join(' · '));
+    } catch (e) {
+        input.checked = revertTo;
+        alert('Не удалось изменить: ' + (e.message || e));
+    } finally {
+        input.disabled = false;
+        delete input.dataset.busy;
+    }
+}
+
 // Отрисовка списка серверов
 function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
@@ -6935,20 +7000,36 @@ function renderServersInGroup(servers) {
         return;
     }
 
-    listEl.innerHTML = servers.map(server => `
-        <div class="admin-user-card server-card">
-            <div class="card-content-wrapper">
+    listEl.innerHTML = servers.map(server => {
+        const on = server.is_active === 1 || server.is_active === true;
+        const safeTitle = escapeHtml(server.display_name || server.name);
+        const safeHost = escapeHtml(server.host || '');
+        const safeName = escapeHtml(server.name || '');
+        return `
+        <div class="admin-user-card server-card${on ? '' : ' server-card-muted'}">
+            <div class="server-card-head">
                 <div class="card-main-info">
-                    <div class="card-title">${server.display_name || server.name}${(server.is_active === 0 || server.is_active === false) ? ' <span class="badge-inactive">Выкл</span>' : ''}</div>
-                    <div class="card-description">${server.host} | ${server.name}</div>
+                    <div class="card-title">${safeTitle}</div>
+                    <div class="card-description">${safeHost} · ${safeName}</div>
                 </div>
-                <div class="card-actions-row">
-                    <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
-                    <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
+                <div class="server-power-cell" onclick="event.stopPropagation()">
+                    <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
+                    <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
+                        <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
+                            onchange="toggleServerActive(${server.id}, this.checked)"
+                            aria-label="Сервер в работе">
+                        <span class="ui-switch-slider" aria-hidden="true"></span>
+                    </label>
+                    <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
                 </div>
             </div>
+            <div class="card-actions-row" style="margin-top: 12px; justify-content: flex-end; flex-wrap: wrap;">
+                <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
+                <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
+            </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 // Показать модалку добавления сервера

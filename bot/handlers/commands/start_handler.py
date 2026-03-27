@@ -2,6 +2,7 @@
 Обработчик команды /start
 """
 import logging
+import aiosqlite
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
 
@@ -17,6 +18,7 @@ from ...db.users_db import (
     link_telegram_to_account,
     get_user_by_telegram_id_v2, create_telegram_link, update_user_telegram_id,
     generate_user_id,
+    reconcile_users_telegram_id_with_link,
 )
 from ...db.subscriptions_db import (
     get_all_active_subscriptions_by_user, create_subscription,
@@ -115,9 +117,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         user_id = generate_user_id()
         was_known_user = False
-        await register_simple_user(user_id)
-        await create_telegram_link(telegram_id, user_id)
-        await update_user_telegram_id(user_id, telegram_id)
+        try:
+            await register_simple_user(user_id)
+            await create_telegram_link(telegram_id, user_id)
+            await update_user_telegram_id(user_id, telegram_id)
+        except aiosqlite.IntegrityError:
+            logger.warning(
+                "Гонка TG-first /start (IntegrityError), telegram_id=%s — сверка с telegram_links",
+                telegram_id,
+            )
+            await reconcile_users_telegram_id_with_link(telegram_id)
+            existing_user = await get_user_by_telegram_id_v2(telegram_id, use_fallback=True)
+            if not existing_user:
+                raise
+            user_id = existing_user["user_id"]
+            was_known_user = True
 
     # Теперь, когда все проверки выполнены и пользователь зарегистрирован
     trial_created = False

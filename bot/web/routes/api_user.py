@@ -8,6 +8,7 @@ import os
 import time
 import uuid
 
+import aiosqlite
 import requests as requests_lib
 from quart import Blueprint, request, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -50,6 +51,7 @@ def create_blueprint(bot_app):
                 create_telegram_link,
                 update_user_telegram_id,
                 generate_user_id,
+                reconcile_users_telegram_id_with_link,
             )
             from bot.db.subscriptions_db import (
                 get_all_active_subscriptions_by_user,
@@ -66,15 +68,27 @@ def create_blueprint(bot_app):
                     user_id = _existing["user_id"]
                 else:
                     user_id = generate_user_id()
-                    await register_simple_user(user_id)
-                    await create_telegram_link(_tg_str, user_id)
-                    await update_user_telegram_id(user_id, _tg_str)
                     just_created_tg_user = True
-                    logger.info(
-                        "Регистрация нового TG-first пользователя: user_id=%s, telegram_id=%s",
-                        user_id,
-                        _tg_str,
-                    )
+                    try:
+                        await register_simple_user(user_id)
+                        await create_telegram_link(_tg_str, user_id)
+                        await update_user_telegram_id(user_id, _tg_str)
+                        logger.info(
+                            "Регистрация нового TG-first пользователя: user_id=%s, telegram_id=%s",
+                            user_id,
+                            _tg_str,
+                        )
+                    except aiosqlite.IntegrityError:
+                        logger.warning(
+                            "Гонка TG-first регистрации (IntegrityError), telegram_id=%s — сверка с telegram_links",
+                            _tg_str,
+                        )
+                        await reconcile_users_telegram_id_with_link(_tg_str)
+                        _existing = await get_user_by_telegram_id_v2(_tg_str, use_fallback=True)
+                        if not _existing:
+                            raise
+                        user_id = _existing["user_id"]
+                        just_created_tg_user = False
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401
             _user = await get_user_by_id(user_id)

@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=11">
+    <link rel="stylesheet" href="/style.css?v=12">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -1089,11 +1089,17 @@
                         <label for="server-display-input">Название в приложении</label>
                         <input type="text" id="server-display-input" required placeholder="Например: 🇩🇪 Germany - 1">
                     </div>
-                    <div class="form-group">
-                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="checkbox" id="server-is-active-input" checked>
-                            <span>Сервер активен (участвует в подписках и синхронизации)</span>
-                        </label>
+                    <div class="form-group server-active-panel">
+                        <div class="server-active-panel-inner">
+                            <div class="server-active-panel-copy">
+                                <span class="server-active-panel-title">Сервер в работе</span>
+                                <span class="server-active-panel-hint">Включённая нода попадает в ключи подписок и в фоновую синхронизацию с панелью 3X-UI.</span>
+                            </div>
+                            <label class="ui-switch" title="Включить или выключить ноду">
+                                <input type="checkbox" id="server-is-active-input" checked aria-label="Сервер в работе">
+                                <span class="ui-switch-slider" aria-hidden="true"></span>
+                            </label>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="server-location-input">Локация</label>
@@ -1321,6 +1327,6 @@
         </div>
     </div>
 
-    <script src="/app.js?v=10"></script>
+    <script src="/app.js?v=11"></script>
 </body>
 </html>

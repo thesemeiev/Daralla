@@ -40,44 +40,67 @@ async def ensure_db_and_servers_ready():
     _bootstrap_completed = True
 
 
-async def notify_admin(bot, admin_ids, text):
-    """Отправляет уведомление всем администраторам"""
+async def notify_admin(bot, admin_ids, text, *, level="error"):
+    """Отправляет сообщение всем администраторам.
+
+    level: 'error' — сбой или недоступность; 'warning' — деградация; 'info' — нормальное событие (например, восстановление).
+    """
     if not admin_ids:
         logger.warning("Список администраторов пуст")
         return
-        
+
+    headers = {
+        "error": "Daralla — ошибка",
+        "warning": "Daralla — внимание",
+        "info": "Daralla — событие",
+    }
+    header = headers.get(level, headers["error"])
+    full_text = f"{header}\n\n{text}"
+
     for admin_id in admin_ids:
         try:
             async with asyncio.timeout(10):
                 await bot.send_message(
                     chat_id=admin_id,
-                    text=f"[VPNBot ERROR]\n{text}",
-                    disable_web_page_preview=True
+                    text=full_text,
+                    disable_web_page_preview=True,
                 )
-                logger.info(f"Успешно отправлено уведомление админу {admin_id}")
+                logger.info("Успешно отправлено уведомление админу %s", admin_id)
         except (TimeoutError, RuntimeError) as e:
-            logger.error(f'Ошибка при отправке уведомления админу {admin_id}: {e}')
+            logger.error("Ошибка при отправке уведомления админу %s: %s", admin_id, e)
 
 
 async def notify_server_issues(bot, admin_ids, server_name, issue_type, details=""):
-    """Уведомляет админа о проблемах с серверами"""
+    """Уведомляет администраторов о состоянии ноды (панель 3X-UI)."""
     try:
-        message = f" Проблема с сервером {server_name}\n\n"
-        message += f"Тип проблемы: {issue_type}\n"
-        message += f"Время: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
-        message += f"Статус: Требует внимания\n\n"
-        
+        ts = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+
+        if issue_type == "Сервер восстановлен":
+            body = f"Сервер «{server_name}» снова отвечает на проверки.\nВремя: {ts}"
+            if details:
+                body += f"\n{details}"
+            await notify_admin(bot, admin_ids, body, level="info")
+            return
+
+        level = "warning" if "Длительная" in issue_type else "error"
+        lines = [
+            f"Сервер: «{server_name}»",
+            f"Событие: {issue_type}",
+            f"Время: {ts}",
+        ]
         if details:
-            message += f"Детали: {details}\n\n"
-        
-        message += "Рекомендуемые действия:\n"
-        message += "• Проверить доступность сервера\n"
-        message += "• Проверить логи сервера"
-        
-        await notify_admin(bot, admin_ids, message)
-        
+            lines.append(f"Подробности: {details}")
+        if level == "error":
+            lines.append("")
+            lines.append("Что проверить: доступность хоста и порта панели, логи 3X-UI и сеть до ноды.")
+        else:
+            lines.append("")
+            lines.append("Сервер не проходит проверки дольше обычного — стоит посмотреть нагрузку и связность.")
+
+        await notify_admin(bot, admin_ids, "\n".join(lines), level=level)
+
     except (RuntimeError, ValueError) as e:
-        logger.error(f"Ошибка отправки уведомления о проблеме с сервером: {e}")
+        logger.error("Ошибка отправки уведомления о проблеме с сервером: %s", e)
 
 
 async def server_health_monitor(app, server_manager, admin_ids):
