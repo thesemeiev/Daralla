@@ -11,7 +11,6 @@ from bot.web.routes.admin_common import _cors_headers, admin_route
 from bot.db import get_all_user_ids
 from bot.db.users_db import get_telegram_chat_id_for_notification
 from bot.app_context import get_ctx
-from bot.utils import UIButtons
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +43,6 @@ def create_blueprint(bot_app):
         sent = 0
         failed = 0
         batch = 40
-        webapp_button = UIButtons.create_webapp_button(text="Открыть в приложении")
-        reply_markup = None
-        if webapp_button:
-            from telegram import InlineKeyboardMarkup
-            reply_markup = InlineKeyboardMarkup([[webapp_button]])
         bot = bot_app.bot
 
         sent_chat_ids = set()
@@ -67,7 +61,6 @@ def create_blueprint(bot_app):
                         text=message_text,
                         parse_mode="HTML",
                         disable_web_page_preview=True,
-                        reply_markup=reply_markup,
                     )
                     sent += 1
                 except telegram.error.Forbidden:
@@ -82,7 +75,6 @@ def create_blueprint(bot_app):
                             text=message_text,
                             parse_mode="HTML",
                             disable_web_page_preview=True,
-                            reply_markup=reply_markup,
                         )
                         sent += 1
                     except Exception:

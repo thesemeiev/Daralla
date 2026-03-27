@@ -38,6 +38,7 @@ def create_quart_app(bot_app=None) -> Quart:
             from bot.web.routes.admin_broadcast import create_blueprint as create_admin_broadcast_blueprint
             from bot.web.routes.admin_servers import create_blueprint as create_admin_servers_blueprint
             from bot.web.routes.admin_notifications import create_blueprint as create_admin_notifications_blueprint
+            from bot.web.routes.admin_commerce import create_blueprint as create_admin_commerce_blueprint
 
             app.register_blueprint(create_payment_blueprint(bot_app))
             try:
@@ -59,6 +60,7 @@ def create_quart_app(bot_app=None) -> Quart:
             app.register_blueprint(create_admin_broadcast_blueprint(bot_app))
             app.register_blueprint(create_admin_servers_blueprint(bot_app))
             app.register_blueprint(create_admin_notifications_blueprint(bot_app))
+            app.register_blueprint(create_admin_commerce_blueprint(bot_app))
             app.register_blueprint(static_bp)
             logger.info(
                 "Registered webhook blueprints on Quart app "

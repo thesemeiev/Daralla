@@ -574,6 +574,45 @@ header:has(.back-button):not(:has(h1)) {
     padding-bottom: 12px;
 }
 
+#page-admin-commerce > header {
+    padding-top: calc(36px + env(safe-area-inset-top, 0px));
+    padding-bottom: 12px;
+}
+
+.admin-commerce-page {
+    padding-bottom: 32px;
+}
+
+.admin-commerce-lead {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0 0 20px;
+}
+
+.admin-commerce-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+@media (min-width: 520px) {
+    .admin-commerce-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .admin-commerce-field:last-child {
+        grid-column: 1 / -1;
+    }
+}
+
+.admin-commerce-field input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 16px;
+}
+
 /* Шапка «Назад» + заголовок: кнопка слева, заголовок по центру экрана */
 .header-with-back {
     display: flex;
@@ -3246,6 +3285,48 @@ body.about-page-active {
     
     .form-actions button {
         width: 100%;
+    }
+}
+
+/* Модалка «Отвязать Telegram»: основная кнопка шире и заметнее, «Отмена» компактнее */
+#unlink-telegram-modal .unlink-telegram-modal-actions {
+    flex-direction: row;
+    gap: 10px;
+    align-items: stretch;
+    margin-top: 20px;
+}
+
+#unlink-telegram-modal .unlink-telegram-modal-actions .unlink-telegram-btn-cancel {
+    flex: 0 1 36%;
+    max-width: 140px;
+    min-width: 0;
+    padding: 12px 12px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+}
+
+#unlink-telegram-modal .unlink-telegram-modal-actions .unlink-telegram-btn-submit {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+    margin-top: 0 !important;
+    padding: 14px 18px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+}
+
+@media (max-width: 480px) {
+    #unlink-telegram-modal .unlink-telegram-modal-actions {
+        flex-direction: column-reverse;
+        gap: 10px;
+    }
+    #unlink-telegram-modal .unlink-telegram-modal-actions .unlink-telegram-btn-cancel {
+        flex: 1 1 auto;
+        max-width: none;
+        width: 100% !important;
+    }
+    #unlink-telegram-modal .unlink-telegram-modal-actions .unlink-telegram-btn-submit {
+        width: 100% !important;
     }
 }
 

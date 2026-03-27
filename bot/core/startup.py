@@ -25,6 +25,12 @@ async def ensure_db_and_servers_ready():
     await init_all_db()
 
     try:
+        from bot.prices_config import refresh_prices_from_db
+        await refresh_prices_from_db()
+    except Exception as e:
+        logger.warning("Не удалось подтянуть цены из БД: %s", e)
+
+    try:
         from bot.events import EVENTS_MODULE_ENABLED
         if EVENTS_MODULE_ENABLED:
             from bot.events.db.migrations import init_events_tables

@@ -16,6 +16,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from bot.handlers.api_support.webhook_auth import authenticate_request_async, verify_telegram_init_data
 from bot.web.auth_validation import validate_username_format, validate_password_format
 from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
+from bot.prices_config import PRICES, get_default_device_limit_async
 
 logger = logging.getLogger(__name__)
 
@@ -111,13 +112,14 @@ def create_blueprint(bot_app):
                     now = int(time.time())
                     active_subs = [s for s in existing_subs if is_subscription_active(s)]
                     if len(active_subs) == 0:
+                        trial_dl = await get_default_device_limit_async()
                         logger.info("Создание пробной подписки для нового пользователя: %s", user_id)
                         subscriber_id = await get_or_create_subscriber(user_id)
                         expires_at = now + (5 * 24 * 60 * 60)
                         subscription_id, token = await create_subscription(
                             subscriber_id=subscriber_id,
                             period="month",
-                            device_limit=1,
+                            device_limit=trial_dl,
                             price=0.0,
                             expires_at=expires_at,
                             name="Пробная подписка",
@@ -157,14 +159,14 @@ def create_blueprint(bot_app):
                                 successful_servers = []
                                 for server_name in all_configured_servers:
                                     try:
-                                        client_exists, _ = await subscription_manager.ensure_client_on_server(
+                                        client_exists, _ =                                         await subscription_manager.ensure_client_on_server(
                                             subscription_id=subscription_id,
                                             server_name=server_name,
                                             client_email=unique_email,
                                             user_id=user_id,
                                             expires_at=expires_at,
                                             token=token,
-                                            device_limit=1,
+                                            device_limit=trial_dl,
                                         )
                                         if client_exists:
                                             successful_servers.append(server_name)
@@ -273,10 +275,10 @@ def create_blueprint(bot_app):
                         return jsonify({"error": "Нельзя использовать свой код"}), 400
                 except Exception:
                     referrer_user_id = None
-            from bot.prices_config import PRICES
             from bot.db import add_payment, DB_PATH
             import aiosqlite
 
+            default_dl = await get_default_device_limit_async()
             price = f"{PRICES[period]:.2f}"
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute(
@@ -293,6 +295,7 @@ def create_blueprint(bot_app):
                 "type": payment_period,
                 "unique_email": unique_email,
                 "message_id": None,
+                "device_limit": default_dl,
             }
             if subscription_id:
                 payment_meta_base["extension_subscription_id"] = int(subscription_id)
@@ -368,7 +371,7 @@ def create_blueprint(bot_app):
                 "metadata": {
                     "user_id": user_id,
                     "type": payment_period,
-                    "device_limit": 1,
+                    "device_limit": default_dl,
                     "unique_email": unique_email,
                     "price": price,
                 },

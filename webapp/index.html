@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=12">
+    <link rel="stylesheet" href="/style.css?v=13">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -518,6 +518,10 @@
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-server-management')">
                             <span class="admin-panel-row-label">Управление серверами</span>
+                            <span class="admin-panel-row-chevron">›</span>
+                        </button>
+                        <button type="button" class="admin-panel-row" onclick="showPage('admin-commerce')">
+                            <span class="admin-panel-row-label">Цены и лимит устройств</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
                         <button type="button" class="admin-panel-row" onclick="showPage('admin-events')">
@@ -1049,6 +1053,40 @@
             </div>
         </div>
 
+        <!-- АДМИН: цены и лимит устройств -->
+        <div id="page-admin-commerce" class="page" style="display: none;">
+            <header>
+                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+            </header>
+            <div class="admin-page-content admin-commerce-page">
+                <div id="admin-commerce-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Загрузка...</p>
+                </div>
+                <p id="admin-commerce-error" class="error-text" style="display: none; margin-bottom: 12px;"></p>
+                <form id="admin-commerce-form" style="display: none;" onsubmit="saveAdminCommerce(event)">
+                    <p class="admin-commerce-lead">Цены подтягиваются в приложение и на экран оплаты. Лимит устройств задаётся для новых покупок и пробного периода (как limitIp в панели).</p>
+                    <div class="admin-commerce-grid">
+                        <div class="form-group admin-commerce-field">
+                            <label for="admin-commerce-price-month">1 месяц, ₽</label>
+                            <input type="number" id="admin-commerce-price-month" min="1" max="2000000" step="1" required inputmode="numeric">
+                        </div>
+                        <div class="form-group admin-commerce-field">
+                            <label for="admin-commerce-price-3month">3 месяца, ₽</label>
+                            <input type="number" id="admin-commerce-price-3month" min="1" max="2000000" step="1" required inputmode="numeric">
+                        </div>
+                        <div class="form-group admin-commerce-field">
+                            <label for="admin-commerce-device-limit">Устройств по умолчанию</label>
+                            <input type="number" id="admin-commerce-device-limit" min="1" max="100" step="1" required inputmode="numeric">
+                            <span class="hint" style="display:block;margin-top:6px;font-size:12px;opacity:0.65;">Не меняет уже оформленные подписки.</span>
+                        </div>
+                    </div>
+                    <div id="admin-commerce-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;">Сохранить</button>
+                </form>
+            </div>
+        </div>
+
         <!-- Модальное окно: Добавить/Редактировать группу -->
         <div id="server-group-modal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -1319,9 +1357,9 @@
                     <label>Текущий пароль</label>
                     <input type="password" id="unlink-telegram-password" required placeholder="Текущий пароль" autocomplete="current-password" />
                 </div>
-                <div class="form-actions" style="flex-direction: row; gap: 8px;">
-                    <button type="button" class="btn-secondary" onclick="closeModal('unlink-telegram-modal')" style="flex: 1;">Отмена</button>
-                    <button type="submit" class="btn-danger" style="flex: 1;">Отвязать</button>
+                <div class="form-actions unlink-telegram-modal-actions">
+                    <button type="button" class="btn-secondary unlink-telegram-btn-cancel" onclick="closeModal('unlink-telegram-modal')">Отмена</button>
+                    <button type="submit" class="btn-danger unlink-telegram-btn-submit">Отвязать</button>
                 </div>
             </form>
         </div>

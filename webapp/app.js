@@ -457,7 +457,7 @@ var ROUTE_PAGE_NAMES = new Set([
     'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
     'admin-stats', 'admin-users', 'admin-broadcast',
     'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
-    'admin-events'
+    'admin-commerce', 'admin-events'
 ]);
 var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
 function isPageAdminOnly(pageName) { return pageName && pageName.startsWith('admin-'); }
@@ -734,6 +734,8 @@ function showPage(pageName, params) {
         loadBroadcastPage();
     } else if (pageName === 'admin-server-management') {
         loadServerManagement();
+    } else if (pageName === 'admin-commerce') {
+        loadAdminCommercePage();
     } else if (pageName === 'admin-events') {
         loadAdminEventsPage();
     } else if (pageName === 'admin-notifications') {
@@ -743,6 +745,7 @@ function showPage(pageName, params) {
         updateReferralCodeBlockVisibility();
         syncChooseOptionCards();
         bindChoosePaymentSubmit();
+        loadPrices();
     } else if (pageName === 'landing') {
         var landingScroll = document.getElementById('landing-scroll');
         if (landingScroll) landingScroll.scrollTop = 0;
@@ -4915,29 +4918,29 @@ document.addEventListener('focusin', function (e) {
 });
 
 // Загружаем цены с сервера и обновляем отображение (публичный API, без авторизации)
+function applyLoadedPrices(prices) {
+    var m = prices && prices.month != null ? prices.month : 150;
+    var t = prices && prices['3month'] != null ? prices['3month'] : 350;
+    document.querySelectorAll('.plan-price[data-period="month"]').forEach(function (el) { el.textContent = m + '₽'; });
+    document.querySelectorAll('.plan-price[data-period="3month"]').forEach(function (el) { el.textContent = t + '₽'; });
+    document.querySelectorAll('#page-choose-payment-method .choose-option-card[data-period="month"] .choose-option-price').forEach(function (el) { el.textContent = m + '₽'; });
+    document.querySelectorAll('#page-choose-payment-method .choose-option-card[data-period="3month"] .choose-option-price').forEach(function (el) { el.textContent = t + '₽'; });
+}
+
 async function loadPrices() {
-    var placeholders = document.querySelectorAll('.plan-price');
-    placeholders.forEach(function (el) { el.textContent = '— ₽'; });
+    document.querySelectorAll('.plan-price').forEach(function (el) { el.textContent = '— ₽'; });
+    var fallback = { month: 150, '3month': 350 };
     try {
         var res = await fetch('/api/prices');
         if (res.ok) {
             var data = await res.json();
-            var prices = data.prices || { month: 150, '3month': 350 };
-            document.querySelectorAll('.plan-price[data-period="month"]').forEach(function (el) { el.textContent = (prices.month || 150) + '₽'; });
-            document.querySelectorAll('.plan-price[data-period="3month"]').forEach(function (el) { el.textContent = (prices['3month'] || 350) + '₽'; });
-        } else {
-            placeholders.forEach(function (el) {
-                var period = el.getAttribute('data-period');
-                el.textContent = (period === '3month' ? 350 : 150) + '₽';
-            });
+            applyLoadedPrices(data.prices || fallback);
+            return;
         }
     } catch (e) {
         console.warn('Не удалось загрузить цены, используются значения по умолчанию', e);
-        placeholders.forEach(function (el) {
-            var period = el.getAttribute('data-period');
-            el.textContent = (period === '3month' ? 350 : 150) + '₽';
-        });
     }
+    applyLoadedPrices(fallback);
 }
 
 // Подгружаем скрипт Telegram с таймаутом. Вызывается только с хоста Mini App (app.daralla.ru).
@@ -6717,6 +6720,78 @@ function closeInstructionModal() {
     window.initNavIndicator = initNavIndicator;
 })();
 
+// === ЦЕНЫ И ЛИМИТ УСТРОЙСТВ (АДМИН) ===
+
+async function loadAdminCommercePage() {
+    var loadingEl = document.getElementById('admin-commerce-loading');
+    var formEl = document.getElementById('admin-commerce-form');
+    var errEl = document.getElementById('admin-commerce-error');
+    var msgEl = document.getElementById('admin-commerce-form-message');
+    if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; msgEl.className = 'form-message'; }
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (formEl) formEl.style.display = 'none';
+    try {
+        var res = await apiFetch('/api/admin/commerce', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Не удалось загрузить настройки');
+        }
+        var pm = document.getElementById('admin-commerce-price-month');
+        var p3 = document.getElementById('admin-commerce-price-3month');
+        var dl = document.getElementById('admin-commerce-device-limit');
+        if (pm) pm.value = String(data.price_month != null ? data.price_month : 150);
+        if (p3) p3.value = String(data.price_3month != null ? data.price_3month : 350);
+        if (dl) dl.value = String(data.default_device_limit != null ? data.default_device_limit : 1);
+    } catch (e) {
+        console.error('loadAdminCommercePage', e);
+        if (errEl) {
+            errEl.textContent = e.message || String(e);
+            errEl.style.display = 'block';
+        }
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (formEl) formEl.style.display = 'block';
+    }
+}
+
+async function saveAdminCommerce(event) {
+    event.preventDefault();
+    var pm = parseInt(document.getElementById('admin-commerce-price-month').value, 10);
+    var p3 = parseInt(document.getElementById('admin-commerce-price-3month').value, 10);
+    var dl = parseInt(document.getElementById('admin-commerce-device-limit').value, 10);
+    var msgEl = document.getElementById('admin-commerce-form-message');
+    if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; }
+    if (isNaN(pm) || isNaN(p3) || isNaN(dl)) {
+        if (msgEl) { msgEl.className = 'form-message form-message--error'; msgEl.textContent = 'Введите целые числа'; msgEl.style.display = 'block'; }
+        return;
+    }
+    try {
+        var res = await apiFetch('/api/admin/commerce', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ price_month: pm, price_3month: p3, default_device_limit: dl })
+        });
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Ошибка сохранения');
+        }
+        if (msgEl) {
+            msgEl.className = 'form-message form-message--success';
+            msgEl.textContent = 'Сохранено. Цены и лимит применяются для новых оплат и пробного периода.';
+            msgEl.style.display = 'block';
+        }
+        loadPrices();
+    } catch (e) {
+        console.error('saveAdminCommerce', e);
+        if (msgEl) {
+            msgEl.className = 'form-message form-message--error';
+            msgEl.textContent = e.message || String(e);
+            msgEl.style.display = 'block';
+        }
+    }
+}
+
 // === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
 
 let currentAdminGroups = [];
@@ -7143,9 +7218,9 @@ async function saveServerConfig(event) {
                 var parts = [];
                 if (result.sync_stats) {
                     var s = result.sync_stats;
-                    if (s.clients_created != null) parts.push('clients_created: ' + s.clients_created);
-                    if (s.servers_added != null) parts.push('servers_added: ' + s.servers_added);
-                    if (s.servers_removed != null) parts.push('servers_removed: ' + s.servers_removed);
+                    if (s.clients_created != null) parts.push('клиентов создано: ' + s.clients_created);
+                    if (s.servers_added != null) parts.push('серверов добавлено: ' + s.servers_added);
+                    if (s.servers_removed != null) parts.push('серверов снято: ' + s.servers_removed);
                     if (s.errors && s.errors.length) parts.push('ошибки: ' + s.errors.slice(0, 5).join('; '));
                 }
                 var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');

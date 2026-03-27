@@ -149,6 +149,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Создаем пробную подписку только если у нового пользователя нет активных подписок
                 if len(active_subs) == 0:
+                    from ...prices_config import get_default_device_limit_async
+                    trial_dl = await get_default_device_limit_async()
                     logger.info(f"Создание пробной подписки для нового пользователя: {user_id}")
                     subscriber_id = await get_or_create_subscriber(user_id)
                     
@@ -167,7 +169,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     sub_dict, token = await subscription_manager.create_subscription_for_user(
                         user_id=user_id,
                         period='month',  # Обычная подписка (можно продлить)
-                        device_limit=1,
+                        device_limit=trial_dl,
                         price=0.0,
                         expires_at=expires_at,
                         name="Пробная подписка"
@@ -233,7 +235,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                             user_id=user_id,
                                             expires_at=expires_at,
                                             token=token,
-                                            device_limit=1
+                                            device_limit=trial_dl
                                         )
                                         
                                         if client_exists:
