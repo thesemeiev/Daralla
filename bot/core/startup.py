@@ -144,7 +144,7 @@ async def server_health_monitor(app, server_manager, admin_ids):
                             "Сервер недоступен",
                             f"Ошибка: {last_error}"
                         )
-                    elif current_status == "online":
+                    elif current_status == "online" and previous_status == "offline":
                         await notify_server_issues(
                             app.bot, admin_ids,
                             server_name, 

@@ -239,7 +239,11 @@ class SubscriptionManager:
                     device_limit = 1  # Fallback
                     logger.warning(f"Не удалось найти подписку {subscription_id} для получения device_limit, используем 1")
             
-            xui, resolved_name = self.server_manager.get_server_by_name(server_name)
+            found = self.server_manager.find_server_by_name(server_name)
+            if found is None:
+                logger.error("Сервер %s не в конфиге бота", server_name)
+                return False, False
+            xui, resolved_name = found
             if xui is None:
                 logger.error(f"Сервер {server_name} недоступен")
                 return False, False
@@ -421,7 +425,15 @@ class SubscriptionManager:
             client_email = s["client_email"]
 
             try:
-                xui, resolved_name = self.server_manager.get_server_by_name(server_name)
+                found = self.server_manager.find_server_by_name(server_name)
+                if found is None:
+                    logger.warning(
+                        "Сервер %s не в конфиге бота (удалён или переименован), пропуск для подписки %s",
+                        server_name,
+                        subscription_id,
+                    )
+                    continue
+                xui, resolved_name = found
                 if xui is None:
                     logger.warning(
                         "Сервер %s недоступен для подписки %s",
@@ -598,9 +610,15 @@ class SubscriptionManager:
                             f"(не в группе или удален)"
                         )
 
-                        xui, _ = self.server_manager.get_server_by_name(server_name)
-                        if xui:
+                        found = self.server_manager.find_server_by_name(server_name)
+                        if found and found[0]:
+                            xui, _ = found
                             await xui.deleteClient(client_email)
+                        elif found is None:
+                            logger.warning(
+                                "Сервер %s не в конфиге — deleteClient на панели пропущен",
+                                server_name,
+                            )
                     except (RuntimeError, ValueError, TypeError, KeyError) as e:
                         logger.error(
                             f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}"
@@ -655,7 +673,10 @@ class SubscriptionManager:
                 by_server[t["server_name"]].append(t)
 
             async def process_server(server_name: str, tasks: List[dict]):
-                xui, _ = self.server_manager.get_server_by_name(server_name)
+                found = self.server_manager.find_server_by_name(server_name)
+                if found is None:
+                    return [(t, Exception(f"Сервер {server_name} не в конфиге")) for t in tasks]
+                xui, _ = found
                 if xui is None:
                     return [(t, Exception(f"Сервер {server_name} недоступен")) for t in tasks]
                 email_map = None

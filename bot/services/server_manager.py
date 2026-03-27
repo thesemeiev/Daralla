@@ -86,12 +86,19 @@ class MultiServerManager:
             return self.servers
         return [s for s in self.servers if s.get("group_id") == group_id]
     
-    def get_server_by_name(self, server_name):
-        """Возвращает конкретный сервер по имени"""
+    def find_server_by_name(self, server_name):
+        """Возвращает (x3, имя) или None, если сервера нет в текущем конфиге."""
         for server in self.servers:
             if server["name"].lower() == server_name.lower():
                 return server["x3"], server["name"]
-        raise Exception(f"Сервер {server_name} не найден или недоступен")
+        return None
+
+    def get_server_by_name(self, server_name):
+        """Возвращает конкретный сервер по имени; бросает исключение, если имени нет в конфиге."""
+        found = self.find_server_by_name(server_name)
+        if found is None:
+            raise Exception(f"Сервер {server_name} не найден или недоступен")
+        return found
     
     def get_server_config(self, server_name):
         """Возвращает конфигурацию сервера по имени"""
