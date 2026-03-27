@@ -1324,6 +1324,9 @@ async function loadServers() {
     if (contentEl) contentEl.style.display = 'none';
     
     try {
+        // Карта не зависит от /api/servers (server-usage); не ждём опрос панелей
+        loadServerMap();
+
         const response = await apiFetch(`/api/servers`);
         
         if (!response.ok) {
@@ -1338,9 +1341,6 @@ async function loadServers() {
         
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
-        
-        // Загружаем карту серверов
-        loadServerMap();
         
         if (!data.servers || data.servers.length === 0) {
             if (listEl) listEl.innerHTML = '<div class="empty"><p>Серверы не найдены</p></div>';
@@ -4703,10 +4703,10 @@ async function loadAdminStats() {
         renderRevenueChart(s.daily_revenue || []);
         renderGatewaySplit(s.gateway_split || {});
 
-        await loadDashboardServers();
-
         if (loadingEl) loadingEl.style.display = 'none';
         if (dashboardEl) dashboardEl.style.display = 'block';
+
+        loadDashboardServers();
 
         if (serverLoadChartInterval) clearInterval(serverLoadChartInterval);
         serverLoadChartInterval = setInterval(() => {
@@ -4796,6 +4796,9 @@ function renderGatewaySplit(gw) {
 async function loadDashboardServers() {
     const container = document.getElementById('dash-servers-load');
     if (!container) return;
+    if (!container.querySelector('.server-load-card')) {
+        container.innerHTML = '<p class="empty-hint">Загрузка нагрузки серверов…</p>';
+    }
     try {
         const response = await apiFetch('/api/admin/charts/server-load', {
             method: 'POST',

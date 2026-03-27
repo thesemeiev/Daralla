@@ -5,6 +5,8 @@ import json
 import logging
 import time
 
+from tenacity import RetryError
+
 from ..db.subscriptions_db import (
     get_subscriptions_to_sync,
     get_subscription_servers,
@@ -16,6 +18,46 @@ from ..db.notifications_db import clear_subscription_notifications
 from .subscription_manager import SubscriptionManager
 
 logger = logging.getLogger(__name__)
+
+
+def _log_delete_client_error(context: str, server_name: str, client_email: str, exc: BaseException) -> None:
+    """
+    Пишет в лог понятную причину сбоя deleteClient.
+    tenacity.RetryError оборачивает реальную ошибку последней попытки — выводим её тип, текст и traceback.
+    """
+    if isinstance(exc, RetryError):
+        logger.error(
+            "%s: сервер=%r email=%r — исчерпаны повторы вызова API панели (tenacity RetryError).",
+            context,
+            server_name,
+            client_email,
+        )
+        inner: BaseException | None = None
+        try:
+            if exc.last_attempt is not None:
+                inner = exc.last_attempt.exception()
+        except Exception:
+            pass
+        if inner is not None:
+            logger.error(
+                "%s: реальная ошибка последней попытки (%s): %s",
+                context,
+                type(inner).__name__,
+                inner,
+                exc_info=inner,
+            )
+        else:
+            logger.error("%s: детали последней попытки недоступны: %s", context, exc)
+        return
+    logger.error(
+        "%s: сервер=%r email=%r — %s",
+        context,
+        server_name,
+        client_email,
+        exc,
+        exc_info=True,
+    )
+
 
 class SyncManager:
     """Менеджер для поддержания консистентности данных"""
@@ -199,8 +241,13 @@ class SyncManager:
                         if xui:
                             await xui.deleteClient(client_email)
                         logger.debug(f"Удален клиент {client_email} с сервера {server_name}")
-                except (RuntimeError, ValueError, TypeError) as e:
-                    logger.error(f"Ошибка удаления клиента {client_email} с {server_name}: {e}")
+                except Exception as e:
+                    _log_delete_client_error(
+                        "cleanup_expired_subscriptions deleteClient",
+                        server_name,
+                        client_email,
+                        e,
+                    )
             
             # 2. Удаляем из БД (полное удаление)
             # По вашей просьбе — удаляем совсем
@@ -317,14 +364,27 @@ class SyncManager:
                             for attempt in range(max_delete_attempts):
                                 try:
                                     deleted = await xui.deleteClient(client_email)
-                                except (RuntimeError, ValueError, TypeError) as e:
-                                    error_msg = (
-                                        f"Ошибка удаления сиротского клиента {client_email} с {server_name} "
-                                        f"(попытка {attempt + 1}/{max_delete_attempts}): {e}"
+                                except Exception as e:
+                                    _log_delete_client_error(
+                                        "cleanup_orphaned_clients deleteClient "
+                                        f"(попытка {attempt + 1}/{max_delete_attempts})",
+                                        server_name,
+                                        client_email,
+                                        e,
                                     )
-                                    logger.error(error_msg)
-                                    stats['errors'].append(error_msg)
-                                    # При ошибке не продолжаем попытки, чтобы избежать бесконечных циклов
+                                    err_text = (
+                                        f"{type(e).__name__}: {e}"
+                                        if not isinstance(e, RetryError)
+                                        else (
+                                            f"RetryError -> {type(e.last_attempt.exception()).__name__}: "
+                                            f"{e.last_attempt.exception()}"
+                                            if e.last_attempt and e.last_attempt.exception()
+                                            else str(e)
+                                        )
+                                    )
+                                    stats['errors'].append(
+                                        f"сирота {client_email} @{server_name}: {err_text}"
+                                    )
                                     break
                                 
                                 # deleteClient вернет False, если клиент (по этому email) больше не найден на панели

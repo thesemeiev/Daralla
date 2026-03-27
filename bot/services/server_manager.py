@@ -1,6 +1,7 @@
 """
 Менеджер для управления несколькими VPN серверами
 """
+import asyncio
 import logging
 import datetime
 import time
@@ -266,15 +267,20 @@ class MultiServerManager:
         """
         Проверяет здоровье всех серверов с кэшированием.
         Ошибка проверки одного сервера не прерывает проверку остальных.
+        Проверки выполняются параллельно (время ~max по нодам, не сумма).
         """
+        if not self.servers:
+            return {}
+        names = [s["name"] for s in self.servers]
+        tasks = [self.check_server_health(name, force_check=force_check) for name in names]
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
         results = {}
-        for server in self.servers:
-            server_name = server["name"]
-            try:
-                results[server_name] = await self.check_server_health(server_name, force_check=force_check)
-            except Exception as e:
-                logger.warning("Проверка здоровья сервера %s не удалась: %s", server_name, e)
+        for server_name, outcome in zip(names, outcomes):
+            if isinstance(outcome, Exception):
+                logger.warning("Проверка здоровья сервера %s не удалась: %s", server_name, outcome)
                 results[server_name] = False
+            else:
+                results[server_name] = outcome
         return results
     
     def get_server_health_status(self):
@@ -282,60 +288,74 @@ class MultiServerManager:
         return self.server_health
 
     async def get_server_load_data(self):
-        """Возвращает данные о нагрузке (онлайн-клиенты) для каждого сервера через X-UI API."""
+        """Возвращает данные о нагрузке (онлайн-клиенты) для каждого сервера через X-UI API.
+        Один запрос средних по БД; опрос панелей параллельно с таймаутом на ноду."""
         from ..db.servers_db import get_server_load_averages
 
         if not self.servers:
             logger.warning("servers пуст, возвращаем пустые данные нагрузки")
             return []
 
-        server_data = []
-        logger.info(f"Обработка {len(self.servers)} серверов")
+        averages_all = await get_server_load_averages(period_hours=24)
+        load_timeout = 15.0
 
-        for server in self.servers:
+        async def fetch_one(server):
             server_name = server.get("name", "Unknown")
             xui = server.get("x3")
+            server_avg = averages_all.get(server_name, {})
 
-            if not xui:
-                logger.warning(f"Сервер {server_name}: XUI объект недоступен")
-                server_data.append({
+            def row_offline():
+                return {
                     'server_name': server_name,
                     'online_clients': 0,
                     'total_active': 0,
                     'offline_clients': 0,
-                })
-                continue
-
-            try:
-                total_active, online_count, offline_count = await xui.get_online_clients_count()
-
-                capacity = (server.get("config") or {}).get("max_concurrent_clients") or 50
-                if capacity <= 0:
-                    capacity = 50
-                load_percentage = min(100, round((online_count / capacity) * 100, 1))
-
-                averages = await get_server_load_averages(period_hours=24)
-                server_avg = averages.get(server_name, {})
-
-                server_data.append({
-                    'server_name': server_name,
-                    'online_clients': online_count,
-                    'total_active': total_active,
-                    'offline_clients': offline_count,
                     'avg_online_24h': server_avg.get('avg_online', 0),
                     'max_online_24h': server_avg.get('max_online', 0),
                     'min_online_24h': server_avg.get('min_online', 0),
                     'samples_24h': server_avg.get('samples', 0),
-                    'load_percentage': load_percentage,
-                })
-            except Exception as e:
-                logger.error(f"Ошибка получения данных о нагрузке с сервера {server_name}: {e}", exc_info=True)
-                server_data.append({
-                    'server_name': server_name,
-                    'online_clients': 0,
-                    'total_active': 0,
-                    'offline_clients': 0,
-                })
+                    'load_percentage': 0,
+                }
 
+            if not xui:
+                logger.warning("Сервер %s: XUI объект недоступен", server_name)
+                return row_offline()
+
+            try:
+                total_active, online_count, offline_count = await asyncio.wait_for(
+                    xui.get_online_clients_count(),
+                    timeout=load_timeout,
+                )
+            except asyncio.TimeoutError:
+                logger.error("Таймаут нагрузки для %s (>%ss)", server_name, load_timeout)
+                return row_offline()
+            except Exception as e:
+                logger.error(
+                    "Ошибка получения данных о нагрузке с сервера %s: %s",
+                    server_name,
+                    e,
+                    exc_info=True,
+                )
+                return row_offline()
+
+            capacity = (server.get("config") or {}).get("max_concurrent_clients") or 50
+            if capacity <= 0:
+                capacity = 50
+            load_percentage = min(100, round((online_count / capacity) * 100, 1))
+
+            return {
+                'server_name': server_name,
+                'online_clients': online_count,
+                'total_active': total_active,
+                'offline_clients': offline_count,
+                'avg_online_24h': server_avg.get('avg_online', 0),
+                'max_online_24h': server_avg.get('max_online', 0),
+                'min_online_24h': server_avg.get('min_online', 0),
+                'samples_24h': server_avg.get('samples', 0),
+                'load_percentage': load_percentage,
+            }
+
+        logger.info("Обработка %s серверов (параллельно)", len(self.servers))
+        server_data = await asyncio.gather(*[fetch_one(s) for s in self.servers])
         server_data.sort(key=lambda x: x['online_clients'], reverse=True)
         return server_data

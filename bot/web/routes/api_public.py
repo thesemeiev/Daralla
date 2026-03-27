@@ -77,7 +77,9 @@ def create_blueprint(bot_app):
             if not server_manager:
                 return jsonify({"error": "Server manager not available"}), 503, CORS_HEADERS
 
-            health_results = await server_manager.check_all_servers_health(force_check=True)
+            # По умолчанию кэш/circuit breaker (см. check_server_health). ?refresh=1 — принудительная проверка всех панелей.
+            force_check = str(request.args.get("refresh") or "").lower() in ("1", "true", "yes")
+            health_results = await server_manager.check_all_servers_health(force_check=force_check)
             health_status = server_manager.get_server_health_status()
             servers = _build_servers_response(server_manager.servers, health_results, health_status)
             return jsonify({"success": True, "servers": servers}), 200, CORS_HEADERS

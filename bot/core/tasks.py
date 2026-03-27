@@ -32,7 +32,7 @@ async def sync_task_loop(sync_manager):
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.error(f"Ошибка в цикле синхронизации: {e}")
+            logger.error("Ошибка в цикле синхронизации: %s", e, exc_info=True)
         
         # Раз в 6 часов
         await asyncio.sleep(6 * 3600)
