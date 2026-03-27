@@ -222,17 +222,19 @@ async def add_server_group(name: str, description: str = None, is_default: bool 
 async def add_server_config(group_id: int, name: str, host: str, login: str, password: str,
                            display_name: str = None, vpn_host: str = None, lat: float = None, lng: float = None,
                            subscription_port: int = None, subscription_url: str = None, client_flow: str = None,
-                           map_label: str = None, location: str = None, max_concurrent_clients: int = None):
-    """Добавляет конфигурацию сервера"""
+                           map_label: str = None, location: str = None, max_concurrent_clients: int = None,
+                           is_active: int = 1):
+    """Добавляет конфигурацию сервера. is_active: 1 по умолчанию."""
     port = 2096 if subscription_port is None else subscription_port
     cap = 50 if max_concurrent_clients is None else max_concurrent_clients
     loc = (location or "").strip() or None
+    ia = 1 if int(is_active) else 0
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """INSERT INTO servers_config 
-               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (group_id, name, display_name, host, login, password, vpn_host, lat, lng, port, subscription_url, (client_flow or "").strip() or None, (map_label or "").strip() or None, loc, cap)
+               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients, is_active)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (group_id, name, display_name, host, login, password, vpn_host, lat, lng, port, subscription_url, (client_flow or "").strip() or None, (map_label or "").strip() or None, loc, cap, ia)
         ) as cur:
             server_id = cur.lastrowid
             await db.commit()

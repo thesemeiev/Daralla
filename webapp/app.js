@@ -6936,7 +6936,7 @@ function renderServersInGroup(servers) {
         <div class="admin-user-card server-card">
             <div class="card-content-wrapper">
                 <div class="card-main-info">
-                    <div class="card-title">${server.display_name || server.name}</div>
+                    <div class="card-title">${server.display_name || server.name}${(server.is_active === 0 || server.is_active === false) ? ' <span class="badge-inactive">Выкл</span>' : ''}</div>
                     <div class="card-description">${server.host} | ${server.name}</div>
                 </div>
                 <div class="card-actions-row">
@@ -6966,6 +6966,8 @@ function showAddServerConfigModal() {
     document.getElementById('server-lng-input').value = '';
     document.getElementById('server-location-input').value = '';
     document.getElementById('server-max-concurrent-input').value = '50';
+    var activeEl = document.getElementById('server-is-active-input');
+    if (activeEl) activeEl.checked = true;
     showModal('server-config-modal');
 }
 
@@ -6990,6 +6992,8 @@ function editServerConfig(serverId) {
     document.getElementById('server-lng-input').value = server.lng || '';
     document.getElementById('server-location-input').value = server.location || '';
     document.getElementById('server-max-concurrent-input').value = server.max_concurrent_clients != null ? String(server.max_concurrent_clients) : '50';
+    var activeEl = document.getElementById('server-is-active-input');
+    if (activeEl) activeEl.checked = (server.is_active === 1 || server.is_active === true);
     showModal('server-config-modal');
 }
 
@@ -7014,6 +7018,7 @@ async function saveServerConfig(event) {
         lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
         location: document.getElementById('server-location-input').value?.trim() || null,
         max_concurrent_clients: (() => { const v = document.getElementById('server-max-concurrent-input').value; const n = parseInt(v, 10); return (v !== '' && !isNaN(n) && n >= 1) ? n : null; })(),
+        is_active: document.getElementById('server-is-active-input') ? document.getElementById('server-is-active-input').checked : true,
         id: id || undefined,
         action: id ? undefined : 'add'
     };
@@ -7049,6 +7054,19 @@ async function saveServerConfig(event) {
                         alert('Ошибка при синхронизации flow');
                     }
                 }
+            }
+            if (result.sync_stats || result.sync_error) {
+                var parts = [];
+                if (result.sync_stats) {
+                    var s = result.sync_stats;
+                    if (s.clients_created != null) parts.push('clients_created: ' + s.clients_created);
+                    if (s.servers_added != null) parts.push('servers_added: ' + s.servers_added);
+                    if (s.servers_removed != null) parts.push('servers_removed: ' + s.servers_removed);
+                    if (s.errors && s.errors.length) parts.push('ошибки: ' + s.errors.slice(0, 5).join('; '));
+                }
+                var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');
+                if (result.sync_error) msg += '\nПредупреждение: ' + result.sync_error;
+                alert(msg);
             }
         } else {
             alert('Ошибка: ' + result.error);

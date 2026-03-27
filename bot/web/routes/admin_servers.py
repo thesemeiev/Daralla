@@ -25,6 +25,54 @@ from bot.app_context import get_ctx
 logger = logging.getLogger(__name__)
 
 
+def _coerce_server_active(value) -> bool:
+    """True если сервер считается активным (is_active в БД)."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    try:
+        return int(value) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+async def _reload_server_manager() -> None:
+    """Перечитывает активные серверы из БД в MultiServerManager."""
+    ctx = get_ctx()
+    sm = ctx.server_manager
+    if not sm:
+        return
+    new_config = await ServerProvider.get_all_servers_by_group()
+    sm.init_from_config(new_config)
+
+
+def _was_inactive_and_now_active(old_server: dict | None, update_data: dict) -> bool:
+    """Переход is_active с выключенного на включённый в одном запросе update."""
+    if not old_server or "is_active" not in update_data:
+        return False
+    old_on = _coerce_server_active(old_server.get("is_active"))
+    new_on = _coerce_server_active(update_data.get("is_active"))
+    return (not old_on) and new_on
+
+
+async def _run_sync_servers_with_config() -> tuple[dict | None, str | None]:
+    """
+    Догон подписок по текущему конфигу (новая/включённая нода).
+    Возвращает (stats, error_message).
+    """
+    ctx = get_ctx()
+    sub = ctx.subscription_manager
+    if not sub:
+        return None, "subscription_manager unavailable"
+    try:
+        stats = await sub.sync_servers_with_config(auto_create_clients=True)
+        return stats, None
+    except Exception as e:
+        logger.exception("sync_servers_with_config после изменения сервера: %s", e)
+        return None, str(e)
+
+
 def create_blueprint(bot_app):
     bp = Blueprint("admin_servers", __name__)
 
@@ -80,6 +128,8 @@ def create_blueprint(bot_app):
             password = data.get("password")
             if not all([group_id, name, host, login, password]):
                 return jsonify({"error": "All fields are required"}), 400, _cors_headers()
+            raw_active = data.get("is_active")
+            insert_active = 1 if (raw_active is None or _coerce_server_active(raw_active)) else 0
             server_id = await add_server_config(
                 group_id,
                 name,
@@ -96,15 +146,22 @@ def create_blueprint(bot_app):
                 map_label=data.get("map_label") or None,
                 location=data.get("location") or None,
                 max_concurrent_clients=data.get("max_concurrent_clients"),
+                is_active=insert_active,
             )
+            sync_stats = None
+            sync_error = None
             try:
-                sm = get_ctx().server_manager
-                if sm:
-                    new_config = await ServerProvider.get_all_servers_by_group()
-                    sm.init_from_config(new_config)
+                await _reload_server_manager()
             except Exception as mgr_e:
                 logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
-            return jsonify({"success": True, "server_id": server_id}), 200, _cors_headers()
+            if insert_active == 1:
+                sync_stats, sync_error = await _run_sync_servers_with_config()
+            payload = {"success": True, "server_id": server_id}
+            if sync_stats is not None:
+                payload["sync_stats"] = sync_stats
+            if sync_error:
+                payload["sync_error"] = sync_error
+            return jsonify(payload), 200, _cors_headers()
         return jsonify({"error": "Invalid action"}), 400, _cors_headers()
 
     @bp.route("/api/admin/server-config/update", methods=["POST", "OPTIONS"])
@@ -120,18 +177,24 @@ def create_blueprint(bot_app):
         new_flow = (update_data.get("client_flow") or "").strip() or None
         client_flow_changed = old_flow != new_flow
         await update_server_config(server_id, **update_data)
+        sync_stats = None
+        sync_error = None
         try:
-            sm = get_ctx().server_manager
-            if sm:
-                new_config = await ServerProvider.get_all_servers_by_group()
-                sm.init_from_config(new_config)
+            await _reload_server_manager()
         except Exception as mgr_e:
             logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
-        return jsonify({
+        if _was_inactive_and_now_active(old_server, update_data):
+            sync_stats, sync_error = await _run_sync_servers_with_config()
+        payload = {
             "success": True,
             "client_flow_changed": client_flow_changed,
             "server_id": int(server_id),
-        }), 200, _cors_headers()
+        }
+        if sync_stats is not None:
+            payload["sync_stats"] = sync_stats
+        if sync_error:
+            payload["sync_error"] = sync_error
+        return jsonify(payload), 200, _cors_headers()
 
     @bp.route("/api/admin/server-config/sync-flow", methods=["POST", "OPTIONS"])
     @admin_route
@@ -167,6 +230,10 @@ def create_blueprint(bot_app):
         if not server_id:
             return jsonify({"error": "Server ID is required"}), 400, _cors_headers()
         await delete_server_config(server_id)
+        try:
+            await _reload_server_manager()
+        except Exception as mgr_e:
+            logger.error("Ошибка обновления менеджера серверов после удаления: %s", mgr_e)
         return jsonify({"success": True}), 200, _cors_headers()
 
     @bp.route("/api/admin/sync-all", methods=["POST", "OPTIONS"])
