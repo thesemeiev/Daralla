@@ -16,6 +16,21 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
 
+
+def _value_error_client_absent_on_panel(exc: ValueError) -> bool:
+    """
+    py3xui при get_by_email может кинуть ValueError, если клиента нет на этой ноде
+    (текст от 3x-ui вроде «Inbound Not Found For Email» / «Error getting traffics»).
+    Это не сбой сети — на панели просто нечего удалять.
+    """
+    msg = str(exc).lower()
+    return (
+        "not found for email" in msg
+        or "inbound not found" in msg
+        or ("error getting traffics" in msg and "not found" in msg)
+    )
+
+
 # Опциональный импорт py3xui — при отсутствии библиотеки будет понятная ошибка
 try:
     from py3xui import AsyncApi
@@ -375,7 +390,17 @@ class X3:
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def deleteClient(self, user_email: str, timeout: int = 15) -> bool:
         await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
+        try:
+            c = await self._api.client.get_by_email(user_email)
+        except ValueError as e:
+            if _value_error_client_absent_on_panel(e):
+                logger.debug(
+                    "Клиент %s на этой панели не найден (нет inbound/email): %s — удаление не требуется",
+                    user_email,
+                    e,
+                )
+                return False
+            raise
         if c is None:
             logger.warning("Клиент с email=%s не найден для удаления", user_email)
             # False — клиента по этому email нет на панели
