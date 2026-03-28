@@ -1064,29 +1064,32 @@
                     <div class="admin-sm-toolbar">
                         <div class="admin-sm-toolbar-text">
                             <h2 id="admin-sm-groups-heading" class="page-section-title admin-sm-title">Группы серверов</h2>
-                            <p class="admin-sm-lead">Нажмите группу, чтобы открыть ноды и настроить порядок в подписке.</p>
+                            <p class="admin-sm-lead">Выберите группу, чтобы открыть список нод и порядок в подписке.</p>
                         </div>
                         <button type="button" class="btn-primary admin-sm-btn-primary" onclick="showAddServerGroupModal()">+ Группа</button>
                     </div>
                     <div id="admin-server-groups-list"></div>
                 </section>
+            </div>
+        </div>
 
-                <section id="admin-group-detail" class="group-detail-block admin-group-detail-panel" style="display: none;" aria-labelledby="admin-group-detail-title">
-                    <div class="group-detail-header">
-                        <div class="group-detail-heading-text">
-                            <h2 class="group-detail-title" id="admin-group-detail-title">Серверы</h2>
-                            <details class="group-detail-hint-details">
-                                <summary class="group-detail-hint-summary">Про порядок серверов</summary>
-                                <p class="group-detail-hint-body">Тот же порядок используется в мини-приложении и в ключах подписки (VPN). Перетащите карточку за ручку слева или воспользуйтесь стрелками.</p>
-                            </details>
-                        </div>
-                        <div class="group-detail-actions">
-                            <button type="button" class="btn-secondary admin-group-collapse-btn" onclick="hideGroupDetail()">Свернуть</button>
-                            <button type="button" class="btn-primary group-detail-add-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
-                        </div>
-                    </div>
-                    <div id="admin-servers-in-group-list" class="admin-servers-in-group-list"></div>
-                </section>
+        <!-- АДМИН: серверы выбранной группы -->
+        <div id="page-admin-server-group" class="page" style="display: none;">
+            <header class="header-with-back">
+                <button type="button" class="back-button" onclick="showPage('admin-server-management')">← Назад</button>
+                <h1 class="admin-server-group-header-title" id="admin-server-group-page-title">Серверы</h1>
+            </header>
+            <div class="admin-page-content admin-server-group-page" id="admin-server-group-page-root">
+                <div class="admin-server-group-toolbar">
+                    <button type="button" class="btn-primary admin-server-group-toolbar-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
+                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-reorder-toggle-btn" onclick="toggleAdminServerReorderMode()">Порядок</button>
+                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-group-edit-btn" onclick="editServerGroup(currentSelectedGroupId)" title="Редактировать группу">⋯</button>
+                </div>
+                <details class="group-detail-hint-details admin-server-group-hint">
+                    <summary class="group-detail-hint-summary">Про порядок в подписке</summary>
+                    <p class="group-detail-hint-body">Порядок строк совпадает с мини-приложением и ключами VPN. На телефоне используйте режим «Порядок» и стрелки; на компьютере можно ещё перетаскивать за ручку.</p>
+                </details>
+                <div id="admin-servers-in-group-list" class="admin-servers-in-group-list"></div>
             </div>
         </div>
 

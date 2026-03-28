@@ -450,7 +450,7 @@ var ROUTE_PAGE_NAMES = new Set([
     'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'choose-payment-method', 'payment',
     'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
     'admin-stats', 'admin-users', 'admin-broadcast',
-    'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management',
+    'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management', 'admin-server-group',
     'admin-commerce', 'admin-events'
 ]);
 var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
@@ -517,6 +517,10 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         showAdminSubscriptionEdit(Number(p.id));
         return true;
     }
+    if (route.pageName === 'admin-server-group' && p.groupId) {
+        showPage('admin-server-group', { groupId: String(p.groupId) });
+        return true;
+    }
     if (route.pageName === 'buy-subscription') {
         currentPaymentPeriod = 'month';
         currentExtendSubscriptionId = null;
@@ -577,6 +581,16 @@ function showPage(pageName, params) {
     }
     if (currentPage === 'about' && pageName !== 'about' && typeof aboutPageDispose === 'function') {
         aboutPageDispose();
+    }
+    if (pageName !== 'admin-server-group') {
+        adminServerReorderMode = false;
+        var reorderBtn = document.getElementById('admin-server-reorder-toggle-btn');
+        if (reorderBtn) {
+            reorderBtn.textContent = 'Порядок';
+            reorderBtn.classList.remove('is-active');
+        }
+        var groupRoot = document.getElementById('admin-server-group-page-root');
+        if (groupRoot) groupRoot.classList.remove('admin-server-group-page--reorder');
     }
 
     // Сбрасываем скролл наверх при переключении страниц
@@ -728,6 +742,13 @@ function showPage(pageName, params) {
         loadBroadcastPage();
     } else if (pageName === 'admin-server-management') {
         loadServerManagement();
+    } else if (pageName === 'admin-server-group') {
+        var agId = params && params.groupId != null ? Number(params.groupId) : NaN;
+        if (!agId || isNaN(agId)) {
+            showPage('admin-server-management');
+        } else {
+            loadAdminServerGroupPage(agId);
+        }
     } else if (pageName === 'admin-commerce') {
         loadAdminCommercePage();
     } else if (pageName === 'admin-events') {
@@ -7269,6 +7290,8 @@ async function saveAdminCommerce(event) {
 let currentAdminGroups = [];
 let currentAdminServers = [];
 let currentSelectedGroupId = null;
+/** Режим только перестановки на экране admin-server-group */
+let adminServerReorderMode = false;
 
 // Загрузка страницы управления серверами
 async function loadServerManagement() {
@@ -7339,11 +7362,10 @@ function renderServerGroups(groups, stats) {
         const safeName = escapeHtml(group.name);
         const subs = groupStats.active_subscriptions || 0;
         const srv = groupStats.active_servers || 0;
-        const isActive = currentSelectedGroupId === group.id;
         return `
-            <div id="group-card-${group.id}" class="admin-user-card group-card ${isActive ? 'active' : ''}" role="button" tabindex="0" data-group-id="${group.id}"
-                onclick="loadServersInGroup(${group.id})"
-                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();loadServersInGroup(${group.id});}">
+            <div id="group-card-${group.id}" class="admin-user-card group-card" role="button" tabindex="0" data-group-id="${group.id}"
+                onclick="showPage('admin-server-group', { groupId: '${group.id}' })"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('admin-server-group', { groupId: '${group.id}' });}">
                 <div class="card-content-wrapper">
                     <div class="card-main-info">
                         <div class="card-title-row">
@@ -7370,16 +7392,6 @@ function renderServerGroups(groups, stats) {
     listEl.innerHTML = '<div class="admin-server-groups-grid">' + cards + '</div>';
 }
 
-// Скрыть детали группы
-function hideGroupDetail() {
-    currentSelectedGroupId = null;
-    const detail = document.getElementById('admin-group-detail');
-    if (detail) detail.style.display = 'none';
-    const titleEl = document.getElementById('admin-group-detail-title');
-    if (titleEl) titleEl.textContent = 'Серверы';
-    document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
-}
-
 // Показать модалку добавления группы
 function showAddServerGroupModal() {
     console.log('Открытие модалки добавления группы');
@@ -7400,6 +7412,7 @@ function showAddServerGroupModal() {
 
 // Показать модалку редактирования группы
 function editServerGroup(groupId) {
+    if (groupId == null || groupId === '') return;
     const group = currentAdminGroups.find(g => g.id === groupId);
     if (!group) return;
 
@@ -7445,51 +7458,76 @@ async function saveServerGroup(event) {
     }
 }
 
-// Загрузка серверов в группе
-async function loadServersInGroup(groupId) {
-    // Если нажали на уже активную группу - скрываем её
-    if (currentSelectedGroupId === groupId) {
-        hideGroupDetail();
+async function loadAdminServerGroupPage(groupId) {
+    const gid = Number(groupId);
+    if (!gid || isNaN(gid)) {
+        showPage('admin-server-management');
         return;
     }
+    if (!currentAdminGroups || !currentAdminGroups.length) {
+        try {
+            await loadServerGroups();
+        } catch (e) {
+            showPage('admin-server-management');
+            return;
+        }
+    }
+    const g = currentAdminGroups.find(function (x) { return x.id === gid; });
+    if (!g) {
+        showPage('admin-server-management');
+        return;
+    }
+    currentSelectedGroupId = gid;
+    adminServerReorderMode = false;
+    var reorderBtn = document.getElementById('admin-server-reorder-toggle-btn');
+    if (reorderBtn) {
+        reorderBtn.textContent = 'Порядок';
+        reorderBtn.classList.remove('is-active');
+    }
+    var groupRoot = document.getElementById('admin-server-group-page-root');
+    if (groupRoot) groupRoot.classList.remove('admin-server-group-page--reorder');
 
-    currentSelectedGroupId = groupId;
-
-    const g = currentAdminGroups.find(function (x) { return x.id === groupId; });
-    const groupLabel = g && g.name ? String(g.name) : '';
-    const titleEl = document.getElementById('admin-group-detail-title');
+    var titleEl = document.getElementById('admin-server-group-page-title');
     if (titleEl) {
-        titleEl.textContent = groupLabel ? ('Серверы — ' + groupLabel) : 'Серверы';
+        titleEl.textContent = g.name ? ('Серверы — ' + g.name) : 'Серверы';
     }
 
-    document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
-    const activeCard = document.getElementById(`group-card-${groupId}`);
-    if (activeCard) activeCard.classList.add('active');
-
-    const detailEl = document.getElementById('admin-group-detail');
-    if (detailEl) detailEl.style.display = 'block';
-    
-    const listEl = document.getElementById('admin-servers-in-group-list');
+    var listEl = document.getElementById('admin-servers-in-group-list');
+    if (!listEl) return;
     listEl.innerHTML = '<div class="spinner"></div>';
 
     try {
         const response = await apiFetch('/api/admin/servers-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list', group_id: groupId })
+            body: JSON.stringify({ action: 'list', group_id: gid })
         });
         const result = await response.json();
         if (result.success) {
             currentAdminServers = result.servers;
             renderServersInGroup(result.servers);
-            // Прокрутка к списку серверов
-            document.getElementById('admin-group-detail').scrollIntoView({ behavior: 'smooth' });
+        } else {
+            listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
         }
     } catch (err) {
         console.error('Ошибка загрузки серверов:', err);
         listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
     }
 }
+
+function toggleAdminServerReorderMode() {
+    adminServerReorderMode = !adminServerReorderMode;
+    var reorderBtn = document.getElementById('admin-server-reorder-toggle-btn');
+    if (reorderBtn) {
+        reorderBtn.textContent = adminServerReorderMode ? 'Готово' : 'Порядок';
+        reorderBtn.classList.toggle('is-active', adminServerReorderMode);
+    }
+    var groupRoot = document.getElementById('admin-server-group-page-root');
+    if (groupRoot) groupRoot.classList.toggle('admin-server-group-page--reorder', adminServerReorderMode);
+    renderServersInGroup(currentAdminServers || []);
+}
+
+window.toggleAdminServerReorderMode = toggleAdminServerReorderMode;
 
 /** Короткое уведомление внизу экрана (без блокирующего alert) */
 function showAdminToast(message, duration) {
@@ -7535,7 +7573,7 @@ async function toggleServerActive(serverId, makeActive) {
         }
         var hint = row && row.querySelector('.server-power-hint');
         if (hint) hint.textContent = makeActive ? 'В подписках' : 'Не в ключах';
-        var card = input.closest('.server-card');
+        var card = input.closest('.admin-server-row') || input.closest('.server-card');
         if (card) card.classList.toggle('server-card-muted', !makeActive);
         var parts = [];
         parts.push(makeActive ? 'Сервер включён' : 'Сервер выключен');
@@ -7583,10 +7621,10 @@ async function refreshAdminServersInGroup() {
     }
 }
 
-function ensureAdminServerReorderBound() {
-    var listEl = document.getElementById('admin-servers-in-group-list');
-    if (!listEl || listEl.dataset.reorderBound === '1') return;
-    listEl.dataset.reorderBound = '1';
+function ensureFinePointerServerDragDrop(listEl) {
+    if (!listEl || listEl.dataset.reorderDnDBound === '1') return;
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    listEl.dataset.reorderDnDBound = '1';
 
     function clearDraggingMark() {
         listEl.querySelectorAll('.server-card--dragging').forEach(function (n) {
@@ -7712,10 +7750,12 @@ async function nudgeServerOrder(serverId, delta) {
 
 window.nudgeServerOrder = nudgeServerOrder;
 
-// Отрисовка списка серверов
+// Отрисовка списка серверов (экран admin-server-group)
 function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
-    ensureAdminServerReorderBound();
+    if (!listEl) return;
+    ensureFinePointerServerDragDrop(listEl);
+
     if (!servers || servers.length === 0) {
         listEl.innerHTML = '<div class="admin-sm-empty admin-sm-empty--compact"><p class="admin-sm-empty-title">В группе нет серверов</p><p class="admin-sm-empty-hint">Добавьте ноду кнопкой «+ Сервер».</p></div>';
         return;
@@ -7723,6 +7763,8 @@ function renderServersInGroup(servers) {
 
     const sorted = sortAdminServersByClientOrder(servers);
     const n = sorted.length;
+    const reorder = !!adminServerReorderMode;
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const dragGripSvg = '<svg class="server-drag-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><circle cx="9" cy="6" r="1.75"/><circle cx="15" cy="6" r="1.75"/><circle cx="9" cy="12" r="1.75"/><circle cx="15" cy="12" r="1.75"/><circle cx="9" cy="18" r="1.75"/><circle cx="15" cy="18" r="1.75"/></svg>';
 
     const cards = sorted.map(function (server, i) {
@@ -7732,49 +7774,60 @@ function renderServersInGroup(servers) {
         const safeName = escapeHtml(server.name || '');
         const upDisabled = i === 0 ? ' disabled' : '';
         const downDisabled = i === n - 1 ? ' disabled' : '';
+        const dragBlock = reorder && finePointer
+            ? `<button type="button" class="server-drag-handle" draggable="true" title="Перетащить" aria-label="Перетащить сервер">${dragGripSvg}</button>`
+            : '';
+        const orderCol = reorder
+            ? `<div class="admin-server-order-col">
+                ${dragBlock}
+                <span class="server-order-badge" aria-hidden="true">${i + 1}</span>
+                <div class="server-reorder-nudge server-reorder-nudge--large" role="group" aria-label="Сдвиг в списке">
+                    <button type="button" class="server-reorder-nudge-btn server-reorder-nudge-btn--large"${upDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, -1)" aria-label="Выше">↑</button>
+                    <button type="button" class="server-reorder-nudge-btn server-reorder-nudge-btn--large"${downDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, 1)" aria-label="Ниже">↓</button>
+                </div>
+            </div>`
+            : '';
+        const menuCol = !reorder
+            ? `<details class="admin-server-row-menu" onclick="event.stopPropagation()">
+                <summary class="admin-server-row-menu-summary" aria-label="Действия">⋯</summary>
+                <div class="admin-server-row-menu-panel">
+                    <button type="button" class="admin-server-row-menu-item" onclick="event.stopPropagation(); this.closest('details').removeAttribute('open'); editServerConfig(${server.id})">Изменить</button>
+                    <button type="button" class="admin-server-row-menu-item admin-server-row-menu-item--danger" onclick="event.stopPropagation(); this.closest('details').removeAttribute('open'); deleteServerConfig(${server.id})">Удалить</button>
+                </div>
+            </details>`
+            : '';
         return `
-        <div class="admin-user-card server-card server-card-reorderable server-card-admin${on ? '' : ' server-card-muted'}" data-server-id="${server.id}">
-            <div class="server-reorder-main-row">
-                <div class="server-reorder-toolbar">
-                    <button type="button" class="server-drag-handle" draggable="true" title="Перетащить" aria-label="Перетащить сервер">${dragGripSvg}</button>
-                    <span class="server-order-badge" aria-hidden="true">${i + 1}</span>
-                    <div class="server-reorder-nudge" role="group" aria-label="Сдвиг в списке">
-                        <button type="button" class="server-reorder-nudge-btn"${upDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, -1)" aria-label="Выше в списке">↑</button>
-                        <button type="button" class="server-reorder-nudge-btn"${downDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, 1)" aria-label="Ниже в списке">↓</button>
-                    </div>
+        <div class="admin-server-row admin-user-card server-card-reorderable${on ? '' : ' server-card-muted'}" data-server-id="${server.id}">
+            ${orderCol}
+            <div class="admin-server-row__main">
+                <div class="admin-server-row__text">
+                    <div class="admin-server-row__title">${safeTitle}</div>
+                    <div class="admin-server-row__meta">${safeHost} · ${safeName}</div>
                 </div>
-                <div class="server-reorder-body">
-                    <div class="server-card-head">
-                        <div class="card-main-info">
-                            <div class="card-title">${safeTitle}</div>
-                            <div class="card-description">${safeHost} · ${safeName}</div>
-                        </div>
-                        <div class="server-power-cell" onclick="event.stopPropagation()">
-                            <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
-                            <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
-                                <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
-                                    onchange="toggleServerActive(${server.id}, this.checked)"
-                                    aria-label="Сервер в работе">
-                                <span class="ui-switch-slider" aria-hidden="true"></span>
-                            </label>
-                            <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
-                        </div>
-                    </div>
-                    <div class="card-actions-row server-card-admin-actions">
-                        <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
-                        <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
-                    </div>
+                <div class="admin-server-row__power server-power-cell" onclick="event.stopPropagation()">
+                    <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
+                    <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
+                        <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
+                            onchange="toggleServerActive(${server.id}, this.checked)"
+                            aria-label="Сервер в работе">
+                        <span class="ui-switch-slider" aria-hidden="true"></span>
+                    </label>
+                    <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
                 </div>
+                ${menuCol}
             </div>
-        </div>
-    `;
+        </div>`;
     }).join('');
 
-    listEl.innerHTML = '<div class="server-reorder-stack">' + cards + '</div>';
+    listEl.innerHTML = '<div class="server-reorder-stack admin-server-rows">' + cards + '</div>';
 }
 
 // Показать модалку добавления сервера
 function showAddServerConfigModal() {
+    if (currentSelectedGroupId == null) {
+        void appShowAlert('Сначала откройте группу серверов.', { title: 'Группа не выбрана', variant: 'error' });
+        return;
+    }
     document.getElementById('server-config-modal-title').innerText = 'Добавить сервер';
     document.getElementById('server-id-input').value = '';
     document.getElementById('server-name-input').value = '';
