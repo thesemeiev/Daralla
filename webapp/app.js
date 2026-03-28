@@ -1392,7 +1392,7 @@ function showSubscriptionDetail(sub) {
                     </button>
                 ` : ''}
                 ${sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial' ? `
-                    <button class="action-button" onclick="showExtendSubscriptionModal(${sub.id})" style="background: #4a9eff;">
+                    <button class="action-button" onclick="showExtendSubscriptionModal(${sub.id})" style="background: var(--accent);">
                         Продлить подписку
                     </button>
                 ` : ''}
@@ -3849,7 +3849,7 @@ function showPaymentSuccessState() {
         toSubs.id = 'payment-to-subscriptions-button';
         toSubs.type = 'button';
         toSubs.className = 'action-button payment-link-button';
-        toSubs.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:#4a9eff;color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
+        toSubs.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
         toSubs.textContent = 'К подпискам';
         toSubs.onclick = function () {
             showPage('subscriptions');
@@ -3885,7 +3885,7 @@ function showPaymentErrorState(message) {
         retryBtn.id = 'payment-retry-button';
         retryBtn.type = 'button';
         retryBtn.className = 'action-button payment-link-button';
-        retryBtn.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:#4a9eff;color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
+        retryBtn.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
         retryBtn.textContent = 'Попробовать снова';
         retryBtn.onclick = function () { goBackFromPayment(); };
         actions.appendChild(retryBtn);
@@ -7704,13 +7704,15 @@ function renderServersInGroup(servers) {
                     <div class="admin-server-row__meta">${safeHost} · ${safeName}</div>
                 </div>
                 <div class="admin-server-row__power server-power-cell" onclick="event.stopPropagation()">
-                    <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
-                    <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
-                        <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
-                            onchange="toggleServerActive(${server.id}, this.checked)"
-                            aria-label="Сервер в работе">
-                        <span class="ui-switch-slider" aria-hidden="true"></span>
-                    </label>
+                    <div class="admin-server-power-toggle">
+                        <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
+                        <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
+                            <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
+                                onchange="toggleServerActive(${server.id}, this.checked)"
+                                aria-label="Сервер в работе">
+                            <span class="ui-switch-slider" aria-hidden="true"></span>
+                        </label>
+                    </div>
                     <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
                 </div>
                 ${menuCol}
