@@ -38,6 +38,7 @@ from .users_db import (
 )
 from .servers_db import (
     init_servers_db,
+    ensure_servers_config_client_sort_order_column,
     get_servers_config,
     get_server_by_id,
     get_server_groups,
@@ -103,6 +104,8 @@ async def init_all_db():
     applied = await run_migrations()
     if applied:
         logger.info("Применено %d миграций", applied)
+    if await ensure_servers_config_client_sort_order_column():
+        logger.info("Схема восстановлена: servers_config.client_sort_order")
     logger.info("База данных daralla.db готова")
 
 __all__ = [

@@ -233,6 +233,46 @@ async def reorder_servers_in_group(group_id: int, ordered_ids: list) -> bool:
     return True
 
 
+async def ensure_servers_config_client_sort_order_column() -> bool:
+    """
+    Добавляет client_sort_order, если колонки нет (код новее образа БД / миграция не доехала).
+    Идемпотентно; не вызывается до применения миграций, создающих servers_config.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='servers_config' LIMIT 1"
+        ) as cur:
+            if not await cur.fetchone():
+                return False
+        async with db.execute("PRAGMA table_info(servers_config)") as cur:
+            col_names = {r[1] for r in await cur.fetchall()}
+        if "client_sort_order" in col_names:
+            return False
+
+        logger.warning(
+            "servers_config: колонка client_sort_order отсутствует — добавляю (восстановление схемы)"
+        )
+        await db.execute(
+            "ALTER TABLE servers_config ADD COLUMN client_sort_order INTEGER NOT NULL DEFAULT 0"
+        )
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT id, group_id FROM servers_config ORDER BY group_id, id"
+        ) as cur:
+            rows = await cur.fetchall()
+        order_in_group: dict[int, int] = {}
+        for row in rows:
+            gid = row["group_id"]
+            idx = order_in_group.get(gid, 0)
+            order_in_group[gid] = idx + 1
+            await db.execute(
+                "UPDATE servers_config SET client_sort_order = ? WHERE id = ?",
+                (idx, row["id"]),
+            )
+        await db.commit()
+    return True
+
+
 async def add_server_group(name: str, description: str = None, is_default: bool = False):
     """Добавляет новую группу серверов (атомарно сбрасывает старый дефолт)."""
     async with aiosqlite.connect(DB_PATH) as db:
