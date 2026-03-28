@@ -2780,13 +2780,11 @@ class CustomGlobe {
         const ctx = this.ctx;
         var isLightTheme = typeof getTheme === 'function' && getTheme() === 'light';
         var bgColor = isLightTheme ? '#f5f5f5' : '#1a1a1a';
-        /* Сфера близко к фону страницы и карточкам — без лишнего провала в #141618 */
-        var globeGradient = isLightTheme
-            ? ['#ececf0', '#f2f2f6', '#f5f5f5']
-            : ['#24262c', '#1f2126', '#1a1a1a'];
-        var globeStroke = isLightTheme ? '#d8d8e0' : '#2e3036';
-        var labelColor = isLightTheme ? '#25252a' : '#fff';
-        var labelStroke = isLightTheme ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.5)';
+        /* Сфера одна и та же в светлой и тёмной теме */
+        var globeGradient = ['#24262c', '#1f2126', '#1a1a1a'];
+        var globeGridStroke = 'rgba(255, 255, 255, 0.11)';
+        var labelColor = '#fff';
+        var labelStroke = 'rgba(0, 0, 0, 0.5)';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
@@ -2812,12 +2810,10 @@ class CustomGlobe {
         ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
-        ctx.strokeStyle = globeStroke;
-        ctx.lineWidth = 2 / this.zoom; // Компенсируем толщину линии при зуме
-        ctx.stroke();
+        /* Без обводки диска — не выглядит как «рамка» на фоне страницы */
         
         // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
-        ctx.strokeStyle = globeStroke;
+        ctx.strokeStyle = globeGridStroke;
         ctx.lineWidth = 1 / this.zoom; // Компенсируем толщину линии при зуме
         
         // Меридианы (вертикальные линии)

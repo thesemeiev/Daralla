@@ -56,9 +56,9 @@
     /* Surfaces */
     --bg-page: #1a1a1a;
     --bg-elevated: #1c1e22;
-    /* Лёгкий нейтральный блик сверху (без синего «пятна») */
-    --bg-page-mesh: radial-gradient(ellipse 130% 55% at 50% -15%, rgba(255, 255, 255, 0.045) 0%, transparent 52%);
-    --landing-mesh: radial-gradient(ellipse 100% 50% at 50% 5%, rgba(255, 255, 255, 0.055) 0%, transparent 48%);
+    /* Вертикальный блик без овального «пятна» */
+    --bg-page-mesh: linear-gradient(180deg, rgba(255, 255, 255, 0.034) 0%, rgba(255, 255, 255, 0) 42%);
+    --landing-mesh: linear-gradient(180deg, rgba(255, 255, 255, 0.042) 0%, rgba(255, 255, 255, 0) 48%);
 
     --card-bg: var(--bg-elevated);
     --card-border: #2e3036;
@@ -106,8 +106,8 @@
     --accent-ring: rgba(74, 158, 255, 0.18);
     --accent-ring-strong: rgba(74, 158, 255, 0.4);
     --accent-focus-ring: rgba(74, 158, 255, 0.5);
-    --bg-page-mesh: radial-gradient(ellipse 130% 48% at 50% -10%, rgba(255, 255, 255, 0.28) 0%, transparent 52%);
-    --landing-mesh: radial-gradient(ellipse 100% 45% at 50% 2%, rgba(255, 255, 255, 0.32) 0%, transparent 50%);
+    --bg-page-mesh: linear-gradient(180deg, #fafafc 0%, #f5f5f5 32%, #f5f5f5 100%);
+    --landing-mesh: linear-gradient(180deg, #fbfbfd 0%, #f5f5f5 40%, #f5f5f5 100%);
 
     --card-bg: #f0f0f4;
     --card-border: #d8d8e0;
@@ -699,9 +699,8 @@ header {
     padding-bottom: 12px;
     position: relative;
     z-index: 10;
-    /* Тот же слой, что у body — без полосы другого оттенка */
-    background: var(--bg-page-mesh), var(--bg-color, var(--bg-page));
-    background-attachment: fixed;
+    /* Прозрачно: фон только у body — нет отдельной плашки под заголовком */
+    background: transparent;
 }
 
 /* Шапка только с кнопкой «Назад» (без заголовка) — выравнивание слева */
