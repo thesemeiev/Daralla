@@ -56,9 +56,6 @@
     /* Surfaces */
     --bg-page: #1a1a1a;
     --bg-elevated: #1c1e22;
-    /* Вертикальный блик без овального «пятна» */
-    --bg-page-mesh: linear-gradient(180deg, rgba(255, 255, 255, 0.034) 0%, rgba(255, 255, 255, 0) 42%);
-    --landing-mesh: linear-gradient(180deg, rgba(255, 255, 255, 0.042) 0%, rgba(255, 255, 255, 0) 48%);
 
     --card-bg: var(--bg-elevated);
     --card-border: #2e3036;
@@ -106,8 +103,6 @@
     --accent-ring: rgba(74, 158, 255, 0.18);
     --accent-ring-strong: rgba(74, 158, 255, 0.4);
     --accent-focus-ring: rgba(74, 158, 255, 0.5);
-    --bg-page-mesh: linear-gradient(180deg, #fafafc 0%, #f5f5f5 32%, #f5f5f5 100%);
-    --landing-mesh: linear-gradient(180deg, #fbfbfd 0%, #f5f5f5 40%, #f5f5f5 100%);
 
     --card-bg: #f0f0f4;
     --card-border: #d8d8e0;
@@ -322,7 +317,7 @@
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: var(--landing-mesh), var(--landing-bg);
+    background: var(--landing-bg);
     overflow: hidden;
     margin: 0 !important;
     max-width: none !important;
@@ -530,8 +525,7 @@ html {
 
 body {
     font-family: var(--font-body);
-    background: var(--bg-page-mesh), var(--bg-page);
-    background-attachment: fixed;
+    background: var(--bg-page);
     color: var(--text-primary);
     position: relative;
     /* Верх: не меньше 170px, иначе 16px + safe-area (монобровь/Dynamic Island — все разделы/страницы) */
@@ -2242,12 +2236,6 @@ h1 {
 
 .status-icon {
     font-size: 12px;
-}
-
-.server-info {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--card-border);
 }
 
 /* Страница "О нас" — обычный скролл, блоки выезжают с боков */

@@ -20,7 +20,7 @@
 | `--color-danger` | #ff6b6b | через error-токены |
 | `--bg-page` | #1a1a1a | #f5f5f5 |
 | `--bg-elevated` / `--card-bg` | #1c1e22 | #f0f0f4 |
-| `--bg-page-mesh` | Радиальный акцент над фоном | слабее |
+| `--landing-bg` | Как `--bg-page` | как `--bg-page` (лендинг fullscreen) |
 | `--text-primary` / `--text-secondary` / `--text-tertiary` | Основной / вторичный / подписи | см. CSS |
 | `--border-subtle` / `--border-strong` | = границы карточек | см. CSS |
 | `--shadow-card` / `--shadow-float` / `--shadow-modal` | Карточки / модалки | светлая тема — лёгкие тени |
@@ -31,7 +31,7 @@
 
 ## Как добавлять экран
 
-1. Фон страницы наследуется от `body` (mesh + шум); не задавайте лишний сплошной `#000`.
+1. Фон страницы наследуется от `body` (`--bg-page` + лёгкий шум `body::before`); не задавайте лишний сплошной `#000`.
 2. Карточки: `background: var(--card-bg)`, `border: 1px solid var(--card-border)`, `border-radius: var(--radius-lg)`, при необходимости `box-shadow: var(--shadow-card)`.
 3. Заголовок страницы: `h1` в шапке или `.page-section-title` — шрифт display подтянется из CSS.
 4. Кнопка основного действия: `.btn-primary` (уже на токенах).
@@ -51,7 +51,7 @@
 
 ## Атмосфера
 
-- **Mesh:** `--bg-page-mesh` на `body`, `--landing-mesh` на лендинге.
+- **Фон:** плоский `--bg-page` на `body`, `--landing-bg` на лендинге (без градиентного mesh).
 - **Шум:** `body::before` — низкая opacity, `pointer-events: none`.
 
 ## Версия стилей

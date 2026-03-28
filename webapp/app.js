@@ -3085,12 +3085,6 @@ function renderServers(servers) {
                 <div class="server-name">${escapeHtml(server.name)}</div>
                 <div class="server-status server-status-badge server-status-blink ${server.status}">${statusText}</div>
             </div>
-            ${server.last_check ? `
-                <div class="server-info">
-                    <div class="info-label">Последняя проверка</div>
-                    <div class="info-value">${escapeHtml(server.last_check)}</div>
-                </div>
-            ` : ''}
         `;
         
         listEl.appendChild(card);
