@@ -27,6 +27,78 @@ from bot.prices_config import PRICES, get_default_device_limit_async
 logger = logging.getLogger(__name__)
 
 
+def _cryptocloud_extract_address(result):
+    """Адрес из ответа create/merchant/info. В JSON ключ address бывает с значением null."""
+    if not isinstance(result, dict):
+        return ""
+    raw = result.get("address")
+    if raw is not None and raw != "":
+        if isinstance(raw, str):
+            s = raw.strip()
+            return s if s else ""
+        return str(raw).strip()
+    for nested_key in ("wallet", "payment", "deposit"):
+        block = result.get(nested_key)
+        if isinstance(block, dict):
+            x = block.get("address")
+            if x is not None and x != "":
+                if isinstance(x, str):
+                    s = x.strip()
+                    if s:
+                        return s
+                else:
+                    return str(x).strip()
+    return ""
+
+
+async def _cryptocloud_merge_merchant_info_if_no_address(client, api_token, invoice_uuid, result):
+    """Если create вернул address=null, подтягиваем счёт через POST /v2/invoice/merchant/info."""
+    addr = _cryptocloud_extract_address(result)
+    if addr:
+        return result, addr
+    if not invoice_uuid:
+        return result, ""
+    try:
+        resp = await client.post(
+            "https://api.cryptocloud.plus/v2/invoice/merchant/info",
+            headers={
+                "Authorization": f"Token {api_token}",
+                "Content-Type": "application/json",
+            },
+            json={"uuids": [str(invoice_uuid).strip()]},
+        )
+    except OSError as e:
+        logger.warning("CryptoCloud merchant/info: %s", e)
+        return result, ""
+    if resp.status_code != 200:
+        logger.warning("CryptoCloud merchant/info: HTTP %s %s", resp.status_code, (resp.text or "")[:400])
+        return result, ""
+    try:
+        info_body = resp.json()
+    except (TypeError, ValueError):
+        return result, ""
+    if info_body.get("status") != "success" or not info_body.get("result"):
+        return result, ""
+    arr = info_body["result"]
+    if not isinstance(arr, list) or not arr:
+        return result, ""
+    inv = arr[0]
+    if not isinstance(inv, dict):
+        return result, ""
+    addr = _cryptocloud_extract_address(inv)
+    if not addr:
+        return result, ""
+    out = dict(result)
+    out["address"] = inv.get("address")
+    if out.get("amount") is None and inv.get("amount") is not None:
+        out["amount"] = inv.get("amount")
+    if not out.get("currency") and inv.get("currency"):
+        out["currency"] = inv["currency"]
+    if not out.get("expiry_date") and inv.get("expiry_date"):
+        out["expiry_date"] = inv.get("expiry_date")
+    return out, addr
+
+
 def create_blueprint(bot_app):
     bp = Blueprint("api_user", __name__)
 
@@ -377,19 +449,9 @@ def create_blueprint(bot_app):
                     return jsonify({"error": "Invalid crypto invoice response"}), 502
                 payment_meta_base["gateway"] = "cryptocloud"
                 payment_meta_base["cryptocurrency"] = cc_code
-                addr = ""
-                if isinstance(result, dict):
-                    raw_a = result.get("address")
-                    if isinstance(raw_a, str) and raw_a.strip():
-                        addr = raw_a.strip()
-                    if not addr:
-                        for nested_key in ("wallet", "payment", "deposit"):
-                            block = result.get(nested_key)
-                            if isinstance(block, dict):
-                                x = block.get("address")
-                                if isinstance(x, str) and x.strip():
-                                    addr = x.strip()
-                                    break
+                result, addr = await _cryptocloud_merge_merchant_info_if_no_address(
+                    client, api_token, invoice_uuid, result
+                )
                 crypto_amt = result.get("amount") if isinstance(result, dict) else None
                 if crypto_amt is not None:
                     payment_meta_base["crypto_amount"] = str(crypto_amt)
