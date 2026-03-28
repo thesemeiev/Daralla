@@ -1638,8 +1638,8 @@ h1 {
     background:
         linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 40%, transparent 100%),
         var(--nav-bg);
-    backdrop-filter: blur(32px) saturate(180%);
-    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
     border: 1px solid var(--nav-border);
     border-radius: 28px;
     display: flex;
@@ -1647,9 +1647,9 @@ h1 {
     padding: 8px 0;
     z-index: 1000;
     box-shadow:
-        0 16px 48px rgba(0, 0, 0, 0.4),
+        0 12px 32px rgba(0, 0, 0, 0.4),
         0 0 0 1px rgba(0, 0, 0, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .nav-glass-indicator {
@@ -1664,11 +1664,12 @@ h1 {
     background:
         linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 40%, rgba(248,252,255,0.03) 100%),
         rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px;
-    transition: background 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease, border-radius 0.25s ease;
+    transition: transform 0.28s ease-out, width 0.28s ease-out,
+        background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, border-radius 0.25s ease;
     pointer-events: auto;
     cursor: grab;
     z-index: 3;
@@ -1691,50 +1692,20 @@ h1 {
 
 /* Перетаскивание: «желе»-капсула, выходит за островок; по краям сильнее — имитация искажения линзы */
 .nav-glass-indicator.dragging {
+    transition: none;
     border-radius: 28px;
     opacity: 0.45;
     background:
         linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0.01) 100%),
         rgba(255, 255, 255, 0.01);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow:
         0 0 0 1px rgba(0, 0, 0, 0.05),
         0 0 24px rgba(255, 255, 255, 0.06),
         inset 0 0 0 1px rgba(255, 255, 255, 0.08),
         inset 0 0 24px rgba(255, 255, 255, 0.04);
-}
-
-/* На мобильных: CSS-переход вместо RAF, меньше blur — без подвисаний */
-@media (max-width: 640px) {
-    .bottom-nav {
-        backdrop-filter: blur(16px) saturate(150%);
-        -webkit-backdrop-filter: blur(16px) saturate(150%);
-        box-shadow:
-            0 12px 32px rgba(0, 0, 0, 0.4),
-            0 0 0 1px rgba(0, 0, 0, 0.08),
-            inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    }
-
-    .nav-glass-indicator {
-        backdrop-filter: blur(12px) saturate(160%);
-        -webkit-backdrop-filter: blur(12px) saturate(160%);
-    }
-
-    .nav-glass-indicator.nav-indicator-mobile {
-        transition: transform 0.28s ease-out, width 0.28s ease-out,
-            background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    }
-
-    .nav-glass-indicator.nav-indicator-mobile.dragging {
-        transition: none;
-    }
-
-    .nav-glass-indicator.dragging {
-        backdrop-filter: blur(18px) saturate(180%);
-        -webkit-backdrop-filter: blur(18px) saturate(180%);
-    }
 }
 
 .nav-glass-indicator:active {
@@ -1791,12 +1762,6 @@ h1 {
 
 .nav-item:active svg {
     transform: scale(0.95);
-}
-
-@media (hover: hover) and (pointer: fine) {
-.nav-item:hover:not(.active) {
-    color: var(--nav-text-active);
-}
 }
 
 .nav-icon {
@@ -2968,17 +2933,26 @@ body.about-page-active {
 .group-detail-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     margin-bottom: 16px;
+}
+.group-detail-heading-text {
+    flex: 1;
+    min-width: 0;
 }
 .group-detail-title {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
     color: var(--text-primary);
-    flex: 1;
-    min-width: 0;
+}
+.group-detail-subtitle {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-secondary, #888);
+    max-width: 42rem;
 }
 .group-detail-add-btn {
     flex: 0 0 auto;
@@ -2986,6 +2960,126 @@ body.about-page-active {
     font-size: 14px;
     font-weight: 500;
     border-radius: 8px;
+    margin-top: 2px;
+}
+
+/* Порядок серверов в админке: drag + стрелки */
+.server-reorder-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.server-card-reorderable {
+    position: relative;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, opacity 0.15s ease;
+}
+.server-card-reorderable.server-card--dragging {
+    opacity: 0.92;
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(74, 158, 255, 0.35);
+    z-index: 2;
+}
+.server-reorder-main-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.server-reorder-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-top: 2px;
+}
+.server-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    background: var(--card-bg-hover);
+    color: var(--text-secondary, #888);
+    cursor: grab;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+    touch-action: none;
+}
+.server-drag-handle:active {
+    cursor: grabbing;
+}
+@media (hover: hover) and (pointer: fine) {
+.server-drag-handle:hover {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border-color: rgba(74, 158, 255, 0.45);
+}
+}
+.server-drag-icon {
+    display: block;
+    opacity: 0.85;
+}
+.server-order-badge {
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(74, 158, 255, 0.12);
+    color: #8ba3e8;
+    border: 1px solid rgba(74, 158, 255, 0.22);
+}
+.server-reorder-nudge {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.server-reorder-nudge-btn {
+    width: 32px;
+    height: 26px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.12s;
+}
+.server-reorder-nudge-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+@media (hover: hover) and (pointer: fine) {
+.server-reorder-nudge-btn:hover:not(:disabled) {
+    background: var(--card-bg-hover);
+    border-color: rgba(74, 158, 255, 0.35);
+}
+}
+.server-reorder-nudge-btn:active:not(:disabled) {
+    transform: scale(0.96);
+}
+.server-reorder-body {
+    flex: 1;
+    min-width: 0;
+}
+[data-theme="light"] .server-order-badge {
+    background: rgba(74, 158, 255, 0.15);
+    color: #3d5a9e;
+    border-color: rgba(74, 158, 255, 0.28);
+}
+[data-theme="light"] .server-card-reorderable.server-card--dragging {
+    box-shadow:
+        0 10px 32px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(74, 158, 255, 0.25);
 }
 @media (hover: hover) and (pointer: fine) {
 .group-detail-add-btn:hover {

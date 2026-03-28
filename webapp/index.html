@@ -1071,7 +1071,10 @@
                 
                 <div id="admin-group-detail" class="group-detail-block" style="display: none;">
                     <div class="group-detail-header">
-                        <h2 class="group-detail-title">Серверы</h2>
+                        <div class="group-detail-heading-text">
+                            <h2 class="group-detail-title">Серверы</h2>
+                            <p class="group-detail-subtitle">Порядок в списке — как в мини-приложении и в ключах подписки (VPN-клиент). Перетащите за ручку слева или пользуйтесь стрелками.</p>
+                        </div>
                         <button type="button" class="btn-primary group-detail-add-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
                     </div>
                     <div id="admin-servers-in-group-list"></div>
@@ -1226,7 +1229,7 @@
     
     <!-- Нижняя навигация -->
     <nav class="bottom-nav" style="display: none;">
-        <div class="nav-glass-indicator"></div>
+        <div class="nav-glass-indicator nav-indicator-mobile"></div>
         <button class="nav-item active" data-page="subscriptions" onclick="showPage('subscriptions')">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M4 6H20M4 12H20M4 18H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>

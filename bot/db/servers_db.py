@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 SERVER_CONFIG_UPDATE_KEYS = [
     'group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host',
     'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url', 'client_flow',
-    'map_label', 'location', 'max_concurrent_clients',
+    'map_label', 'location', 'max_concurrent_clients', 'client_sort_order',
 ]
 
 
@@ -49,6 +49,7 @@ async def init_servers_db():
                 map_label TEXT,
                 location TEXT,
                 max_concurrent_clients INTEGER DEFAULT 50,
+                client_sort_order INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (group_id) REFERENCES server_groups(id)
             )
         """)
@@ -186,6 +187,8 @@ async def get_servers_config(group_id: int = None, only_active: bool = True):
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
+        query += " ORDER BY group_id ASC, client_sort_order ASC, id ASC"
+
         async with db.execute(query, params) as cur:
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
@@ -198,6 +201,36 @@ async def get_server_by_id(server_id: int):
         async with db.execute("SELECT * FROM servers_config WHERE id = ?", (server_id,)) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
+
+
+async def reorder_servers_in_group(group_id: int, ordered_ids: list) -> bool:
+    """
+    Задаёт порядок серверов в группе (0, 1, 2, …).
+    ordered_ids должен совпадать по составу с серверами группы.
+    """
+    if not ordered_ids:
+        return False
+    try:
+        gid = int(group_id)
+        ids = [int(x) for x in ordered_ids]
+    except (TypeError, ValueError):
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT id FROM servers_config WHERE group_id = ? ORDER BY id",
+            (gid,),
+        ) as cur:
+            existing = [r[0] for r in await cur.fetchall()]
+        if sorted(existing) != sorted(ids):
+            return False
+        for i, sid in enumerate(ids):
+            await db.execute(
+                "UPDATE servers_config SET client_sort_order = ? WHERE id = ? AND group_id = ?",
+                (i, sid, gid),
+            )
+        await db.commit()
+    return True
 
 
 async def add_server_group(name: str, description: str = None, is_default: bool = False):
@@ -231,10 +264,34 @@ async def add_server_config(group_id: int, name: str, host: str, login: str, pas
     ia = 1 if int(is_active) else 0
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
+            "SELECT COALESCE(MAX(client_sort_order), -1) + 1 FROM servers_config WHERE group_id = ?",
+            (group_id,),
+        ) as cur:
+            sort_row = await cur.fetchone()
+        next_sort = int(sort_row[0]) if sort_row and sort_row[0] is not None else 0
+        async with db.execute(
             """INSERT INTO servers_config 
-               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients, is_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (group_id, name, display_name, host, login, password, vpn_host, lat, lng, port, subscription_url, (client_flow or "").strip() or None, (map_label or "").strip() or None, loc, cap, ia)
+               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients, is_active, client_sort_order)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                group_id,
+                name,
+                display_name,
+                host,
+                login,
+                password,
+                vpn_host,
+                lat,
+                lng,
+                port,
+                subscription_url,
+                (client_flow or "").strip() or None,
+                (map_label or "").strip() or None,
+                loc,
+                cap,
+                ia,
+                next_sort,
+            ),
         ) as cur:
             server_id = cur.lastrowid
             await db.commit()
@@ -324,13 +381,29 @@ async def update_server_group(group_id: int, name: str = None, description: str 
 async def update_server_config(server_id: int, **kwargs):
     """Обновляет конфигурацию сервера"""
     async with aiosqlite.connect(DB_PATH) as db:
-        old_name = None
-        if 'name' in kwargs:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT name FROM servers_config WHERE id = ?", (server_id,)) as cur:
-                row = await cur.fetchone()
-                if row:
-                    old_name = row[0]
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT name, group_id FROM servers_config WHERE id = ?",
+            (server_id,),
+        ) as cur:
+            row_before = await cur.fetchone()
+        if not row_before:
+            return False
+
+        old_name = row_before["name"]
+
+        if "group_id" in kwargs and "client_sort_order" not in kwargs:
+            try:
+                new_gid = int(kwargs["group_id"])
+            except (TypeError, ValueError):
+                new_gid = row_before["group_id"]
+            if new_gid != row_before["group_id"]:
+                async with db.execute(
+                    "SELECT COALESCE(MAX(client_sort_order), -1) + 1 FROM servers_config WHERE group_id = ?",
+                    (new_gid,),
+                ) as cur:
+                    r = await cur.fetchone()
+                kwargs = {**kwargs, "client_sort_order": int(r[0]) if r and r[0] is not None else 0}
 
         updates = []
         params = []

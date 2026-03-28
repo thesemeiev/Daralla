@@ -6964,7 +6964,7 @@ function closeInstructionModal() {
     currentInstructionSteps = [];
 }
 
-// --- Нижняя навигация: индикатор с пружиной («желе») и перетаскиванием ---
+// --- Нижняя навигация: индикатор с CSS-переходами и перетаскиванием (одинаково на всех ширинах) ---
 (function () {
     const navIndicatorState = {
         currentX: 0,
@@ -6973,17 +6973,8 @@ function closeInstructionModal() {
         targetX: 0,
         targetWidth: 56,
         targetScale: 1,
-        velocityX: 0,
-        velocityW: 0,
-        velocityScale: 0,
-        isDragging: false,
-        lastAction: 'idle', // 'idle' | 'click' | 'drag'
-        rafId: null,
-        lastTime: 0
+        isDragging: false
     };
-    // Пружина для «желе»: чуть мягче и более плавное затухание
-    const SPRING_STIFFNESS = 0.032;
-    const SPRING_DAMPING = 0.86;
     const DRAG_SCALE = 1.28;
     const DRAG_PILL_WIDTH = 80;
     const DRAG_PILL_HEIGHT = 56;
@@ -7013,12 +7004,10 @@ function closeInstructionModal() {
         }
         navIndicatorState.targetX = x;
         window.currentNavIndex = index;
-        if (navIndicatorMobile) {
-            navIndicatorState.currentX = navIndicatorState.targetX;
-            navIndicatorState.currentWidth = navIndicatorState.targetWidth;
-            navIndicatorState.currentScale = navIndicatorState.targetScale;
-            applyNavIndicatorPosition();
-        }
+        navIndicatorState.currentX = navIndicatorState.targetX;
+        navIndicatorState.currentWidth = navIndicatorState.targetWidth;
+        navIndicatorState.currentScale = navIndicatorState.targetScale;
+        applyNavIndicatorPosition();
     }
 
     function applyNavIndicatorPosition() {
@@ -7070,76 +7059,13 @@ function closeInstructionModal() {
         });
     }
 
-    function navIndicatorSpringStep() {
-        const s = navIndicatorState;
-        let stiffness = SPRING_STIFFNESS;
-        // Для клика делаем движение чуть более «резким» и быстрым
-        if (!s.isDragging && s.lastAction === 'click') {
-            stiffness *= 1.7;
-        }
-
-        s.velocityX += (s.targetX - s.currentX) * stiffness;
-        s.velocityX *= SPRING_DAMPING;
-        s.currentX += s.velocityX;
-        s.velocityW += (s.targetWidth - s.currentWidth) * stiffness;
-        s.velocityW *= SPRING_DAMPING;
-
-        s.velocityScale += (s.targetScale - s.currentScale) * stiffness;
-        s.velocityScale *= SPRING_DAMPING;
-        s.currentScale += s.velocityScale;
-        if (
-            Math.abs(s.velocityX) < 0.08 &&
-            Math.abs(s.velocityW) < 0.04 &&
-            Math.abs(s.velocityScale) < 0.02
-        ) {
-            s.currentX = s.targetX;
-            s.currentWidth = s.targetWidth;
-            s.currentScale = s.targetScale;
-            s.velocityX = s.velocityW = s.velocityScale = 0;
-            s.lastAction = 'idle';
-        }
-        applyNavIndicatorPosition();
-    }
-
-    var navIndicatorMobile = false;
-
-    function navIndicatorLoop() {
-        const nav = document.querySelector('.bottom-nav');
-        const indicator = document.querySelector('.nav-glass-indicator');
-        if (!nav || !indicator || nav.style.display === 'none') {
-            navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
-            return;
-        }
-        if (navIndicatorMobile) {
-            navIndicatorState.rafId = null;
-            return;
-        }
-        navIndicatorSpringStep();
-        navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
-    }
-
     function moveNavIndicator(index) {
-        // Чуть быстрее движение только при клике на невыделенную иконку (без раздутия scale)
-        if (index !== window.currentNavIndex) {
-            navIndicatorState.lastAction = 'click';
-        }
         setNavIndicatorTargetFromIndex(index);
     }
 
     window.moveNavIndicator = moveNavIndicator;
 
     window.addEventListener('resize', function () {
-        var mq = window.matchMedia('(max-width: 640px)');
-        var wasMobile = navIndicatorMobile;
-        navIndicatorMobile = mq.matches;
-        var ind = document.querySelector('.nav-glass-indicator');
-        if (ind) {
-            if (navIndicatorMobile) ind.classList.add('nav-indicator-mobile');
-            else ind.classList.remove('nav-indicator-mobile');
-        }
-        if (!navIndicatorMobile && !navIndicatorState.rafId) {
-            navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
-        }
         if (typeof window.currentNavIndex !== 'undefined') {
             setNavIndicatorTargetFromIndex(window.currentNavIndex);
         }
@@ -7152,10 +7078,7 @@ function closeInstructionModal() {
 
         if (!indicator || !nav || !navItems.length) return;
 
-        navIndicatorMobile = window.matchMedia('(max-width: 640px)').matches;
-        if (navIndicatorMobile) {
-            indicator.classList.add('nav-indicator-mobile');
-        }
+        indicator.classList.add('nav-indicator-mobile');
 
         function setInitialPosition() {
             const activeItem = document.querySelector('.nav-item.active');
@@ -7165,17 +7088,12 @@ function closeInstructionModal() {
             navIndicatorState.currentX = navIndicatorState.targetX;
             navIndicatorState.currentWidth = navIndicatorState.targetWidth;
             navIndicatorState.currentScale = navIndicatorState.targetScale = 1;
-            navIndicatorState.velocityX = navIndicatorState.velocityW = navIndicatorState.velocityScale = 0;
             applyNavIndicatorPosition();
         }
 
         requestAnimationFrame(function () {
             requestAnimationFrame(setInitialPosition);
         });
-
-        if (!navIndicatorMobile && !navIndicatorState.rafId) {
-            navIndicatorState.rafId = requestAnimationFrame(navIndicatorLoop);
-        }
 
         navItems.forEach(function (item, index) {
             item.addEventListener('click', function () {
@@ -7215,12 +7133,10 @@ function closeInstructionModal() {
             navIndicatorState.targetScale = DRAG_SCALE;
             navIndicatorState.targetWidth = DRAG_PILL_WIDTH;
             navIndicatorState.targetX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
-            if (navIndicatorMobile) {
-                navIndicatorState.currentScale = DRAG_SCALE;
-                navIndicatorState.currentWidth = DRAG_PILL_WIDTH;
-                navIndicatorState.currentX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
-                applyNavIndicatorPosition();
-            }
+            navIndicatorState.currentScale = DRAG_SCALE;
+            navIndicatorState.currentWidth = DRAG_PILL_WIDTH;
+            navIndicatorState.currentX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
+            applyNavIndicatorPosition();
             e.preventDefault();
         }
 
@@ -7230,10 +7146,8 @@ function closeInstructionModal() {
             var delta = px - dragStartX;
             var centerX = dragStartCenterX + delta;
             navIndicatorState.targetX = centerX - DRAG_PILL_WIDTH / 2;
-            if (navIndicatorMobile) {
-                navIndicatorState.currentX = navIndicatorState.targetX;
-                applyNavIndicatorPosition();
-            }
+            navIndicatorState.currentX = navIndicatorState.targetX;
+            applyNavIndicatorPosition();
             e.preventDefault();
         }
 
@@ -7260,13 +7174,10 @@ function closeInstructionModal() {
             if (page && typeof showPage === 'function') showPage(page);
             setNavIndicatorTargetFromIndex(bestIdx);
             navIndicatorState.targetScale = 1;
-            if (navIndicatorMobile) {
-                navIndicatorState.currentScale = 1;
-                navIndicatorState.currentX = navIndicatorState.targetX;
-                navIndicatorState.currentWidth = navIndicatorState.targetWidth;
-                navIndicatorState.velocityX = navIndicatorState.velocityW = 0;
-                applyNavIndicatorPosition();
-            }
+            navIndicatorState.currentScale = 1;
+            navIndicatorState.currentX = navIndicatorState.targetX;
+            navIndicatorState.currentWidth = navIndicatorState.targetWidth;
+            applyNavIndicatorPosition();
         }
 
         indicator.addEventListener('mousedown', onPointerDown);
@@ -7628,44 +7539,221 @@ async function toggleServerActive(serverId, makeActive) {
     }
 }
 
+function sortAdminServersByClientOrder(servers) {
+    return servers.slice().sort(function (a, b) {
+        var ao = a.client_sort_order != null ? Number(a.client_sort_order) : a.id;
+        var bo = b.client_sort_order != null ? Number(b.client_sort_order) : b.id;
+        if (ao !== bo) return ao - bo;
+        return a.id - b.id;
+    });
+}
+
+async function refreshAdminServersInGroup() {
+    if (currentSelectedGroupId == null) return;
+    try {
+        const response = await apiFetch('/api/admin/servers-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list', group_id: currentSelectedGroupId })
+        });
+        const result = await response.json();
+        if (result.success) {
+            currentAdminServers = result.servers;
+            renderServersInGroup(result.servers);
+        }
+    } catch (err) {
+        console.error('refreshAdminServersInGroup:', err);
+    }
+}
+
+function ensureAdminServerReorderBound() {
+    var listEl = document.getElementById('admin-servers-in-group-list');
+    if (!listEl || listEl.dataset.reorderBound === '1') return;
+    listEl.dataset.reorderBound = '1';
+
+    function clearDraggingMark() {
+        listEl.querySelectorAll('.server-card--dragging').forEach(function (n) {
+            n.classList.remove('server-card--dragging');
+            n.style.opacity = '';
+        });
+    }
+
+    function getDragAfterElement(stack, y) {
+        var nodes = listEl.querySelectorAll('.server-reorder-stack .server-card-reorderable:not(.server-card--dragging)');
+        var draggableElements = Array.prototype.slice.call(nodes);
+        var closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+        draggableElements.forEach(function (child) {
+            var box = child.getBoundingClientRect();
+            var offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                closest = { offset: offset, element: child };
+            }
+        });
+        return closest.element;
+    }
+
+    listEl.addEventListener('dragstart', function (e) {
+        var h = e.target.closest('.server-drag-handle');
+        if (!h || !listEl.contains(h)) return;
+        e.stopPropagation();
+        var card = h.closest('.server-card-reorderable');
+        if (!card) return;
+        e.dataTransfer.setData('text/plain', String(card.dataset.serverId));
+        e.dataTransfer.effectAllowed = 'move';
+        try {
+            e.dataTransfer.setDragImage(card, 48, 28);
+        } catch (err) { /* WebView */ }
+        card.classList.add('server-card--dragging');
+    });
+
+    listEl.addEventListener('dragend', function () {
+        clearDraggingMark();
+    });
+
+    listEl.addEventListener('dragover', function (e) {
+        var stack = e.target.closest('.server-reorder-stack');
+        if (!stack || !listEl.contains(stack)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        var dragging = stack.querySelector('.server-card--dragging');
+        if (!dragging) return;
+        var after = getDragAfterElement(stack, e.clientY);
+        if (after == null) {
+            stack.appendChild(dragging);
+        } else {
+            stack.insertBefore(dragging, after);
+        }
+    });
+
+    listEl.addEventListener('drop', function (e) {
+        var stack = e.target.closest('.server-reorder-stack');
+        if (!stack || !listEl.contains(stack)) return;
+        e.preventDefault();
+        clearDraggingMark();
+        persistServerOrderFromStack(stack);
+    });
+}
+
+async function persistServerOrderFromStack(stack) {
+    if (!currentSelectedGroupId || !stack) return;
+    var ids = Array.prototype.map.call(stack.querySelectorAll('.server-card-reorderable'), function (c) {
+        return parseInt(c.dataset.serverId, 10);
+    });
+    if (!ids.length) return;
+    try {
+        var response = await apiFetch('/api/admin/servers-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'reorder',
+                group_id: currentSelectedGroupId,
+                server_ids: ids
+            })
+        });
+        var result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Ошибка');
+        await refreshAdminServersInGroup();
+        showAdminToast('Порядок сохранён');
+    } catch (e) {
+        await appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
+        await refreshAdminServersInGroup();
+    }
+}
+
+async function nudgeServerOrder(serverId, delta) {
+    if (!currentSelectedGroupId) return;
+    var sorted = sortAdminServersByClientOrder(currentAdminServers.slice());
+    var idx = sorted.findIndex(function (s) { return s.id === serverId; });
+    if (idx < 0) return;
+    var j = idx + delta;
+    if (j < 0 || j >= sorted.length) return;
+    var tmp = sorted[idx];
+    sorted[idx] = sorted[j];
+    sorted[j] = tmp;
+    var ids = sorted.map(function (s) { return s.id; });
+    try {
+        var response = await apiFetch('/api/admin/servers-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'reorder',
+                group_id: currentSelectedGroupId,
+                server_ids: ids
+            })
+        });
+        var result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Ошибка');
+        currentAdminServers = sorted;
+        sorted.forEach(function (s, i) { s.client_sort_order = i; });
+        renderServersInGroup(sorted);
+        showAdminToast('Порядок сохранён');
+    } catch (e) {
+        await appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
+        await refreshAdminServersInGroup();
+    }
+}
+
+window.nudgeServerOrder = nudgeServerOrder;
+
 // Отрисовка списка серверов
 function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
+    ensureAdminServerReorderBound();
     if (!servers || servers.length === 0) {
         listEl.innerHTML = '<p class="empty-hint">В этой группе пока нет серверов</p>';
         return;
     }
 
-    listEl.innerHTML = servers.map(server => {
+    const sorted = sortAdminServersByClientOrder(servers);
+    const n = sorted.length;
+    const dragGripSvg = '<svg class="server-drag-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><circle cx="9" cy="6" r="1.75"/><circle cx="15" cy="6" r="1.75"/><circle cx="9" cy="12" r="1.75"/><circle cx="15" cy="12" r="1.75"/><circle cx="9" cy="18" r="1.75"/><circle cx="15" cy="18" r="1.75"/></svg>';
+
+    const cards = sorted.map(function (server, i) {
         const on = server.is_active === 1 || server.is_active === true;
         const safeTitle = escapeHtml(server.display_name || server.name);
         const safeHost = escapeHtml(server.host || '');
         const safeName = escapeHtml(server.name || '');
+        const upDisabled = i === 0 ? ' disabled' : '';
+        const downDisabled = i === n - 1 ? ' disabled' : '';
         return `
-        <div class="admin-user-card server-card${on ? '' : ' server-card-muted'}">
-            <div class="server-card-head">
-                <div class="card-main-info">
-                    <div class="card-title">${safeTitle}</div>
-                    <div class="card-description">${safeHost} · ${safeName}</div>
+        <div class="admin-user-card server-card server-card-reorderable${on ? '' : ' server-card-muted'}" data-server-id="${server.id}">
+            <div class="server-reorder-main-row">
+                <div class="server-reorder-toolbar">
+                    <button type="button" class="server-drag-handle" draggable="true" title="Перетащить" aria-label="Перетащить сервер">${dragGripSvg}</button>
+                    <span class="server-order-badge" aria-hidden="true">${i + 1}</span>
+                    <div class="server-reorder-nudge" role="group" aria-label="Сдвиг в списке">
+                        <button type="button" class="server-reorder-nudge-btn"${upDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, -1)" aria-label="Выше в списке">↑</button>
+                        <button type="button" class="server-reorder-nudge-btn"${downDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, 1)" aria-label="Ниже в списке">↓</button>
+                    </div>
                 </div>
-                <div class="server-power-cell" onclick="event.stopPropagation()">
-                    <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
-                    <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
-                        <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
-                            onchange="toggleServerActive(${server.id}, this.checked)"
-                            aria-label="Сервер в работе">
-                        <span class="ui-switch-slider" aria-hidden="true"></span>
-                    </label>
-                    <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
+                <div class="server-reorder-body">
+                    <div class="server-card-head">
+                        <div class="card-main-info">
+                            <div class="card-title">${safeTitle}</div>
+                            <div class="card-description">${safeHost} · ${safeName}</div>
+                        </div>
+                        <div class="server-power-cell" onclick="event.stopPropagation()">
+                            <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
+                            <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
+                                <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
+                                    onchange="toggleServerActive(${server.id}, this.checked)"
+                                    aria-label="Сервер в работе">
+                                <span class="ui-switch-slider" aria-hidden="true"></span>
+                            </label>
+                            <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
+                        </div>
+                    </div>
+                    <div class="card-actions-row" style="margin-top: 12px; justify-content: flex-end; flex-wrap: wrap;">
+                        <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
+                        <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
+                    </div>
                 </div>
-            </div>
-            <div class="card-actions-row" style="margin-top: 12px; justify-content: flex-end; flex-wrap: wrap;">
-                <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
-                <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
             </div>
         </div>
     `;
     }).join('');
+
+    listEl.innerHTML = '<div class="server-reorder-stack">' + cards + '</div>';
 }
 
 // Показать модалку добавления сервера

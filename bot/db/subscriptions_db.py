@@ -256,7 +256,17 @@ async def get_subscription_by_id_only(sub_id: int):
 async def get_subscription_servers(subscription_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM subscription_servers WHERE subscription_id = ?", (subscription_id,)) as cur:
+        async with db.execute(
+            """
+            SELECT ss.* FROM subscription_servers ss
+            LEFT JOIN servers_config sc ON lower(sc.name) = lower(ss.server_name)
+            WHERE ss.subscription_id = ?
+            ORDER BY (CASE WHEN sc.id IS NULL THEN 1 ELSE 0 END),
+                     COALESCE(sc.client_sort_order, 999999),
+                     ss.server_name
+            """,
+            (subscription_id,),
+        ) as cur:
             rows = await cur.fetchall()
             return [dict(row) for row in rows]
 
@@ -269,7 +279,15 @@ async def get_subscription_servers_for_subscription_ids(subscription_ids: list) 
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         placeholders = ",".join("?" * len(unique))
-        q = f"SELECT * FROM subscription_servers WHERE subscription_id IN ({placeholders}) ORDER BY subscription_id, server_name"
+        q = f"""
+            SELECT ss.* FROM subscription_servers ss
+            LEFT JOIN servers_config sc ON lower(sc.name) = lower(ss.server_name)
+            WHERE ss.subscription_id IN ({placeholders})
+            ORDER BY ss.subscription_id,
+                     (CASE WHEN sc.id IS NULL THEN 1 ELSE 0 END),
+                     COALESCE(sc.client_sort_order, 999999),
+                     ss.server_name
+        """
         async with db.execute(q, unique) as cur:
             rows = await cur.fetchall()
     by_id = {sid: [] for sid in unique}

@@ -17,6 +17,7 @@ from bot.db.servers_db import (
     get_server_by_id,
     update_server_config,
     delete_server_config,
+    reorder_servers_in_group,
 )
 from bot.services.server_provider import ServerProvider
 from bot.services.xui_service import X3
@@ -162,6 +163,19 @@ def create_blueprint(bot_app):
             if sync_error:
                 payload["sync_error"] = sync_error
             return jsonify(payload), 200, _cors_headers()
+        elif action == "reorder":
+            group_id = data.get("group_id")
+            server_ids = data.get("server_ids")
+            if group_id is None or not isinstance(server_ids, list) or len(server_ids) == 0:
+                return jsonify({"error": "group_id and server_ids[] required"}), 400, _cors_headers()
+            ok = await reorder_servers_in_group(int(group_id), server_ids)
+            if not ok:
+                return jsonify({"error": "Invalid order or group mismatch"}), 400, _cors_headers()
+            try:
+                await _reload_server_manager()
+            except Exception as mgr_e:
+                logger.error("Ошибка обновления менеджера серверов после reorder: %s", mgr_e)
+            return jsonify({"success": True}), 200, _cors_headers()
         return jsonify({"error": "Invalid action"}), 400, _cors_headers()
 
     @bp.route("/api/admin/server-config/update", methods=["POST", "OPTIONS"])
