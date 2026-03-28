@@ -105,18 +105,18 @@ jobs:
               if sudo tar -tzf "/root/backups/data/backup_${timestamp}.tar.gz" > /dev/null 2>&1; then
                 BACKUP_SIZE=$(sudo stat -c%s "/root/backups/data/backup_${timestamp}.tar.gz" 2>/dev/null || echo "0")
                 if [ "$BACKUP_SIZE" -gt 1000 ]; then
-                  echo "✅ Database backup created and verified: /root/backups/data/backup_${timestamp}.tar.gz (size: ${BACKUP_SIZE} bytes)"
+                  echo " Database backup created and verified: /root/backups/data/backup_${timestamp}.tar.gz (size: ${BACKUP_SIZE} bytes)"
                   BACKUP_SUCCESS=true
                 else
-                  echo "❌ ERROR: Backup file is too small (${BACKUP_SIZE} bytes), may be corrupted!"
+                  echo " ERROR: Backup file is too small (${BACKUP_SIZE} bytes), may be corrupted!"
                   sudo rm -f "/root/backups/data/backup_${timestamp}.tar.gz"
                 fi
               else
-                echo "❌ ERROR: Backup file is corrupted or invalid!"
+                echo " ERROR: Backup file is corrupted or invalid!"
                 sudo rm -f "/root/backups/data/backup_${timestamp}.tar.gz"
               fi
             else
-              echo "❌ ERROR: Failed to create backup!"
+              echo " ERROR: Failed to create backup!"
             fi
             
             # Keep only 5 latest backups (only if backup was successful)
@@ -130,7 +130,7 @@ jobs:
           
           # CRITICAL: Stop deployment if backup failed
           if [ "$BACKUP_SUCCESS" != true ]; then
-            echo "❌ CRITICAL ERROR: Database backup failed! Deployment aborted to prevent data loss."
+            echo " CRITICAL ERROR: Database backup failed! Deployment aborted to prevent data loss."
             exit 1
           fi
 
@@ -199,7 +199,7 @@ jobs:
           echo "Cloning repository..."
           export GIT_TOKEN="${{ secrets.REPO_CLONE_TOKEN }}"
           if [ -z "$GIT_TOKEN" ]; then
-            echo "❌ ERROR: REPO_CLONE_TOKEN is not set!"
+            echo " ERROR: REPO_CLONE_TOKEN is not set!"
             exit 1
           fi
           
@@ -211,7 +211,7 @@ jobs:
           # Method 1: Direct URL with token (URL encoded)
           echo "Trying method 1: Direct URL with token..."
           if sudo git clone "https://${{ github.repository_owner }}:${GIT_TOKEN}@github.com/${{ github.repository }}.git" Daralla 2>&1; then
-            echo "✅ Repository cloned successfully (method 1)"
+            echo " Repository cloned successfully (method 1)"
             CLONE_SUCCESS=true
           else
             echo "Method 1 failed, trying method 2..."
@@ -223,7 +223,7 @@ jobs:
             sudo chmod 600 /root/.git-credentials
             
             if sudo git clone https://github.com/${{ github.repository }}.git Daralla 2>&1; then
-              echo "✅ Repository cloned successfully (method 2)"
+              echo " Repository cloned successfully (method 2)"
               CLONE_SUCCESS=true
               sudo rm -f /root/.git-credentials
             else
@@ -231,7 +231,7 @@ jobs:
               
               # Method 3: Try without authentication (if repo is public)
               if sudo git clone https://github.com/${{ github.repository }}.git Daralla 2>&1; then
-                echo "✅ Repository cloned successfully (method 3 - public repo)"
+                echo " Repository cloned successfully (method 3 - public repo)"
                 CLONE_SUCCESS=true
               else
                 echo "All methods failed!"
@@ -241,7 +241,7 @@ jobs:
           fi
           
           if [ "$CLONE_SUCCESS" != true ]; then
-            echo "❌ ERROR: Failed to clone repository with all methods!"
+            echo "   ERROR: Failed to clone repository with all methods!"
             echo "   Token info: length=${#GIT_TOKEN}, starts with: ${GIT_TOKEN:0:7}..."
             echo "   Possible issues:"
             echo "   1. Token doesn't have 'repo' scope (needed for private repos)"
@@ -272,39 +272,39 @@ jobs:
             
             # Verify backup file before restoration
             if ! sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
-              echo "❌ ERROR: Backup file is corrupted or invalid: $latest_db_backup"
-              echo "⚠️  Attempting to use previous backup..."
+              echo " ERROR: Backup file is corrupted or invalid: $latest_db_backup"
+              echo "  Attempting to use previous backup..."
               # Try previous backup
               latest_db_backup=$(ls -t /root/backups/data/backup_*.tar.gz 2>/dev/null | head -n2 | tail -n1)
               if [ -z "$latest_db_backup" ] || ! sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
-                echo "❌ ERROR: All backup files are corrupted or missing!"
-                echo "⚠️  daralla.db will be created on startup (data loss possible)"
+                echo " ERROR: All backup files are corrupted or missing!"
+                echo "  daralla.db will be created on startup (data loss possible)"
                 sudo mkdir -p data
               else
-                echo "✅ Using previous backup: $latest_db_backup"
+                echo " Using previous backup: $latest_db_backup"
               fi
             fi
             
             if [ -n "$latest_db_backup" ] && sudo tar -tzf "$latest_db_backup" > /dev/null 2>&1; then
               sudo mkdir -p data
               if sudo tar -xzf "$latest_db_backup" -C .; then
-                echo "✅ Databases restored from $latest_db_backup"
+                echo " Databases restored from $latest_db_backup"
               else
-                echo "❌ ERROR: Failed to extract backup!"
+                echo " ERROR: Failed to extract backup!"
                 # Try safety copy as last resort
                 if [ -d "/root/backups/safety" ] && [ -n "$(ls -A /root/backups/safety/*.db 2>/dev/null)" ]; then
-                  echo "⚠️  Attempting to restore from safety copy..."
-                  sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy also failed, daralla.db will be created on startup"
+                  echo "  Attempting to restore from safety copy..."
+                  sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo " Restored from safety copy" || echo " Safety copy also failed, daralla.db will be created on startup"
                 else
-                  echo "⚠️  daralla.db will be created on startup (data loss possible)"
+                  echo "  daralla.db will be created on startup (data loss possible)"
                 fi
               fi
             else
               sudo mkdir -p data
               # Try safety copy as last resort
               if [ -d "/root/backups/safety" ] && [ -n "$(ls -A /root/backups/safety/*.db 2>/dev/null)" ]; then
-                echo "⚠️  Attempting to restore from safety copy..."
-                sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo "✅ Restored from safety copy" || echo "❌ Safety copy failed, daralla.db will be created on startup"
+                echo "  Attempting to restore from safety copy..."
+                sudo cp /root/backups/safety/*.db data/ 2>/dev/null && echo " Restored from safety copy" || echo " Safety copy failed, daralla.db will be created on startup"
               fi
             fi
             
@@ -324,14 +324,14 @@ jobs:
             if [ -f "data/daralla.db" ]; then
               echo "Checking daralla.db content..."
               if sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
-                echo "✅ daralla.db is valid"
+                echo " daralla.db is valid"
                 sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
               else
-                echo "⚠️  daralla.db exists but is invalid or empty, will be recreated on startup"
+                echo "  daralla.db exists but is invalid or empty, will be recreated on startup"
                 sudo rm -f data/daralla.db
               fi
             else
-              echo "⚠️  daralla.db not found in backup, will be created on startup"
+              echo "  daralla.db not found in backup, will be created on startup"
             fi
           else
             echo "Database backups not found - daralla.db will be created on startup"
@@ -358,7 +358,7 @@ jobs:
             echo "Checking daralla.db structure..."
             sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;" || echo "Cannot read daralla.db"
           else
-            echo "ℹ️  daralla.db will be created automatically on first bot startup"
+            echo "  daralla.db will be created automatically on first bot startup"
           fi
           
           # Fix permissions after restoration
@@ -376,7 +376,7 @@ jobs:
           sudo chmod 755 data/
           
           # WEBHOOK_URL и WEBAPP_URL не дописываются в .env при деплое — они должны быть в .env (или в бэкапе).
-          echo "ℹ️  WEBHOOK_URL и WEBAPP_URL берутся из .env (не изменяются при деплое)"
+          echo "  WEBHOOK_URL и WEBAPP_URL берутся из .env (не изменяются при деплое)"
           
           # Return to project directory
           cd /root/Daralla
@@ -442,13 +442,13 @@ jobs:
           if [ -f "data/daralla.db" ]; then
             echo "Final daralla.db check:"
             if sudo sqlite3 data/daralla.db "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;" > /dev/null 2>&1; then
-              echo "✅ daralla.db is valid and initialized"
+              echo " daralla.db is valid and initialized"
               sudo sqlite3 data/daralla.db "SELECT COUNT(*) as total_subscriptions FROM subscriptions;" || echo "Cannot read subscriptions table"
             else
-              echo "⚠️  daralla.db exists but may not be initialized yet (check bot logs)"
+              echo "  daralla.db exists but may not be initialized yet (check bot logs)"
             fi
           else
-            echo "⚠️  daralla.db not found - check bot logs for initialization errors"
+            echo "  daralla.db not found - check bot logs for initialization errors"
           fi
           
           echo "Deployment completed!"

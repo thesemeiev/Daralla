@@ -1,4 +1,4 @@
-name: 💾 Daily Backup
+name:  Daily Backup
 
 on:
   schedule:
@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 📥 Checkout code
+    - name:  Checkout code
       uses: actions/checkout@v6
 
-    - name: 💾 Create backup
+    - name:  Create backup
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.SERVER_HOST }}
@@ -33,14 +33,14 @@ jobs:
             [ -n "$FOUND" ] && DARALLA_DIR="$(dirname "$FOUND")"
           fi
           cd "$DARALLA_DIR" || { echo "Project dir not found"; exit 1; }
-          echo "💾 Создаю ежедневную резервную копию..."
+          echo " Создаю ежедневную резервную копию..."
           ./backup.sh "daily_$(date +'%Y%m%d_%H%M%S')"
           
           # Очищаем старые бэкапы (старше 7 дней)
           find ./backups -name "*.tar.gz" -mtime +7 -delete
           
-          echo "✅ Резервная копия создана"
+          echo " Резервная копия создана"
 
-    - name: 📊 Backup status
+    - name:  Backup status
       run: |
-        echo "📊 Статус резервного копирования: ${{ job.status }}"
+        echo " Статус резервного копирования: ${{ job.status }}"
