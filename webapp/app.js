@@ -7330,16 +7330,20 @@ function renderServerGroups(groups, stats) {
     if (!listEl) return;
     
     if (!groups || groups.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint">Нет созданных групп серверов</p>';
+        listEl.innerHTML = '<div class="admin-sm-empty"><p class="admin-sm-empty-title">Групп пока нет</p><p class="admin-sm-empty-hint">Создайте первую группу — в неё добавятся серверы для подписок.</p></div>';
         return;
     }
 
-    listEl.innerHTML = groups.map(group => {
+    const cards = groups.map(group => {
         const groupStats = (stats || []).find(s => s.id === group.id) || {};
         const safeName = escapeHtml(group.name);
+        const subs = groupStats.active_subscriptions || 0;
+        const srv = groupStats.active_servers || 0;
         const isActive = currentSelectedGroupId === group.id;
         return `
-            <div id="group-card-${group.id}" class="admin-user-card group-card ${isActive ? 'active' : ''}" onclick="loadServersInGroup(${group.id}, '${safeName.replace(/'/g, "\\'")}')">
+            <div id="group-card-${group.id}" class="admin-user-card group-card ${isActive ? 'active' : ''}" role="button" tabindex="0" data-group-id="${group.id}"
+                onclick="loadServersInGroup(${group.id})"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();loadServersInGroup(${group.id});}">
                 <div class="card-content-wrapper">
                     <div class="card-main-info">
                         <div class="card-title-row">
@@ -7349,24 +7353,30 @@ function renderServerGroups(groups, stats) {
                                 ${!group.is_active ? '<span class="badge-inactive">Неактивна</span>' : ''}
                             </div>
                         </div>
-                        <div class="card-description">${escapeHtml(group.description || 'Нет описания')}</div>
+                        <div class="card-description">${escapeHtml(group.description || 'Без описания')}</div>
                         <div class="card-stats-row">
-                            <span>Подписок: <b>${groupStats.active_subscriptions || 0}</b></span>
-                            <span>Серверов: <b>${groupStats.active_servers || 0}</b></span>
+                            <span class="admin-stat-pill" title="Активные подписки"><span class="admin-stat-pill__value">${subs}</span> подписок</span>
+                            <span class="admin-stat-pill" title="Активные серверы в группе"><span class="admin-stat-pill__value">${srv}</span> серверов</span>
                         </div>
                     </div>
-                    <button class="btn-secondary card-action-btn" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
+                    <div class="group-card-side">
+                        <button type="button" class="btn-secondary card-action-btn" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
+                        <span class="group-card-chevron" aria-hidden="true"></span>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
+    listEl.innerHTML = '<div class="admin-server-groups-grid">' + cards + '</div>';
 }
 
 // Скрыть детали группы
 function hideGroupDetail() {
     currentSelectedGroupId = null;
-    document.getElementById('admin-group-detail').style.display = 'none';
-    // Снимаем подсветку со всех карточек
+    const detail = document.getElementById('admin-group-detail');
+    if (detail) detail.style.display = 'none';
+    const titleEl = document.getElementById('admin-group-detail-title');
+    if (titleEl) titleEl.textContent = 'Серверы';
     document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
 }
 
@@ -7436,7 +7446,7 @@ async function saveServerGroup(event) {
 }
 
 // Загрузка серверов в группе
-async function loadServersInGroup(groupId, groupName) {
+async function loadServersInGroup(groupId) {
     // Если нажали на уже активную группу - скрываем её
     if (currentSelectedGroupId === groupId) {
         hideGroupDetail();
@@ -7444,13 +7454,20 @@ async function loadServersInGroup(groupId, groupName) {
     }
 
     currentSelectedGroupId = groupId;
-    
-    // Подсветка активной карточки
+
+    const g = currentAdminGroups.find(function (x) { return x.id === groupId; });
+    const groupLabel = g && g.name ? String(g.name) : '';
+    const titleEl = document.getElementById('admin-group-detail-title');
+    if (titleEl) {
+        titleEl.textContent = groupLabel ? ('Серверы — ' + groupLabel) : 'Серверы';
+    }
+
     document.querySelectorAll('.group-card').forEach(card => card.classList.remove('active'));
     const activeCard = document.getElementById(`group-card-${groupId}`);
     if (activeCard) activeCard.classList.add('active');
 
-    document.getElementById('admin-group-detail').style.display = 'block';
+    const detailEl = document.getElementById('admin-group-detail');
+    if (detailEl) detailEl.style.display = 'block';
     
     const listEl = document.getElementById('admin-servers-in-group-list');
     listEl.innerHTML = '<div class="spinner"></div>';
@@ -7700,7 +7717,7 @@ function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
     ensureAdminServerReorderBound();
     if (!servers || servers.length === 0) {
-        listEl.innerHTML = '<p class="empty-hint">В этой группе пока нет серверов</p>';
+        listEl.innerHTML = '<div class="admin-sm-empty admin-sm-empty--compact"><p class="admin-sm-empty-title">В группе нет серверов</p><p class="admin-sm-empty-hint">Добавьте ноду кнопкой «+ Сервер».</p></div>';
         return;
     }
 
@@ -7716,7 +7733,7 @@ function renderServersInGroup(servers) {
         const upDisabled = i === 0 ? ' disabled' : '';
         const downDisabled = i === n - 1 ? ' disabled' : '';
         return `
-        <div class="admin-user-card server-card server-card-reorderable${on ? '' : ' server-card-muted'}" data-server-id="${server.id}">
+        <div class="admin-user-card server-card server-card-reorderable server-card-admin${on ? '' : ' server-card-muted'}" data-server-id="${server.id}">
             <div class="server-reorder-main-row">
                 <div class="server-reorder-toolbar">
                     <button type="button" class="server-drag-handle" draggable="true" title="Перетащить" aria-label="Перетащить сервер">${dragGripSvg}</button>
@@ -7743,7 +7760,7 @@ function renderServersInGroup(servers) {
                             <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
                         </div>
                     </div>
-                    <div class="card-actions-row" style="margin-top: 12px; justify-content: flex-end; flex-wrap: wrap;">
+                    <div class="card-actions-row server-card-admin-actions">
                         <button type="button" class="btn-secondary server-action-btn" onclick="event.stopPropagation(); editServerConfig(${server.id})" aria-label="Изменить сервер">Изменить</button>
                         <button type="button" class="btn-danger server-action-btn" onclick="event.stopPropagation(); deleteServerConfig(${server.id})" aria-label="Удалить сервер">Удалить</button>
                     </div>
@@ -7841,8 +7858,7 @@ async function saveServerConfig(event) {
         const result = await response.json();
         if (result.success) {
             closeModal('server-config-modal');
-            const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
-            loadServersInGroup(currentSelectedGroupId, group.name);
+            await refreshAdminServersInGroup();
             if (result.client_flow_changed && result.server_id) {
                 var doSync = await appShowConfirm('Обновить flow у существующих клиентов на этом сервере?', { title: 'Синхронизация flow' });
                 if (doSync) {
@@ -7907,8 +7923,7 @@ async function deleteServerConfig(serverId) {
         });
         const result = await response.json();
         if (result.success) {
-            const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
-            loadServersInGroup(currentSelectedGroupId, group.name);
+            await refreshAdminServersInGroup();
             if (result.sync_stats || result.sync_error) {
                 await appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
             }

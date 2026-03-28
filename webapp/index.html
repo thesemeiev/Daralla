@@ -1059,26 +1059,34 @@
                 <p>Загрузка конфигурации...</p>
             </div>
             
-            <div id="admin-server-management-content" class="admin-page-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 class="page-section-title">Группы серверов</h2>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn-primary" onclick="showAddServerGroupModal()" style="padding: 8px 16px; font-size: 14px; border-radius: 10px;">+ Группа</button>
+            <div id="admin-server-management-content" class="admin-page-content admin-server-mgmt-page">
+                <section class="admin-sm-section" aria-labelledby="admin-sm-groups-heading">
+                    <div class="admin-sm-toolbar">
+                        <div class="admin-sm-toolbar-text">
+                            <h2 id="admin-sm-groups-heading" class="page-section-title admin-sm-title">Группы серверов</h2>
+                            <p class="admin-sm-lead">Нажмите группу, чтобы открыть ноды и настроить порядок в подписке.</p>
+                        </div>
+                        <button type="button" class="btn-primary admin-sm-btn-primary" onclick="showAddServerGroupModal()">+ Группа</button>
                     </div>
-                </div>
-                
-                <div id="admin-server-groups-list"></div>
-                
-                <div id="admin-group-detail" class="group-detail-block" style="display: none;">
+                    <div id="admin-server-groups-list"></div>
+                </section>
+
+                <section id="admin-group-detail" class="group-detail-block admin-group-detail-panel" style="display: none;" aria-labelledby="admin-group-detail-title">
                     <div class="group-detail-header">
                         <div class="group-detail-heading-text">
-                            <h2 class="group-detail-title">Серверы</h2>
-                            <p class="group-detail-subtitle">Порядок в списке — как в мини-приложении и в ключах подписки (VPN-клиент). Перетащите за ручку слева или пользуйтесь стрелками.</p>
+                            <h2 class="group-detail-title" id="admin-group-detail-title">Серверы</h2>
+                            <details class="group-detail-hint-details">
+                                <summary class="group-detail-hint-summary">Про порядок серверов</summary>
+                                <p class="group-detail-hint-body">Тот же порядок используется в мини-приложении и в ключах подписки (VPN). Перетащите карточку за ручку слева или воспользуйтесь стрелками.</p>
+                            </details>
                         </div>
-                        <button type="button" class="btn-primary group-detail-add-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
+                        <div class="group-detail-actions">
+                            <button type="button" class="btn-secondary admin-group-collapse-btn" onclick="hideGroupDetail()">Свернуть</button>
+                            <button type="button" class="btn-primary group-detail-add-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
+                        </div>
                     </div>
-                    <div id="admin-servers-in-group-list"></div>
-                </div>
+                    <div id="admin-servers-in-group-list" class="admin-servers-in-group-list"></div>
+                </section>
             </div>
         </div>
 
