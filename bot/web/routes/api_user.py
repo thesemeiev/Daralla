@@ -434,24 +434,24 @@ def create_blueprint(bot_app):
                         },
                         json=payload,
                     )
-                if resp.status_code != 200:
-                    logger.warning("CryptoCloud invoice create failed: %s %s", resp.status_code, resp.text)
-                    return jsonify({"error": "Failed to create crypto invoice"}), 502
-                body = resp.json()
-                if body.get("status") != "success" or "result" not in body:
-                    logger.warning("CryptoCloud invoice create error: %s", body)
-                    return jsonify({"error": "Failed to create crypto invoice"}), 502
-                result = body["result"]
-                invoice_uuid = result.get("uuid")
-                payment_link = result.get("link")
-                if not invoice_uuid or not payment_link:
-                    logger.warning("CryptoCloud missing uuid/link: %s", result)
-                    return jsonify({"error": "Invalid crypto invoice response"}), 502
-                payment_meta_base["gateway"] = "cryptocloud"
-                payment_meta_base["cryptocurrency"] = cc_code
-                result, addr = await _cryptocloud_merge_merchant_info_if_no_address(
-                    client, api_token, invoice_uuid, result
-                )
+                    if resp.status_code != 200:
+                        logger.warning("CryptoCloud invoice create failed: %s %s", resp.status_code, resp.text)
+                        return jsonify({"error": "Failed to create crypto invoice"}), 502
+                    body = resp.json()
+                    if body.get("status") != "success" or "result" not in body:
+                        logger.warning("CryptoCloud invoice create error: %s", body)
+                        return jsonify({"error": "Failed to create crypto invoice"}), 502
+                    result = body["result"]
+                    invoice_uuid = result.get("uuid")
+                    payment_link = result.get("link")
+                    if not invoice_uuid or not payment_link:
+                        logger.warning("CryptoCloud missing uuid/link: %s", result)
+                        return jsonify({"error": "Invalid crypto invoice response"}), 502
+                    payment_meta_base["gateway"] = "cryptocloud"
+                    payment_meta_base["cryptocurrency"] = cc_code
+                    result, addr = await _cryptocloud_merge_merchant_info_if_no_address(
+                        client, api_token, invoice_uuid, result
+                    )
                 crypto_amt = result.get("amount") if isinstance(result, dict) else None
                 if crypto_amt is not None:
                     payment_meta_base["crypto_amount"] = str(crypto_amt)
