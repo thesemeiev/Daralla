@@ -92,6 +92,27 @@ def _cryptocloud_uuids_for_merchant_info(invoice_uuid):
     return uniq
 
 
+def _cryptocloud_invoice_amount_currency(amount_rub: float) -> tuple[float, str]:
+    """
+    Сумма и валюта для POST /v2/invoice/create.
+    В API Reference amount в примерах в USD; при RUB часть проектов всё равно отдаёт success, но address пустой.
+    Для проверки: CRYPTOCLOUD_INVOICE_FIAT=usd и CRYPTOCLOUD_RUB_PER_USD (сколько ₽ за 1 USD).
+    """
+    raw = (os.getenv("CRYPTOCLOUD_INVOICE_FIAT") or "rub").strip().lower()
+    if raw in ("usd", "dollar", "dollars"):
+        try:
+            rub_per_usd = float(os.getenv("CRYPTOCLOUD_RUB_PER_USD", "95"))
+        except (TypeError, ValueError):
+            rub_per_usd = 95.0
+        if rub_per_usd <= 0:
+            rub_per_usd = 95.0
+        usd = round(amount_rub / rub_per_usd, 2)
+        if usd < 1.0:
+            usd = 1.0
+        return usd, "USD"
+    return float(amount_rub), "RUB"
+
+
 async def _cryptocloud_merge_merchant_info_if_no_address(client, api_token, invoice_uuid, result):
     """Если create вернул address=null, подтягиваем счёт через POST /v2/invoice/merchant/info."""
     addr = _cryptocloud_extract_address(result)
@@ -455,8 +476,8 @@ def create_blueprint(bot_app):
                 payment_meta_base["referrer_user_id"] = referrer_user_id
 
             if gateway == "cryptocloud":
-                # CryptoCloud API: при currency=RUB поле amount — сумма в рублях (docs + support).
                 # H2H: add_fields.cryptocurrency — реквизиты в ответе (address, amount в крипте).
+                # Фиат счёта: RUB (amount в ₽) или USD через CRYPTOCLOUD_INVOICE_FIAT=usd (см. _cryptocloud_invoice_amount_currency).
                 api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
                 shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
                 if not api_token or not shop_id:
@@ -466,11 +487,12 @@ def create_blueprint(bot_app):
                     return jsonify({"error": "Неизвестная криптовалюта"}), 400, _cors_headers()
                 cc_code = raw_cc if raw_cc in CRYPTOCLOUD_AVAILABLE_CURRENCIES else CRYPTOCLOUD_DEFAULT_CURRENCY
                 amount_rub = float(PRICES[period])
+                api_amount, api_currency = _cryptocloud_invoice_amount_currency(amount_rub)
                 order_id = f"{user_id}_{int(time.time() * 1000)}"
                 payload = {
                     "shop_id": shop_id,
-                    "amount": amount_rub,
-                    "currency": "RUB",
+                    "amount": api_amount,
+                    "currency": api_currency,
                     "order_id": order_id,
                 }
                 # H2H: одна валюта. Полный список + cryptocurrency давал ответ без address; достаточно [cc_code].
@@ -505,6 +527,8 @@ def create_blueprint(bot_app):
                         return jsonify({"error": "Invalid crypto invoice response"}), 502
                     payment_meta_base["gateway"] = "cryptocloud"
                     payment_meta_base["cryptocurrency"] = cc_code
+                    payment_meta_base["cryptocloud_invoice_currency"] = api_currency
+                    payment_meta_base["cryptocloud_invoice_amount"] = str(api_amount)
                     result, addr = await _cryptocloud_merge_merchant_info_if_no_address(
                         client, api_token, invoice_uuid, result
                     )
@@ -529,6 +553,15 @@ def create_blueprint(bot_app):
                         "CryptoCloud H2H: address пустой для invoice %s, keys=%s — только payment_url",
                         invoice_uuid,
                         rkeys,
+                    )
+                    logger.debug(
+                        "CryptoCloud H2H диагностика: sent_fiat=%s sent_amount=%r result.fiat_currency=%r "
+                        "amount_in_fiat=%r amount_usd=%r",
+                        api_currency,
+                        api_amount,
+                        result.get("fiat_currency") if isinstance(result, dict) else None,
+                        result.get("amount_in_fiat") if isinstance(result, dict) else None,
+                        result.get("amount_usd") if isinstance(result, dict) else None,
                     )
                 await add_payment(
                     payment_id=invoice_uuid,
