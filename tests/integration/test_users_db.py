@@ -17,6 +17,7 @@ from bot.db import (
     get_user_by_id,
     merge_user_into_target,
     register_web_user,
+    UsernameAlreadyExistsError,
     update_user_auth_token,
 )
 
@@ -61,9 +62,9 @@ async def test_register_web_user_success(db):
 async def test_register_web_user_duplicate_raises(db):
     """register_web_user raises when username already exists."""
     await register_web_user("dupuser", "hash1")
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(UsernameAlreadyExistsError) as exc_info:
         await register_web_user("dupuser", "hash2")
-    assert "уже существует" in str(exc_info.value) or "already" in str(exc_info.value).lower()
+    assert "уже существует" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

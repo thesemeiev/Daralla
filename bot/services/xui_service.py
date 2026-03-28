@@ -43,6 +43,41 @@ except ImportError:
     Py3xuiClient = None
     Py3xuiInbound = None
 
+_py3xui_timeout_patch_applied = False
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _apply_py3xui_request_timeout() -> None:
+    """
+    py3xui по умолчанию не передаёт timeout в httpx (≈5 с) — при удалённых панелях и пиках нагрузки
+    сыпятся предупреждения «Request to … failed: , retry» (у части исключений str(e) пустой).
+    Подмешиваем увеличенный timeout ко всем запросам AsyncBaseApi.
+    """
+    global _py3xui_timeout_patch_applied
+    if not PY3XUI_AVAILABLE or _py3xui_timeout_patch_applied:
+        return
+    from py3xui.async_api.async_api_base import AsyncBaseApi
+
+    total = max(5.0, _float_env("XUI_HTTP_TIMEOUT_TOTAL", 30.0))
+    connect = max(3.0, _float_env("XUI_HTTP_TIMEOUT_CONNECT", 15.0))
+    pool = max(2.0, _float_env("XUI_HTTP_TIMEOUT_POOL", 10.0))
+    timeout = httpx.Timeout(total, connect=connect, pool=pool)
+
+    _orig = AsyncBaseApi._request_with_retry
+
+    async def _request_with_timeout(self, method, url, headers, **kwargs):
+        kwargs.setdefault("timeout", timeout)
+        return await _orig(self, method, url, headers, **kwargs)
+
+    AsyncBaseApi._request_with_retry = _request_with_timeout
+    _py3xui_timeout_patch_applied = True
+
 
 def _client_to_api_dict(c: Any) -> dict:
     """Преобразует клиента py3xui (или dict) в формат 3x-ui API (camelCase)."""
@@ -124,6 +159,7 @@ class X3:
             raise RuntimeError(
                 "py3xui не установлен. Выполните: pip install py3xui>=0.5.5"
             )
+        _apply_py3xui_request_timeout()
         self.login = login
         self.password = password
         self.host = host.rstrip("/")
@@ -132,6 +168,13 @@ class X3:
         self.subscription_url = (subscription_url or "").strip() or None
         use_tls_verify = host.startswith("https://")
         self._api = AsyncApi(host, login, password, use_tls_verify=use_tls_verify)
+        try:
+            mr = int(os.getenv("XUI_PANEL_MAX_RETRIES", "5"))
+        except ValueError:
+            mr = 5
+        mr = max(1, min(mr, 10))
+        for sub in (self._api.client, self._api.inbound, self._api.database, self._api.server):
+            sub.max_retries = mr
         self._logged_in = False
         logger.debug("X3 (py3xui) создан для %s", host)
 

@@ -14,6 +14,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from bot.db.users_db import (
     register_web_user,
+    UsernameAlreadyExistsError,
     get_user_by_username_or_id,
     update_user_auth_token,
     get_user_by_auth_token,
@@ -60,11 +61,14 @@ def create_blueprint(bot_app):
             resp = jsonify({"success": True, "token": token, "user_id": user_id})
             _set_auth_cookie(resp, token, remember=True)
             return resp
+        except UsernameAlreadyExistsError:
+            logger.info("Регистрация: логин уже занят")
+            return jsonify({"error": "Пользователь с таким логином уже существует"}), 409
         except ValueError as e:
             logger.warning("Ошибка регистрации (валидация): %s", e)
             return jsonify({"error": str(e)}), 400
         except aiosqlite.IntegrityError:
-            logger.info("Ошибка регистрации: username уже существует")
+            logger.info("Регистрация: конфликт уникальности в БД")
             return jsonify({"error": "Пользователь с таким логином уже существует"}), 409
         except aiosqlite.Error as e:
             logger.error("Ошибка регистрации (БД): %s", e)

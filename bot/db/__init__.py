@@ -23,7 +23,7 @@ from .payments_db import (
 )
 from .users_db import (
     init_users_db, get_all_user_ids, register_simple_user, is_known_user,
-    TG_USER_ID_HEX_LEN, generate_user_id, generate_tg_user_id, get_or_create_subscriber,
+    TG_USER_ID_HEX_LEN, UsernameAlreadyExistsError, generate_user_id, generate_tg_user_id, get_or_create_subscriber,
     get_user_by_id, get_user_by_username, resolve_user_by_query,
     get_user_growth_data, get_user_server_usage, register_web_user,
     update_user_auth_token, get_user_by_auth_token, get_user_by_username_or_id,
@@ -121,7 +121,7 @@ __all__ = [
     'get_notification_rule_by_id',
     'get_notification_send_count', 'get_last_notification_send_time',
     'TG_USER_ID_HEX_LEN', 'generate_user_id', 'generate_tg_user_id', 'get_or_create_subscriber', 'get_user_by_id', 'get_user_by_username',
-    'resolve_user_by_query', 'get_user_growth_data', 'get_user_server_usage', 'register_web_user',
+    'resolve_user_by_query', 'get_user_growth_data', 'get_user_server_usage', 'UsernameAlreadyExistsError', 'register_web_user',
     'update_user_auth_token', 'get_user_by_auth_token', 'get_user_by_username_or_id',
     'username_available', 'update_user_username', 'update_user_password',
     'link_telegram_create_state', 'link_telegram_consume_state',

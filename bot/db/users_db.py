@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 TG_USER_ID_HEX_LEN = 12  # tg_ + 12 hex = 15 символов всего
 
 
+class UsernameAlreadyExistsError(ValueError):
+    """Логин уже занят (веб-регистрация)."""
+
+
 async def init_users_db():
     """Инициализирует таблицы users, telegram_links, link_telegram_states, known_telegram_ids."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -303,7 +307,7 @@ async def register_web_user(username: str, password_hash: str):
         raise ValueError("Логин не может быть пустым")
     existing = await get_user_by_username(uname)
     if existing:
-        raise Exception("Пользователь с таким логином уже существует")
+        raise UsernameAlreadyExistsError("Пользователь с таким логином уже существует")
     user_id = generate_user_id()
     async with aiosqlite.connect(DB_PATH) as db:
         try:
@@ -315,7 +319,7 @@ async def register_web_user(username: str, password_hash: str):
             await db.commit()
             return user_id
         except aiosqlite.IntegrityError:
-            raise Exception("Пользователь с таким логином уже существует")
+            raise UsernameAlreadyExistsError("Пользователь с таким логином уже существует")
 
 
 async def update_user_auth_token(user_id: str, token: str):
