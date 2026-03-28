@@ -230,11 +230,19 @@ def create_blueprint(bot_app):
         if not server_id:
             return jsonify({"error": "Server ID is required"}), 400, _cors_headers()
         await delete_server_config(server_id)
+        sync_stats = None
+        sync_error = None
         try:
             await _reload_server_manager()
         except Exception as mgr_e:
             logger.error("Ошибка обновления менеджера серверов после удаления: %s", mgr_e)
-        return jsonify({"success": True}), 200, _cors_headers()
+        sync_stats, sync_error = await _run_sync_servers_with_config()
+        payload = {"success": True}
+        if sync_stats is not None:
+            payload["sync_stats"] = sync_stats
+        if sync_error:
+            payload["sync_error"] = sync_error
+        return jsonify(payload), 200, _cors_headers()
 
     @bp.route("/api/admin/sync-all", methods=["POST", "OPTIONS"])
     @admin_route

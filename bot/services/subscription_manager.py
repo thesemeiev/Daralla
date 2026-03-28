@@ -527,26 +527,27 @@ class SubscriptionManager:
     async def sync_servers_with_config(self, auto_create_clients: bool = True) -> dict:
         """
         Синхронизирует подписки с серверами (БД → Серверы).
-        
-        Принцип: БД - источник истины. Гарантирует, что все подписки имеют клиентов
-        на серверах ИХ ГРУППЫ из конфигурации.
+
+        Принцип: БД — источник истины. Связь подписка–сервер снимается только если сервер
+        больше не входит в группу (удалён, другая группа). Временно выключенные (is_active=0)
+        остаются в subscription_servers — ссылки на них не отдаются, пока сервер не в рантайме.
         """
         logger.info("Начало синхронизации подписок с серверами (БД → Серверы)")
-        
+
         # Получаем все подписки, которые нужно синхронизировать
         all_subscriptions = await get_subscriptions_to_sync()
-        
-        # Получаем все серверы из конфигурации (БД)
+
         from ..db.servers_db import get_servers_config
-        all_configured_servers = await get_servers_config(only_active=True)
-        
-        # Группируем серверы по group_id для быстрого поиска
+
+        all_servers_rows = await get_servers_config(only_active=False)
         servers_by_group = {}
-        for s in all_configured_servers:
+        servers_by_group_all = {}
+        for s in all_servers_rows:
             g_id = s["group_id"]
-            if g_id not in servers_by_group:
-                servers_by_group[g_id] = []
-            servers_by_group[g_id].append(s["name"])
+            name = s["name"]
+            servers_by_group_all.setdefault(g_id, []).append(name)
+            if s.get("is_active", 1):
+                servers_by_group.setdefault(g_id, []).append(name)
         
         stats = {
             "subscriptions_checked": len(all_subscriptions),
@@ -560,7 +561,7 @@ class SubscriptionManager:
             "errors": [],
         }
 
-        # Фаза 1: только БД (связи подписка–сервер) и удаление клиентов с выбывших нод
+        # Фаза 1: только БД (связи подписка–сервер). Клиентов на панели X-UI при снятии связи не удаляем.
         for sub in all_subscriptions:
             subscription_id = sub["id"]
             user_id = sub["user_id"]
@@ -574,6 +575,7 @@ class SubscriptionManager:
                 continue
 
             group_servers = set(servers_by_group.get(group_id, []))
+            group_servers_all = set(servers_by_group_all.get(group_id, []))
 
             try:
                 current_servers = await get_subscription_servers(subscription_id)
@@ -600,25 +602,15 @@ class SubscriptionManager:
                         except (RuntimeError, ValueError, TypeError) as e:
                             stats["errors"].append(f"Подписка {subscription_id}, server {server_name}: {e}")
 
-                servers_to_remove = current_server_names - group_servers
+                servers_to_remove = current_server_names - group_servers_all
                 for server_name in servers_to_remove:
                     try:
                         await remove_subscription_server(subscription_id, server_name)
                         stats["servers_removed"] += 1
                         logger.info(
                             f"Удалена связь подписки {subscription_id} с сервером {server_name} "
-                            f"(не в группе или удален)"
+                            f"(сервер удалён из группы или перенесён); панель X-UI не изменялась"
                         )
-
-                        found = self.server_manager.find_server_by_name(server_name)
-                        if found and found[0]:
-                            xui, _ = found
-                            await xui.deleteClient(client_email)
-                        elif found is None:
-                            logger.warning(
-                                "Сервер %s не в конфиге — deleteClient на панели пропущен",
-                                server_name,
-                            )
                     except (RuntimeError, ValueError, TypeError, KeyError) as e:
                         logger.error(
                             f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}"
