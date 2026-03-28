@@ -7,6 +7,7 @@ import logging
 import os
 import time
 import uuid
+from urllib.parse import urlencode
 
 import aiosqlite
 import requests as requests_lib
@@ -363,9 +364,10 @@ def create_blueprint(bot_app):
                 }), 200, _cors_headers()
 
             from yookassa import Payment
+
             payment = Payment.create({
                 "amount": {"value": price, "currency": "RUB"},
-                "confirmation": {"type": "redirect", "return_url": f"https://t.me/{user_id}"},
+                "confirmation": {"type": "embedded"},
                 "capture": True,
                 "description": f"VPN {period} для {user_id}",
                 "metadata": {
@@ -385,6 +387,22 @@ def create_blueprint(bot_app):
                     }],
                 },
             })
+            confirmation = getattr(payment, "confirmation", None)
+            conf_token = getattr(confirmation, "confirmation_token", None) if confirmation else None
+            if not conf_token:
+                logger.error(
+                    "YooKassa embedded: нет confirmation_token в ответе, payment_id=%s",
+                    getattr(payment, "id", None),
+                )
+                return jsonify({"error": "Не удалось создать платёж (виджет)"}), 502, _cors_headers()
+
+            webapp_base = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
+            widget_return_url = None
+            if webapp_base:
+                widget_return_url = (
+                    f"{webapp_base}/?{urlencode({'payment_return': '1', 'payment_id': payment.id})}"
+                )
+
             await add_payment(
                 payment_id=payment.id,
                 user_id=user_id,
@@ -394,9 +412,11 @@ def create_blueprint(bot_app):
             return jsonify({
                 "success": True,
                 "payment_id": payment.id,
-                "payment_url": payment.confirmation.confirmation_url,
+                "confirmation_token": conf_token,
+                "widget_return_url": widget_return_url,
                 "amount": price,
                 "period": period,
+                "gateway": "yookassa",
             }), 200, _cors_headers()
         except Exception as e:
             logger.error("Ошибка в API /api/user/payment/create: %s", e, exc_info=True)

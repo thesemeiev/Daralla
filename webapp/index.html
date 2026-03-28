@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=14">
+    <link rel="stylesheet" href="/style.css?v=15">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -247,13 +247,15 @@
                         </div>
                     </div>
                     
+                    <div id="yookassa-widget-root" class="yookassa-widget-root" style="display: none;" aria-live="polite"></div>
+
                     <div class="detail-actions">
                         <button type="button" id="payment-link-button" class="action-button payment-link-button" style="width:100%;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:500;">
                             Перейти к оплате
                         </button>
                     </div>
                     
-                    <p class="hint" style="margin-top: 16px; text-align: center; font-size: 14px;">
+                    <p id="payment-widget-hint" class="hint" style="margin-top: 16px; text-align: center; font-size: 14px;">
                         Ссылка действительна 15 минут
                     </p>
                 </div>
@@ -1416,6 +1418,6 @@
         </div>
     </div>
 
-    <script src="/app.js?v=13"></script>
+    <script src="/app.js?v=14"></script>
 </body>
 </html>

@@ -3137,8 +3137,116 @@ function goBackFromChoosePayment() {
 
 // Функция возврата с страницы оплаты (на страницу оформления)
 function goBackFromPayment() {
+    destroyYooKassaWidget();
     currentPaymentData = null;
     showPage('choose-payment-method');
+}
+
+var yooCheckoutScriptPromise = null;
+
+function loadYooKassaWidgetScript() {
+    if (typeof window !== 'undefined' && window.YooMoneyCheckoutWidget) {
+        return Promise.resolve();
+    }
+    if (yooCheckoutScriptPromise) return yooCheckoutScriptPromise;
+    yooCheckoutScriptPromise = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://yookassa.ru/checkout-widget/v1/checkout-widget.js';
+        s.async = true;
+        s.onload = function () { resolve(); };
+        s.onerror = function () { reject(new Error('Не удалось загрузить виджет ЮKassa')); };
+        document.head.appendChild(s);
+    });
+    return yooCheckoutScriptPromise;
+}
+
+function destroyYooKassaWidget() {
+    try {
+        if (window.__darallaYooCheckout && typeof window.__darallaYooCheckout.destroy === 'function') {
+            window.__darallaYooCheckout.destroy();
+        }
+    } catch (e) {
+        console.warn('YooKassa widget destroy', e);
+    }
+    window.__darallaYooCheckout = null;
+    var root = document.getElementById('yookassa-widget-root');
+    if (root) {
+        root.innerHTML = '';
+        root.style.display = 'none';
+    }
+}
+
+function buildYooKassaReturnUrl(paymentId, serverReturnUrl) {
+    var u = String(serverReturnUrl || '').trim();
+    if (u.indexOf('http') === 0) return u;
+    try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('payment_return', '1');
+        url.searchParams.set('payment_id', paymentId);
+        return url.toString();
+    } catch (e2) {
+        return window.location.href;
+    }
+}
+
+function mountYooKassaWidget(confirmationToken, paymentId, returnUrl, extendSubscriptionId) {
+    return loadYooKassaWidgetScript().then(function () {
+        destroyYooKassaWidget();
+        var root = document.getElementById('yookassa-widget-root');
+        if (!root) return;
+        root.style.display = 'block';
+        var Checkout = window.YooMoneyCheckoutWidget;
+        if (!Checkout) throw new Error('YooMoneyCheckoutWidget не найден');
+        var checkout = new Checkout({
+            confirmation_token: confirmationToken,
+            return_url: returnUrl,
+            error_callback: function (err) {
+                console.error('YooKassa widget init', err);
+                var msg = typeof err === 'string' ? err : (err && err.message) ? err.message : JSON.stringify(err);
+                showFormMessage('payment-form-message', 'error', 'Ошибка оплаты: ' + (msg || 'неизвестно'));
+            },
+            customization: {
+                colors: {
+                    control_primary: '#4a9eff',
+                    control_primary_content: '#FFFFFF',
+                    background: '#1c1e22',
+                    border: '#3a3f4a',
+                    text: '#e0e0e0'
+                }
+            }
+        });
+        window.__darallaYooCheckout = checkout;
+        var poll = function () {
+            checkPaymentStatus(paymentId, extendSubscriptionId || null);
+        };
+        if (typeof checkout.on === 'function') {
+            checkout.on('success', poll);
+            checkout.on('complete', poll);
+        }
+        checkout.render('yookassa-widget-root');
+    });
+}
+
+/** После редиректа виджета ЮKassa: query payment_return=1&payment_id=… */
+function handlePaymentReturnFromQuery() {
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('payment_return') !== '1') return;
+    var pid = params.get('payment_id');
+    if (!pid) return;
+    if (!platform.isTelegram() && !currentUserId) return;
+    var extRaw = sessionStorage.getItem('payment_extend_sub_id');
+    var extId = extRaw ? parseInt(extRaw, 10) : null;
+    if (!extRaw || isNaN(extId)) extId = null;
+    try {
+        window.history.replaceState(null, '', window.location.pathname + (window.location.hash || ''));
+    } catch (e) { /* ignore */ }
+    currentPaymentData = {
+        payment_id: pid,
+        gateway: 'yookassa'
+    };
+    showPage('payment');
+    showPaymentPage();
+    checkPaymentStatus(pid, extId);
 }
 
 function openPaymentUrl() {
@@ -3321,13 +3429,51 @@ async function createPayment(period, subscriptionId, gateway) {
         }
         
         const data = await response.json();
-        
+
+        if (!data.success || !data.payment_id) {
+            throw new Error('Не удалось создать платёж');
+        }
+
+        if (gateway === 'yookassa') {
+            var tok = data.confirmation_token;
+            if (!tok || typeof tok !== 'string') {
+                var legacyUrl = data.payment_url;
+                if (legacyUrl && String(legacyUrl).trim().indexOf('http') === 0) {
+                    currentPaymentData = {
+                        payment_id: data.payment_id,
+                        payment_url: String(legacyUrl).trim(),
+                        amount: data.amount,
+                        period: data.period,
+                        gateway: 'yookassa'
+                    };
+                    showPaymentPage();
+                    return;
+                }
+                throw new Error('Не удалось получить данные для оплаты');
+            }
+            if (subscriptionId) {
+                sessionStorage.setItem('payment_extend_sub_id', String(subscriptionId));
+            } else {
+                try { sessionStorage.removeItem('payment_extend_sub_id'); } catch (e) {}
+            }
+            currentPaymentData = {
+                payment_id: data.payment_id,
+                confirmation_token: tok,
+                widget_return_url: data.widget_return_url || null,
+                amount: data.amount,
+                period: data.period,
+                gateway: 'yookassa',
+                extend_subscription_id: subscriptionId || null
+            };
+            showPaymentPage();
+            return;
+        }
+
         var payUrl = data.payment_url;
-        if (!data.success || !payUrl || typeof payUrl !== 'string' || !String(payUrl).trim() || String(payUrl).trim().indexOf('http') !== 0) {
+        if (!payUrl || typeof payUrl !== 'string' || String(payUrl).trim().indexOf('http') !== 0) {
             throw new Error('Не удалось получить ссылку на оплату');
         }
-        
-        // Сохраняем данные платежа
+
         currentPaymentData = {
             payment_id: data.payment_id,
             payment_url: String(payUrl).trim(),
@@ -3335,8 +3481,7 @@ async function createPayment(period, subscriptionId, gateway) {
             period: data.period,
             gateway: gateway
         };
-        
-        // Обновляем страницу оплаты с данными (кнопка восстановится автоматически)
+
         showPaymentPage();
         
     } catch (error) {
@@ -3361,6 +3506,8 @@ function showPaymentPage() {
     hideFormMessage('payment-form-message');
     showPage('payment');
     var page = document.getElementById('page-payment');
+    var hintEl = document.getElementById('payment-widget-hint');
+    var widgetRoot = document.getElementById('yookassa-widget-root');
     if (page) {
         var statusEl = page.querySelector('.detail-status');
         if (statusEl) {
@@ -3371,14 +3518,18 @@ function showPaymentPage() {
         if (toSubs) toSubs.style.display = 'none';
         var retryBtn = document.getElementById('payment-retry-button');
         if (retryBtn) retryBtn.style.display = 'none';
-        var hint = page.querySelector('.detail-card .hint');
-        if (hint) hint.style.display = '';
+        if (hintEl) hintEl.style.display = '';
     }
     var btn = document.getElementById('payment-link-button');
+    if (widgetRoot && !currentPaymentData) {
+        widgetRoot.style.display = 'none';
+        widgetRoot.innerHTML = '';
+    }
     if (btn) btn.style.display = '';
     if (!currentPaymentData) {
         document.getElementById('payment-period').textContent = 'Загрузка...';
         document.getElementById('payment-amount').textContent = 'Загрузка...';
+        if (hintEl) hintEl.textContent = 'Ссылка действительна 15 минут';
         if (btn) {
             btn.textContent = 'Создание платежа...';
             btn.classList.add('payment-link-disabled');
@@ -3390,14 +3541,64 @@ function showPaymentPage() {
         }
         return;
     }
-    var periodText = currentPaymentData.period === 'month' ? '1 месяц' : '3 месяца';
+
+    var gw = currentPaymentData.gateway || 'yookassa';
+    var periodText = currentPaymentData.period === 'month' ? '1 месяц' : (currentPaymentData.period === '3month' ? '3 месяца' : '—');
     document.getElementById('payment-period').textContent = periodText;
-    document.getElementById('payment-amount').textContent = currentPaymentData.amount + '₽';
+    document.getElementById('payment-amount').textContent =
+        currentPaymentData.amount != null ? String(currentPaymentData.amount) + '₽' : '—';
+
+    if (gw === 'yookassa' && currentPaymentData.confirmation_token) {
+        if (btn) btn.style.display = 'none';
+        if (hintEl) {
+            hintEl.textContent = 'Оплатите в форме ниже. После банка вы вернётесь в приложение — мы проверим оплату автоматически.';
+            hintEl.style.display = '';
+        }
+        var ret = buildYooKassaReturnUrl(
+            currentPaymentData.payment_id,
+            currentPaymentData.widget_return_url
+        );
+        var extSub = currentPaymentData.extend_subscription_id;
+        mountYooKassaWidget(
+            currentPaymentData.confirmation_token,
+            currentPaymentData.payment_id,
+            ret,
+            extSub
+        ).catch(function (err) {
+            console.error(err);
+            showFormMessage('payment-form-message', 'error', err.message || 'Не удалось открыть форму оплаты');
+            if (btn) {
+                btn.style.display = '';
+                btn.textContent = 'Повторить';
+                btn.onclick = function () {
+                    goBackFromPayment();
+                };
+            }
+        });
+        checkPaymentStatus(currentPaymentData.payment_id, extSub || null);
+        return;
+    }
+
+    if (gw === 'yookassa' && currentPaymentData.payment_id && !currentPaymentData.confirmation_token) {
+        if (btn) btn.style.display = 'none';
+        if (widgetRoot) widgetRoot.style.display = 'none';
+        if (hintEl) {
+            hintEl.textContent = 'Проверяем статус платежа…';
+            hintEl.style.display = '';
+        }
+        return;
+    }
+
+    if (hintEl) hintEl.textContent = 'Ссылка действительна 15 минут';
+    if (widgetRoot) {
+        widgetRoot.style.display = 'none';
+        widgetRoot.innerHTML = '';
+    }
     if (btn) {
         btn.textContent = 'Перейти к оплате';
         btn.classList.remove('payment-link-disabled');
         btn.setAttribute('aria-disabled', 'false');
-        btn.dataset.paymentUrl = currentPaymentData.payment_url;
+        btn.dataset.paymentUrl = currentPaymentData.payment_url || '';
         btn.dataset.paymentId = currentPaymentData.payment_id;
         btn.onclick = function (e) {
             e.preventDefault();
@@ -3413,6 +3614,7 @@ function showPaymentPage() {
 
 // Показать на странице оплаты состояние «Оплата прошла» (обновить карточку, кнопка «К подпискам»)
 function showPaymentSuccessState() {
+    destroyYooKassaWidget();
     var page = document.getElementById('page-payment');
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
@@ -3422,7 +3624,7 @@ function showPaymentSuccessState() {
     }
     var btn = document.getElementById('payment-link-button');
     if (btn) btn.style.display = 'none';
-    var hint = page.querySelector('.detail-card .hint');
+    var hint = document.getElementById('payment-widget-hint');
     if (hint) hint.style.display = 'none';
     var actions = page.querySelector('.detail-actions');
     if (!actions) return;
@@ -3445,6 +3647,7 @@ function showPaymentSuccessState() {
 
 // Показать на странице оплаты состояние отмены/ошибки (красный статус, кнопка «Попробовать снова»)
 function showPaymentErrorState(message) {
+    destroyYooKassaWidget();
     var page = document.getElementById('page-payment');
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
@@ -3454,7 +3657,7 @@ function showPaymentErrorState(message) {
     }
     var btn = document.getElementById('payment-link-button');
     if (btn) btn.style.display = 'none';
-    var hint = page.querySelector('.detail-card .hint');
+    var hint = document.getElementById('payment-widget-hint');
     if (hint) hint.style.display = 'none';
     var actions = page.querySelector('.detail-actions');
     if (!actions) return;
@@ -5197,6 +5400,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
         await initTelegramFlow();
     }
+
+    handlePaymentReturnFromQuery();
 
     initNavIndicator();
     initThemeToggle();

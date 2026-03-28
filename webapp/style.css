@@ -4767,3 +4767,12 @@ body.web-mode .web-only {
 body.web-mode .tg-only {
     display: none !important;
 }
+
+.yookassa-widget-root {
+    width: 100%;
+    min-height: 80px;
+    margin-top: 8px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card-bg, #1c1e22);
+}
