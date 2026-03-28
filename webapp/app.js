@@ -2780,9 +2780,13 @@ class CustomGlobe {
         const ctx = this.ctx;
         var isLightTheme = typeof getTheme === 'function' && getTheme() === 'light';
         var bgColor = isLightTheme ? '#f5f5f5' : '#1a1a1a';
-        var globeGradient = ['#25282c', '#1c1e22', '#141618'];
-        var globeStroke = '#2e3036';
-        var labelColor = '#fff';
+        /* Сфера близко к фону страницы и карточкам — без лишнего провала в #141618 */
+        var globeGradient = isLightTheme
+            ? ['#ececf0', '#f2f2f6', '#f5f5f5']
+            : ['#24262c', '#1f2126', '#1a1a1a'];
+        var globeStroke = isLightTheme ? '#d8d8e0' : '#2e3036';
+        var labelColor = isLightTheme ? '#25252a' : '#fff';
+        var labelStroke = isLightTheme ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.5)';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
@@ -2930,7 +2934,7 @@ class CustomGlobe {
                 
                 // Рисуем текст без фона (или с очень прозрачным фоном для читаемости)
                 ctx.fillStyle = labelColor;
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.strokeStyle = labelStroke;
                 ctx.lineWidth = 1.5;
                 ctx.lineJoin = 'round';
                 ctx.miterLimit = 2;
