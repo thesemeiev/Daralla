@@ -4383,6 +4383,11 @@ body.about-page-active {
     color: var(--danger-title);
 }
 
+/* Углы карты не перекрывают mesh страницы сплошным цветом */
+#server-map canvas {
+    background: transparent;
+}
+
 .server-map-error {
     background: var(--error-bg);
     color: var(--error-text);

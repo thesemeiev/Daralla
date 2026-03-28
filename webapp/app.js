@@ -2336,7 +2336,7 @@ let globeAnimationId = null;
 class CustomGlobe {
     constructor(canvas, servers) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
+        this.ctx = canvas.getContext('2d', { alpha: true });
         this.servers = servers;
         this.rotation = 0; // Горизонтальное вращение (yaw)
         this.pitch = 0; // Вертикальное вращение (pitch) - наклон вверх/вниз
@@ -2778,8 +2778,6 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
-        var isLightTheme = typeof getTheme === 'function' && getTheme() === 'light';
-        var bgColor = isLightTheme ? '#f5f5f5' : '#1a1a1a';
         /* Сфера одна и та же в светлой и тёмной теме */
         var globeGradient = ['#24262c', '#1f2126', '#1a1a1a'];
         var globeGridStroke = 'rgba(255, 255, 255, 0.11)';
@@ -2790,9 +2788,8 @@ class CustomGlobe {
         const width = this.canvas.width / dpr;
         const height = this.canvas.height / dpr;
         
-        // Очищаем canvas
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, width, height);
+        /* Прозрачная очистка — фон как у body (mesh + базовый цвет), без «плашки» fillRect */
+        ctx.clearRect(0, 0, width, height);
         
         // Рисуем круг глобуса (цвет карточек #1c1e22)
         ctx.save();
@@ -3024,9 +3021,10 @@ async function loadServerMap() {
         canvas.style.cursor = 'grab';
         canvas.style.imageRendering = 'pixelated';
         canvas.style.pointerEvents = 'auto'; // Чтобы события работали
+        canvas.style.background = 'transparent';
         
         // Масштабируем контекст для четкого рендеринга
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: true });
         ctx.scale(dpr, dpr);
         
         mapContainer.appendChild(canvas);
@@ -3043,7 +3041,7 @@ async function loadServerMap() {
             canvas.style.height = displayHeight + 'px';
             
             // Масштабируем контекст заново
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { alpha: true });
             ctx.scale(dpr, dpr);
             
             if (serverGlobe) {
