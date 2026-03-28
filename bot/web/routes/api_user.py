@@ -2,7 +2,6 @@
 Quart Blueprint: /api/user/* and /api/subscriptions.
 Async implementation — no asyncio.new_event_loop / run_until_complete.
 """
-import asyncio
 import datetime
 import logging
 import os
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def _cryptocloud_extract_address(result):
-    """Адрес из ответа create/merchant/info. В JSON ключ address бывает с значением null."""
+    """Адрес из result ответа POST /v2/invoice/create (ключ address может быть null или '')."""
     if not isinstance(result, dict):
         return ""
     for key in ("address", "payment_address", "wallet_address", "crypto_address"):
@@ -54,126 +53,6 @@ def _cryptocloud_extract_address(result):
                     else:
                         return str(x).strip()
     return ""
-
-
-def _cryptocloud_invoice_info_first_item(info_body):
-    """result у merchant/info — массив счетов или один объект (на всякий случай)."""
-    if not isinstance(info_body, dict) or info_body.get("status") != "success":
-        return None
-    r = info_body.get("result")
-    if isinstance(r, dict):
-        return r
-    if isinstance(r, list) and r:
-        return r[0] if isinstance(r[0], dict) else None
-    return None
-
-
-def _cryptocloud_uuids_for_merchant_info(invoice_uuid):
-    """Документация: INV-XXXXXXXX или короткий id — пробуем оба."""
-    u = str(invoice_uuid).strip()
-    if not u:
-        return []
-    out = [u]
-    up = u.upper()
-    if up.startswith("INV-"):
-        short = u[4:].strip()
-        if short and short not in out:
-            out.append(short)
-    elif "-" not in u and len(u) >= 6:
-        inv_pref = f"INV-{u}" if not up.startswith("INV") else u
-        if inv_pref not in out:
-            out.append(inv_pref)
-    seen = set()
-    uniq = []
-    for x in out:
-        if x and x not in seen:
-            seen.add(x)
-            uniq.append(x)
-    return uniq
-
-
-def _cryptocloud_invoice_amount_currency(amount_rub: float) -> tuple[float, str]:
-    """
-    Сумма и валюта для POST /v2/invoice/create.
-    В API Reference amount в примерах в USD; при RUB часть проектов всё равно отдаёт success, но address пустой.
-    Для проверки: CRYPTOCLOUD_INVOICE_FIAT=usd и CRYPTOCLOUD_RUB_PER_USD (сколько ₽ за 1 USD).
-    """
-    raw = (os.getenv("CRYPTOCLOUD_INVOICE_FIAT") or "rub").strip().lower()
-    if raw in ("usd", "dollar", "dollars"):
-        try:
-            rub_per_usd = float(os.getenv("CRYPTOCLOUD_RUB_PER_USD", "95"))
-        except (TypeError, ValueError):
-            rub_per_usd = 95.0
-        if rub_per_usd <= 0:
-            rub_per_usd = 95.0
-        usd = round(amount_rub / rub_per_usd, 2)
-        if usd < 1.0:
-            usd = 1.0
-        return usd, "USD"
-    return float(amount_rub), "RUB"
-
-
-async def _cryptocloud_merge_merchant_info_if_no_address(client, api_token, invoice_uuid, result):
-    """Если create вернул address=null, подтягиваем счёт через POST /v2/invoice/merchant/info."""
-    addr = _cryptocloud_extract_address(result)
-    if addr:
-        return result, addr
-    if not invoice_uuid:
-        return result, ""
-    uuid_variants = _cryptocloud_uuids_for_merchant_info(invoice_uuid)
-    if not uuid_variants:
-        return result, ""
-
-    last_err = None
-    for attempt in range(3):
-        for uid in uuid_variants:
-            try:
-                resp = await client.post(
-                    "https://api.cryptocloud.plus/v2/invoice/merchant/info",
-                    headers={
-                        "Authorization": f"Token {api_token}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"uuids": [uid]},
-                )
-            except OSError as e:
-                logger.warning("CryptoCloud merchant/info: %s", e)
-                last_err = str(e)
-                continue
-            if resp.status_code != 200:
-                last_err = f"HTTP {resp.status_code} {(resp.text or '')[:300]}"
-                continue
-            try:
-                info_body = resp.json()
-            except (TypeError, ValueError):
-                continue
-            inv = _cryptocloud_invoice_info_first_item(info_body)
-            if not inv:
-                last_err = "empty result"
-                continue
-            addr = _cryptocloud_extract_address(inv)
-            if addr:
-                out = dict(result)
-                out["address"] = addr
-                if out.get("amount") is None and inv.get("amount") is not None:
-                    out["amount"] = inv.get("amount")
-                if not out.get("currency") and inv.get("currency"):
-                    out["currency"] = inv["currency"]
-                if not out.get("expiry_date") and inv.get("expiry_date"):
-                    out["expiry_date"] = inv.get("expiry_date")
-                return out, addr
-            last_err = f"no address in info keys={list(inv.keys())[:12]} addr_repr={repr(inv.get('address'))}"
-
-        if attempt < 2:
-            await asyncio.sleep(0.45)
-
-    if last_err:
-        logger.info(
-            "CryptoCloud merchant/info: address пустой для %s (%s) — клиенту показываем payment_url",
-            invoice_uuid,
-            last_err,
-        )
-    return result, ""
 
 
 def create_blueprint(bot_app):
@@ -476,8 +355,8 @@ def create_blueprint(bot_app):
                 payment_meta_base["referrer_user_id"] = referrer_user_id
 
             if gateway == "cryptocloud":
-                # H2H: add_fields.cryptocurrency — реквизиты в ответе (address, amount в крипте).
-                # Фиат счёта: RUB (amount в ₽) или USD через CRYPTOCLOUD_INVOICE_FIAT=usd (см. _cryptocloud_invoice_amount_currency).
+                # API Reference: amount + currency (RUB), add_fields.cryptocurrency и available_currencies;
+                # при успехе в result — address, amount в крипте, link.
                 api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
                 shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
                 if not api_token or not shop_id:
@@ -487,21 +366,18 @@ def create_blueprint(bot_app):
                     return jsonify({"error": "Неизвестная криптовалюта"}), 400, _cors_headers()
                 cc_code = raw_cc if raw_cc in CRYPTOCLOUD_AVAILABLE_CURRENCIES else CRYPTOCLOUD_DEFAULT_CURRENCY
                 amount_rub = float(PRICES[period])
-                api_amount, api_currency = _cryptocloud_invoice_amount_currency(amount_rub)
                 order_id = f"{user_id}_{int(time.time() * 1000)}"
                 payload = {
                     "shop_id": shop_id,
-                    "amount": api_amount,
-                    "currency": api_currency,
+                    "amount": amount_rub,
+                    "currency": "RUB",
                     "order_id": order_id,
+                    "add_fields": {
+                        "time_to_pay": {"hours": 0, "minutes": 15},
+                        "cryptocurrency": cc_code,
+                        "available_currencies": list(CRYPTOCLOUD_AVAILABLE_CURRENCIES),
+                    },
                 }
-                # H2H: одна валюта. Полный список + cryptocurrency давал ответ без address; достаточно [cc_code].
-                add_fields = {
-                    "time_to_pay": {"hours": 0, "minutes": 15},
-                    "cryptocurrency": cc_code,
-                    "available_currencies": [cc_code],
-                }
-                payload["add_fields"] = add_fields
                 import httpx
                 async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.post(
@@ -527,11 +403,7 @@ def create_blueprint(bot_app):
                         return jsonify({"error": "Invalid crypto invoice response"}), 502
                     payment_meta_base["gateway"] = "cryptocloud"
                     payment_meta_base["cryptocurrency"] = cc_code
-                    payment_meta_base["cryptocloud_invoice_currency"] = api_currency
-                    payment_meta_base["cryptocloud_invoice_amount"] = str(api_amount)
-                    result, addr = await _cryptocloud_merge_merchant_info_if_no_address(
-                        client, api_token, invoice_uuid, result
-                    )
+                    addr = _cryptocloud_extract_address(result)
                 crypto_amt = result.get("amount") if isinstance(result, dict) else None
                 if crypto_amt is not None:
                     payment_meta_base["crypto_amount"] = str(crypto_amt)
@@ -548,20 +420,9 @@ def create_blueprint(bot_app):
                         "network_code": network_obj.get("code"),
                     }
                 else:
-                    rkeys = list(result.keys()) if isinstance(result, dict) else []
                     logger.info(
-                        "CryptoCloud H2H: address пустой для invoice %s, keys=%s — только payment_url",
+                        "CryptoCloud: пустой address в ответе create для %s — клиент использует payment_url",
                         invoice_uuid,
-                        rkeys,
-                    )
-                    logger.debug(
-                        "CryptoCloud H2H диагностика: sent_fiat=%s sent_amount=%r result.fiat_currency=%r "
-                        "amount_in_fiat=%r amount_usd=%r",
-                        api_currency,
-                        api_amount,
-                        result.get("fiat_currency") if isinstance(result, dict) else None,
-                        result.get("amount_in_fiat") if isinstance(result, dict) else None,
-                        result.get("amount_usd") if isinstance(result, dict) else None,
                     )
                 await add_payment(
                     payment_id=invoice_uuid,
