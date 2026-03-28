@@ -2,6 +2,7 @@
 Quart Blueprint: /api/user/* and /api/subscriptions.
 Async implementation — no asyncio.new_event_loop / run_until_complete.
 """
+import asyncio
 import datetime
 import logging
 import os
@@ -31,24 +32,64 @@ def _cryptocloud_extract_address(result):
     """Адрес из ответа create/merchant/info. В JSON ключ address бывает с значением null."""
     if not isinstance(result, dict):
         return ""
-    raw = result.get("address")
-    if raw is not None and raw != "":
-        if isinstance(raw, str):
-            s = raw.strip()
-            return s if s else ""
-        return str(raw).strip()
+    for key in ("address", "payment_address", "wallet_address", "crypto_address"):
+        raw = result.get(key)
+        if raw is not None and raw != "":
+            if isinstance(raw, str):
+                s = raw.strip()
+                if s and s.lower() not in ("none", "null"):
+                    return s
+            else:
+                return str(raw).strip()
     for nested_key in ("wallet", "payment", "deposit"):
         block = result.get(nested_key)
         if isinstance(block, dict):
-            x = block.get("address")
-            if x is not None and x != "":
-                if isinstance(x, str):
-                    s = x.strip()
-                    if s:
-                        return s
-                else:
-                    return str(x).strip()
+            for key in ("address", "payment_address"):
+                x = block.get(key)
+                if x is not None and x != "":
+                    if isinstance(x, str):
+                        s = x.strip()
+                        if s:
+                            return s
+                    else:
+                        return str(x).strip()
     return ""
+
+
+def _cryptocloud_invoice_info_first_item(info_body):
+    """result у merchant/info — массив счетов или один объект (на всякий случай)."""
+    if not isinstance(info_body, dict) or info_body.get("status") != "success":
+        return None
+    r = info_body.get("result")
+    if isinstance(r, dict):
+        return r
+    if isinstance(r, list) and r:
+        return r[0] if isinstance(r[0], dict) else None
+    return None
+
+
+def _cryptocloud_uuids_for_merchant_info(invoice_uuid):
+    """Документация: INV-XXXXXXXX или короткий id — пробуем оба."""
+    u = str(invoice_uuid).strip()
+    if not u:
+        return []
+    out = [u]
+    up = u.upper()
+    if up.startswith("INV-"):
+        short = u[4:].strip()
+        if short and short not in out:
+            out.append(short)
+    elif "-" not in u and len(u) >= 6:
+        inv_pref = f"INV-{u}" if not up.startswith("INV") else u
+        if inv_pref not in out:
+            out.append(inv_pref)
+    seen = set()
+    uniq = []
+    for x in out:
+        if x and x not in seen:
+            seen.add(x)
+            uniq.append(x)
+    return uniq
 
 
 async def _cryptocloud_merge_merchant_info_if_no_address(client, api_token, invoice_uuid, result):
@@ -58,45 +99,60 @@ async def _cryptocloud_merge_merchant_info_if_no_address(client, api_token, invo
         return result, addr
     if not invoice_uuid:
         return result, ""
-    try:
-        resp = await client.post(
-            "https://api.cryptocloud.plus/v2/invoice/merchant/info",
-            headers={
-                "Authorization": f"Token {api_token}",
-                "Content-Type": "application/json",
-            },
-            json={"uuids": [str(invoice_uuid).strip()]},
+    uuid_variants = _cryptocloud_uuids_for_merchant_info(invoice_uuid)
+    if not uuid_variants:
+        return result, ""
+
+    last_err = None
+    for attempt in range(3):
+        for uid in uuid_variants:
+            try:
+                resp = await client.post(
+                    "https://api.cryptocloud.plus/v2/invoice/merchant/info",
+                    headers={
+                        "Authorization": f"Token {api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"uuids": [uid]},
+                )
+            except OSError as e:
+                logger.warning("CryptoCloud merchant/info: %s", e)
+                last_err = str(e)
+                continue
+            if resp.status_code != 200:
+                last_err = f"HTTP {resp.status_code} {(resp.text or '')[:300]}"
+                continue
+            try:
+                info_body = resp.json()
+            except (TypeError, ValueError):
+                continue
+            inv = _cryptocloud_invoice_info_first_item(info_body)
+            if not inv:
+                last_err = "empty result"
+                continue
+            addr = _cryptocloud_extract_address(inv)
+            if addr:
+                out = dict(result)
+                out["address"] = addr
+                if out.get("amount") is None and inv.get("amount") is not None:
+                    out["amount"] = inv.get("amount")
+                if not out.get("currency") and inv.get("currency"):
+                    out["currency"] = inv["currency"]
+                if not out.get("expiry_date") and inv.get("expiry_date"):
+                    out["expiry_date"] = inv.get("expiry_date")
+                return out, addr
+            last_err = f"no address in info keys={list(inv.keys())[:12]} addr_repr={repr(inv.get('address'))}"
+
+        if attempt < 2:
+            await asyncio.sleep(0.45)
+
+    if last_err:
+        logger.warning(
+            "CryptoCloud merchant/info: не удалось получить address для %s (%s)",
+            invoice_uuid,
+            last_err,
         )
-    except OSError as e:
-        logger.warning("CryptoCloud merchant/info: %s", e)
-        return result, ""
-    if resp.status_code != 200:
-        logger.warning("CryptoCloud merchant/info: HTTP %s %s", resp.status_code, (resp.text or "")[:400])
-        return result, ""
-    try:
-        info_body = resp.json()
-    except (TypeError, ValueError):
-        return result, ""
-    if info_body.get("status") != "success" or not info_body.get("result"):
-        return result, ""
-    arr = info_body["result"]
-    if not isinstance(arr, list) or not arr:
-        return result, ""
-    inv = arr[0]
-    if not isinstance(inv, dict):
-        return result, ""
-    addr = _cryptocloud_extract_address(inv)
-    if not addr:
-        return result, ""
-    out = dict(result)
-    out["address"] = inv.get("address")
-    if out.get("amount") is None and inv.get("amount") is not None:
-        out["amount"] = inv.get("amount")
-    if not out.get("currency") and inv.get("currency"):
-        out["currency"] = inv["currency"]
-    if not out.get("expiry_date") and inv.get("expiry_date"):
-        out["expiry_date"] = inv.get("expiry_date")
-    return out, addr
+    return result, ""
 
 
 def create_blueprint(bot_app):
