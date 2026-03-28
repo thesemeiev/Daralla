@@ -7370,17 +7370,7 @@ async function saveServerConfig(event) {
                 }
             }
             if (result.sync_stats || result.sync_error) {
-                var parts = [];
-                if (result.sync_stats) {
-                    var s = result.sync_stats;
-                    if (s.clients_created != null) parts.push('клиентов создано: ' + s.clients_created);
-                    if (s.servers_added != null) parts.push('серверов добавлено: ' + s.servers_added);
-                    if (s.servers_removed != null) parts.push('серверов снято: ' + s.servers_removed);
-                    if (s.errors && s.errors.length) parts.push('ошибки: ' + s.errors.slice(0, 5).join('; '));
-                }
-                var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');
-                if (result.sync_error) msg += '\nПредупреждение: ' + result.sync_error;
-                await appShowAlert(msg, { title: 'Синхронизация' });
+                await appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
             }
         } else {
             await appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
@@ -7391,9 +7381,27 @@ async function saveServerConfig(event) {
     }
 }
 
+/** Текст алерта по результату sync_servers_with_config (добавление / изменение / удаление сервера). */
+function adminSyncSubscriptionsAlertMessage(result) {
+    var parts = [];
+    if (result.sync_stats) {
+        var s = result.sync_stats;
+        if (s.clients_created != null) parts.push('клиентов создано: ' + s.clients_created);
+        if (s.servers_added != null) parts.push('серверов добавлено: ' + s.servers_added);
+        if (s.servers_removed != null) parts.push('серверов снято: ' + s.servers_removed);
+        if (s.errors && s.errors.length) parts.push('ошибки: ' + s.errors.slice(0, 5).join('; '));
+    }
+    var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');
+    if (result.sync_error) msg += '\nПредупреждение: ' + result.sync_error;
+    return msg;
+}
+
 // Удаление сервера
 async function deleteServerConfig(serverId) {
-    var okDel = await appShowConfirm('Вы уверены, что хотите удалить конфигурацию сервера? Это не удалит клиентов с самого сервера, но бот перестанет его использовать.', { title: 'Удаление сервера', confirmText: 'Удалить' });
+    var okDel = await appShowConfirm(
+        'Удалить конфигурацию сервера? На панели этой ноды клиенты не удаляются. Бот перестанет использовать сервер и обновит привязки подписок в базе (снятие связей без очистки панели удалённой ноды).',
+        { title: 'Удаление сервера', confirmText: 'Удалить' }
+    );
     if (!okDel) return;
 
     try {
@@ -7406,6 +7414,9 @@ async function deleteServerConfig(serverId) {
         if (result.success) {
             const group = currentAdminGroups.find(g => g.id === currentSelectedGroupId);
             loadServersInGroup(currentSelectedGroupId, group.name);
+            if (result.sync_stats || result.sync_error) {
+                await appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
+            }
         } else {
             await appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
         }
