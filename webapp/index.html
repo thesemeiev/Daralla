@@ -212,6 +212,12 @@
                         <span class="choose-option-sub">TON, USDT</span>
                     </button>
                 </div>
+                <div id="choose-crypto-currency-block" class="choose-crypto-currency-block" style="display: none; margin-top: 16px;">
+                    <label class="form-group" style="margin-bottom: 0;">
+                        <span class="hint choose-section-label">Монета и сеть</span>
+                        <select id="choose-cryptocurrency-select" class="choose-cryptocurrency-select" aria-label="Криптовалюта для оплаты"></select>
+                    </label>
+                </div>
                 <div id="choose-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px;">
                     <label class="form-group" style="margin-bottom: 0;">
                         <span class="hint" style="font-size: 14px;">Код события (необязательно)</span>
@@ -249,9 +255,27 @@
                     
                     <div id="yookassa-widget-root" class="yookassa-widget-root" style="display: none;" aria-live="polite"></div>
 
+                    <div id="cryptocloud-h2h-block" class="cryptocloud-h2h-block" style="display: none;" aria-live="polite">
+                        <p id="crypto-h2h-network-warning" class="crypto-h2h-warning"></p>
+                        <div class="crypto-h2h-field">
+                            <span class="crypto-h2h-label">Сумма к переводу</span>
+                            <div id="crypto-h2h-amount" class="crypto-h2h-value mono"></div>
+                            <button type="button" class="crypto-h2h-copy" id="crypto-copy-amount">Скопировать сумму</button>
+                        </div>
+                        <div class="crypto-h2h-field">
+                            <span class="crypto-h2h-label">Адрес кошелька</span>
+                            <div id="crypto-h2h-address" class="crypto-h2h-value mono crypto-h2h-address-wrap"></div>
+                            <button type="button" class="crypto-h2h-copy" id="crypto-copy-address">Скопировать адрес</button>
+                        </div>
+                        <div id="crypto-h2h-qr" class="crypto-h2h-qr"></div>
+                    </div>
+
                     <div class="detail-actions">
                         <button type="button" id="payment-link-button" class="action-button payment-link-button" style="width:100%;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:500;">
                             Перейти к оплате
+                        </button>
+                        <button type="button" id="payment-crypto-external-link" class="action-button payment-crypto-external-link" style="display:none;width:100%;margin-top:10px;padding:12px;border:1px solid #3a3f4a;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;background:transparent;color:#b0b8c4;">
+                            Открыть страницу счёта
                         </button>
                     </div>
                     
@@ -1418,6 +1442,6 @@
         </div>
     </div>
 
-    <script src="/app.js?v=14"></script>
+    <script src="/app.js?v=15"></script>
 </body>
 </html>
