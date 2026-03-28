@@ -12,9 +12,38 @@ from typing import List, Any, Optional
 from urllib.parse import quote
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_fixed
 
 logger = logging.getLogger(__name__)
+
+try:
+    _XUI_LIST_DB_LOCK_RETRIES = max(2, min(int(os.getenv("XUI_LIST_DB_LOCK_RETRIES", "6")), 15))
+except ValueError:
+    _XUI_LIST_DB_LOCK_RETRIES = 6
+
+
+def _before_sleep_xui_list(retry_state) -> None:
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    host = ""
+    try:
+        if retry_state.args:
+            host = getattr(retry_state.args[0], "host", "") or ""
+    except Exception:
+        pass
+    logger.warning(
+        "X-UI %s: inbound list — SQLite database locked, попытка %s/%s, повтор после задержки: %s",
+        host or "?",
+        retry_state.attempt_number,
+        _XUI_LIST_DB_LOCK_RETRIES,
+        exc,
+    )
+
+
+def _is_xui_sqlite_locked_error(exc: BaseException) -> bool:
+    """Панель 3x-ui на SQLite иногда отвечает «database is locked» при пиковой нагрузке."""
+    if not isinstance(exc, ValueError):
+        return False
+    return "database is locked" in str(exc).lower()
 
 
 def _value_error_client_absent_on_panel(exc: ValueError) -> bool:
@@ -187,6 +216,13 @@ class X3:
         """Алиас для совместимости с прежним кодом."""
         await self._ensure_login()
 
+    @retry(
+        retry=retry_if_exception(_is_xui_sqlite_locked_error),
+        stop=stop_after_attempt(_XUI_LIST_DB_LOCK_RETRIES),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
+        before_sleep=_before_sleep_xui_list,
+        reraise=True,
+    )
     async def list(self, timeout: int = 15) -> dict:
         """Возвращает {success: True, obj: [inbound_dict, ...]} в формате 3x-ui API."""
         await self._ensure_login()

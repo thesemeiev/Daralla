@@ -867,7 +867,7 @@ function initLandingWheelAndHint() {
     updateHintVisibility();
 }
 
-// --- Страница «О нас»: 3D-фигура, фон тёмный → белый при скролле ---
+// --- Страница «О нас»: 3D-сеть узлов + рёбра, фон тёмный → белый при скролле ---
 var aboutPageState = null;
 
 function loadScript(src) {
@@ -945,12 +945,49 @@ function initAboutPage() {
         document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
         pageEl.classList.toggle('about-bg-light', isLight);
         if (aboutPageState.mesh) {
-            var mesh = aboutPageState.mesh;
-            mesh.rotation.y = smoothedProgress * Math.PI * 2;
-            mesh.rotation.x = smoothedProgress * Math.PI * 0.5;
-            var hex = 0x1c1e22;
-            if (mesh.material && mesh.material.color) mesh.material.color.setHex(hex);
-            if (mesh.material && mesh.material.envMapIntensity !== undefined) mesh.material.envMapIntensity = 0.95;
+            var grp = aboutPageState.mesh;
+            grp.rotation.y = smoothedProgress * Math.PI * 2;
+            grp.rotation.x = smoothedProgress * Math.PI * 0.5;
+            var time = performance.now() * 0.001;
+            var reducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var breatheAmp = reducedMotion ? 0 : 0.028;
+            if (aboutPageState.aboutNodeBases) {
+                aboutPageState.aboutNodeBases.forEach(function (item) {
+                    var m = item.mesh;
+                    var b = item.base;
+                    var ph = item.phase;
+                    m.position.set(
+                        b.x + Math.sin(time * 0.35 + ph) * breatheAmp,
+                        b.y + Math.cos(time * 0.28 + ph * 1.3) * breatheAmp,
+                        b.z + Math.sin(time * 0.31 + ph * 0.7) * breatheAmp * 0.75
+                    );
+                });
+            }
+            if (aboutPageState.aboutNodeMeshes && aboutPageState.aboutEdgePairs && aboutPageState.aboutEdgeGeoms) {
+                var nodes = aboutPageState.aboutNodeMeshes;
+                aboutPageState.aboutEdgeGeoms.forEach(function (geo, ei) {
+                    var pair = aboutPageState.aboutEdgePairs[ei];
+                    var p0 = nodes[pair[0]].position;
+                    var p1 = nodes[pair[1]].position;
+                    var arr = geo.attributes.position.array;
+                    arr[0] = p0.x;
+                    arr[1] = p0.y;
+                    arr[2] = p0.z;
+                    arr[3] = p1.x;
+                    arr[4] = p1.y;
+                    arr[5] = p1.z;
+                    geo.attributes.position.needsUpdate = true;
+                });
+            }
+            if (aboutPageState.aboutEdgeMaterials) {
+                var p = smoothedProgress;
+                aboutPageState.aboutEdgeMaterials.forEach(function (mat, i) {
+                    mat.opacity = 0.16 + p * 0.22 + Math.sin(time * 0.85 + i * 0.65) * 0.032;
+                });
+            }
+            if (aboutPageState.aboutNodeMaterial && aboutPageState.aboutNodeMaterial.envMapIntensity !== undefined) {
+                aboutPageState.aboutNodeMaterial.envMapIntensity = 0.92;
+            }
         }
         if (aboutPageState.lights) {
             var k = 1;
@@ -1008,16 +1045,57 @@ function initAboutPage() {
                 highlight2: highlightLight2
             };
         }
-        var geom = new THREE.DodecahedronGeometry(0.6, 0);
-        var mat = new THREE.MeshStandardMaterial({
-            color: 0x1c1e22,
-            metalness: 0.78,
-            roughness: 0.22,
-            envMapIntensity: 0.95
+        var networkGroup = new THREE.Group();
+        var nodeMat = new THREE.MeshStandardMaterial({
+            color: 0x252a32,
+            metalness: 0.52,
+            roughness: 0.34,
+            emissive: 0x0a1524,
+            emissiveIntensity: 0.14,
+            envMapIntensity: 0.92
         });
-        var mesh = new THREE.Mesh(geom, mat);
-        mesh.scale.setScalar(1.15);
-        scene.add(mesh);
+        var nodeDefs = [
+            { x: 0, y: 0.05, z: 0, r: 0.11 },
+            { x: -0.95, y: 0.32, z: 0.18, r: 0.065 },
+            { x: 0.88, y: -0.22, z: 0.12, r: 0.07 },
+            { x: 0.12, y: 0.78, z: -0.22, r: 0.062 },
+            { x: -0.42, y: -0.48, z: 0.28, r: 0.058 },
+            { x: 0.52, y: 0.38, z: -0.58, r: 0.06 },
+            { x: -0.32, y: 0.15, z: 0.68, r: 0.055 }
+        ];
+        var aboutNodeMeshes = [];
+        var aboutNodeBases = [];
+        nodeDefs.forEach(function (d, i) {
+            var sg = new THREE.SphereGeometry(d.r, 22, 18);
+            var sphere = new THREE.Mesh(sg, nodeMat);
+            sphere.position.set(d.x, d.y, d.z);
+            networkGroup.add(sphere);
+            aboutNodeMeshes.push(sphere);
+            aboutNodeBases.push({
+                mesh: sphere,
+                base: new THREE.Vector3(d.x, d.y, d.z),
+                phase: i * 0.85
+            });
+        });
+        var aboutEdgePairs = [[0, 1], [0, 2], [0, 3], [0, 4], [1, 5], [2, 6], [3, 5]];
+        var aboutEdgeGeoms = [];
+        var aboutEdgeMaterials = [];
+        aboutEdgePairs.forEach(function (pair) {
+            var a = aboutNodeMeshes[pair[0]].position;
+            var b = aboutNodeMeshes[pair[1]].position;
+            var edgeGeo = new THREE.BufferGeometry().setFromPoints([a.clone(), b.clone()]);
+            var lmat = new THREE.LineBasicMaterial({
+                color: 0x5c7394,
+                transparent: true,
+                opacity: 0.22,
+                depthWrite: false
+            });
+            networkGroup.add(new THREE.Line(edgeGeo, lmat));
+            aboutEdgeGeoms.push(edgeGeo);
+            aboutEdgeMaterials.push(lmat);
+        });
+        networkGroup.scale.setScalar(1.2);
+        scene.add(networkGroup);
         (function setDefaultEnvMap() {
             var size = 64;
             var canvases = [];
@@ -1081,7 +1159,13 @@ function initAboutPage() {
         aboutPageState.renderer = renderer;
         aboutPageState.scene = scene;
         aboutPageState.camera = camera;
-        aboutPageState.mesh = mesh;
+        aboutPageState.mesh = networkGroup;
+        aboutPageState.aboutNodeMeshes = aboutNodeMeshes;
+        aboutPageState.aboutNodeBases = aboutNodeBases;
+        aboutPageState.aboutNodeMaterial = nodeMat;
+        aboutPageState.aboutEdgePairs = aboutEdgePairs;
+        aboutPageState.aboutEdgeGeoms = aboutEdgeGeoms;
+        aboutPageState.aboutEdgeMaterials = aboutEdgeMaterials;
         aboutPageState.resizeHandler = onResize;
         aboutPageState.animId = requestAnimationFrame(animate);
     }).catch(function () {});

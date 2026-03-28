@@ -31,7 +31,7 @@
 
 ## Как добавлять экран
 
-1. Фон страницы наследуется от `body` (`--bg-page` + лёгкий шум `body::before`); не задавайте лишний сплошной `#000`.
+1. Фон страницы наследуется от `body` (`--bg-page`); не задавайте лишний сплошной `#000`.
 2. Карточки: `background: var(--card-bg)`, `border: 1px solid var(--card-border)`, `border-radius: var(--radius-lg)`, при необходимости `box-shadow: var(--shadow-card)`.
 3. Заголовок страницы: `h1` в шапке или `.page-section-title` — шрифт display подтянется из CSS.
 4. Кнопка основного действия: `.btn-primary` (уже на токенах).
@@ -52,7 +52,7 @@
 ## Атмосфера
 
 - **Фон:** плоский `--bg-page` на `body`, `--landing-bg` на лендинге (без градиентного mesh).
-- **Шум:** `body::before` — низкая opacity, `pointer-events: none`.
+- Лёгкий шум только на странице «О нас» — `.about-hero-content::after` / `.about-block-inner::after`.
 
 ## Версия стилей
 
