@@ -763,30 +763,36 @@ header:has(.back-button):not(:has(h1)) {
     display: none;
 }
 @media (max-width: 480px) {
-    .admin-server-row__main {
-        flex-direction: column;
-        align-items: stretch;
+    .admin-server-rows .admin-server-row {
+        padding: 10px 12px;
     }
-    .admin-server-row__power {
+    .admin-server-rows .admin-server-row__main {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: start;
+        column-gap: 8px;
+        row-gap: 8px;
+    }
+    .admin-server-rows .admin-server-row__text {
+        grid-column: 1;
+        grid-row: 1;
+        min-width: 0;
+    }
+    .admin-server-rows .admin-server-row-menu {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: start;
+    }
+    .admin-server-rows .admin-server-row__power {
+        grid-column: 1 / -1;
+        grid-row: 2;
         margin-left: 0;
         width: 100%;
-        justify-content: space-between;
-    }
-}
-@supports selector(:has(*)) {
-    @media (max-width: 480px) {
-        .admin-server-row:has(.admin-server-row-menu) {
-            position: relative;
-            padding-top: 44px;
-        }
-        .admin-server-row:has(.admin-server-row-menu) .admin-server-row-menu {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-        }
-        .admin-server-row:has(.admin-server-row-menu) .admin-server-row__text {
-            padding-right: 48px;
-        }
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px 12px;
     }
 }
 
@@ -3142,11 +3148,6 @@ body.about-page-active {
     grid-template-columns: 1fr;
     gap: 12px;
 }
-@media (min-width: 560px) {
-    .admin-server-groups-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
 .admin-server-groups-grid .group-card {
     margin-bottom: 0;
 }
@@ -3306,7 +3307,7 @@ body.about-page-active {
     margin-top: 2px;
 }
 
-/* Порядок серверов в админке: drag + стрелки */
+/* Порядок серверов в админке: стрелки */
 .server-reorder-stack {
     display: flex;
     flex-direction: column;
@@ -3314,56 +3315,7 @@ body.about-page-active {
 }
 .server-card-reorderable {
     position: relative;
-    transition: box-shadow 0.2s ease, transform 0.2s ease, opacity 0.15s ease;
-}
-.server-card-reorderable.server-card--dragging {
-    opacity: 0.92;
-    box-shadow:
-        0 12px 40px rgba(0, 0, 0, 0.35),
-        0 0 0 1px rgba(74, 158, 255, 0.35);
-    z-index: 2;
-}
-.server-reorder-main-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-.server-reorder-toolbar {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding-top: 2px;
-}
-.server-drag-handle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 1px solid var(--card-border);
-    border-radius: 12px;
-    background: var(--card-bg-hover);
-    color: var(--text-secondary, #888);
-    cursor: grab;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
-    touch-action: none;
-}
-.server-drag-handle:active {
-    cursor: grabbing;
-}
-@media (hover: hover) and (pointer: fine) {
-.server-drag-handle:hover {
-    background: var(--card-bg);
-    color: var(--text-primary);
-    border-color: rgba(74, 158, 255, 0.45);
-}
-}
-.server-drag-icon {
-    display: block;
-    opacity: 0.85;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .server-order-badge {
     font-size: 11px;
@@ -3418,11 +3370,6 @@ body.about-page-active {
     background: rgba(74, 158, 255, 0.15);
     color: #3d5a9e;
     border-color: rgba(74, 158, 255, 0.28);
-}
-[data-theme="light"] .server-card-reorderable.server-card--dragging {
-    box-shadow:
-        0 10px 32px rgba(0, 0, 0, 0.12),
-        0 0 0 1px rgba(74, 158, 255, 0.25);
 }
 @media (hover: hover) and (pointer: fine) {
 .group-detail-add-btn:hover {
@@ -3489,6 +3436,14 @@ body.about-page-active {
     .server-power-hint {
         text-align: left;
         max-width: none;
+    }
+
+    .admin-server-rows .server-power-cell {
+        padding-top: 0;
+        border-top: none;
+    }
+    .admin-server-rows .server-power-hint {
+        display: none;
     }
 }
 

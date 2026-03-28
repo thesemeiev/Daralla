@@ -7621,100 +7621,6 @@ async function refreshAdminServersInGroup() {
     }
 }
 
-function ensureFinePointerServerDragDrop(listEl) {
-    if (!listEl || listEl.dataset.reorderDnDBound === '1') return;
-    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    listEl.dataset.reorderDnDBound = '1';
-
-    function clearDraggingMark() {
-        listEl.querySelectorAll('.server-card--dragging').forEach(function (n) {
-            n.classList.remove('server-card--dragging');
-            n.style.opacity = '';
-        });
-    }
-
-    function getDragAfterElement(stack, y) {
-        var nodes = listEl.querySelectorAll('.server-reorder-stack .server-card-reorderable:not(.server-card--dragging)');
-        var draggableElements = Array.prototype.slice.call(nodes);
-        var closest = { offset: Number.NEGATIVE_INFINITY, element: null };
-        draggableElements.forEach(function (child) {
-            var box = child.getBoundingClientRect();
-            var offset = y - box.top - box.height / 2;
-            if (offset < 0 && offset > closest.offset) {
-                closest = { offset: offset, element: child };
-            }
-        });
-        return closest.element;
-    }
-
-    listEl.addEventListener('dragstart', function (e) {
-        var h = e.target.closest('.server-drag-handle');
-        if (!h || !listEl.contains(h)) return;
-        e.stopPropagation();
-        var card = h.closest('.server-card-reorderable');
-        if (!card) return;
-        e.dataTransfer.setData('text/plain', String(card.dataset.serverId));
-        e.dataTransfer.effectAllowed = 'move';
-        try {
-            e.dataTransfer.setDragImage(card, 48, 28);
-        } catch (err) { /* WebView */ }
-        card.classList.add('server-card--dragging');
-    });
-
-    listEl.addEventListener('dragend', function () {
-        clearDraggingMark();
-    });
-
-    listEl.addEventListener('dragover', function (e) {
-        var stack = e.target.closest('.server-reorder-stack');
-        if (!stack || !listEl.contains(stack)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        var dragging = stack.querySelector('.server-card--dragging');
-        if (!dragging) return;
-        var after = getDragAfterElement(stack, e.clientY);
-        if (after == null) {
-            stack.appendChild(dragging);
-        } else {
-            stack.insertBefore(dragging, after);
-        }
-    });
-
-    listEl.addEventListener('drop', function (e) {
-        var stack = e.target.closest('.server-reorder-stack');
-        if (!stack || !listEl.contains(stack)) return;
-        e.preventDefault();
-        clearDraggingMark();
-        persistServerOrderFromStack(stack);
-    });
-}
-
-async function persistServerOrderFromStack(stack) {
-    if (!currentSelectedGroupId || !stack) return;
-    var ids = Array.prototype.map.call(stack.querySelectorAll('.server-card-reorderable'), function (c) {
-        return parseInt(c.dataset.serverId, 10);
-    });
-    if (!ids.length) return;
-    try {
-        var response = await apiFetch('/api/admin/servers-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'reorder',
-                group_id: currentSelectedGroupId,
-                server_ids: ids
-            })
-        });
-        var result = await response.json();
-        if (!result.success) throw new Error(result.error || 'Ошибка');
-        await refreshAdminServersInGroup();
-        showAdminToast('Порядок сохранён');
-    } catch (e) {
-        await appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
-        await refreshAdminServersInGroup();
-    }
-}
-
 async function nudgeServerOrder(serverId, delta) {
     if (!currentSelectedGroupId) return;
     var sorted = sortAdminServersByClientOrder(currentAdminServers.slice());
@@ -7754,7 +7660,6 @@ window.nudgeServerOrder = nudgeServerOrder;
 function renderServersInGroup(servers) {
     const listEl = document.getElementById('admin-servers-in-group-list');
     if (!listEl) return;
-    ensureFinePointerServerDragDrop(listEl);
 
     if (!servers || servers.length === 0) {
         listEl.innerHTML = '<div class="admin-sm-empty admin-sm-empty--compact"><p class="admin-sm-empty-title">В группе нет серверов</p><p class="admin-sm-empty-hint">Добавьте ноду кнопкой «+ Сервер».</p></div>';
@@ -7764,8 +7669,6 @@ function renderServersInGroup(servers) {
     const sorted = sortAdminServersByClientOrder(servers);
     const n = sorted.length;
     const reorder = !!adminServerReorderMode;
-    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-    const dragGripSvg = '<svg class="server-drag-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><circle cx="9" cy="6" r="1.75"/><circle cx="15" cy="6" r="1.75"/><circle cx="9" cy="12" r="1.75"/><circle cx="15" cy="12" r="1.75"/><circle cx="9" cy="18" r="1.75"/><circle cx="15" cy="18" r="1.75"/></svg>';
 
     const cards = sorted.map(function (server, i) {
         const on = server.is_active === 1 || server.is_active === true;
@@ -7774,12 +7677,8 @@ function renderServersInGroup(servers) {
         const safeName = escapeHtml(server.name || '');
         const upDisabled = i === 0 ? ' disabled' : '';
         const downDisabled = i === n - 1 ? ' disabled' : '';
-        const dragBlock = reorder && finePointer
-            ? `<button type="button" class="server-drag-handle" draggable="true" title="Перетащить" aria-label="Перетащить сервер">${dragGripSvg}</button>`
-            : '';
         const orderCol = reorder
             ? `<div class="admin-server-order-col">
-                ${dragBlock}
                 <span class="server-order-badge" aria-hidden="true">${i + 1}</span>
                 <div class="server-reorder-nudge server-reorder-nudge--large" role="group" aria-label="Сдвиг в списке">
                     <button type="button" class="server-reorder-nudge-btn server-reorder-nudge-btn--large"${upDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, -1)" aria-label="Выше">↑</button>
