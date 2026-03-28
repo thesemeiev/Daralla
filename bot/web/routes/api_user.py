@@ -345,10 +345,11 @@ def create_blueprint(bot_app):
                     "currency": "RUB",
                     "order_id": order_id,
                 }
+                # H2H: одна валюта. Полный список + cryptocurrency давал ответ без address; достаточно [cc_code].
                 add_fields = {
-                    "available_currencies": list(CRYPTOCLOUD_AVAILABLE_CURRENCIES),
                     "time_to_pay": {"hours": 0, "minutes": 15},
                     "cryptocurrency": cc_code,
+                    "available_currencies": [cc_code],
                 }
                 payload["add_fields"] = add_fields
                 import httpx
@@ -376,8 +377,20 @@ def create_blueprint(bot_app):
                     return jsonify({"error": "Invalid crypto invoice response"}), 502
                 payment_meta_base["gateway"] = "cryptocloud"
                 payment_meta_base["cryptocurrency"] = cc_code
-                addr = (result.get("address") or "").strip()
-                crypto_amt = result.get("amount")
+                addr = ""
+                if isinstance(result, dict):
+                    raw_a = result.get("address")
+                    if isinstance(raw_a, str) and raw_a.strip():
+                        addr = raw_a.strip()
+                    if not addr:
+                        for nested_key in ("wallet", "payment", "deposit"):
+                            block = result.get(nested_key)
+                            if isinstance(block, dict):
+                                x = block.get("address")
+                                if isinstance(x, str) and x.strip():
+                                    addr = x.strip()
+                                    break
+                crypto_amt = result.get("amount") if isinstance(result, dict) else None
                 if crypto_amt is not None:
                     payment_meta_base["crypto_amount"] = str(crypto_amt)
                 currency_obj = result.get("currency") if isinstance(result.get("currency"), dict) else {}
@@ -393,9 +406,11 @@ def create_blueprint(bot_app):
                         "network_code": network_obj.get("code"),
                     }
                 else:
+                    rkeys = list(result.keys()) if isinstance(result, dict) else []
                     logger.warning(
-                        "CryptoCloud H2H: пустой address для invoice %s, fallback на payment_url",
+                        "CryptoCloud H2H: пустой address для invoice %s, result keys=%s",
                         invoice_uuid,
+                        rkeys,
                     )
                 await add_payment(
                     payment_id=invoice_uuid,

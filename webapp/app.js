@@ -3570,7 +3570,9 @@ async function createPayment(period, subscriptionId, gateway, cryptocurrency) {
         var referrerCode = getReferralCodeFromCurrentPage();
         var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
         if (referrerCode) body.referrer_code = referrerCode;
-        if (gateway === 'cryptocloud' && cryptocurrency) body.cryptocurrency = cryptocurrency;
+        if (gateway === 'cryptocloud') {
+            body.cryptocurrency = cryptocurrency || 'USDT_TRC20';
+        }
         // Показываем страницу оплаты с индикатором загрузки
         currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
         showPaymentPage();
@@ -3640,7 +3642,7 @@ async function createPayment(period, subscriptionId, gateway, cryptocurrency) {
             try { sessionStorage.removeItem('payment_extend_sub_id'); } catch (e) {}
         }
         var cr = data.crypto;
-        var h2hOk = data.h2h_available === true && cr && cr.address;
+        var h2hOk = !!(cr && cr.address);
         currentPaymentData = {
             payment_id: data.payment_id,
             payment_url: String(payUrl).trim(),
