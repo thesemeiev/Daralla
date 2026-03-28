@@ -147,8 +147,8 @@ async def _cryptocloud_merge_merchant_info_if_no_address(client, api_token, invo
             await asyncio.sleep(0.45)
 
     if last_err:
-        logger.warning(
-            "CryptoCloud merchant/info: не удалось получить address для %s (%s)",
+        logger.info(
+            "CryptoCloud merchant/info: address пустой для %s (%s) — клиенту показываем payment_url",
             invoice_uuid,
             last_err,
         )
@@ -525,8 +525,8 @@ def create_blueprint(bot_app):
                     }
                 else:
                     rkeys = list(result.keys()) if isinstance(result, dict) else []
-                    logger.warning(
-                        "CryptoCloud H2H: пустой address для invoice %s, result keys=%s",
+                    logger.info(
+                        "CryptoCloud H2H: address пустой для invoice %s, keys=%s — только payment_url",
                         invoice_uuid,
                         rkeys,
                     )

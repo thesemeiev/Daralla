@@ -3778,7 +3778,11 @@ function showPaymentPage() {
         return;
     }
 
-    if (hintEl) hintEl.textContent = 'Ссылка действительна 15 минут';
+    if (hintEl) {
+        hintEl.textContent = (gw === 'cryptocloud' && !currentPaymentData.h2h_available)
+            ? 'Оплата открывается на странице CryptoCloud — нажмите «Перейти к оплате». Реквизиты кошелька там. Ссылка действительна 15 минут.'
+            : 'Ссылка действительна 15 минут';
+    }
     if (widgetRoot) {
         widgetRoot.style.display = 'none';
         widgetRoot.innerHTML = '';
