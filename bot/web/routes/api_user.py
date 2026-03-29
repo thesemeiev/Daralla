@@ -19,7 +19,6 @@ from bot.web.auth_validation import validate_username_format, validate_password_
 from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
 from bot.cryptocloud_config import (
     CRYPTOCLOUD_AVAILABLE_CURRENCIES,
-    CRYPTOCLOUD_CURRENCIES_METADATA,
     CRYPTOCLOUD_DEFAULT_CURRENCY,
 )
 from bot.prices_config import PRICES, get_default_device_limit_async
@@ -277,24 +276,6 @@ def create_blueprint(bot_app):
             logger.error("Ошибка в API /api/subscriptions: %s", e, exc_info=True)
             return jsonify({"error": "Internal server error"}), 500, _cors_headers()
 
-    @bp.route("/api/user/payment/crypto-currencies", methods=["GET", "OPTIONS"])
-    async def api_user_payment_crypto_currencies():
-        if request.method == "OPTIONS":
-            return "", 200, CORS_HEADERS
-        try:
-            user_id = await _auth()
-            if not user_id:
-                return jsonify({"error": "Invalid authentication"}), 401
-            items = [{"code": c, "label": lbl} for c, lbl in CRYPTOCLOUD_CURRENCIES_METADATA]
-            return jsonify({
-                "success": True,
-                "default_code": CRYPTOCLOUD_DEFAULT_CURRENCY,
-                "currencies": items,
-            }), 200, _cors_headers()
-        except Exception as e:
-            logger.error("Ошибка в API /api/user/payment/crypto-currencies: %s", e, exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500, _cors_headers()
-
     @bp.route("/api/user/payment/create", methods=["POST", "OPTIONS"])
     async def api_user_payment_create():
         if request.method == "OPTIONS":
@@ -361,10 +342,8 @@ def create_blueprint(bot_app):
                 shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
                 if not api_token or not shop_id:
                     return jsonify({"error": "CryptoCloud payment is not configured"}), 503
-                raw_cc = (data.get("cryptocurrency") or "").strip().upper()
-                if raw_cc and raw_cc not in CRYPTOCLOUD_AVAILABLE_CURRENCIES:
-                    return jsonify({"error": "Неизвестная криптовалюта"}), 400, _cors_headers()
-                cc_code = raw_cc if raw_cc in CRYPTOCLOUD_AVAILABLE_CURRENCIES else CRYPTOCLOUD_DEFAULT_CURRENCY
+                # Стартовая монета для счёта; выбор сети/валюты — на странице CryptoCloud (available_currencies).
+                cc_code = CRYPTOCLOUD_DEFAULT_CURRENCY
                 amount_rub = float(PRICES[period])
                 order_id = f"{user_id}_{int(time.time() * 1000)}"
                 payload = {

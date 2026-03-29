@@ -3360,38 +3360,6 @@ function getReferralCodeFromCurrentPage() {
     return input ? (input.value || '').trim() : '';
 }
 
-/** Список валют CryptoCloud с бэкенда (кэш на время сессии страницы). */
-function refreshCryptoCurrencySelect() {
-    var sel = document.getElementById('choose-cryptocurrency-select');
-    if (!sel) return;
-    apiFetch('/api/user/payment/crypto-currencies')
-        .then(function (r) {
-            if (!r.ok) throw new Error('bad');
-            return r.json();
-        })
-        .then(function (d) {
-            if (!d.success || !d.currencies || !d.currencies.length) throw new Error('empty');
-            sel.innerHTML = '';
-            d.currencies.forEach(function (item) {
-                var opt = document.createElement('option');
-                opt.value = item.code;
-                opt.textContent = item.label || item.code;
-                sel.appendChild(opt);
-            });
-            var def = d.default_code || 'USDT_TRC20';
-            if (Array.prototype.some.call(sel.options, function (o) { return o.value === def; })) {
-                sel.value = def;
-            }
-        })
-        .catch(function () {
-            sel.innerHTML = '';
-            var opt = document.createElement('option');
-            opt.value = 'USDT_TRC20';
-            opt.textContent = 'USDT (TRC-20)';
-            sel.appendChild(opt);
-        });
-}
-
 /** Карточки периода и способа оплаты на странице choose-payment-method. */
 function syncChooseOptionCards() {
     var container = document.getElementById('page-choose-payment-method');
@@ -3424,8 +3392,6 @@ function syncChooseOptionCards() {
             card.classList.toggle('choose-option-card-selected', isSelected);
             card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
-        var cryptoBlock = document.getElementById('choose-crypto-currency-block');
-        if (cryptoBlock) cryptoBlock.style.display = g === 'cryptocloud' ? 'block' : 'none';
     }
 
     periodRow.querySelectorAll('.choose-option-card[data-period]').forEach(function (card) {
@@ -3442,7 +3408,6 @@ function syncChooseOptionCards() {
     setPeriod(currentPaymentPeriod || 'month');
     setGateway('yookassa');
     updatePayButtonText();
-    refreshCryptoCurrencySelect();
 }
 
 /** Кнопка «Оплатить» на странице оформления. */
@@ -3457,27 +3422,18 @@ function bindChoosePaymentSubmit() {
         var gatewayCard = container && container.querySelector('.choose-option-card[data-gateway].choose-option-card-selected');
         var period = periodCard ? (periodCard.getAttribute('data-period') === '3month' ? '3month' : 'month') : (currentPaymentPeriod || 'month');
         var gateway = gatewayCard ? (gatewayCard.getAttribute('data-gateway') === 'cryptocloud' ? 'cryptocloud' : 'yookassa') : 'yookassa';
-        var cryptocurrency = null;
-        if (gateway === 'cryptocloud') {
-            var cryptoSel = document.getElementById('choose-cryptocurrency-select');
-            cryptocurrency = (cryptoSel && cryptoSel.value) ? cryptoSel.value : 'USDT_TRC20';
-        }
-        createPayment(period, currentExtendSubscriptionId, gateway, cryptocurrency);
+        createPayment(period, currentExtendSubscriptionId, gateway);
     });
 }
 
 // Функция создания платежа (вызывается со страницы оформления)
-async function createPayment(period, subscriptionId, gateway, cryptocurrency) {
+async function createPayment(period, subscriptionId, gateway) {
     if (subscriptionId === undefined) subscriptionId = null;
-    if (cryptocurrency === undefined) cryptocurrency = null;
     if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud')) gateway = 'yookassa';
     try {
         var referrerCode = getReferralCodeFromCurrentPage();
         var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
         if (referrerCode) body.referrer_code = referrerCode;
-        if (gateway === 'cryptocloud') {
-            body.cryptocurrency = cryptocurrency || 'USDT_TRC20';
-        }
         // Показываем страницу оплаты с индикатором загрузки
         currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
         showPaymentPage();

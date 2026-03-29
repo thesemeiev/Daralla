@@ -5307,14 +5307,3 @@ body.web-mode .tg-only {
     display: none !important;
 }
 
-.choose-cryptocurrency-select {
-    width: 100%;
-    margin-top: 8px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    border: 1px solid var(--input-border, #333);
-    background: var(--input-bg, #1a1a1a);
-    color: var(--input-color, #fff);
-    font-size: 15px;
-}
-
