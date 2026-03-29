@@ -444,9 +444,21 @@ def create_blueprint(bot_app):
 
             from yookassa import Payment
 
+            webapp_base = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
+            if not webapp_base:
+                logger.error("WEBAPP_URL не задан — для ЮKassa redirect нужен return_url")
+                return jsonify({"error": "Платёж временно недоступен"}), 503, _cors_headers()
+
+            # return_url задаётся при создании платежа, до присвоения payment.id — без payment_id в query.
+            # Клиент сохраняет payment_id в sessionStorage и подставляет при возврате (handlePaymentReturnFromQuery).
+            yookassa_return_url = f"{webapp_base}/?{urlencode({'payment_return': '1'})}"
+
             payment = Payment.create({
                 "amount": {"value": price, "currency": "RUB"},
-                "confirmation": {"type": "embedded"},
+                "confirmation": {
+                    "type": "redirect",
+                    "return_url": yookassa_return_url,
+                },
                 "capture": True,
                 "description": f"VPN {period} для {user_id}",
                 "metadata": {
@@ -467,20 +479,14 @@ def create_blueprint(bot_app):
                 },
             })
             confirmation = getattr(payment, "confirmation", None)
-            conf_token = getattr(confirmation, "confirmation_token", None) if confirmation else None
-            if not conf_token:
+            pay_url = getattr(confirmation, "confirmation_url", None) if confirmation else None
+            if not pay_url or not str(pay_url).strip().lower().startswith("http"):
                 logger.error(
-                    "YooKassa embedded: нет confirmation_token в ответе, payment_id=%s",
+                    "YooKassa redirect: нет confirmation_url в ответе, payment_id=%s, confirmation=%r",
                     getattr(payment, "id", None),
+                    confirmation,
                 )
-                return jsonify({"error": "Не удалось создать платёж (виджет)"}), 502, _cors_headers()
-
-            webapp_base = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
-            widget_return_url = None
-            if webapp_base:
-                widget_return_url = (
-                    f"{webapp_base}/?{urlencode({'payment_return': '1', 'payment_id': payment.id})}"
-                )
+                return jsonify({"error": "Не удалось создать платёж"}), 502, _cors_headers()
 
             await add_payment(
                 payment_id=payment.id,
@@ -491,8 +497,7 @@ def create_blueprint(bot_app):
             return jsonify({
                 "success": True,
                 "payment_id": payment.id,
-                "confirmation_token": conf_token,
-                "widget_return_url": widget_return_url,
+                "payment_url": str(pay_url).strip(),
                 "amount": price,
                 "period": period,
                 "gateway": "yookassa",

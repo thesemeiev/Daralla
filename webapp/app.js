@@ -3234,219 +3234,22 @@ function goBackFromChoosePayment() {
 
 // Функция возврата с страницы оплаты (на страницу оформления)
 function goBackFromPayment() {
-    destroyYooKassaWidget();
-    destroyCryptocloudH2h();
     clearPaymentStatusPolling();
+    try { sessionStorage.removeItem('payment_return_payment_id'); } catch (e) {}
     currentPaymentData = null;
     showPage('choose-payment-method');
 }
 
-var yooCheckoutScriptPromise = null;
-
-function loadYooKassaWidgetScript() {
-    if (typeof window !== 'undefined' && window.YooMoneyCheckoutWidget) {
-        return Promise.resolve();
-    }
-    if (yooCheckoutScriptPromise) return yooCheckoutScriptPromise;
-    yooCheckoutScriptPromise = new Promise(function (resolve, reject) {
-        var s = document.createElement('script');
-        s.src = 'https://yookassa.ru/checkout-widget/v1/checkout-widget.js';
-        s.async = true;
-        s.onload = function () { resolve(); };
-        s.onerror = function () { reject(new Error('Не удалось загрузить виджет ЮKassa')); };
-        document.head.appendChild(s);
-    });
-    return yooCheckoutScriptPromise;
-}
-
-function destroyYooKassaWidget() {
-    try {
-        if (window.__darallaYooCheckout && typeof window.__darallaYooCheckout.destroy === 'function') {
-            window.__darallaYooCheckout.destroy();
-        }
-    } catch (e) {
-        console.warn('YooKassa widget destroy', e);
-    }
-    window.__darallaYooCheckout = null;
-    var root = document.getElementById('yookassa-widget-root');
-    if (root) {
-        root.innerHTML = '';
-        root.style.display = 'none';
-    }
-}
-
-var qrcodeScriptPromise = null;
-
-function loadQRCodeScript() {
-    if (typeof window !== 'undefined' && typeof window.QRCode === 'function') {
-        return Promise.resolve();
-    }
-    if (qrcodeScriptPromise) return qrcodeScriptPromise;
-    qrcodeScriptPromise = new Promise(function (resolve, reject) {
-        var s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-        s.async = true;
-        s.onload = function () { resolve(); };
-        s.onerror = function () { reject(new Error('Не удалось загрузить QR')); };
-        document.head.appendChild(s);
-    });
-    return qrcodeScriptPromise;
-}
-
-function destroyCryptocloudH2h() {
-    var block = document.getElementById('cryptocloud-h2h-block');
-    var qr = document.getElementById('crypto-h2h-qr');
-    if (qr) qr.innerHTML = '';
-    if (block) block.style.display = 'none';
-    var ext = document.getElementById('payment-crypto-external-link');
-    if (ext) {
-        ext.style.display = 'none';
-        ext.onclick = null;
-    }
-    window.__darallaCryptoQR = null;
-}
-
-function copyPaymentTextToClipboard(text, okMessage) {
-    var t = String(text || '');
-    if (!t) return;
-    function done(ok) {
-        if (typeof platform !== 'undefined' && platform.showAlert) {
-            platform.showAlert(ok ? (okMessage || 'Скопировано') : 'Не удалось скопировать');
-        }
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(t).then(function () { done(true); }).catch(function () { done(false); });
-        return;
-    }
-    try {
-        var ta = document.createElement('textarea');
-        ta.value = t;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        done(true);
-    } catch (e) {
-        done(false);
-    }
-}
-
-function mountCryptocloudH2h(crypto, paymentUrl) {
-    var block = document.getElementById('cryptocloud-h2h-block');
-    var warn = document.getElementById('crypto-h2h-network-warning');
-    var amtEl = document.getElementById('crypto-h2h-amount');
-    var addrEl = document.getElementById('crypto-h2h-address');
-    var qrEl = document.getElementById('crypto-h2h-qr');
-    if (!block || !crypto || !crypto.address) return;
-    var net = (crypto.network_name || crypto.network_code || '').trim();
-    var code = (crypto.currency_code || '').trim();
-    if (warn) {
-        warn.innerHTML = 'Переводите <strong>только</strong> в сети <strong>' + (net || code || 'указанной') + '</strong>. Сумма и адрес должны совпадать снизу — иначе средства могут быть потеряны.';
-    }
-    var amtStr = crypto.amount != null && crypto.amount !== '' ? String(crypto.amount) : '—';
-    if (code && amtStr !== '—') amtStr = amtStr + ' ' + code;
-    if (amtEl) amtEl.textContent = amtStr;
-    if (addrEl) addrEl.textContent = crypto.address;
-    if (qrEl) qrEl.innerHTML = '';
-    block.style.display = 'block';
-    var copyAmt = document.getElementById('crypto-copy-amount');
-    var copyAddr = document.getElementById('crypto-copy-address');
-    if (copyAmt) {
-        copyAmt.onclick = function () {
-            copyPaymentTextToClipboard(crypto.amount != null ? String(crypto.amount) : '', 'Сумма скопирована');
-        };
-    }
-    if (copyAddr) {
-        copyAddr.onclick = function () {
-            copyPaymentTextToClipboard(crypto.address, 'Адрес скопирован');
-        };
-    }
-    var ext = document.getElementById('payment-crypto-external-link');
-    if (ext && paymentUrl && String(paymentUrl).indexOf('http') === 0) {
-        ext.style.display = 'block';
-        ext.onclick = function (e) {
-            e.preventDefault();
-            openPaymentUrl();
-        };
-    }
-    loadQRCodeScript().then(function () {
-        if (!qrEl || !window.QRCode) return;
-        qrEl.innerHTML = '';
-        try {
-            window.__darallaCryptoQR = new window.QRCode(qrEl, {
-                text: String(crypto.address),
-                width: 200,
-                height: 200,
-                colorDark: '#000000',
-                colorLight: '#ffffff',
-                correctLevel: window.QRCode.CorrectLevel.M
-            });
-        } catch (e) {
-            console.warn('QRCode', e);
-        }
-    }).catch(function (e) {
-        console.warn(e);
-    });
-}
-
-function buildYooKassaReturnUrl(paymentId, serverReturnUrl) {
-    var u = String(serverReturnUrl || '').trim();
-    if (u.indexOf('http') === 0) return u;
-    try {
-        var url = new URL(window.location.href);
-        url.searchParams.set('payment_return', '1');
-        url.searchParams.set('payment_id', paymentId);
-        return url.toString();
-    } catch (e2) {
-        return window.location.href;
-    }
-}
-
-function mountYooKassaWidget(confirmationToken, paymentId, returnUrl, extendSubscriptionId) {
-    return loadYooKassaWidgetScript().then(function () {
-        destroyYooKassaWidget();
-        var root = document.getElementById('yookassa-widget-root');
-        if (!root) return;
-        root.style.display = 'block';
-        var Checkout = window.YooMoneyCheckoutWidget;
-        if (!Checkout) throw new Error('YooMoneyCheckoutWidget не найден');
-        var checkout = new Checkout({
-            confirmation_token: confirmationToken,
-            return_url: returnUrl,
-            error_callback: function (err) {
-                console.error('YooKassa widget init', err);
-                var msg = typeof err === 'string' ? err : (err && err.message) ? err.message : JSON.stringify(err);
-                showFormMessage('payment-form-message', 'error', 'Ошибка оплаты: ' + (msg || 'неизвестно'));
-            },
-            customization: {
-                colors: {
-                    control_primary: '#4a9eff',
-                    control_primary_content: '#FFFFFF',
-                    background: '#1c1e22',
-                    border: '#3a3f4a',
-                    text: '#e0e0e0'
-                }
-            }
-        });
-        window.__darallaYooCheckout = checkout;
-        var poll = function () {
-            checkPaymentStatus(paymentId, extendSubscriptionId || null);
-        };
-        if (typeof checkout.on === 'function') {
-            checkout.on('success', poll);
-            checkout.on('complete', poll);
-        }
-        checkout.render('yookassa-widget-root');
-    });
-}
-
-/** После редиректа виджета ЮKassa: query payment_return=1&payment_id=… */
+/** После редиректа с сайта ЮKassa: payment_return=1; payment_id в query или в sessionStorage */
 function handlePaymentReturnFromQuery() {
     var params = new URLSearchParams(window.location.search || '');
     if (params.get('payment_return') !== '1') return;
     var pid = params.get('payment_id');
+    if (!pid) {
+        try {
+            pid = sessionStorage.getItem('payment_return_payment_id') || '';
+        } catch (e) { pid = ''; }
+    }
     if (!pid) return;
     if (!platform.isTelegram() && !currentUserId) return;
     var extRaw = sessionStorage.getItem('payment_extend_sub_id');
@@ -3457,11 +3260,11 @@ function handlePaymentReturnFromQuery() {
     } catch (e) { /* ignore */ }
     currentPaymentData = {
         payment_id: pid,
-        gateway: 'yookassa'
+        gateway: 'yookassa',
+        extend_subscription_id: extId
     };
     showPage('payment');
     showPaymentPage();
-    checkPaymentStatus(pid, extId);
 }
 
 function openPaymentUrl() {
@@ -3479,7 +3282,12 @@ function openPaymentUrl() {
         return;
     }
     platform.openExternalUrl(url);
-    if (paymentId) checkPaymentStatus(paymentId, currentExtendSubscriptionId);
+    if (paymentId) {
+        var extPoll = (currentPaymentData && currentPaymentData.extend_subscription_id != null)
+            ? currentPaymentData.extend_subscription_id
+            : currentExtendSubscriptionId;
+        checkPaymentStatus(paymentId, extPoll);
+    }
 }
 if (typeof window !== 'undefined') window.openPaymentUrl = openPaymentUrl;
 
@@ -3694,31 +3502,21 @@ async function createPayment(period, subscriptionId, gateway, cryptocurrency) {
         }
 
         if (gateway === 'yookassa') {
-            var tok = data.confirmation_token;
-            if (!tok || typeof tok !== 'string') {
-                var legacyUrl = data.payment_url;
-                if (legacyUrl && String(legacyUrl).trim().indexOf('http') === 0) {
-                    currentPaymentData = {
-                        payment_id: data.payment_id,
-                        payment_url: String(legacyUrl).trim(),
-                        amount: data.amount,
-                        period: data.period,
-                        gateway: 'yookassa'
-                    };
-                    showPaymentPage();
-                    return;
-                }
-                throw new Error('Не удалось получить данные для оплаты');
+            var ykUrl = data.payment_url;
+            if (!ykUrl || String(ykUrl).trim().indexOf('http') !== 0) {
+                throw new Error('Не удалось получить ссылку на оплату');
             }
             if (subscriptionId) {
                 sessionStorage.setItem('payment_extend_sub_id', String(subscriptionId));
             } else {
                 try { sessionStorage.removeItem('payment_extend_sub_id'); } catch (e) {}
             }
+            try {
+                sessionStorage.setItem('payment_return_payment_id', String(data.payment_id));
+            } catch (e) {}
             currentPaymentData = {
                 payment_id: data.payment_id,
-                confirmation_token: tok,
-                widget_return_url: data.widget_return_url || null,
+                payment_url: String(ykUrl).trim(),
                 amount: data.amount,
                 period: data.period,
                 gateway: 'yookassa',
@@ -3738,16 +3536,12 @@ async function createPayment(period, subscriptionId, gateway, cryptocurrency) {
         } else {
             try { sessionStorage.removeItem('payment_extend_sub_id'); } catch (e) {}
         }
-        var cr = data.crypto;
-        var h2hOk = !!(cr && cr.address);
         currentPaymentData = {
             payment_id: data.payment_id,
             payment_url: String(payUrl).trim(),
             amount: data.amount,
             period: data.period,
             gateway: gateway,
-            crypto: cr || null,
-            h2h_available: !!h2hOk,
             extend_subscription_id: subscriptionId || null
         };
 
@@ -3773,12 +3567,10 @@ async function createPayment(period, subscriptionId, gateway, cryptocurrency) {
 // Функция показа страницы оплаты
 function showPaymentPage() {
     hideFormMessage('payment-form-message');
-    destroyCryptocloudH2h();
     clearPaymentStatusPolling();
     showPage('payment');
     var page = document.getElementById('page-payment');
     var hintEl = document.getElementById('payment-widget-hint');
-    var widgetRoot = document.getElementById('yookassa-widget-root');
     if (page) {
         var statusEl = page.querySelector('.detail-status');
         if (statusEl) {
@@ -3792,10 +3584,6 @@ function showPaymentPage() {
         if (hintEl) hintEl.style.display = '';
     }
     var btn = document.getElementById('payment-link-button');
-    if (widgetRoot && !currentPaymentData) {
-        widgetRoot.style.display = 'none';
-        widgetRoot.innerHTML = '';
-    }
     if (btn) btn.style.display = '';
     if (!currentPaymentData) {
         document.getElementById('payment-period').textContent = 'Загрузка...';
@@ -3819,70 +3607,30 @@ function showPaymentPage() {
     document.getElementById('payment-amount').textContent =
         currentPaymentData.amount != null ? String(currentPaymentData.amount) + '₽' : '—';
 
-    if (gw === 'yookassa' && currentPaymentData.confirmation_token) {
+    if (currentPaymentData.payment_id &&
+        (!currentPaymentData.payment_url || String(currentPaymentData.payment_url).trim().indexOf('http') !== 0)) {
+        if (hintEl) hintEl.textContent = 'Проверяем статус платежа…';
         if (btn) btn.style.display = 'none';
-        if (hintEl) {
-            hintEl.textContent = 'Оплатите в форме ниже. После банка вы вернётесь в приложение — мы проверим оплату автоматически.';
-            hintEl.style.display = '';
+        var extWait = currentPaymentData.extend_subscription_id;
+        if (extWait == null) {
+            try {
+                var _ers = sessionStorage.getItem('payment_extend_sub_id');
+                var _ei = _ers ? parseInt(_ers, 10) : NaN;
+                if (_ers && !isNaN(_ei)) extWait = _ei;
+            } catch (_e) {}
         }
-        var ret = buildYooKassaReturnUrl(
-            currentPaymentData.payment_id,
-            currentPaymentData.widget_return_url
-        );
-        var extSub = currentPaymentData.extend_subscription_id;
-        mountYooKassaWidget(
-            currentPaymentData.confirmation_token,
-            currentPaymentData.payment_id,
-            ret,
-            extSub
-        ).catch(function (err) {
-            console.error(err);
-            showFormMessage('payment-form-message', 'error', err.message || 'Не удалось открыть форму оплаты');
-            if (btn) {
-                btn.style.display = '';
-                btn.textContent = 'Повторить';
-                btn.onclick = function () {
-                    goBackFromPayment();
-                };
-            }
-        });
-        checkPaymentStatus(currentPaymentData.payment_id, extSub || null);
-        return;
-    }
-
-    if (gw === 'yookassa' && currentPaymentData.payment_id && !currentPaymentData.confirmation_token) {
-        if (btn) btn.style.display = 'none';
-        if (widgetRoot) widgetRoot.style.display = 'none';
-        if (hintEl) {
-            hintEl.textContent = 'Проверяем статус платежа…';
-            hintEl.style.display = '';
-        }
-        return;
-    }
-
-    if (gw === 'cryptocloud' && currentPaymentData.h2h_available && currentPaymentData.crypto) {
-        if (btn) btn.style.display = 'none';
-        if (hintEl) {
-            hintEl.textContent = 'После перевода статус обновится автоматически (обычно от секунд до нескольких минут). Счёт действителен 15 минут.';
-            hintEl.style.display = '';
-        }
-        if (widgetRoot) {
-            widgetRoot.style.display = 'none';
-            widgetRoot.innerHTML = '';
-        }
-        mountCryptocloudH2h(currentPaymentData.crypto, currentPaymentData.payment_url);
-        checkPaymentStatus(currentPaymentData.payment_id, currentPaymentData.extend_subscription_id || null);
+        checkPaymentStatus(currentPaymentData.payment_id, extWait != null ? extWait : null);
         return;
     }
 
     if (hintEl) {
-        hintEl.textContent = (gw === 'cryptocloud' && !currentPaymentData.h2h_available)
-            ? 'Оплата открывается на странице CryptoCloud — нажмите «Перейти к оплате». Реквизиты кошелька там. Ссылка действительна 15 минут.'
-            : 'Ссылка действительна 15 минут';
-    }
-    if (widgetRoot) {
-        widgetRoot.style.display = 'none';
-        widgetRoot.innerHTML = '';
+        if (gw === 'yookassa') {
+            hintEl.textContent = 'Оплата откроется на сайте ЮKassa в браузере. После оплаты вы вернётесь в приложение — статус проверится автоматически.';
+        } else if (gw === 'cryptocloud') {
+            hintEl.textContent = 'Оплата на странице CryptoCloud в браузере. Счёт действителен 15 минут; статус обновится после зачисления.';
+        } else {
+            hintEl.textContent = 'Ссылка действительна 15 минут';
+        }
     }
     if (btn) {
         btn.textContent = 'Перейти к оплате';
@@ -3900,12 +3648,15 @@ function showPaymentPage() {
         };
         btn.style.display = '';
     }
+    checkPaymentStatus(
+        currentPaymentData.payment_id,
+        currentPaymentData.extend_subscription_id || null
+    );
 }
 
 // Показать на странице оплаты состояние «Оплата прошла» (обновить карточку, кнопка «К подпискам»)
 function showPaymentSuccessState() {
-    destroyYooKassaWidget();
-    destroyCryptocloudH2h();
+    try { sessionStorage.removeItem('payment_return_payment_id'); } catch (e) {}
     var page = document.getElementById('page-payment');
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
@@ -3938,8 +3689,6 @@ function showPaymentSuccessState() {
 
 // Показать на странице оплаты состояние отмены/ошибки (красный статус, кнопка «Попробовать снова»)
 function showPaymentErrorState(message) {
-    destroyYooKassaWidget();
-    destroyCryptocloudH2h();
     var page = document.getElementById('page-payment');
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
