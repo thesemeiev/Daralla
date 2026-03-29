@@ -20,6 +20,47 @@ from bot.handlers.api_support.payment_processors import process_payment_webhook
 logger = logging.getLogger(__name__)
 
 
+def parse_yookassa_webhook_payload(data):
+    """
+    Разбор тела вебхука YooKassa.
+
+    Для payment.* в object лежит платёж: id + status.
+    Для refund.succeeded в object — возврат: id возврата в object.id, исходный платёж в payment_id;
+    status «succeeded» у возврата не означает успешную оплату — в процессор отдаём (payment_id, "refunded").
+
+    Returns:
+        (payment_id, status) — передать в process_payment_webhook.
+        None — ответ 200, фоновую обработку не запускать (неизвестное событие, отмена возврата и т.п.).
+
+    Raises:
+        ValueError — неверный формат (ответ 400).
+    """
+    if not data or "object" not in data:
+        raise ValueError("missing object")
+    event = (data.get("event") or "").strip().lower()
+    obj = data["object"]
+
+    if event.startswith("refund."):
+        if event != "refund.succeeded":
+            return None
+        payment_id = obj.get("payment_id")
+        refund_status = (obj.get("status") or "").strip().lower()
+        if not payment_id or not refund_status:
+            raise ValueError("refund payload missing payment_id or status")
+        if refund_status != "succeeded":
+            return None
+        return (payment_id, "refunded")
+
+    if event and not event.startswith("payment."):
+        return None
+
+    payment_id = obj.get("id")
+    status = obj.get("status")
+    if not payment_id or not status:
+        raise ValueError("payment payload missing id or status")
+    return (payment_id, status)
+
+
 async def _cryptocloud_parse_postback_body():
     """JSON (рекомендуется в ЛК) или form-data — иначе get_json пустой и постбэк падал с 400."""
     data = await request.get_json(silent=True)
@@ -110,19 +151,28 @@ def create_blueprint(bot_app):
             logger.info("WEBHOOK: Данные: %s", data)
             logger.info("WEBHOOK: Заголовки: %s", dict(request.headers))
 
-            if not data or "object" not in data:
-                logger.error("Неверный формат webhook от YooKassa")
+            try:
+                resolved = parse_yookassa_webhook_payload(data)
+            except ValueError as e:
+                logger.error("Неверный формат webhook от YooKassa: %s", e)
                 return jsonify({"status": "error"}), 400
 
-            payment_data = data["object"]
-            payment_id = payment_data.get("id")
-            status = payment_data.get("status")
+            if resolved is None:
+                logger.info(
+                    "WEBHOOK: событие %s — без обновления платежа",
+                    (data.get("event") or "").strip(),
+                )
+                return jsonify({"status": "ok"})
 
-            if not payment_id or not status:
-                logger.error("Отсутствуют обязательные поля в webhook")
-                return jsonify({"status": "error"}), 400
+            payment_id, status = resolved
+            event_name = (data.get("event") or "").strip()
 
-            logger.info("WEBHOOK: Обработка webhook: payment_id=%s, status=%s", payment_id, status)
+            logger.info(
+                "WEBHOOK: Обработка webhook: event=%s, payment_id=%s, status=%s",
+                event_name or "(legacy)",
+                payment_id,
+                status,
+            )
             if status == "succeeded":
                 logger.info("WEBHOOK: Платеж успешен - активируем ключ")
             elif status == "canceled":
@@ -132,7 +182,6 @@ def create_blueprint(bot_app):
             else:
                 logger.info("WEBHOOK: Неизвестный статус: %s", status)
 
-            # Обработка в фоне, чтобы сразу вернуть 200 YooKassa
             asyncio.create_task(_process_webhook(bot_app, payment_id, status))
 
             return jsonify({"status": "ok"})

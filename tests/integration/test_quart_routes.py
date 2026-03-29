@@ -4,6 +4,7 @@ from unittest.mock import patch
 from quart import Quart
 
 from bot.web.app_quart import create_quart_app
+from bot.web.routes.payment import parse_yookassa_webhook_payload
 
 
 @pytest.fixture
@@ -36,6 +37,50 @@ async def test_post_webhook_yookassa_invalid_body_returns_400(quart_app_with_rou
     assert response.status_code == 400
     data = await response.get_json()
     assert data.get("status") == "error"
+
+
+def test_parse_yookassa_refund_succeeded_maps_to_payment_id_and_refunded():
+    """refund.succeeded: ищем платёж по payment_id, статус для БД — refunded."""
+    r = parse_yookassa_webhook_payload(
+        {
+            "event": "refund.succeeded",
+            "object": {
+                "id": "2f9e4b2a-000f-5000-9000-1b2c3d4e5f6a",
+                "payment_id": "2f9e4b2a-000f-5000-8000-1b2c3d4e5f60",
+                "status": "succeeded",
+            },
+        }
+    )
+    assert r == ("2f9e4b2a-000f-5000-8000-1b2c3d4e5f60", "refunded")
+
+
+def test_parse_yookassa_payment_succeeded_unchanged():
+    r = parse_yookassa_webhook_payload(
+        {
+            "event": "payment.succeeded",
+            "object": {"id": "pay-uuid", "status": "succeeded"},
+        }
+    )
+    assert r == ("pay-uuid", "succeeded")
+
+
+def test_parse_yookassa_legacy_no_event_still_payment():
+    """Старые/минимальные payload без event обрабатываем как платёж."""
+    r = parse_yookassa_webhook_payload({"object": {"id": "p1", "status": "pending"}})
+    assert r == ("p1", "pending")
+
+
+def test_parse_yookassa_unknown_event_skips_processing():
+    assert (
+        parse_yookassa_webhook_payload({"event": "deal.closed", "object": {"id": "x"}}) is None
+    )
+
+
+def test_parse_yookassa_refund_succeeded_missing_payment_id_raises():
+    with pytest.raises(ValueError):
+        parse_yookassa_webhook_payload(
+            {"event": "refund.succeeded", "object": {"id": "r1", "status": "succeeded"}}
+        )
 
 
 @pytest.mark.asyncio
