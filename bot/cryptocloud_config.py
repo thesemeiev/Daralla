@@ -1,5 +1,5 @@
 # Синхронизировать с валютами, включёнными в проекте CryptoCloud (ЛК).
-# code — значение add_fields.cryptocurrency / available_currencies.
+# code — значения add_fields.available_currencies (и опционально cryptocurrency).
 
 CRYPTOCLOUD_CURRENCIES_METADATA = [
     ("USDT_TRC20", "USDT (TRC-20)"),

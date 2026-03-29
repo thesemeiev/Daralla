@@ -17,10 +17,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from bot.handlers.api_support.webhook_auth import authenticate_request_async, verify_telegram_init_data
 from bot.web.auth_validation import validate_username_format, validate_password_format
 from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
-from bot.cryptocloud_config import (
-    CRYPTOCLOUD_AVAILABLE_CURRENCIES,
-    CRYPTOCLOUD_DEFAULT_CURRENCY,
-)
+from bot.cryptocloud_config import CRYPTOCLOUD_AVAILABLE_CURRENCIES
 from bot.prices_config import PRICES, get_default_device_limit_async
 
 logger = logging.getLogger(__name__)
@@ -336,14 +333,12 @@ def create_blueprint(bot_app):
                 payment_meta_base["referrer_user_id"] = referrer_user_id
 
             if gateway == "cryptocloud":
-                # API Reference: amount + currency (RUB), add_fields.cryptocurrency и available_currencies;
-                # при успехе в result — address, amount в крипте, link.
+                # Без add_fields.cryptocurrency — на странице кассы показывается выбор валюты/сети
+                # (см. docs: при переданном cryptocurrency выбор скрывается).
                 api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
                 shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
                 if not api_token or not shop_id:
                     return jsonify({"error": "CryptoCloud payment is not configured"}), 503
-                # Стартовая монета для счёта; выбор сети/валюты — на странице CryptoCloud (available_currencies).
-                cc_code = CRYPTOCLOUD_DEFAULT_CURRENCY
                 amount_rub = float(PRICES[period])
                 order_id = f"{user_id}_{int(time.time() * 1000)}"
                 payload = {
@@ -353,7 +348,6 @@ def create_blueprint(bot_app):
                     "order_id": order_id,
                     "add_fields": {
                         "time_to_pay": {"hours": 0, "minutes": 15},
-                        "cryptocurrency": cc_code,
                         "available_currencies": list(CRYPTOCLOUD_AVAILABLE_CURRENCIES),
                     },
                 }
@@ -381,13 +375,20 @@ def create_blueprint(bot_app):
                         logger.warning("CryptoCloud missing uuid/link: %s", result)
                         return jsonify({"error": "Invalid crypto invoice response"}), 502
                     payment_meta_base["gateway"] = "cryptocloud"
-                    payment_meta_base["cryptocurrency"] = cc_code
                     addr = _cryptocloud_extract_address(result)
                 crypto_amt = result.get("amount") if isinstance(result, dict) else None
                 if crypto_amt is not None:
                     payment_meta_base["crypto_amount"] = str(crypto_amt)
                 currency_obj = result.get("currency") if isinstance(result.get("currency"), dict) else {}
                 network_obj = currency_obj.get("network") if isinstance(currency_obj.get("network"), dict) else {}
+                cc_from_api = (
+                    result.get("cryptocurrency")
+                    or result.get("currency_code")
+                    or currency_obj.get("fullcode")
+                    or currency_obj.get("code")
+                )
+                if cc_from_api:
+                    payment_meta_base["cryptocurrency"] = str(cc_from_api).strip().upper()
                 crypto_out = None
                 if addr:
                     crypto_out = {
@@ -415,7 +416,7 @@ def create_blueprint(bot_app):
                     "payment_url": payment_link,
                     "amount": price,
                     "period": period,
-                    "cryptocurrency": cc_code,
+                    "cryptocurrency": payment_meta_base.get("cryptocurrency"),
                     "crypto": crypto_out,
                     "h2h_available": bool(crypto_out),
                 }

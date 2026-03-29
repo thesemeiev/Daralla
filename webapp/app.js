@@ -524,6 +524,7 @@ function applyRoute(route, isAuthenticated, isAdmin) {
     if (route.pageName === 'buy-subscription') {
         currentPaymentPeriod = 'month';
         currentExtendSubscriptionId = null;
+        resetCheckoutPaymentState();
         showPage('choose-payment-method');
         return true;
     }
@@ -1552,6 +1553,7 @@ async function loadSubscriptions() {
             buyButton.onclick = function () {
             currentPaymentPeriod = 'month';
             currentExtendSubscriptionId = null;
+            resetCheckoutPaymentState();
             showPage('choose-payment-method');
         };
             subscriptionsListEl.appendChild(buyButton);
@@ -3204,6 +3206,28 @@ let currentPaymentData = null;
 // Выбранный период при переходе на страницу выбора способа оплаты (month / 3month)
 let currentPaymentPeriod = null;
 
+/** Ссылка на оплату (https/http), без учёта регистра схемы */
+function isHttpUrl(s) {
+    if (s == null) return false;
+    var t = String(s).trim();
+    if (!t) return false;
+    var low = t.toLowerCase();
+    return low.indexOf('http://') === 0 || low.indexOf('https://') === 0;
+}
+
+function extractPaymentUrlFromCreateResponse(data) {
+    if (!data || typeof data !== 'object') return '';
+    var u = data.payment_url || data.paymentUrl || data.confirmation_url || data.confirmationUrl;
+    if (u != null && typeof u === 'object' && u.url) u = u.url;
+    return u != null ? String(u).trim() : '';
+}
+
+/** Сброс состояния незавершённого платежа перед новым оформлением (не трогает sessionStorage продления). */
+function resetCheckoutPaymentState() {
+    clearPaymentStatusPolling();
+    currentPaymentData = null;
+}
+
 // Функция показа страницы продления подписки (сразу на оформление с карточками)
 async function showExtendSubscriptionModal(subscriptionId) {
     if (!subscriptionId) {
@@ -3212,6 +3236,7 @@ async function showExtendSubscriptionModal(subscriptionId) {
     }
     currentExtendSubscriptionId = subscriptionId;
     currentPaymentPeriod = 'month';
+    resetCheckoutPaymentState();
     showPage('choose-payment-method');
 }
 
@@ -3220,6 +3245,7 @@ function goToChoosePaymentMethod(period, subscriptionId) {
     currentPaymentPeriod = period === '3month' ? '3month' : 'month';
     if (subscriptionId != null) currentExtendSubscriptionId = subscriptionId;
     else currentExtendSubscriptionId = null;
+    resetCheckoutPaymentState();
     showPage('choose-payment-method');
 }
 
@@ -3277,7 +3303,7 @@ function openPaymentUrl() {
         url = String(btn.dataset.paymentUrl).trim();
         paymentId = btn.dataset.paymentId || paymentId;
     }
-    if (!url || url.indexOf('http') !== 0) {
+    if (!isHttpUrl(url)) {
         platform.showAlert('Ошибка: ссылка на оплату не найдена');
         return;
     }
@@ -3458,8 +3484,8 @@ async function createPayment(period, subscriptionId, gateway) {
         }
 
         if (gateway === 'yookassa') {
-            var ykUrl = data.payment_url;
-            if (!ykUrl || String(ykUrl).trim().indexOf('http') !== 0) {
+            var ykUrl = extractPaymentUrlFromCreateResponse(data);
+            if (!isHttpUrl(ykUrl)) {
                 throw new Error('Не удалось получить ссылку на оплату');
             }
             if (subscriptionId) {
@@ -3482,8 +3508,8 @@ async function createPayment(period, subscriptionId, gateway) {
             return;
         }
 
-        var payUrl = data.payment_url;
-        if (!payUrl || typeof payUrl !== 'string' || String(payUrl).trim().indexOf('http') !== 0) {
+        var payUrl = extractPaymentUrlFromCreateResponse(data);
+        if (!isHttpUrl(payUrl)) {
             throw new Error('Не удалось получить ссылку на оплату');
         }
 
@@ -3564,7 +3590,7 @@ function showPaymentPage() {
         currentPaymentData.amount != null ? String(currentPaymentData.amount) + '₽' : '—';
 
     if (currentPaymentData.payment_id &&
-        (!currentPaymentData.payment_url || String(currentPaymentData.payment_url).trim().indexOf('http') !== 0)) {
+        !isHttpUrl(currentPaymentData.payment_url)) {
         if (hintEl) hintEl.textContent = 'Проверяем статус платежа…';
         if (btn) btn.style.display = 'none';
         var extWait = currentPaymentData.extend_subscription_id;
