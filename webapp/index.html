@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=23">
+    <link rel="stylesheet" href="/style.css?v=24">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -709,8 +709,9 @@
         <!-- АДМИН-ПАНЕЛЬ: Аналитика серверов -->
         <!-- АДМИН-ПАНЕЛЬ: Список подписок -->
         <div id="page-admin-subscriptions" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+            <header class="header-with-back">
+                <button type="button" class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1 class="page-section-title">Подписки</h1>
             </header>
 
             <div class="admin-toolbar">
@@ -753,12 +754,15 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Список пользователей -->
         <div id="page-admin-users" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+            <header class="header-with-back">
+                <button type="button" class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <h1 class="page-section-title">Пользователи</h1>
             </header>
-            
-            <div class="admin-search-box">
-                <input type="text" id="admin-user-search" placeholder="Поиск по ID..." oninput="handleAdminUserSearch()">
+
+            <div class="admin-toolbar">
+                <div class="admin-search-box">
+                    <input type="text" id="admin-user-search" placeholder="Поиск по ID..." oninput="handleAdminUserSearch()">
+                </div>
             </div>
             
             <div id="admin-users-loading" class="loading">
@@ -895,8 +899,9 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Детальная информация о пользователе -->
         <div id="page-admin-user-detail" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="goBackFromUserDetail()">← Назад</button>
+            <header class="header-with-back">
+                <button type="button" class="back-button" onclick="goBackFromUserDetail()">← Назад</button>
+                <h1 class="page-section-title">Клиент</h1>
             </header>
             
             <div id="admin-user-detail-loading" class="loading">
@@ -909,8 +914,9 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Создание подписки -->
         <div id="page-admin-create-subscription" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="goBackFromCreateSubscription()">← Назад</button>
+            <header class="header-with-back">
+                <button type="button" class="back-button" onclick="goBackFromCreateSubscription()">← Назад</button>
+                <h1 class="page-section-title">Новая подписка</h1>
             </header>
             
             <div id="admin-create-subscription-content" class="admin-page-content">
@@ -949,8 +955,9 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Редактирование подписки -->
         <div id="page-admin-subscription-edit" class="page" style="display: none;">
-            <header>
-                <button class="back-button" onclick="goBackFromSubscriptionEdit()">← Назад</button>
+            <header class="header-with-back">
+                <button type="button" class="back-button" onclick="goBackFromSubscriptionEdit()">← Назад</button>
+                <h1 class="page-section-title">Подписка</h1>
             </header>
             
             <div id="admin-subscription-edit-loading" class="loading">

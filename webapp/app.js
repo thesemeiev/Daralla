@@ -4171,7 +4171,7 @@ async function loadAdminUsers(page = 1, search = '') {
                 const extra = [user.telegram_id && `TG: ${escapeHtml(user.telegram_id)}`, user.username && `Логин: ${escapeHtml(user.username)}`].filter(Boolean).join(' · ');
                 card.innerHTML = `
                     <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
-                    ${extra ? `<div class="admin-user-extra hint" style="font-size: 12px; margin-top: 4px;">${extra}</div>` : ''}
+                    ${extra ? `<div class="admin-user-extra">${extra}</div>` : ''}
                     <div class="admin-user-meta">
                         <span>Создан: ${firstSeen}</span>
                         <span>Активен: ${lastSeen}</span>
@@ -4318,7 +4318,7 @@ async function showAdminUserDetail(userId) {
                         </div>
                     `;
                     }).join('') :
-                    '<p class="empty-hint hint" style="padding: 16px;">Нет подписок</p>'
+                    '<p class="admin-detail-empty hint">Нет подписок</p>'
                 }
             </div>
             
@@ -4334,9 +4334,9 @@ async function showAdminUserDetail(userId) {
                 </div>
             ` : ''}
             
-            <div class="create-subscription-section" style="margin-top: 24px;">
-                <button class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')" style="width: 100%; margin-bottom: 12px;">Создать подписку</button>
-                <button class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')" style="width: 100%; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500;">Удалить пользователя</button>
+            <div class="admin-user-detail-actions">
+                <button type="button" class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')">Создать подписку</button>
+                <button type="button" class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')">Удалить пользователя</button>
             </div>
         `;
     } catch (error) {

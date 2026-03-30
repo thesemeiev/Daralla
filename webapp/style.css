@@ -2904,7 +2904,7 @@ body.about-page-active {
     padding: 12px 16px;
     background: var(--input-bg);
     border: 1px solid var(--input-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--input-color);
     font-size: 16px;
     outline: none;
@@ -2918,14 +2918,40 @@ body.about-page-active {
 
 .admin-stats {
     display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding: 10px;
-    background: var(--card-bg-hover);
-    border-radius: 8px;
+    gap: var(--space-sm);
+    align-items: center;
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
 }
 
-.admin-user-card {
+.admin-stats .stat-item {
+    text-align: left;
+    flex: 1;
+}
+
+.admin-stats .stat-label {
+    margin-bottom: 2px;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 13px;
+}
+
+.admin-stats .stat-value {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.admin-toolbar > .admin-search-box:only-child {
+    flex: 1;
+    width: 100%;
+}
+
+.admin-user-card,
+.admin-subscription-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-lg);
@@ -2933,7 +2959,7 @@ body.about-page-active {
     padding: 16px;
     margin-bottom: 12px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
 .admin-user-card.active {
@@ -3565,7 +3591,8 @@ body.about-page-active {
 }
 
 @media (hover: hover) and (pointer: fine) {
-.admin-user-card:hover {
+.admin-user-card:hover,
+.admin-subscription-card:hover {
     border-color: var(--card-border-hover);
 }
 }
@@ -3590,12 +3617,38 @@ body.about-page-active {
     color: var(--text-secondary);
 }
 
+.admin-user-extra {
+    font-size: 12px;
+    margin-top: var(--space-xs);
+    color: var(--text-secondary);
+}
+
 .admin-user-detail-section {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 12px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+    box-shadow: var(--shadow-card);
+}
+
+.admin-user-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+}
+
+.admin-user-detail-actions .btn-primary,
+.admin-user-detail-actions .btn-danger {
+    width: 100%;
+    flex: none;
+    margin-top: 0;
+}
+
+.admin-detail-empty {
+    padding: var(--space-md);
+    margin: 0;
 }
 
 /* Стили для форм в модальных окнах */
@@ -3887,10 +3940,12 @@ body.about-page-active {
 }
 
 .admin-user-detail-section h3 {
-    font-size: 15px;
+    font-family: var(--font-display);
+    font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 8px;
+    margin-bottom: var(--space-sm);
+    letter-spacing: var(--letter-spacing-display);
 }
 
 .admin-detail-item {
@@ -3923,7 +3978,7 @@ body.about-page-active {
     align-items: center;
 }
 
-.admin-search-box {
+.admin-toolbar .admin-search-box {
     flex: 2;
     margin-bottom: 0;
 }
@@ -3938,7 +3993,7 @@ body.about-page-active {
     padding: 12px 16px;
     background: var(--input-bg);
     border: 1px solid var(--input-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-size: 14px;
     outline: none;
@@ -3951,33 +4006,53 @@ body.about-page-active {
 }
 
 .admin-select-styled:focus {
-    border-color: var(--card-border-hover);
-}
-
-.admin-subscription-card {
-    background: var(--card-bg);
-    border: none;
-    border-bottom: 1px solid var(--card-border);
-    border-radius: 0;
-    padding: 14px 4px;
-    margin-bottom: 0;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.admin-subscription-card:last-child {
-    border-bottom: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-.admin-subscription-card:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-}
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .admin-subscription-card:active {
-    background-color: rgba(255, 255, 255, 0.06);
-    transform: none;
+    transform: scale(0.98);
+}
+
+.admin-subscription-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.admin-subscription-status {
+    display: inline-block;
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+}
+
+.admin-subscription-status.active {
+    background: rgba(76, 175, 80, 0.22);
+    color: #81c784;
+}
+
+.admin-subscription-status.expired {
+    background: rgba(220, 53, 69, 0.2);
+    color: #e57373;
+}
+
+.admin-subscription-status.deleted {
+    background: rgba(120, 120, 120, 0.2);
+    color: var(--text-secondary);
+}
+
+.admin-subscription-status.canceled {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
 }
 
 .admin-subscription-row-main {
@@ -4041,12 +4116,14 @@ body.about-page-active {
         width: 100%;
     }
 
-    .admin-subscription-card {
-        padding: 12px 0;
-    }
-    
     .admin-subscription-name {
         font-size: 14px;
+    }
+
+    .admin-subscription-row-left {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
     }
 }
 
@@ -4641,8 +4718,8 @@ body.about-page-active {
 }
 
 .tab-button.active {
-    color: var(--text-primary);
-    border-bottom-color: var(--card-border-hover);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
 }
 
 .tab-button:active {
