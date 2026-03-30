@@ -1,7 +1,9 @@
 """
 Quart Blueprint: POST /api/admin/charts/* (user-growth, server-load, conversion, notifications, subscriptions).
 """
+import asyncio
 import logging
+import time
 
 from quart import Blueprint, request, jsonify
 
@@ -17,6 +19,9 @@ from bot.db.notifications_db import get_notification_stats, get_daily_notificati
 from bot.app_context import get_ctx
 
 logger = logging.getLogger(__name__)
+_SERVER_LOAD_CACHE_TTL_SECONDS = 5.0
+_server_load_cache_lock = asyncio.Lock()
+_server_load_cache = {"ts": 0.0, "payload": None}
 
 
 def _get_server_info():
@@ -50,58 +55,78 @@ def create_blueprint(bot_app):
     @admin_route
     async def api_admin_charts_server_load(request, admin_id):
         await request.get_json(silent=True) or {}
-        sm = get_ctx().server_manager
-        server_load_data = await sm.get_server_load_data() if sm else []
-        logger.info("Получены данные о нагрузке для %s серверов", len(server_load_data))
-        if not server_load_data:
-            logger.warning("server_load_data пуст, возвращаем пустой ответ")
-            return jsonify({
-                "success": True,
-                "data": {"servers": [], "locations": []},
-            }), 200, _cors_headers()
-        server_info_map = _get_server_info()
-        enriched_data = []
-        for item in server_load_data:
-            server_name = item["server_name"]
-            info = server_info_map.get(server_name, {})
-            enriched_data.append({
-                "server_name": server_name,
-                "display_name": info.get("display_name", server_name),
-                "location": info.get("location", "Unknown"),
-                "online_clients": item.get("online_clients", 0),
-                "total_active": item.get("total_active", 0),
-                "offline_clients": item.get("offline_clients", 0),
-                "avg_online_24h": item.get("avg_online_24h", 0),
-                "max_online_24h": item.get("max_online_24h", 0),
-                "min_online_24h": item.get("min_online_24h", 0),
-                "samples_24h": item.get("samples_24h", 0),
-                "load_percentage": item.get("load_percentage", 0),
-            })
-        location_stats = {}
-        for item in enriched_data:
-            location = item["location"]
-            if location not in location_stats:
-                location_stats[location] = {
-                    "location": location,
-                    "total_online": 0,
-                    "total_active": 0,
-                    "servers": [],
+        now = time.monotonic()
+        cached = _server_load_cache.get("payload")
+        if cached is not None and (now - _server_load_cache.get("ts", 0.0)) < _SERVER_LOAD_CACHE_TTL_SECONDS:
+            logger.info("Возвращены кэшированные данные нагрузки серверов (ttl=%.1fs)", _SERVER_LOAD_CACHE_TTL_SECONDS)
+            return jsonify(cached), 200, _cors_headers()
+
+        async with _server_load_cache_lock:
+            now_locked = time.monotonic()
+            cached = _server_load_cache.get("payload")
+            if cached is not None and (now_locked - _server_load_cache.get("ts", 0.0)) < _SERVER_LOAD_CACHE_TTL_SECONDS:
+                logger.info("Возвращены кэшированные данные нагрузки серверов (ttl=%.1fs)", _SERVER_LOAD_CACHE_TTL_SECONDS)
+                return jsonify(cached), 200, _cors_headers()
+
+            sm = get_ctx().server_manager
+            server_load_data = await sm.get_server_load_data() if sm else []
+            logger.info("Получены данные о нагрузке для %s серверов", len(server_load_data))
+            if not server_load_data:
+                logger.warning("server_load_data пуст, возвращаем пустой ответ")
+                payload = {
+                    "success": True,
+                    "data": {"servers": [], "locations": []},
                 }
-            location_stats[location]["total_online"] += item["online_clients"]
-            location_stats[location]["total_active"] += item["total_active"]
-            location_stats[location]["servers"].append({
-                "server_name": item["server_name"],
-                "display_name": item["display_name"],
-                "online_clients": item["online_clients"],
-                "total_active": item["total_active"],
-            })
-        return jsonify({
-            "success": True,
-            "data": {
-                "servers": enriched_data,
-                "locations": list(location_stats.values()),
-            },
-        }), 200, _cors_headers()
+                _server_load_cache["ts"] = now_locked
+                _server_load_cache["payload"] = payload
+                return jsonify(payload), 200, _cors_headers()
+
+            server_info_map = _get_server_info()
+            enriched_data = []
+            for item in server_load_data:
+                server_name = item["server_name"]
+                info = server_info_map.get(server_name, {})
+                enriched_data.append({
+                    "server_name": server_name,
+                    "display_name": info.get("display_name", server_name),
+                    "location": info.get("location", "Unknown"),
+                    "online_clients": item.get("online_clients", 0),
+                    "total_active": item.get("total_active", 0),
+                    "offline_clients": item.get("offline_clients", 0),
+                    "avg_online_24h": item.get("avg_online_24h", 0),
+                    "max_online_24h": item.get("max_online_24h", 0),
+                    "min_online_24h": item.get("min_online_24h", 0),
+                    "samples_24h": item.get("samples_24h", 0),
+                    "load_percentage": item.get("load_percentage", 0),
+                })
+            location_stats = {}
+            for item in enriched_data:
+                location = item["location"]
+                if location not in location_stats:
+                    location_stats[location] = {
+                        "location": location,
+                        "total_online": 0,
+                        "total_active": 0,
+                        "servers": [],
+                    }
+                location_stats[location]["total_online"] += item["online_clients"]
+                location_stats[location]["total_active"] += item["total_active"]
+                location_stats[location]["servers"].append({
+                    "server_name": item["server_name"],
+                    "display_name": item["display_name"],
+                    "online_clients": item["online_clients"],
+                    "total_active": item["total_active"],
+                })
+            payload = {
+                "success": True,
+                "data": {
+                    "servers": enriched_data,
+                    "locations": list(location_stats.values()),
+                },
+            }
+            _server_load_cache["ts"] = now_locked
+            _server_load_cache["payload"] = payload
+            return jsonify(payload), 200, _cors_headers()
 
     @bp.route("/api/admin/charts/conversion", methods=["POST", "OPTIONS"])
     @admin_route

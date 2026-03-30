@@ -1,6 +1,7 @@
 """
 Менеджер синхронизации данных между БД и серверами X-UI
 """
+import asyncio
 import json
 import logging
 import time
@@ -66,6 +67,8 @@ class SyncManager:
         self.server_manager = server_manager
         self.subscription_manager = subscription_manager
         self.is_running = False
+        # Глобальная защита от параллельных sync-циклов (ручной + фоновый + post-CRUD).
+        self._sync_lock = asyncio.Lock()
 
     async def sync_all_subscriptions(self, auto_fix: bool = False):
         """
@@ -78,60 +81,63 @@ class SyncManager:
         """
         logger.info("🌀 Запуск sync_all_subscriptions (auto_fix=%s)", auto_fix)
 
-        stats = {
-            "subscriptions_checked": 0,
-            "subscriptions_synced": 0,
-            "total_servers_checked": 0,
-            "total_servers_synced": 0,
-            "total_clients_created": 0,
-            "total_errors": 0,
-            "errors": [],
-        }
+        if self._sync_lock.locked():
+            logger.info("sync_all_subscriptions ожидает завершения текущего цикла синхронизации")
+        async with self._sync_lock:
+            stats = {
+                "subscriptions_checked": 0,
+                "subscriptions_synced": 0,
+                "total_servers_checked": 0,
+                "total_servers_synced": 0,
+                "total_clients_created": 0,
+                "total_errors": 0,
+                "errors": [],
+            }
 
-        # Синхронизация БД ↔ группы серверов + ensure по панелям (один list() на сервер, без второго прохода)
-        try:
-            cfg_stats = await self.subscription_manager.sync_servers_with_config(
-                auto_create_clients=auto_fix
-            )
-            if cfg_stats:
-                stats["subscriptions_checked"] = cfg_stats.get(
-                    "subscriptions_checked", stats["subscriptions_checked"]
+            # Синхронизация БД ↔ группы серверов + ensure по панелям (один list() на сервер, без второго прохода)
+            try:
+                cfg_stats = await self.subscription_manager.sync_servers_with_config(
+                    auto_create_clients=auto_fix
                 )
-                stats["subscriptions_synced"] = cfg_stats.get("subscriptions_synced", 0)
-                stats["total_servers_checked"] = cfg_stats.get("total_servers_checked", 0)
-                stats["total_servers_synced"] = cfg_stats.get("total_servers_synced", 0)
-                stats["total_clients_created"] += cfg_stats.get("clients_created", 0)
-                stats["errors"].extend(cfg_stats.get("errors", []))
-        except (RuntimeError, ValueError, TypeError) as e:
-            logger.error("Ошибка sync_servers_with_config: %s", e)
-            stats["errors"].append(f"sync_servers_with_config: {e}")
+                if cfg_stats:
+                    stats["subscriptions_checked"] = cfg_stats.get(
+                        "subscriptions_checked", stats["subscriptions_checked"]
+                    )
+                    stats["subscriptions_synced"] = cfg_stats.get("subscriptions_synced", 0)
+                    stats["total_servers_checked"] = cfg_stats.get("total_servers_checked", 0)
+                    stats["total_servers_synced"] = cfg_stats.get("total_servers_synced", 0)
+                    stats["total_clients_created"] += cfg_stats.get("clients_created", 0)
+                    stats["errors"].extend(cfg_stats.get("errors", []))
+            except (RuntimeError, ValueError, TypeError) as e:
+                logger.error("Ошибка sync_servers_with_config: %s", e)
+                stats["errors"].append(f"sync_servers_with_config: {e}")
 
-        if not self.server_manager.servers:
-            logger.warning(
-                "Список серверов пуст — очистка сирот может быть некорректной. "
-                "Убедитесь, что init_server_managers() выполнился и в БД есть активные серверы."
+            if not self.server_manager.servers:
+                logger.warning(
+                    "Список серверов пуст — очистка сирот может быть некорректной. "
+                    "Убедитесь, что init_server_managers() выполнился и в БД есть активные серверы."
+                )
+
+            # Очистка сиротских клиентов (не связанных с подписками из get_subscriptions_to_sync)
+            try:
+                orphaned_stats = await self.cleanup_orphaned_clients()
+                stats["orphaned_clients_deleted"] = orphaned_stats.get("deleted_count", 0)
+                if orphaned_stats.get("errors"):
+                    stats["errors"].extend(orphaned_stats["errors"])
+            except (RuntimeError, ValueError, TypeError) as e:
+                logger.error("Ошибка cleanup_orphaned_clients: %s", e)
+                stats["errors"].append(f"cleanup_orphaned_clients: {e}")
+
+            stats["total_errors"] = len(stats["errors"])
+            logger.info(
+                "✅ sync_all_subscriptions завершена: subs=%s, synced=%s, servers=%s, orphaned=%s, errors=%s",
+                stats["subscriptions_checked"],
+                stats["subscriptions_synced"],
+                stats["total_servers_synced"],
+                stats.get("orphaned_clients_deleted", 0),
+                stats["total_errors"],
             )
-
-        # Очистка сиротских клиентов (не связанных с подписками из get_subscriptions_to_sync)
-        try:
-            orphaned_stats = await self.cleanup_orphaned_clients()
-            stats["orphaned_clients_deleted"] = orphaned_stats.get("deleted_count", 0)
-            if orphaned_stats.get("errors"):
-                stats["errors"].extend(orphaned_stats["errors"])
-        except (RuntimeError, ValueError, TypeError) as e:
-            logger.error("Ошибка cleanup_orphaned_clients: %s", e)
-            stats["errors"].append(f"cleanup_orphaned_clients: {e}")
-
-        stats["total_errors"] = len(stats["errors"])
-        logger.info(
-            "✅ sync_all_subscriptions завершена: subs=%s, synced=%s, servers=%s, orphaned=%s, errors=%s",
-            stats["subscriptions_checked"],
-            stats["subscriptions_synced"],
-            stats["total_servers_synced"],
-            stats.get("orphaned_clients_deleted", 0),
-            stats["total_errors"],
-        )
-        return stats
+            return stats
 
     async def run_sync(self):
         """
@@ -147,37 +153,40 @@ class SyncManager:
         """
         logger.info("🌀 Запуск полной синхронизации БД с серверами X-UI...")
         logger.info("📋 Принцип: БД - источник истины, серверы синхронизируются с БД")
+        if self._sync_lock.locked():
+            logger.info("run_sync ожидает завершения другого цикла синхронизации")
+        async with self._sync_lock:
         
-        # Шаг 1: Синхронизация статусов подписок в БД
-        # Обновляет статусы active ↔ expired на основе expires_at
-        logger.info("📊 Шаг 1: Синхронизация статусов подписок в БД...")
-        await sync_subscription_statuses()
-        logger.info("✅ Шаг 1 завершен: статусы подписок синхронизированы")
+            # Шаг 1: Синхронизация статусов подписок в БД
+            # Обновляет статусы active ↔ expired на основе expires_at
+            logger.info("📊 Шаг 1: Синхронизация статусов подписок в БД...")
+            await sync_subscription_statuses()
+            logger.info("✅ Шаг 1 завершен: статусы подписок синхронизированы")
         
-        # Шаг 2: Удаление старых подписок (истекли более 3 дней назад)
-        # Удаляет подписки со статусом deleted и их клиентов с серверов
-        logger.info("🗑️ Шаг 2: Удаление старых подписок (истекли > 3 дней)...")
-        await self.cleanup_expired_subscriptions(days_limit=3)
-        logger.info("✅ Шаг 2 завершен: старые подписки удалены")
+            # Шаг 2: Удаление старых подписок (истекли более 3 дней назад)
+            # Удаляет подписки со статусом deleted и их клиентов с серверов
+            logger.info("🗑️ Шаг 2: Удаление старых подписок (истекли > 3 дней)...")
+            await self.cleanup_expired_subscriptions(days_limit=3)
+            logger.info("✅ Шаг 2 завершен: старые подписки удалены")
         
-        # Шаг 3: Синхронизация БД → Серверы
-        # Для каждой подписки (active или expired, но не deleted):
-        # - Гарантирует наличие клиентов на всех серверах из конфигурации
-        # - Синхронизирует параметры (expires_at, device_limit)
-        logger.info("🔄 Шаг 3: Синхронизация подписок с серверами (БД → Серверы)...")
-        await self.subscription_manager.sync_servers_with_config(auto_create_clients=True)
-        logger.info("✅ Шаг 3 завершен: подписки синхронизированы с серверами")
+            # Шаг 3: Синхронизация БД → Серверы
+            # Для каждой подписки (active или expired, но не deleted):
+            # - Гарантирует наличие клиентов на всех серверах из конфигурации
+            # - Синхронизирует параметры (expires_at, device_limit)
+            logger.info("🔄 Шаг 3: Синхронизация подписок с серверами (БД → Серверы)...")
+            await self.subscription_manager.sync_servers_with_config(auto_create_clients=True)
+            logger.info("✅ Шаг 3 завершен: подписки синхронизированы с серверами")
         
-        # Шаг 4: Очистка сиротских клиентов (Серверы → БД)
-        # Удаляет клиентов на серверах, которых нет в БД (в active или expired подписках)
-        logger.info("🧹 Шаг 4: Очистка сиротских клиентов (Серверы → БД)...")
-        orphaned_stats = await self.cleanup_orphaned_clients()
-        if orphaned_stats['deleted_count'] > 0:
-            logger.info(f"✅ Шаг 4 завершен: удалено {orphaned_stats['deleted_count']} сиротских клиентов")
-        else:
-            logger.info("✅ Шаг 4 завершен: сиротских клиентов не найдено")
+            # Шаг 4: Очистка сиротских клиентов (Серверы → БД)
+            # Удаляет клиентов на серверах, которых нет в БД (в active или expired подписках)
+            logger.info("🧹 Шаг 4: Очистка сиротских клиентов (Серверы → БД)...")
+            orphaned_stats = await self.cleanup_orphaned_clients()
+            if orphaned_stats['deleted_count'] > 0:
+                logger.info(f"✅ Шаг 4 завершен: удалено {orphaned_stats['deleted_count']} сиротских клиентов")
+            else:
+                logger.info("✅ Шаг 4 завершен: сиротских клиентов не найдено")
         
-        logger.info("✅ Полная синхронизация завершена успешно")
+            logger.info("✅ Полная синхронизация завершена успешно")
 
     async def cleanup_expired_subscriptions(self, days_limit: int = 3):
         """Удаляет подписки, которые истекли более N дней назад"""

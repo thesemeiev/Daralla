@@ -2,7 +2,9 @@
 Quart Blueprint: admin server-groups, server-group/update, servers-config,
 server-config/update, server-config/sync-flow, server-config/delete, sync-all.
 """
+import asyncio
 import logging
+import time
 
 from quart import Blueprint, request, jsonify
 
@@ -25,6 +27,9 @@ from bot.services.xui_service import X3
 from bot.app_context import get_ctx
 
 logger = logging.getLogger(__name__)
+_SERVER_CONFIG_OP_LOCK = asyncio.Lock()
+_SYNC_DEBOUNCE_SECONDS = 2.0
+_last_sync_started_at = 0.0
 
 
 def _coerce_server_active(value) -> bool:
@@ -90,6 +95,41 @@ async def _run_sync_servers_with_config() -> tuple[dict | None, str | None]:
     except Exception as e:
         logger.exception("sync_servers_with_config после изменения сервера: %s", e)
         return None, str(e)
+
+
+def _should_debounce_sync() -> bool:
+    global _last_sync_started_at
+    now = time.monotonic()
+    if (now - _last_sync_started_at) < _SYNC_DEBOUNCE_SECONDS:
+        return True
+    _last_sync_started_at = now
+    return False
+
+
+async def _reload_and_sync_serialized(need_sync: bool) -> tuple[dict | None, str | None, bool]:
+    """
+    Последовательно выполняет reload server_manager и (опционально) sync,
+    чтобы избежать гонок между параллельными CRUD-запросами админки.
+    Возвращает (sync_stats, sync_error, sync_debounced).
+    """
+    async with _SERVER_CONFIG_OP_LOCK:
+        try:
+            await _reload_server_manager()
+        except Exception as mgr_e:
+            logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
+
+        if not need_sync:
+            return None, None, False
+
+        if _should_debounce_sync():
+            logger.info(
+                "Sync после изменения сервера пропущен по debounce (окно %.1fs)",
+                _SYNC_DEBOUNCE_SECONDS,
+            )
+            return None, None, True
+
+        sync_stats, sync_error = await _run_sync_servers_with_config()
+        return sync_stats, sync_error, False
 
 
 def create_blueprint(bot_app):
@@ -167,19 +207,16 @@ def create_blueprint(bot_app):
                 max_concurrent_clients=data.get("max_concurrent_clients"),
                 is_active=insert_active,
             )
-            sync_stats = None
-            sync_error = None
-            try:
-                await _reload_server_manager()
-            except Exception as mgr_e:
-                logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
-            if insert_active == 1:
-                sync_stats, sync_error = await _run_sync_servers_with_config()
+            sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
+                need_sync=(insert_active == 1)
+            )
             payload = {"success": True, "server_id": server_id}
             if sync_stats is not None:
                 payload["sync_stats"] = sync_stats
             if sync_error:
                 payload["sync_error"] = sync_error
+            if sync_debounced:
+                payload["sync_debounced"] = True
             return jsonify(payload), 200, _cors_headers()
         elif action == "reorder":
             group_id = data.get("group_id")
@@ -189,10 +226,7 @@ def create_blueprint(bot_app):
             ok = await reorder_servers_in_group(int(group_id), server_ids)
             if not ok:
                 return jsonify({"error": "Invalid order or group mismatch"}), 400, _cors_headers()
-            try:
-                await _reload_server_manager()
-            except Exception as mgr_e:
-                logger.error("Ошибка обновления менеджера серверов после reorder: %s", mgr_e)
+            await _reload_and_sync_serialized(need_sync=False)
             return jsonify({"success": True}), 200, _cors_headers()
         return jsonify({"error": "Invalid action"}), 400, _cors_headers()
 
@@ -209,14 +243,9 @@ def create_blueprint(bot_app):
         new_flow = (update_data.get("client_flow") or "").strip() or None
         client_flow_changed = old_flow != new_flow
         await update_server_config(server_id, **update_data)
-        sync_stats = None
-        sync_error = None
-        try:
-            await _reload_server_manager()
-        except Exception as mgr_e:
-            logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
-        if _was_inactive_and_now_active(old_server, update_data):
-            sync_stats, sync_error = await _run_sync_servers_with_config()
+        sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
+            need_sync=_was_inactive_and_now_active(old_server, update_data)
+        )
         payload = {
             "success": True,
             "client_flow_changed": client_flow_changed,
@@ -226,6 +255,8 @@ def create_blueprint(bot_app):
             payload["sync_stats"] = sync_stats
         if sync_error:
             payload["sync_error"] = sync_error
+        if sync_debounced:
+            payload["sync_debounced"] = True
         return jsonify(payload), 200, _cors_headers()
 
     @bp.route("/api/admin/server-config/sync-flow", methods=["POST", "OPTIONS"])
@@ -262,18 +293,16 @@ def create_blueprint(bot_app):
         if not server_id:
             return jsonify({"error": "Server ID is required"}), 400, _cors_headers()
         await delete_server_config(server_id)
-        sync_stats = None
-        sync_error = None
-        try:
-            await _reload_server_manager()
-        except Exception as mgr_e:
-            logger.error("Ошибка обновления менеджера серверов после удаления: %s", mgr_e)
-        sync_stats, sync_error = await _run_sync_servers_with_config()
+        sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
+            need_sync=True
+        )
         payload = {"success": True}
         if sync_stats is not None:
             payload["sync_stats"] = sync_stats
         if sync_error:
             payload["sync_error"] = sync_error
+        if sync_debounced:
+            payload["sync_debounced"] = True
         return jsonify(payload), 200, _cors_headers()
 
     @bp.route("/api/admin/sync-all", methods=["POST", "OPTIONS"])
