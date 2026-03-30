@@ -19,6 +19,7 @@ from bot.db.servers_db import (
     delete_server_config,
     reorder_servers_in_group,
 )
+from bot.db.subscriptions_db import sync_subscription_statuses
 from bot.services.server_provider import ServerProvider
 from bot.services.xui_service import X3
 from bot.app_context import get_ctx
@@ -60,10 +61,27 @@ def _was_inactive_and_now_active(old_server: dict | None, update_data: dict) -> 
 async def _run_sync_servers_with_config() -> tuple[dict | None, str | None]:
     """
     Догон подписок по текущему конфигу (новая/включённая нода).
+    При наличии sync_manager запускает расширенный цикл:
+    1) sync статусов active/expired
+    2) cleanup подписок, просроченных > 3 дней
+    3) полный sync подписок/клиентов
     Возвращает (stats, error_message).
     """
     ctx = get_ctx()
+    sync_manager = ctx.sync_manager
     sub = ctx.subscription_manager
+    if sync_manager:
+        try:
+            status_sync = await sync_subscription_statuses()
+            await sync_manager.cleanup_expired_subscriptions(days_limit=3)
+            stats = await sync_manager.sync_all_subscriptions(auto_fix=True)
+            if isinstance(stats, dict):
+                stats["status_sync"] = status_sync
+            return stats, None
+        except Exception as e:
+            logger.exception("Полный sync после изменения сервера завершился ошибкой: %s", e)
+            return None, str(e)
+
     if not sub:
         return None, "subscription_manager unavailable"
     try:

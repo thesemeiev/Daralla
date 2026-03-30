@@ -29,11 +29,13 @@ class MultiServerManager:
 
     def init_from_config(self, servers_by_group):
         """Инициализирует серверы из переданной конфигурации {group_id: [server_config, ...]}"""
-        self.servers_by_group = {}
-        self.servers = []
+        new_servers_by_group = {}
+        new_servers = []
+        new_server_health = {}
+        new_health_check_cache = {}
         
         for group_id, servers_config in servers_by_group.items():
-            self.servers_by_group[group_id] = []
+            new_servers_by_group[group_id] = []
             
             for server_config in servers_config:
                 try:
@@ -51,16 +53,15 @@ class MultiServerManager:
                         "config": server_config,
                         "group_id": server_config.get("group_id")
                     }
-                    self.servers_by_group[group_id].append(server_info)
-                    self.servers.append(server_info)
-                    if server_config["name"] not in self.server_health:
-                        self.server_health[server_config["name"]] = {
-                            "status": "unknown",
-                            "last_check": None,
-                            "last_error": None,
-                            "consecutive_failures": 0,
-                            "uptime_percentage": 0.0
-                        }
+                    new_servers_by_group[group_id].append(server_info)
+                    new_servers.append(server_info)
+                    new_server_health[server_config["name"]] = {
+                        "status": "unknown",
+                        "last_check": None,
+                        "last_error": None,
+                        "consecutive_failures": 0,
+                        "uptime_percentage": 0.0
+                    }
                     logger.info(f"Сервер {server_config['name']} добавлен (группа: {group_id})")
                 except Exception as e:
                     logger.warning(f"Ошибка создания X3 объекта для {server_config['name']} (группа {group_id}): {e}")
@@ -70,15 +71,27 @@ class MultiServerManager:
                         "config": server_config,
                         "group_id": server_config.get("group_id")
                     }
-                    self.servers_by_group[group_id].append(server_info)
-                    self.servers.append(server_info)
-                    self.server_health[server_config["name"]] = {
+                    new_servers_by_group[group_id].append(server_info)
+                    new_servers.append(server_info)
+                    new_server_health[server_config["name"]] = {
                         "status": "offline",
                         "last_check": datetime.datetime.now(),
                         "last_error": str(e),
                         "consecutive_failures": 1,
                         "uptime_percentage": 0.0
                     }
+                    new_health_check_cache[server_config["name"]] = {
+                        "result": False,
+                        "timestamp": time.time(),
+                        "cached": True,
+                    }
+
+        # Заменяем runtime-состояние целиком, чтобы после hot-reload
+        # не оставались старые health/cache записи от предыдущего конфига.
+        self.servers_by_group = new_servers_by_group
+        self.servers = new_servers
+        self.server_health = new_server_health
+        self._health_check_cache = new_health_check_cache
 
     def get_servers_by_group(self, group_id: int):
         """Возвращает список серверов, принадлежащих конкретной группе"""
@@ -120,8 +133,9 @@ class MultiServerManager:
         """
         server_info = None
         for server in self.servers:
-            if server["name"] == server_name:
+            if server["name"].lower() == str(server_name).lower():
                 server_info = server
+                server_name = server["name"]
                 break
         
         if not server_info:
