@@ -74,18 +74,24 @@ def create_subscription_blueprint(bot_app):
             )
 
             if not is_subscription_active(sub):
-                expires_str = datetime.datetime.fromtimestamp(sub["expires_at"]).strftime(
+                now_ts = int(time.time())
+                expires_at = int(sub.get("expires_at") or 0)
+                expires_str = datetime.datetime.fromtimestamp(expires_at).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
-                current_str = datetime.datetime.fromtimestamp(int(time.time())).strftime(
+                current_str = datetime.datetime.fromtimestamp(now_ts).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
-                error_msg = (
-                    f"Subscription is not active (status: {sub['status']}, "
-                    f"expires_at: {expires_str}, current: {current_str})"
+                logger.warning(
+                    "Подписка с токеном %s не активна: status=%s, expires_at=%s, current=%s",
+                    token,
+                    sub.get("status"),
+                    expires_str,
+                    current_str,
                 )
-                logger.warning("Подписка с токеном %s не активна: %s", token, error_msg)
-                return error_msg, 403
+                if expires_at < now_ts:
+                    return "Подписка просрочена", 403
+                return "Подписка неактивна", 403
 
             logger.info("Подписка %s валидна, генерируем ссылки...", sub["id"])
 
