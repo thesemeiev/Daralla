@@ -737,11 +737,31 @@ class X3:
                 work_items.append((c, protocol))
 
         async def _one(item: Tuple[Any, str]) -> Tuple[str, Optional[str]]:
-            c, _proto = item
+            """
+            Не вызывать client.update по объекту из inbound.settings.clients: у 3x-ui/py3xui
+            id часто в формате, при котором панель отвечает «record not found».
+            Всегда подгружаем клиента через get_by_email перед update.
+            """
+            c_list, _proto = item
+            email = getattr(c_list, "email", None)
+            if not email:
+                return "err", "?: нет email у записи клиента в inbound"
+            email = str(email)
             async with sem:
                 try:
-                    cur = _normalize_client_flow_value(getattr(c, "flow", None))
-                    if cur == target:
+                    list_flow = _normalize_client_flow_value(getattr(c_list, "flow", None))
+                    if list_flow == target:
+                        return "skip", None
+                    try:
+                        c = await self._api.client.get_by_email(email)
+                    except ValueError as e:
+                        if _value_error_client_absent_on_panel(e):
+                            return "err", f"{email}: клиент не найден (возможно удалён или другой inbound)"
+                        raise
+                    if c is None:
+                        return "err", f"{email}: клиент не найден"
+                    actual = _normalize_client_flow_value(getattr(c, "flow", None))
+                    if actual == target:
                         return "skip", None
                     if target:
                         c.flow = target
@@ -752,7 +772,7 @@ class X3:
                     await self._api.client.update(c.id, c)
                     return "ok", None
                 except Exception as e:
-                    return "err", f"{getattr(c, 'email', '?')}: {e}"
+                    return "err", f"{email}: {e}"
 
         if not work_items:
             return 0, 0, []
