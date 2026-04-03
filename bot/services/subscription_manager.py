@@ -35,10 +35,11 @@ _PROTOCOL_PREFIXES = ('vless://', 'trojan://', 'vmess://', 'ss://', 'socks://')
 def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dict[str, Any]]:
     """
     Снимок клиентов с панели из ответа xui.list() (поле obj).
-    email -> {expiry_sec, limit_ip}; при дубликате email последний inbound в обходе перезаписывает.
+    email -> {expiry_sec, limit_ip, flow, protocol}; при дубликате email последний inbound перезаписывает (в лог — warning).
     """
     out: Dict[str, Dict[str, Any]] = {}
     for inbound in list_payload.get("obj") or []:
+        protocol = (inbound.get("protocol") or "vless").lower()
         try:
             settings = json.loads(inbound.get("settings") or "{}")
         except (json.JSONDecodeError, TypeError):
@@ -48,12 +49,25 @@ def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dic
             if not email:
                 continue
             email = str(email)
+            if email in out:
+                logger.warning(
+                    "X-UI list snapshot: email %s встречается в нескольких inbound — используется последняя запись (protocol=%s)",
+                    email,
+                    protocol,
+                )
             expiry_ms = client.get("expiryTime") or 0
             if not expiry_ms or int(expiry_ms) <= 0:
                 expiry_sec = None
             else:
                 expiry_sec = int(expiry_ms) // 1000
-            out[email] = {"expiry_sec": expiry_sec, "limit_ip": client.get("limitIp")}
+            flow_raw = client.get("flow")
+            flow_s = (str(flow_raw).strip() if flow_raw is not None else "") or ""
+            out[email] = {
+                "expiry_sec": expiry_sec,
+                "limit_ip": client.get("limitIp"),
+                "flow": flow_s,
+                "protocol": protocol,
+            }
     return out
 
 
@@ -68,6 +82,8 @@ def panel_entry_from_snapshot(email_map: Optional[Dict[str, Dict[str, Any]]], cl
         "on_panel": True,
         "expiry_sec": row["expiry_sec"],
         "limit_ip": row.get("limit_ip"),
+        "flow": row.get("flow"),
+        "protocol": row.get("protocol") or "vless",
     }
 
 
@@ -220,7 +236,7 @@ class SubscriptionManager:
         Если клиент есть - проверяет и синхронизирует время истечения и limitIp.
         
         panel_entry: снимок с панели из одного list() на сервер. None — как раньше (client_exists + get_*).
-        dict: {"on_panel": bool, "expiry_sec": int|None, "limit_ip": int|None} при on_panel True.
+        dict при on_panel True: expiry_sec, limit_ip, flow, protocol (для reconcile без лишних запросов).
         
         Returns:
             Tuple[bool, bool]:
@@ -260,91 +276,39 @@ class SubscriptionManager:
             if on_panel:
                 if panel_entry is not None:
                     logger.debug("Клиент %s на сервере %s (снимок list)", client_email, server_name)
-                    server_expiry = panel_entry.get("expiry_sec")
                 else:
-                    logger.info(f"Клиент {client_email} уже существует на сервере {server_name}")
-                    server_expiry = await xui.get_client_expiry_time(client_email)
-
-                # Проверяем и синхронизируем время истечения
-                # ВАЖНО: БД - источник истины. Мы синхронизируем серверы С БД, но НЕ изменяем БД на основе данных с сервера
+                    logger.info(
+                        "Клиент %s уже существует на сервере %s",
+                        client_email,
+                        server_name,
+                    )
                 try:
-                    tolerance = 5 * 60
-
-                    if server_expiry:
-                        time_diff = abs(server_expiry - expires_at)
-
-                        if time_diff > tolerance:
-                            if server_expiry < expires_at:
-                                days_to_add = (expires_at - server_expiry) // (24 * 60 * 60)
-                                if days_to_add > 0:
-                                    logger.info(
-                                        f"Синхронизация времени истечения на сервере {server_name}: "
-                                        f"добавляем {days_to_add} дней (сервер: {server_expiry}, БД: {expires_at})"
-                                    )
-                                    await xui.extendClient(client_email, days_to_add, flow=client_flow)
-                                    logger.info(
-                                        f"Время истечения синхронизировано на сервере {server_name} "
-                                        f"(продлено до значения БД)"
-                                    )
-                            else:
-                                logger.info(
-                                    f"Синхронизация времени истечения на сервере {server_name}: "
-                                    f"устанавливаем точное время из БД (сервер: {server_expiry}, БД: {expires_at})"
-                                )
-                                try:
-                                    updated = await xui.setClientExpiry(client_email, expires_at, flow=client_flow)
-                                    if updated:
-                                        logger.info(
-                                            f"Время истечения синхронизировано на сервере {server_name} "
-                                            f"(установлено значение из БД)"
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"Не удалось установить точное время на сервере {server_name}: "
-                                            f"клиент не найден"
-                                        )
-                                except (RuntimeError, ValueError, TypeError) as set_expiry_e:
-                                    logger.error(
-                                        f"Ошибка установки точного времени на сервере {server_name}: {set_expiry_e}"
-                                    )
-                        else:
-                            logger.debug(
-                                f"Время истечения на сервере {server_name} совпадает с БД "
-                                f"(разница: {time_diff} сек, допуск: {tolerance} сек)"
-                            )
-                except (RuntimeError, ValueError, TypeError) as sync_e:
-                    logger.warning(f"Ошибка синхронизации времени на сервере {server_name}: {sync_e}")
-
-                try:
-                    if panel_entry is not None:
-                        current_limit_ip = panel_entry.get("limit_ip")
-                    else:
-                        client_info = await xui.get_client_info(client_email)
-                        current_limit_ip = client_info["client"].get("limitIp") if client_info else None
-
-                    if current_limit_ip is None or current_limit_ip == 0 or current_limit_ip != device_limit:
-                        current_limit_display = current_limit_ip if current_limit_ip is not None else "не установлен"
+                    ok, did_update = await xui.reconcile_client(
+                        client_email,
+                        expiry_sec=expires_at,
+                        limit_ip=device_limit,
+                        flow_from_config=client_flow,
+                        protocol=(panel_entry or {}).get("protocol") if panel_entry else None,
+                        panel_snapshot=panel_entry,
+                    )
+                    if not ok:
+                        logger.warning(
+                            "reconcile_client: клиент %s на %s не найден на панели после проверки наличия",
+                            client_email,
+                            server_name,
+                        )
+                    elif did_update:
                         logger.info(
-                            f"Синхронизация limitIp на сервере {server_name} для клиента {client_email}: "
-                            f"{current_limit_display} -> {device_limit}"
+                            "Синхронизирован клиент %s на %s (expiry, limitIp, flow по БД/конфигу)",
+                            client_email,
+                            server_name,
                         )
-                        try:
-                            await xui.updateClientLimitIp(client_email, device_limit, flow=client_flow)
-                            logger.info(
-                                f"limitIp успешно синхронизирован на сервере {server_name} для клиента {client_email}"
-                            )
-                        except (RuntimeError, ValueError, TypeError) as update_e:
-                            logger.error(
-                                f"Ошибка обновления limitIp на сервере {server_name} для клиента {client_email}: {update_e}"
-                            )
-                    else:
-                        logger.debug(
-                            f"limitIp для клиента {client_email} на сервере {server_name} уже равен {device_limit}, "
-                            f"синхронизация не требуется"
-                        )
-                except (RuntimeError, ValueError, TypeError, KeyError) as limit_sync_e:
+                except (RuntimeError, ValueError, TypeError, KeyError) as rec_e:
                     logger.warning(
-                        f"Ошибка синхронизации limitIp на сервере {server_name} для клиента {client_email}: {limit_sync_e}"
+                        "Ошибка reconcile_client на сервере %s для %s: %s",
+                        server_name,
+                        client_email,
+                        rec_e,
                     )
 
                 return True, False

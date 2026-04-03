@@ -2,14 +2,15 @@
 Сервис для работы с X-UI API через библиотеку py3xui (AsyncApi).
 Сохраняет прежний публичный интерфейс класса X3 для совместимости с кодом проекта.
 """
+import asyncio
 import base64
 import datetime
 import json
 import logging
 import os
 import uuid
-from typing import List, Any, Optional
-from urllib.parse import quote
+from typing import Any, List, Optional, Tuple
+from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
 import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_fixed
@@ -127,6 +128,55 @@ def _client_to_api_dict(c: Any) -> dict:
     for k, v in d.items():
         out[key_map.get(k, k)] = v
     return out
+
+
+def _normalize_client_flow_value(v: Any) -> str:
+    if v is None:
+        return ""
+    return str(v).strip()
+
+
+def _expiry_sec_matches_panel(panel_sec: Optional[int], db_sec: int, tolerance_sec: int = 300) -> bool:
+    if panel_sec is None:
+        return False
+    return abs(int(panel_sec) - int(db_sec)) <= tolerance_sec
+
+
+def _limit_ip_matches_panel(panel_limit: Any, device_limit: int) -> bool:
+    if panel_limit is None or panel_limit == 0:
+        return False
+    try:
+        return int(panel_limit) == int(device_limit)
+    except (TypeError, ValueError):
+        return False
+
+
+def _flow_matches_desired(protocol: str, panel_flow: Any, flow_from_config: Optional[str]) -> bool:
+    if (protocol or "vless").lower() == "trojan":
+        return True
+    desired = (flow_from_config or "").strip()
+    panel = _normalize_client_flow_value(panel_flow)
+    return desired == panel
+
+
+def _panel_snapshot_matches_desired(
+    panel_snapshot: dict,
+    expiry_sec: int,
+    limit_ip: int,
+    flow_from_config: Optional[str],
+) -> bool:
+    """True если снимок list() совпадает с желаемым состоянием — можно не вызывать get_by_email/update."""
+    if not panel_snapshot.get("on_panel"):
+        return False
+    proto = (panel_snapshot.get("protocol") or "vless").lower()
+    se = panel_snapshot.get("expiry_sec")
+    if not _expiry_sec_matches_panel(se, expiry_sec):
+        return False
+    if not _limit_ip_matches_panel(panel_snapshot.get("limit_ip"), limit_ip):
+        return False
+    if not _flow_matches_desired(proto, panel_snapshot.get("flow"), flow_from_config):
+        return False
+    return True
 
 
 def _inbound_to_dict(inv: Any) -> dict:
@@ -387,6 +437,74 @@ class X3:
         return c
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    async def reconcile_client(
+        self,
+        user_email: str,
+        *,
+        expiry_sec: int,
+        limit_ip: int,
+        flow_from_config: Optional[str],
+        protocol: Optional[str] = None,
+        panel_snapshot: Optional[dict] = None,
+    ) -> Tuple[bool, bool]:
+        """
+        Выравнивает expiry (UNIX sec), limit_ip и flow с БД и конфигом сервера.
+        Пустой/отсутствующий client_flow в конфиге => на панели flow очищается (VLESS/VMess).
+        Для trojan поле flow не меняется.
+        panel_snapshot: снимок из list(); при полном совпадении — без get_by_email/update.
+        Returns: (success, did_update).
+        """
+        await self._ensure_login()
+        if panel_snapshot is not None and _panel_snapshot_matches_desired(
+            panel_snapshot, expiry_sec, limit_ip, flow_from_config
+        ):
+            return True, False
+        try:
+            c = await self._api.client.get_by_email(user_email)
+        except ValueError as e:
+            if _value_error_client_absent_on_panel(e):
+                return False, False
+            raise
+        if c is None:
+            return False, False
+
+        proto = (protocol or (panel_snapshot or {}).get("protocol") or "").strip().lower() or None
+        if not proto:
+            info = await self.get_client_info(user_email)
+            proto = (info.get("protocol") or "vless").lower() if info else "vless"
+
+        exp_ms = getattr(c, "expiry_time", 0) or 0
+        cur_sec = int(exp_ms) // 1000 if exp_ms else None
+        cur_li = getattr(c, "limit_ip", None)
+        cur_flow = _normalize_client_flow_value(getattr(c, "flow", None))
+
+        need = False
+        if cur_sec is None or abs(int(cur_sec) - int(expiry_sec)) > 300:
+            need = True
+        if cur_li is None or cur_li == 0:
+            need = True
+        else:
+            try:
+                if int(cur_li) != int(limit_ip):
+                    need = True
+            except (TypeError, ValueError):
+                need = True
+        if proto != "trojan":
+            want_flow = (flow_from_config or "").strip()
+            if cur_flow != want_flow:
+                need = True
+        if not need:
+            return True, False
+
+        c.expiry_time = int(expiry_sec) * 1000
+        c.limit_ip = int(limit_ip)
+        if proto != "trojan":
+            c.flow = (flow_from_config or "").strip()
+        self._ensure_client_id_for_update(c)
+        await self._api.client.update(c.id, c)
+        return True, True
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def extendClient(
         self,
         user_email: str,
@@ -403,8 +521,8 @@ class X3:
             current_ms = int(datetime.datetime.now().timestamp() * 1000)
         new_ms = current_ms + (extend_days * 86400000)
         c.expiry_time = new_ms
-        if flow is not None and str(flow).strip():
-            c.flow = str(flow).strip()
+        if flow is not None:
+            c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
         await self._api.client.update(c.id, c)
         # Успех сигнализируется отсутствием исключения
@@ -600,31 +718,49 @@ class X3:
         return total, active, expired
 
     async def sync_flow_for_all_clients(self, flow_value: str, timeout: int = 15) -> tuple:
+        """
+        Массово выставляет flow для всех клиентов VLESS/VMess (trojan пропускает).
+        Returns: (updated_count, skipped_unchanged_count, errors_list).
+        """
         await self._ensure_login()
-        updated = 0
-        errors = []
+        target = (flow_value or "").strip()
         inbounds = await self._api.inbound.get_list()
-        flow_val = (flow_value or "").strip() or None
+        sem = asyncio.Semaphore(8)
+        work_items: List[Tuple[Any, str]] = []
         for inv in inbounds:
             protocol = (getattr(inv, "protocol", None) or "vless").lower()
             if protocol == "trojan":
                 continue
-            inv_id = getattr(inv, "id", None)
             settings = getattr(inv, "settings", None)
             clients = getattr(settings, "clients", None) or []
             for c in clients:
+                work_items.append((c, protocol))
+
+        async def _one(item: Tuple[Any, str]) -> Tuple[str, Optional[str]]:
+            c, _proto = item
+            async with sem:
                 try:
-                    if flow_val:
-                        c.flow = flow_val
+                    cur = _normalize_client_flow_value(getattr(c, "flow", None))
+                    if cur == target:
+                        return "skip", None
+                    if target:
+                        c.flow = target
                     else:
                         if hasattr(c, "flow"):
                             c.flow = ""
                     self._ensure_client_id_for_update(c)
                     await self._api.client.update(c.id, c)
-                    updated += 1
+                    return "ok", None
                 except Exception as e:
-                    errors.append(f"{getattr(c, 'email', '?')}: {e}")
-        return updated, errors
+                    return "err", f"{getattr(c, 'email', '?')}: {e}"
+
+        if not work_items:
+            return 0, 0, []
+        results = await asyncio.gather(*[_one(it) for it in work_items])
+        updated = sum(1 for status, _ in results if status == "ok")
+        skipped = sum(1 for status, _ in results if status == "skip")
+        errors = [msg for status, msg in results if status == "err" and msg]
+        return updated, skipped, errors
 
     async def link(self, user_id: str, server_name: Optional[str] = None) -> str:
         """Генерирует VLESS или TROJAN ссылку для клиента."""
@@ -788,14 +924,22 @@ class X3:
                 if not line or line.startswith("#"):
                     continue
                 if "vless://" in line or "vmess://" in line or "trojan://" in line:
-                    if flow_override and "vless://" in line and "flow=" not in line:
-                        from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+                    if flow_override and "vless://" in line:
                         try:
                             parsed = urlparse(line)
                             qs = parse_qs(parsed.query)
                             qs["flow"] = [flow_override]
                             new_query = urlencode(qs, doseq=True)
-                            line = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+                            line = urlunparse(
+                                (
+                                    parsed.scheme,
+                                    parsed.netloc,
+                                    parsed.path,
+                                    parsed.params,
+                                    new_query,
+                                    parsed.fragment,
+                                )
+                            )
                         except Exception:
                             pass
                     if server_name and "#" in line:

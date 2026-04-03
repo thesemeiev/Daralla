@@ -7620,26 +7620,11 @@ async function saveServerConfig(event) {
         if (result.success) {
             closeModal('server-config-modal');
             await refreshAdminServersInGroup();
-            if (result.client_flow_changed && result.server_id) {
-                var doSync = await appShowConfirm('Обновить flow у существующих клиентов на этом сервере?', { title: 'Синхронизация flow' });
-                if (doSync) {
-                    try {
-                        const syncRes = await apiFetch('/api/admin/server-config/sync-flow', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ server_id: result.server_id })
-                        });
-                        const syncData = await syncRes.json();
-                        if (syncData.success) {
-                            await appShowAlert('Обновлено клиентов: ' + syncData.updated + (syncData.errors?.length ? '. Ошибки: ' + syncData.errors.slice(0, 3).join('; ') : ''), { title: 'Готово', variant: 'success' });
-                        } else {
-                            await appShowAlert('Ошибка синхронизации flow: ' + (syncData.error || 'unknown'), { variant: 'error' });
-                        }
-                    } catch (e) {
-                        console.error('sync-flow', e);
-                        await appShowAlert('Ошибка при синхронизации flow', { variant: 'error' });
-                    }
-                }
+            if (result.flow_sync_started && result.server_id) {
+                await appShowAlert(
+                    'Синхронизация flow для всех клиентов на этой ноде запущена в фоне. При необходимости повторите вручную через API или дождитесь завершения (см. логи бота).',
+                    { title: 'Flow', variant: 'success' }
+                );
             }
             if (result.sync_stats || result.sync_error) {
                 await appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });

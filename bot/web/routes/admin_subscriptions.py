@@ -287,16 +287,22 @@ def create_blueprint(bot_app):
                         server_name = server_info["server_name"]
                         client_email = server_info["client_email"]
                         try:
-                            xui, _ = server_manager.get_server_by_name(server_name)
-                            if xui:
-                                server_config = server_manager.get_server_config(server_name)
-                                client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
-                                if "expires_at" in updates:
-                                    await xui.setClientExpiry(client_email, new_expires_at, flow=client_flow)
-                                if "device_limit" in updates:
-                                    await xui.updateClientLimitIp(client_email, new_device_limit, flow=client_flow)
+                            await subscription_manager.ensure_client_on_server(
+                                subscription_id=sub_id,
+                                server_name=server_name,
+                                client_email=client_email,
+                                user_id=user_id,
+                                expires_at=new_expires_at,
+                                token=token,
+                                device_limit=new_device_limit,
+                            )
                         except Exception as e:
-                            logger.error("Ошибка обновления клиента %s на сервере %s: %s", client_email, server_name, e)
+                            logger.error(
+                                "Ошибка синхронизации клиента %s на сервере %s: %s",
+                                client_email,
+                                server_name,
+                                e,
+                            )
 
         try:
             await asyncio.wait_for(sync_with_servers(), timeout=60.0)

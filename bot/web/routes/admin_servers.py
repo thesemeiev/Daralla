@@ -32,6 +32,40 @@ _SYNC_DEBOUNCE_SECONDS = 2.0
 _last_sync_started_at = 0.0
 
 
+async def _background_sync_client_flow(server_id: int) -> None:
+    """Фоновая синхронизация flow по всем клиентам панели после смены client_flow в конфиге."""
+    try:
+        server = await get_server_by_id(int(server_id))
+        if not server:
+            logger.warning("background flow sync: server_id=%s не найден", server_id)
+            return
+        x3 = X3(
+            login=server["login"],
+            password=server["password"],
+            host=server["host"],
+            vpn_host=server.get("vpn_host"),
+            subscription_port=server.get("subscription_port", 2096),
+            subscription_url=server.get("subscription_url"),
+        )
+        flow_val = (server.get("client_flow") or "").strip() or ""
+        updated, skipped, errs = await x3.sync_flow_for_all_clients(flow_val)
+        logger.info(
+            "Фоновый sync flow завершён: server_id=%s updated=%s skipped=%s errors=%s",
+            server_id,
+            updated,
+            skipped,
+            len(errs),
+        )
+        if errs:
+            logger.warning(
+                "Фоновый sync flow server_id=%s примеры ошибок: %s",
+                server_id,
+                errs[:5],
+            )
+    except Exception:
+        logger.exception("Фоновый sync flow server_id=%s завершился ошибкой", server_id)
+
+
 def _coerce_server_active(value) -> bool:
     """True если сервер считается активным (is_active в БД)."""
     if value is None:
@@ -257,6 +291,9 @@ def create_blueprint(bot_app):
             payload["sync_error"] = sync_error
         if sync_debounced:
             payload["sync_debounced"] = True
+        if client_flow_changed:
+            asyncio.create_task(_background_sync_client_flow(int(server_id)))
+            payload["flow_sync_started"] = True
         return jsonify(payload), 200, _cors_headers()
 
     @bp.route("/api/admin/server-config/sync-flow", methods=["POST", "OPTIONS"])
@@ -278,10 +315,11 @@ def create_blueprint(bot_app):
             subscription_url=server.get("subscription_url"),
         )
         flow_val = (server.get("client_flow") or "").strip() or ""
-        updated, errs = await x3.sync_flow_for_all_clients(flow_val)
+        updated, skipped, errs = await x3.sync_flow_for_all_clients(flow_val)
         return jsonify({
             "success": True,
             "updated": updated,
+            "skipped": skipped,
             "errors": errs[:20],
         }), 200, _cors_headers()
 
