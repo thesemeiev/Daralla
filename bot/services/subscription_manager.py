@@ -297,6 +297,7 @@ class SubscriptionManager:
                             client_email,
                             server_name,
                         )
+                        return False, False
                     elif did_update:
                         logger.info(
                             "Синхронизирован клиент %s на %s (expiry, limitIp, flow по БД/конфигу)",
@@ -310,6 +311,7 @@ class SubscriptionManager:
                         client_email,
                         rec_e,
                     )
+                    return False, False
 
                 return True, False
             else:
@@ -524,6 +526,7 @@ class SubscriptionManager:
             "servers_removed": 0,
             "clients_created": 0,
             "clients_restored": 0,
+            "clients_deleted_strict": 0,
             "total_servers_checked": 0,
             "total_servers_synced": 0,
             "subscriptions_synced": 0,
@@ -636,10 +639,18 @@ class SubscriptionManager:
             async def process_server(server_name: str, tasks: List[dict]):
                 found = self.server_manager.find_server_by_name(server_name)
                 if found is None:
-                    return [(t, Exception(f"Сервер {server_name} не в конфиге")) for t in tasks]
+                    return {
+                        "pairs": [(t, Exception(f"Сервер {server_name} не в конфиге")) for t in tasks],
+                        "strict_deleted": 0,
+                        "strict_errors": [],
+                    }
                 xui, _ = found
                 if xui is None:
-                    return [(t, Exception(f"Сервер {server_name} недоступен")) for t in tasks]
+                    return {
+                        "pairs": [(t, Exception(f"Сервер {server_name} недоступен")) for t in tasks],
+                        "strict_deleted": 0,
+                        "strict_errors": [],
+                    }
                 email_map = None
                 try:
                     data = await xui.list()
@@ -670,7 +681,64 @@ class SubscriptionManager:
                         except (RuntimeError, ValueError, TypeError, KeyError) as e:
                             return (t, e)
 
-                return await asyncio.gather(*[one(t) for t in tasks])
+                pairs = await asyncio.gather(*[one(t) for t in tasks])
+
+                # Жёсткий режим: сервер должен содержать только клиентов, назначенных группе
+                # (email из ensure_tasks для этого server_name). Все лишние email удаляем.
+                strict_deleted = 0
+                strict_errors: List[str] = []
+                expected_emails = {
+                    str(t["client_email"]).strip()
+                    for t in tasks
+                    if t.get("client_email") is not None and str(t.get("client_email")).strip()
+                }
+                try:
+                    latest = await xui.list()
+                    panel_emails: set = set()
+                    for inbound in latest.get("obj") or []:
+                        try:
+                            settings = json.loads(inbound.get("settings") or "{}")
+                        except (json.JSONDecodeError, TypeError):
+                            continue
+                        for c in settings.get("clients") or []:
+                            em = c.get("email")
+                            if em is None:
+                                continue
+                            em = str(em).strip()
+                            if em:
+                                panel_emails.add(em)
+
+                    extras = sorted(panel_emails - expected_emails)
+                    for email in extras:
+                        # На панели могут быть дубликаты email в нескольких inbound — удаляем до полного исчезновения.
+                        max_delete_attempts = 5
+                        for attempt in range(max_delete_attempts):
+                            try:
+                                deleted = await xui.deleteClient(email)
+                            except Exception as del_e:
+                                strict_errors.append(
+                                    f"{server_name}: delete extra {email} failed ({type(del_e).__name__}: {del_e})"
+                                )
+                                break
+                            if not deleted:
+                                break
+                            strict_deleted += 1
+                    if strict_deleted > 0:
+                        logger.info(
+                            "Строгий sync состава: сервер %s, удалено лишних клиентов: %s",
+                            server_name,
+                            strict_deleted,
+                        )
+                except Exception as strict_e:
+                    strict_errors.append(
+                        f"{server_name}: strict composition sync failed ({type(strict_e).__name__}: {strict_e})"
+                    )
+
+                return {
+                    "pairs": pairs,
+                    "strict_deleted": strict_deleted,
+                    "strict_errors": strict_errors,
+                }
 
             batches = await asyncio.gather(
                 *[process_server(sn, tl) for sn, tl in by_server.items()],
@@ -681,7 +749,11 @@ class SubscriptionManager:
                 if isinstance(batch, Exception):
                     stats["errors"].append(str(batch))
                     continue
-                for pair in batch:
+                stats["clients_deleted_strict"] += int(batch.get("strict_deleted", 0))
+                for se in batch.get("strict_errors", []):
+                    stats["errors"].append(se)
+
+                for pair in batch.get("pairs", []):
                     t, outcome = pair
                     if isinstance(outcome, Exception):
                         stats["errors"].append(
@@ -689,6 +761,12 @@ class SubscriptionManager:
                         )
                         continue
                     client_exists, client_created = outcome
+                    if not client_exists:
+                        stats["errors"].append(
+                            f"Подписка {t['subscription_id']}, server {t['server_name']}: "
+                            f"ensure_client_on_server вернул client_exists=False"
+                        )
+                        continue
                     if client_created:
                         stats["clients_created"] += 1
                     elif client_exists:
@@ -708,6 +786,7 @@ class SubscriptionManager:
             f"удалено {stats['servers_removed']} серверов, "
             f"создано {stats['clients_created']} клиентов, "
             f"восстановлено {stats['clients_restored']} клиентов, "
+            f"удалено лишних (strict) {stats['clients_deleted_strict']} клиентов, "
             f"серверов (ensure) {stats['total_servers_checked']}, "
             f"ошибок {len(stats['errors'])}"
         )
