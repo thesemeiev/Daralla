@@ -342,12 +342,17 @@ class SubscriptionManager:
                             f"Установка точного времени истечения и flow для клиента {client_email} "
                             f"на сервере {server_name}: {expires_at}"
                         )
-                        ok_rec, _ = await xui.reconcile_client(
-                            client_email,
-                            expiry_sec=expires_at,
-                            limit_ip=device_limit,
-                            flow_from_config=client_flow,
-                        )
+                        ok_rec = False
+                        for attempt in range(3):
+                            ok_rec, _ = await xui.reconcile_client(
+                                client_email,
+                                expiry_sec=expires_at,
+                                limit_ip=device_limit,
+                                flow_from_config=client_flow,
+                            )
+                            if ok_rec:
+                                break
+                            await asyncio.sleep(0.4 * (attempt + 1))
                         if ok_rec:
                             logger.info(
                                 f"Точное время и flow синхронизированы для клиента {client_email} "
@@ -358,13 +363,14 @@ class SubscriptionManager:
                                 f"Не удалось синхронизировать клиента {client_email} "
                                 f"на сервере {server_name}: не найден на панели после создания"
                             )
+                            return False, False
                     except (RuntimeError, ValueError, TypeError) as set_expiry_e:
                         logger.warning(
                             f"Ошибка синхронизации после создания клиента {client_email} "
                             f"на сервере {server_name}: {set_expiry_e}"
                         )
-                        # Не критично - клиент создан, время будет синхронизировано при следующей синхронизации
-                    
+                        return False, False
+
                     return True, True  # Клиент создан
 
                 logger.error(f"Не удалось создать клиента на сервере {server_name}: неизвестная ошибка")
@@ -709,6 +715,7 @@ class SubscriptionManager:
                                 panel_emails.add(em)
 
                     extras = sorted(panel_emails - expected_emails)
+                    missing = sorted(expected_emails - panel_emails)
                     for email in extras:
                         # На панели могут быть дубликаты email в нескольких inbound — удаляем до полного исчезновения.
                         max_delete_attempts = 5
@@ -728,6 +735,10 @@ class SubscriptionManager:
                             "Строгий sync состава: сервер %s, удалено лишних клиентов: %s",
                             server_name,
                             strict_deleted,
+                        )
+                    if missing:
+                        strict_errors.append(
+                            f"{server_name}: missing {len(missing)} expected clients after ensure"
                         )
                 except Exception as strict_e:
                     strict_errors.append(
