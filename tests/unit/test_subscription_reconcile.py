@@ -1,4 +1,4 @@
-"""Unit tests: panel snapshot helpers, list snapshot shape, reconcile_client fast path."""
+"""Unit tests: panel snapshot helpers, list snapshot shape, reconcile_client."""
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -60,11 +60,13 @@ def test_panel_entry_from_snapshot_roundtrip():
     assert _panel_snapshot_matches_desired(pe, 100, 2, "y") is False
 
 
-def test_flow_matches_desired_trojan_ignores_flow():
-    assert _flow_matches_desired("trojan", "old", "new") is True
+def test_flow_matches_desired_compares_panel_to_config():
+    assert _flow_matches_desired("old", "new") is False
+    assert _flow_matches_desired("x", "x") is True
+    assert _flow_matches_desired("", None) is True
 
 
-def test_panel_snapshot_matches_trojan_ignores_flow_drift():
+def test_panel_snapshot_matches_requires_flow_for_trojan():
     snap = {
         "on_panel": True,
         "expiry_sec": 50,
@@ -72,12 +74,13 @@ def test_panel_snapshot_matches_trojan_ignores_flow_drift():
         "flow": "should-ignore",
         "protocol": "trojan",
     }
-    assert _panel_snapshot_matches_desired(snap, 50, 1, "xtls") is True
+    assert _panel_snapshot_matches_desired(snap, 50, 1, "xtls") is False
+    assert _panel_snapshot_matches_desired(snap, 50, 1, "should-ignore") is True
 
 
 @pytest.mark.asyncio
-async def test_reconcile_client_fast_path_skips_get_by_email_trojan_only():
-    """Для trojan при совпадении expiry/limit по снимку list() не ходим в get_by_email."""
+async def test_reconcile_client_applies_flow_from_config_when_mismatch():
+    """При расхождении flow с конфигом сервера — update; без fast path по протоколу."""
     with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
         with patch("bot.services.xui_service.AsyncApi"):
             from bot.services.xui_service import X3
@@ -85,32 +88,32 @@ async def test_reconcile_client_fast_path_skips_get_by_email_trojan_only():
             x3 = X3.__new__(X3)
             x3._logged_in = True
             x3._api = MagicMock()
-            x3._api.client.get_by_email = AsyncMock()
+            mock_c = MagicMock()
+            mock_c.expiry_time = 2000 * 1000
+            mock_c.limit_ip = 1
+            mock_c.flow = ""
+            mock_c.id = "uuid"
+            x3._api.client.get_by_email = AsyncMock(return_value=mock_c)
             x3._api.login = AsyncMock()
             x3._ensure_login = AsyncMock()
+            x3._ensure_client_id_for_update = MagicMock(side_effect=lambda c: c)
+            x3._post_inbound_update_client = AsyncMock()
 
-            snap = {
-                "on_panel": True,
-                "expiry_sec": 2000,
-                "limit_ip": 1,
-                "flow": "ignored",
-                "protocol": "trojan",
-            }
             ok, did_upd = await x3.reconcile_client(
                 "u@test",
                 expiry_sec=2000,
                 limit_ip=1,
                 flow_from_config="xtls-rprx-vision",
-                panel_snapshot=snap,
             )
             assert ok is True
-            assert did_upd is False
-            x3._api.client.get_by_email.assert_not_called()
+            assert did_upd is True
+            x3._api.client.get_by_email.assert_called_once()
+            assert mock_c.flow == "xtls-rprx-vision"
+            x3._post_inbound_update_client.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_reconcile_client_vless_always_calls_get_by_email_with_snapshot():
-    """VLESS: снимок list() не используется для пропуска API — flow сверяем через get_by_email."""
+async def test_reconcile_client_no_update_when_already_matches():
     with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
         with patch("bot.services.xui_service.AsyncApi"):
             from bot.services.xui_service import X3
@@ -124,25 +127,18 @@ async def test_reconcile_client_vless_always_calls_get_by_email_with_snapshot():
             mock_c.flow = "a"
             mock_c.id = "uuid"
             x3._api.client.get_by_email = AsyncMock(return_value=mock_c)
-            x3._api.client.update = AsyncMock()
             x3._api.login = AsyncMock()
             x3._ensure_login = AsyncMock()
             x3._ensure_client_id_for_update = MagicMock(side_effect=lambda c: c)
+            x3._post_inbound_update_client = AsyncMock()
 
-            snap = {
-                "on_panel": True,
-                "expiry_sec": 2000,
-                "limit_ip": 1,
-                "flow": "a",
-                "protocol": "vless",
-            }
             ok, did_upd = await x3.reconcile_client(
                 "u@test",
                 expiry_sec=2000,
                 limit_ip=1,
                 flow_from_config="a",
-                panel_snapshot=snap,
             )
             assert ok is True
             assert did_upd is False
             x3._api.client.get_by_email.assert_called_once()
+            x3._post_inbound_update_client.assert_not_called()

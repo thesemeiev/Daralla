@@ -290,8 +290,6 @@ class SubscriptionManager:
                         expiry_sec=expires_at,
                         limit_ip=device_limit,
                         flow_from_config=client_flow,
-                        protocol=(panel_entry or {}).get("protocol") if panel_entry else None,
-                        panel_snapshot=panel_entry,
                     )
                     if not ok:
                         logger.warning(
@@ -347,7 +345,6 @@ class SubscriptionManager:
                             expiry_sec=expires_at,
                             limit_ip=device_limit,
                             flow_from_config=client_flow,
-                            panel_snapshot=None,
                         )
                         if ok_rec:
                             logger.info(

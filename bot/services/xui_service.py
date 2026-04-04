@@ -174,9 +174,7 @@ def _limit_ip_matches_panel(panel_limit: Any, device_limit: int) -> bool:
         return False
 
 
-def _flow_matches_desired(protocol: str, panel_flow: Any, flow_from_config: Optional[str]) -> bool:
-    if (protocol or "vless").lower() == "trojan":
-        return True
+def _flow_matches_desired(panel_flow: Any, flow_from_config: Optional[str]) -> bool:
     desired = (flow_from_config or "").strip()
     panel = _normalize_client_flow_value(panel_flow)
     return desired == panel
@@ -191,13 +189,12 @@ def _panel_snapshot_matches_desired(
     """True если снимок list() совпадает с желаемым состоянием — можно не вызывать get_by_email/update."""
     if not panel_snapshot.get("on_panel"):
         return False
-    proto = (panel_snapshot.get("protocol") or "vless").lower()
     se = panel_snapshot.get("expiry_sec")
     if not _expiry_sec_matches_panel(se, expiry_sec):
         return False
     if not _limit_ip_matches_panel(panel_snapshot.get("limit_ip"), limit_ip):
         return False
-    if not _flow_matches_desired(proto, panel_snapshot.get("flow"), flow_from_config):
+    if not _flow_matches_desired(panel_snapshot.get("flow"), flow_from_config):
         return False
     return True
 
@@ -491,27 +488,14 @@ class X3:
         expiry_sec: int,
         limit_ip: int,
         flow_from_config: Optional[str],
-        protocol: Optional[str] = None,
-        panel_snapshot: Optional[dict] = None,
     ) -> Tuple[bool, bool]:
         """
         Выравнивает expiry (UNIX sec), limit_ip и flow с БД и конфигом сервера.
-        Пустой/отсутствующий client_flow в конфиге => на панели flow очищается (VLESS/VMess).
-        Для trojan поле flow не меняется.
-        panel_snapshot: снимок из list(); учитывается только для trojan (без поля flow).
-        Для VLESS/VMess поле flow в JSON list() ненадёжно (dump, дубликаты email в inbound) —
-        всегда сверяем через get_by_email.
+        Пустой/отсутствующий client_flow в конфиге => на панели flow очищается.
+        Поле flow в JSON list() ненадёжно — сверка и обновление через get_by_email.
         Returns: (success, did_update).
         """
         await self._ensure_login()
-        if panel_snapshot is not None and panel_snapshot.get("on_panel"):
-            proto_snap = (protocol or panel_snapshot.get("protocol") or "vless").strip().lower()
-            if (
-                proto_snap == "trojan"
-                and _expiry_sec_matches_panel(panel_snapshot.get("expiry_sec"), expiry_sec)
-                and _limit_ip_matches_panel(panel_snapshot.get("limit_ip"), limit_ip)
-            ):
-                return True, False
         try:
             c = await self._api.client.get_by_email(user_email)
         except ValueError as e:
@@ -520,11 +504,6 @@ class X3:
             raise
         if c is None:
             return False, False
-
-        proto = (protocol or (panel_snapshot or {}).get("protocol") or "").strip().lower() or None
-        if not proto:
-            info = await self.get_client_info(user_email)
-            proto = (info.get("protocol") or "vless").lower() if info else "vless"
 
         exp_ms = getattr(c, "expiry_time", 0) or 0
         cur_sec = int(exp_ms) // 1000 if exp_ms else None
@@ -542,17 +521,15 @@ class X3:
                     need = True
             except (TypeError, ValueError):
                 need = True
-        if proto != "trojan":
-            want_flow = (flow_from_config or "").strip()
-            if cur_flow != want_flow:
-                need = True
+        want_flow = (flow_from_config or "").strip()
+        if cur_flow != want_flow:
+            need = True
         if not need:
             return True, False
 
         c.expiry_time = int(expiry_sec) * 1000
         c.limit_ip = int(limit_ip)
-        if proto != "trojan":
-            c.flow = (flow_from_config or "").strip()
+        c.flow = want_flow
         self._ensure_client_id_for_update(c)
         await self._post_inbound_update_client(c)
         return True, True
@@ -772,7 +749,7 @@ class X3:
 
     async def sync_flow_for_all_clients(self, flow_value: str, timeout: int = 15) -> tuple:
         """
-        Массово выставляет flow для всех клиентов VLESS/VMess (trojan пропускает).
+        Массово выставляет flow для всех клиентов по inbound (протокол задаётся панелью).
 
         Раньше задачи схлопывались по email: при одном email в двух inbound обновлялся только один
         клиент. Теперь отдельная задача на каждую запись (inbound_id, email).
@@ -788,9 +765,6 @@ class X3:
         sem = asyncio.Semaphore(4)
         work_items: List[Tuple[int, Any]] = []
         for inv in inbounds:
-            protocol = (getattr(inv, "protocol", None) or "vless").lower()
-            if protocol == "trojan":
-                continue
             inv_id = getattr(inv, "id", None)
             if inv_id is None:
                 continue
@@ -829,7 +803,10 @@ class X3:
                             f"(один email в нескольких inbound — API отдаёт одну запись; разведите email или правьте вручную)",
                         )
                     actual = _normalize_client_flow_value(getattr(c, "flow", None))
-                    if actual == target:
+                    # getClientTraffics (get_by_email) часто не возвращает поле flow в JSON — в модели
+                    # Client тогда остаётся default "". При целевом сбросе (target "") получалось
+                    # actual == target и ложный skip, хотя на панели flow ещё заполнен.
+                    if actual == target and target != "":
                         return "skip", None
                     c.flow = target if target else ""
                     self._ensure_client_id_for_update(c)
