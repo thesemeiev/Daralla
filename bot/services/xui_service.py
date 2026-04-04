@@ -140,6 +140,25 @@ def _normalize_client_flow_value(v: Any) -> str:
     return str(v).strip()
 
 
+def _panel_client_settings_dict(c: Any) -> Dict[str, Any]:
+    """
+    Тело clients[] для addClient/updateClient в 3x-ui.
+
+    py3xui передаёт model_dump(by_alias=True, exclude_defaults=True). У Client.flow значение
+    по умолчанию пустая строка — при сбросе flow поле не попадает в JSON, панель не затирает
+    старый flow (рассинхрон с админкой бота, где client_flow очищен в БД).
+
+    Всегда добавляем ключ flow явно.
+    """
+    if hasattr(c, "model_dump"):
+        d = c.model_dump(by_alias=True, mode="json", exclude_defaults=True)
+    else:
+        d = {}
+    fv = getattr(c, "flow", None)
+    d["flow"] = "" if fv is None else str(fv).strip()
+    return d
+
+
 def _expiry_sec_matches_panel(panel_sec: Optional[int], db_sec: int, tolerance_sec: int = 300) -> bool:
     if panel_sec is None:
         return False
@@ -428,7 +447,7 @@ class X3:
                 "flow": (str(flow).strip() if flow and str(flow).strip() else ""),
             }
             new_client = Py3xuiClient(**kwargs)
-        await self._api.client.add(int(inbound_id), [new_client])
+        await self._post_inbound_add_clients(int(inbound_id), [new_client])
         # Успех сигнализируется отсутствием исключения
         return True
 
@@ -439,6 +458,30 @@ class X3:
         if uuid_val and isinstance(getattr(c, "id", None), int):
             c.id = uuid_val
         return c
+
+    async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
+        """addClient: как py3xui, но flow всегда в JSON (см. _panel_client_settings_dict)."""
+        await self._ensure_login()
+        api = self._api.client
+        settings = {"clients": [_panel_client_settings_dict(c) for c in clients]}
+        data = {"id": int(inbound_id), "settings": json.dumps(settings)}
+        url = api._url("panel/api/inbounds/addClient")
+        await api._post(url, {"Accept": "application/json"}, data)
+
+    async def _post_inbound_update_client(self, c: Any) -> None:
+        """updateClient: как py3xui, но flow всегда в JSON — иначе сброс flow на панели не работает."""
+        await self._ensure_login()
+        self._ensure_client_id_for_update(c)
+        inbound_id = getattr(c, "inbound_id", None)
+        if inbound_id is None:
+            raise ValueError("updateClient: у клиента нет inbound_id")
+        api = self._api.client
+        uuid_for_url = c.id
+        endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
+        settings = {"clients": [_panel_client_settings_dict(c)]}
+        data = {"id": int(inbound_id), "settings": json.dumps(settings)}
+        url = api._url(endpoint)
+        await api._post(url, {"Accept": "application/json"}, data)
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def reconcile_client(
@@ -511,7 +554,7 @@ class X3:
         if proto != "trojan":
             c.flow = (flow_from_config or "").strip()
         self._ensure_client_id_for_update(c)
-        await self._api.client.update(c.id, c)
+        await self._post_inbound_update_client(c)
         return True, True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
@@ -534,7 +577,7 @@ class X3:
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
-        await self._api.client.update(c.id, c)
+        await self._post_inbound_update_client(c)
         # Успех сигнализируется отсутствием исключения
         return True
 
@@ -555,7 +598,7 @@ class X3:
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
-        await self._api.client.update(c.id, c)
+        await self._post_inbound_update_client(c)
         # True — время истечения обновлено
         return True
 
@@ -575,7 +618,7 @@ class X3:
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
-        await self._api.client.update(c.id, c)
+        await self._post_inbound_update_client(c)
         return True
 
     async def updateClientName(
@@ -590,7 +633,7 @@ class X3:
             raise Exception(f"Клиент с email {user_email} не найден")
         c.sub_id = new_name
         self._ensure_client_id_for_update(c)
-        await self._api.client.update(c.id, c)
+        await self._post_inbound_update_client(c)
         # Успех — отсутствие исключения
         return True
 
@@ -730,34 +773,37 @@ class X3:
     async def sync_flow_for_all_clients(self, flow_value: str, timeout: int = 15) -> tuple:
         """
         Массово выставляет flow для всех клиентов VLESS/VMess (trojan пропускает).
+
+        Раньше задачи схлопывались по email: при одном email в двух inbound обновлялся только один
+        клиент. Теперь отдельная задача на каждую запись (inbound_id, email).
+
+        Сброс flow (пустое значение из админки) идёт через _post_inbound_update_client — в JSON
+        всегда передаётся ключ flow (py3xui иначе выкидывает \"\" как default и панель не сбрасывает).
+
         Returns: (updated_count, skipped_unchanged_count, errors_list).
         """
         await self._ensure_login()
         target = (flow_value or "").strip()
         inbounds = await self._api.inbound.get_list()
-        # Меньше параллелизма — панель 3x-ui часто отвечает 5xx/timeout при всплеске update.
         sem = asyncio.Semaphore(4)
-        # Один email — одна задача: иначе два inbound с тем же email дают гонки и лишние ошибки API.
-        by_email: Dict[str, Tuple[Any, str]] = {}
+        work_items: List[Tuple[int, Any]] = []
         for inv in inbounds:
             protocol = (getattr(inv, "protocol", None) or "vless").lower()
             if protocol == "trojan":
                 continue
+            inv_id = getattr(inv, "id", None)
+            if inv_id is None:
+                continue
             settings = getattr(inv, "settings", None)
             clients = getattr(settings, "clients", None) or []
             for c in clients:
-                em = getattr(c, "email", None)
-                if em:
-                    by_email[str(em)] = (c, protocol)
-        work_items: List[Tuple[Any, str]] = list(by_email.values())
+                if getattr(c, "email", None):
+                    work_items.append((int(inv_id), c))
 
-        async def _one(item: Tuple[Any, str]) -> Tuple[str, Optional[str]]:
+        async def _one(inbound_id: int, c_list: Any) -> Tuple[str, Optional[str]]:
             """
-            Не вызывать client.update по объекту из inbound.settings.clients: у 3x-ui/py3xui
-            id часто в формате, при котором панель отвечает «record not found».
-            Всегда подгружаем клиента через get_by_email перед update.
+            Подгружаем клиента через get_by_email; сверяем inbound_id — иначе дубликат email.
             """
-            c_list, _proto = item
             email = getattr(c_list, "email", None)
             if not email:
                 return "err", "?: нет email у записи клиента в inbound"
@@ -771,23 +817,26 @@ class X3:
                         c = await self._api.client.get_by_email(email)
                     except ValueError as e:
                         if _value_error_client_absent_on_panel(e):
-                            return "err", f"{email}: клиент не найден (возможно удалён или другой inbound)"
+                            return "err", f"{email}: клиент не найден (возможно удалён)"
                         raise
                     if c is None:
                         return "err", f"{email}: клиент не найден"
+                    api_iid = int(getattr(c, "inbound_id", -1) or -1)
+                    if api_iid != int(inbound_id):
+                        return (
+                            "err",
+                            f"{email}: get_by_email вернул inbound {api_iid}, ожидался {inbound_id} "
+                            f"(один email в нескольких inbound — API отдаёт одну запись; разведите email или правьте вручную)",
+                        )
                     actual = _normalize_client_flow_value(getattr(c, "flow", None))
                     if actual == target:
                         return "skip", None
-                    if target:
-                        c.flow = target
-                    else:
-                        if hasattr(c, "flow"):
-                            c.flow = ""
+                    c.flow = target if target else ""
                     self._ensure_client_id_for_update(c)
                     last_exc: Optional[Exception] = None
                     for attempt in range(3):
                         try:
-                            await self._api.client.update(c.id, c)
+                            await self._post_inbound_update_client(c)
                             return "ok", None
                         except Exception as up_e:
                             last_exc = up_e
@@ -799,7 +848,7 @@ class X3:
 
         if not work_items:
             return 0, 0, []
-        results = await asyncio.gather(*[_one(it) for it in work_items])
+        results = await asyncio.gather(*[_one(iid, cl) for iid, cl in work_items])
         updated = sum(1 for status, _ in results if status == "ok")
         skipped = sum(1 for status, _ in results if status == "skip")
         errors = [msg for status, msg in results if status == "err" and msg]
