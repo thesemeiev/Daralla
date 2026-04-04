@@ -810,9 +810,9 @@ class X3:
             email = str(email)
             async with sem:
                 try:
-                    list_flow = _normalize_client_flow_value(getattr(c_list, "flow", None))
-                    if list_flow == target:
-                        return "skip", None
+                    # Не сравниваем flow со снимком из inbound.settings: у py3xui/панели поле часто
+                    # пустое в объекте при том, что в БД панели flow задан (как с exclude_defaults).
+                    # При target="" все 205 клиентов ошибочно попадали в skip без get_by_email.
                     try:
                         c = await self._api.client.get_by_email(email)
                     except ValueError as e:
