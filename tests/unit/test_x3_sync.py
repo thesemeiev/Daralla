@@ -74,7 +74,8 @@ def mock_xui_for_ensure():
     xui = MagicMock()
     xui.client_exists = AsyncMock(return_value=False)
     xui.addClient = AsyncMock(return_value=True)
-    xui.setClientExpiry = AsyncMock(return_value=True)
+    # ensure_client_on_server после addClient теперь делает reconcile_client (может ретраить до 3 раз)
+    xui.reconcile_client = AsyncMock(return_value=(True, True))
     return xui
 
 
@@ -116,3 +117,4 @@ async def test_ensure_client_on_server_creates_client_when_addClient_succeeds(
     assert result == (True, True)
     mock_xui_for_ensure.client_exists.assert_awaited_once_with("user@test")
     mock_xui_for_ensure.addClient.assert_awaited_once()
+    assert mock_xui_for_ensure.reconcile_client.await_count >= 1
