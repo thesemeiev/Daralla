@@ -511,16 +511,49 @@ class X3:
         flow_from_config: Optional[str],
     ) -> Tuple[bool, bool]:
         """
-        Всегда отправляет на панель целевые expiry, limit_ip и flow (как в конфиге сервера).
+        Выставляет на панели целевые expiry, limit_ip и flow (как в конфиге сервера).
 
-        Не полагаемся на сравнение с ответом get_by_email: поле flow там часто пустое/не то,
-        из‑за чего раньше пропускался update и на панели оставался старый flow.
+        Обходит все inbound и обновляет каждую запись clients[] с данным email — иначе при дубликате
+        email в нескольких inbound get_by_email менял бы только одну строку.
+
+        Если в снимке get_list() email не найден, fallback: один update через get_by_email.
 
         Пустой/отсутствующий client_flow в конфиге => в JSON уходит flow "" (сброс на панели).
 
-        Returns: (success, did_update). did_update всегда True при успешном update.
+        Returns: (success, did_update). did_update True после хотя бы одного успешного update.
         """
         await self._ensure_login()
+        want_flow = (flow_from_config or "").strip()
+        exp_ms = int(expiry_sec) * 1000
+        li = int(limit_ip)
+        needle = str(user_email).strip()
+
+        inbounds = await self._api.inbound.get_list()
+        work_items: List[Tuple[int, Any]] = []
+        for inv in inbounds:
+            inv_id = getattr(inv, "id", None)
+            if inv_id is None:
+                continue
+            settings = getattr(inv, "settings", None)
+            clients = getattr(settings, "clients", None) or []
+            for cl in clients:
+                em = getattr(cl, "email", None)
+                if em is None:
+                    continue
+                if str(em).strip() == needle:
+                    work_items.append((int(inv_id), cl))
+
+        if work_items:
+            for inbound_id, c in work_items:
+                c.expiry_time = exp_ms
+                c.limit_ip = li
+                c.flow = want_flow
+                self._ensure_client_id_for_update(c)
+                await self._post_inbound_update_client(
+                    c, inbound_id_override=inbound_id, flow_override=want_flow
+                )
+            return True, True
+
         try:
             c = await self._api.client.get_by_email(user_email)
         except ValueError as e:
@@ -530,9 +563,8 @@ class X3:
         if c is None:
             return False, False
 
-        want_flow = (flow_from_config or "").strip()
-        c.expiry_time = int(expiry_sec) * 1000
-        c.limit_ip = int(limit_ip)
+        c.expiry_time = exp_ms
+        c.limit_ip = li
         c.flow = want_flow
         self._ensure_client_id_for_update(c)
         await self._post_inbound_update_client(c, flow_override=want_flow)
