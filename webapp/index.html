@@ -1196,8 +1196,16 @@
                         <input type="text" id="server-subscription-url-input" placeholder="http://host:2096 — если пусто, считается из хоста и порта подписки">
                     </div>
                     <div class="form-group">
-                        <label for="server-client-flow-input">Flow при создании клиента</label>
-                        <input type="text" id="server-client-flow-input" placeholder="Напр. xtls-rprx-vision — пусто = не передавать">
+                        <label class="checkbox-label" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <input type="checkbox" id="server-client-flow-enable" onchange="onServerClientFlowToggle()">
+                            <span>Flow для клиентов (VLESS / VMess)</span>
+                        </label>
+                        <label for="server-client-flow-select" style="display:block;margin-bottom:4px;font-size:0.9em;color:var(--text-muted, #888);">Значение flow</label>
+                        <select id="server-client-flow-select" disabled>
+                            <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+                            <option value="xtls-rprx-vision-udp443">xtls-rprx-vision-udp443</option>
+                        </select>
+                        <p id="server-flow-legacy-warning" class="hint" style="display:none;margin-top:8px;color:#c9a227;">В базе сохранено нестандартное значение flow. Выберите один из вариантов ниже — при сохранении оно заменит текущее.</p>
                     </div>
                     <div class="form-group">
                         <label for="server-map-label-input">Название на карте</label>

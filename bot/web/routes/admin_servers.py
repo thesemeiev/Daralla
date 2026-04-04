@@ -25,6 +25,7 @@ from bot.db.subscriptions_db import sync_subscription_statuses
 from bot.services.server_provider import ServerProvider
 from bot.services.xui_service import X3
 from bot.app_context import get_ctx
+from bot.client_flow import normalize_client_flow_for_storage
 
 logger = logging.getLogger(__name__)
 _SERVER_CONFIG_OP_LOCK = asyncio.Lock()
@@ -221,6 +222,9 @@ def create_blueprint(bot_app):
             password = data.get("password")
             if not all([group_id, name, host, login, password]):
                 return jsonify({"error": "All fields are required"}), 400, _cors_headers()
+            cf_norm, cf_err = normalize_client_flow_for_storage(data.get("client_flow"))
+            if cf_err:
+                return jsonify({"error": cf_err}), 400, _cors_headers()
             raw_active = data.get("is_active")
             insert_active = 1 if (raw_active is None or _coerce_server_active(raw_active)) else 0
             server_id = await add_server_config(
@@ -235,7 +239,7 @@ def create_blueprint(bot_app):
                 lng=data.get("lng"),
                 subscription_port=data.get("subscription_port"),
                 subscription_url=data.get("subscription_url") or None,
-                client_flow=data.get("client_flow") or None,
+                client_flow=cf_norm,
                 map_label=data.get("map_label") or None,
                 location=data.get("location") or None,
                 max_concurrent_clients=data.get("max_concurrent_clients"),
@@ -272,10 +276,19 @@ def create_blueprint(bot_app):
         if not server_id:
             return jsonify({"error": "Server ID is required"}), 400, _cors_headers()
         update_data = {k: v for k, v in data.items() if k not in ("initData", "id")}
+        if "client_flow" in update_data:
+            cf_norm, cf_err = normalize_client_flow_for_storage(update_data.get("client_flow"))
+            if cf_err:
+                return jsonify({"error": cf_err}), 400, _cors_headers()
+            update_data["client_flow"] = cf_norm
         old_server = await get_server_by_id(int(server_id))
-        old_flow = ((old_server.get("client_flow") or "").strip() or None) if old_server else None
-        new_flow = (update_data.get("client_flow") or "").strip() or None
-        client_flow_changed = old_flow != new_flow
+        # Только если в запросе явно передан client_flow — иначе new_flow нельзя считать None
+        # (частичный PATCH без поля не должен триггерить массовый sync и давать ложные сравнения).
+        client_flow_changed = False
+        if "client_flow" in update_data and old_server is not None:
+            old_cf = ((old_server.get("client_flow") or "").strip() or None)
+            new_cf = update_data["client_flow"]
+            client_flow_changed = old_cf != new_cf
         await update_server_config(server_id, **update_data)
         sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
             need_sync=_was_inactive_and_now_active(old_server, update_data)

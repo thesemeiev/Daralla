@@ -7530,6 +7530,48 @@ function renderServersInGroup(servers) {
     listEl.innerHTML = '<div class="server-reorder-stack admin-server-rows">' + cards + '</div>';
 }
 
+var SERVER_CLIENT_FLOW_ALLOWED = ['xtls-rprx-vision', 'xtls-rprx-vision-udp443'];
+
+function setServerClientFlowFormState(serverFlowRaw) {
+    var enable = document.getElementById('server-client-flow-enable');
+    var select = document.getElementById('server-client-flow-select');
+    var legacyWarn = document.getElementById('server-flow-legacy-warning');
+    if (!enable || !select) return;
+    if (legacyWarn) legacyWarn.style.display = 'none';
+    var v = (serverFlowRaw || '').trim();
+    if (!v) {
+        enable.checked = false;
+        select.disabled = true;
+        select.value = SERVER_CLIENT_FLOW_ALLOWED[0];
+        return;
+    }
+    if (SERVER_CLIENT_FLOW_ALLOWED.indexOf(v) !== -1) {
+        enable.checked = true;
+        select.disabled = false;
+        select.value = v;
+        return;
+    }
+    enable.checked = true;
+    select.disabled = false;
+    select.value = SERVER_CLIENT_FLOW_ALLOWED[0];
+    if (legacyWarn) legacyWarn.style.display = 'block';
+}
+
+function onServerClientFlowToggle() {
+    var enable = document.getElementById('server-client-flow-enable');
+    var select = document.getElementById('server-client-flow-select');
+    if (!enable || !select) return;
+    select.disabled = !enable.checked;
+}
+
+function getServerClientFlowPayload() {
+    var enable = document.getElementById('server-client-flow-enable');
+    var select = document.getElementById('server-client-flow-select');
+    if (!enable || !select) return null;
+    if (!enable.checked) return null;
+    return select.value || null;
+}
+
 // Показать модалку добавления сервера
 function showAddServerConfigModal() {
     if (currentSelectedGroupId == null) {
@@ -7546,7 +7588,7 @@ function showAddServerConfigModal() {
     document.getElementById('server-vpnhost-input').value = '';
     document.getElementById('server-subscription-port-input').value = '2096';
     document.getElementById('server-subscription-url-input').value = '';
-    document.getElementById('server-client-flow-input').value = '';
+    setServerClientFlowFormState('');
     document.getElementById('server-map-label-input').value = '';
     document.getElementById('server-lat-input').value = '';
     document.getElementById('server-lng-input').value = '';
@@ -7572,7 +7614,7 @@ function editServerConfig(serverId) {
     document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
     document.getElementById('server-subscription-port-input').value = server.subscription_port != null ? String(server.subscription_port) : '2096';
     document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
-    document.getElementById('server-client-flow-input').value = server.client_flow || '';
+    setServerClientFlowFormState(server.client_flow || '');
     document.getElementById('server-map-label-input').value = server.map_label || '';
     document.getElementById('server-lat-input').value = server.lat || '';
     document.getElementById('server-lng-input').value = server.lng || '';
@@ -7598,7 +7640,7 @@ async function saveServerConfig(event) {
         vpn_host: document.getElementById('server-vpnhost-input').value || null,
         subscription_port: portVal ? parseInt(portVal, 10) : null,
         subscription_url: document.getElementById('server-subscription-url-input').value || null,
-        client_flow: document.getElementById('server-client-flow-input').value?.trim() || null,
+        client_flow: getServerClientFlowPayload(),
         map_label: document.getElementById('server-map-label-input').value?.trim() || null,
         lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
         lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,

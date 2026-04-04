@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import uuid
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
 import httpx
@@ -725,8 +725,10 @@ class X3:
         await self._ensure_login()
         target = (flow_value or "").strip()
         inbounds = await self._api.inbound.get_list()
-        sem = asyncio.Semaphore(8)
-        work_items: List[Tuple[Any, str]] = []
+        # Меньше параллелизма — панель 3x-ui часто отвечает 5xx/timeout при всплеске update.
+        sem = asyncio.Semaphore(4)
+        # Один email — одна задача: иначе два inbound с тем же email дают гонки и лишние ошибки API.
+        by_email: Dict[str, Tuple[Any, str]] = {}
         for inv in inbounds:
             protocol = (getattr(inv, "protocol", None) or "vless").lower()
             if protocol == "trojan":
@@ -734,7 +736,10 @@ class X3:
             settings = getattr(inv, "settings", None)
             clients = getattr(settings, "clients", None) or []
             for c in clients:
-                work_items.append((c, protocol))
+                em = getattr(c, "email", None)
+                if em:
+                    by_email[str(em)] = (c, protocol)
+        work_items: List[Tuple[Any, str]] = list(by_email.values())
 
         async def _one(item: Tuple[Any, str]) -> Tuple[str, Optional[str]]:
             """
@@ -769,8 +774,16 @@ class X3:
                         if hasattr(c, "flow"):
                             c.flow = ""
                     self._ensure_client_id_for_update(c)
-                    await self._api.client.update(c.id, c)
-                    return "ok", None
+                    last_exc: Optional[Exception] = None
+                    for attempt in range(3):
+                        try:
+                            await self._api.client.update(c.id, c)
+                            return "ok", None
+                        except Exception as up_e:
+                            last_exc = up_e
+                            if attempt < 2:
+                                await asyncio.sleep(0.4 * (attempt + 1))
+                    return "err", f"{email}: {last_exc}"
                 except Exception as e:
                     return "err", f"{email}: {e}"
 
