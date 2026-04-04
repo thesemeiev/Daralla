@@ -376,17 +376,30 @@ class SubscriptionManager:
                                 f"Установка точного времени истечения и flow для клиента {client_email} "
                                 f"на сервере {server_name}: {expires_at}"
                             )
-                            ok_rec = False
-                            for attempt in range(3):
-                                ok_rec, _ = await xui.reconcile_client(
-                                    client_email,
-                                    expiry_sec=expires_at,
-                                    limit_ip=device_limit,
-                                    flow_from_config=client_flow,
-                                )
-                                if ok_rec:
-                                    break
-                                await asyncio.sleep(0.4 * (attempt + 1))
+                        ok_rec = False
+                        # После addClient панель может "увидеть" клиента не сразу.
+                        # Даем больше времени и сначала дожидаемся появления, затем reconcile.
+                        max_attempts = 10
+                        for attempt in range(max_attempts):
+                            ok_rec, _ = await xui.reconcile_client(
+                                client_email,
+                                expiry_sec=expires_at,
+                                limit_ip=device_limit,
+                                flow_from_config=client_flow,
+                            )
+                            if ok_rec:
+                                break
+
+                            # Если reconcile пока не нашел клиента, проверяем наличие напрямую:
+                            # это помогает отличить "еще не появился" от реального отсутствия.
+                            try:
+                                exists_now = await xui.client_exists(client_email)
+                            except Exception:
+                                exists_now = False
+
+                            # Небольшой backoff, чтобы не спамить API панели.
+                            # Суммарно ~11 секунд ожидания появления.
+                            await asyncio.sleep(0.2 if exists_now else min(2.0, 0.2 * (attempt + 1)))
                             if ok_rec:
                                 logger.info(
                                     f"Точное время и flow синхронизированы для клиента {client_email} "
