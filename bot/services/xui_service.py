@@ -140,23 +140,30 @@ def _normalize_client_flow_value(v: Any) -> str:
     return str(v).strip()
 
 
+def _dedupe_flow_json_key(d: Dict[str, Any]) -> None:
+    """Оставляем один ключ ``flow`` (нижний регистр). Иначе model_dump мог оставить ``Flow`` и панель читает не то."""
+    for k in list(d.keys()):
+        if isinstance(k, str) and k != "flow" and k.lower() == "flow":
+            d.pop(k, None)
+
+
 def _panel_client_settings_dict(
     c: Any, flow_override: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Тело clients[] для addClient/updateClient в 3x-ui.
 
-    py3xui передаёт model_dump(by_alias=True, exclude_defaults=True). У Client.flow значение
-    по умолчанию пустая строка — при сбросе flow поле не попадает в JSON, панель не затирает
-    старый flow (рассинхрон с админкой бота, где client_flow очищен в БД).
+    exclude_defaults=False: неполный JSON (только поля «не по умолчанию») на части версий 3x-ui
+    даёт merge, при котором flow на панели не меняется или остаётся рассинхрон.
 
-    Всегда добавляем ключ flow явно. flow_override — если задан, подставляется в JSON вместо c.flow
-    (массовый sync: не полагаться на мутацию pydantic-модели и на «actual» из снимка get_list).
+    В конце всегда один ключ ``flow`` (пустая строка — явный сброс). flow_override задаёт значение
+    из конфига сервера поверх дампа модели.
     """
     if hasattr(c, "model_dump"):
-        d = c.model_dump(by_alias=True, mode="json", exclude_defaults=True)
+        d = c.model_dump(by_alias=True, mode="json", exclude_defaults=False)
     else:
         d = {}
+    _dedupe_flow_json_key(d)
     if flow_override is not None:
         d["flow"] = (str(flow_override).strip() if str(flow_override).strip() else "")
     else:
