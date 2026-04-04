@@ -61,6 +61,8 @@ def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dic
             else:
                 expiry_sec = int(expiry_ms) // 1000
             flow_raw = client.get("flow")
+            if flow_raw is None:
+                flow_raw = client.get("Flow")
             flow_s = (str(flow_raw).strip() if flow_raw is not None else "") or ""
             out[email] = {
                 "expiry_sec": expiry_sec,
@@ -337,23 +339,29 @@ class SubscriptionManager:
                     # Поэтому после создания устанавливаем точное время из expires_at
                     try:
                         logger.info(
-                            f"Установка точного времени истечения для клиента {client_email} "
+                            f"Установка точного времени истечения и flow для клиента {client_email} "
                             f"на сервере {server_name}: {expires_at}"
                         )
-                        updated = await xui.setClientExpiry(client_email, expires_at, flow=client_flow)
-                        if updated:
+                        ok_rec, _ = await xui.reconcile_client(
+                            client_email,
+                            expiry_sec=expires_at,
+                            limit_ip=device_limit,
+                            flow_from_config=client_flow,
+                            panel_snapshot=None,
+                        )
+                        if ok_rec:
                             logger.info(
-                                f"Точное время истечения установлено для клиента {client_email} "
+                                f"Точное время и flow синхронизированы для клиента {client_email} "
                                 f"на сервере {server_name}"
                             )
                         else:
                             logger.warning(
-                                f"Не удалось установить точное время истечения для клиента {client_email} "
-                                f"на сервере {server_name}: клиент не найден"
+                                f"Не удалось синхронизировать клиента {client_email} "
+                                f"на сервере {server_name}: не найден на панели после создания"
                             )
                     except (RuntimeError, ValueError, TypeError) as set_expiry_e:
                         logger.warning(
-                            f"Ошибка установки точного времени истечения для клиента {client_email} "
+                            f"Ошибка синхронизации после создания клиента {client_email} "
                             f"на сервере {server_name}: {set_expiry_e}"
                         )
                         # Не критично - клиент создан, время будет синхронизировано при следующей синхронизации

@@ -127,6 +127,10 @@ def _client_to_api_dict(c: Any) -> dict:
     out = {}
     for k, v in d.items():
         out[key_map.get(k, k)] = v
+    # model_dump() иногда опускает или алиасит flow — подмешиваем с объекта, иначе list() даёт неверный снимок для reconcile fast path
+    if not isinstance(c, dict) and hasattr(c, "flow"):
+        raw = getattr(c, "flow", None)
+        out["flow"] = "" if raw is None else str(raw).strip()
     return out
 
 
@@ -420,9 +424,9 @@ class X3:
                 "expiry_time": x_time,
                 "tg_id": str(tg_id),
                 "sub_id": key_name or "",
+                # Явно задаём flow: иначе панель может унаследовать шаблон inbound и разойтись с client_flow сервера
+                "flow": (str(flow).strip() if flow and str(flow).strip() else ""),
             }
-            if flow and str(flow).strip():
-                kwargs["flow"] = str(flow).strip()
             new_client = Py3xuiClient(**kwargs)
         await self._api.client.add(int(inbound_id), [new_client])
         # Успех сигнализируется отсутствием исключения
@@ -451,14 +455,20 @@ class X3:
         Выравнивает expiry (UNIX sec), limit_ip и flow с БД и конфигом сервера.
         Пустой/отсутствующий client_flow в конфиге => на панели flow очищается (VLESS/VMess).
         Для trojan поле flow не меняется.
-        panel_snapshot: снимок из list(); при полном совпадении — без get_by_email/update.
+        panel_snapshot: снимок из list(); учитывается только для trojan (без поля flow).
+        Для VLESS/VMess поле flow в JSON list() ненадёжно (dump, дубликаты email в inbound) —
+        всегда сверяем через get_by_email.
         Returns: (success, did_update).
         """
         await self._ensure_login()
-        if panel_snapshot is not None and _panel_snapshot_matches_desired(
-            panel_snapshot, expiry_sec, limit_ip, flow_from_config
-        ):
-            return True, False
+        if panel_snapshot is not None and panel_snapshot.get("on_panel"):
+            proto_snap = (protocol or panel_snapshot.get("protocol") or "vless").strip().lower()
+            if (
+                proto_snap == "trojan"
+                and _expiry_sec_matches_panel(panel_snapshot.get("expiry_sec"), expiry_sec)
+                and _limit_ip_matches_panel(panel_snapshot.get("limit_ip"), limit_ip)
+            ):
+                return True, False
         try:
             c = await self._api.client.get_by_email(user_email)
         except ValueError as e:
