@@ -15,7 +15,6 @@ from typing import Any, FrozenSet, Optional, Tuple
 ALLOWED_CLIENT_FLOW_VALUES: FrozenSet[str] = frozenset(
     {
         "xtls-rprx-vision",
-        "xtls-rprx-vision-udp443",
     }
 )
 
@@ -37,4 +36,4 @@ def normalize_client_flow_for_storage(value: Any) -> Tuple[Optional[str], Option
         return None, None
     if s in ALLOWED_CLIENT_FLOW_VALUES:
         return s, None
-    return None, "client_flow must be null, empty, or one of: xtls-rprx-vision, xtls-rprx-vision-udp443"
+    return None, "client_flow must be null, empty, or xtls-rprx-vision"

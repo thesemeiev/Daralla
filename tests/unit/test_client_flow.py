@@ -5,8 +5,8 @@ from bot.client_flow import ALLOWED_CLIENT_FLOW_VALUES, normalize_client_flow_fo
 
 def test_allowed_set():
     assert "xtls-rprx-vision" in ALLOWED_CLIENT_FLOW_VALUES
-    assert "xtls-rprx-vision-udp443" in ALLOWED_CLIENT_FLOW_VALUES
-    assert len(ALLOWED_CLIENT_FLOW_VALUES) == 2
+    assert "xtls-rprx-vision-udp443" not in ALLOWED_CLIENT_FLOW_VALUES
+    assert len(ALLOWED_CLIENT_FLOW_VALUES) == 1
 
 
 @pytest.mark.parametrize(
@@ -16,7 +16,6 @@ def test_allowed_set():
         ("", None),
         ("  ", None),
         ("xtls-rprx-vision", "xtls-rprx-vision"),
-        ("xtls-rprx-vision-udp443", "xtls-rprx-vision-udp443"),
     ],
 )
 def test_normalize_ok(raw, expected_stored):

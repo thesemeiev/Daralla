@@ -7530,46 +7530,28 @@ function renderServersInGroup(servers) {
     listEl.innerHTML = '<div class="server-reorder-stack admin-server-rows">' + cards + '</div>';
 }
 
-var SERVER_CLIENT_FLOW_ALLOWED = ['xtls-rprx-vision', 'xtls-rprx-vision-udp443'];
+var SERVER_CLIENT_FLOW_VALUE = 'xtls-rprx-vision';
 
 function setServerClientFlowFormState(serverFlowRaw) {
     var enable = document.getElementById('server-client-flow-enable');
-    var select = document.getElementById('server-client-flow-select');
     var legacyWarn = document.getElementById('server-flow-legacy-warning');
-    if (!enable || !select) return;
+    if (!enable) return;
     if (legacyWarn) legacyWarn.style.display = 'none';
     var v = (serverFlowRaw || '').trim();
     if (!v) {
         enable.checked = false;
-        select.disabled = true;
-        select.value = SERVER_CLIENT_FLOW_ALLOWED[0];
-        return;
-    }
-    if (SERVER_CLIENT_FLOW_ALLOWED.indexOf(v) !== -1) {
-        enable.checked = true;
-        select.disabled = false;
-        select.value = v;
         return;
     }
     enable.checked = true;
-    select.disabled = false;
-    select.value = SERVER_CLIENT_FLOW_ALLOWED[0];
-    if (legacyWarn) legacyWarn.style.display = 'block';
-}
-
-function onServerClientFlowToggle() {
-    var enable = document.getElementById('server-client-flow-enable');
-    var select = document.getElementById('server-client-flow-select');
-    if (!enable || !select) return;
-    select.disabled = !enable.checked;
+    if (v !== SERVER_CLIENT_FLOW_VALUE && legacyWarn) {
+        legacyWarn.style.display = 'block';
+    }
 }
 
 function getServerClientFlowPayload() {
     var enable = document.getElementById('server-client-flow-enable');
-    var select = document.getElementById('server-client-flow-select');
-    if (!enable || !select) return null;
-    if (!enable.checked) return null;
-    return select.value || null;
+    if (!enable) return null;
+    return enable.checked ? SERVER_CLIENT_FLOW_VALUE : null;
 }
 
 // Показать модалку добавления сервера
