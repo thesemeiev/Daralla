@@ -140,7 +140,9 @@ def _normalize_client_flow_value(v: Any) -> str:
     return str(v).strip()
 
 
-def _panel_client_settings_dict(c: Any) -> Dict[str, Any]:
+def _panel_client_settings_dict(
+    c: Any, flow_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Тело clients[] для addClient/updateClient в 3x-ui.
 
@@ -148,14 +150,18 @@ def _panel_client_settings_dict(c: Any) -> Dict[str, Any]:
     по умолчанию пустая строка — при сбросе flow поле не попадает в JSON, панель не затирает
     старый flow (рассинхрон с админкой бота, где client_flow очищен в БД).
 
-    Всегда добавляем ключ flow явно.
+    Всегда добавляем ключ flow явно. flow_override — если задан, подставляется в JSON вместо c.flow
+    (массовый sync: не полагаться на мутацию pydantic-модели и на «actual» из снимка get_list).
     """
     if hasattr(c, "model_dump"):
         d = c.model_dump(by_alias=True, mode="json", exclude_defaults=True)
     else:
         d = {}
-    fv = getattr(c, "flow", None)
-    d["flow"] = "" if fv is None else str(fv).strip()
+    if flow_override is not None:
+        d["flow"] = (str(flow_override).strip() if str(flow_override).strip() else "")
+    else:
+        fv = getattr(c, "flow", None)
+        d["flow"] = "" if fv is None else str(fv).strip()
     return d
 
 
@@ -465,17 +471,32 @@ class X3:
         url = api._url("panel/api/inbounds/addClient")
         await api._post(url, {"Accept": "application/json"}, data)
 
-    async def _post_inbound_update_client(self, c: Any) -> None:
-        """updateClient: как py3xui, но flow всегда в JSON — иначе сброс flow на панели не работает."""
+    async def _post_inbound_update_client(
+        self,
+        c: Any,
+        inbound_id_override: Optional[int] = None,
+        flow_override: Optional[str] = None,
+    ) -> None:
+        """updateClient: как py3xui, но flow всегда в JSON — иначе сброс flow на панели не работает.
+
+        inbound_id_override: если задан, подставляется в тело запроса вместо c.inbound_id
+        (нужно при обновлении записи из снимка inbound: у клиента в settings часто нет inbound_id).
+
+        flow_override: явное значение flow в JSON (массовый sync); иначе берётся с объекта c.
+        """
         await self._ensure_login()
         self._ensure_client_id_for_update(c)
-        inbound_id = getattr(c, "inbound_id", None)
+        inbound_id = (
+            int(inbound_id_override)
+            if inbound_id_override is not None
+            else getattr(c, "inbound_id", None)
+        )
         if inbound_id is None:
             raise ValueError("updateClient: у клиента нет inbound_id")
         api = self._api.client
         uuid_for_url = c.id
         endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
-        settings = {"clients": [_panel_client_settings_dict(c)]}
+        settings = {"clients": [_panel_client_settings_dict(c, flow_override=flow_override)]}
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url(endpoint)
         await api._post(url, {"Accept": "application/json"}, data)
@@ -751,11 +772,12 @@ class X3:
         """
         Массово выставляет flow для всех клиентов по inbound (протокол задаётся панелью).
 
-        Раньше задачи схлопывались по email: при одном email в двух inbound обновлялся только один
-        клиент. Теперь отдельная задача на каждую запись (inbound_id, email).
+        Обновление по строке clients[] из get_list() для этого inbound + явный inbound_id в теле запроса.
+        Flow в JSON всегда задаётся через flow_override (целевое значение с сервера), без сравнения
+        со снимком: иначе при одном inbound возможны ложные skip (объект из get_list часто без flow)
+        или рассинхрон после мутации модели py3xui.
 
-        Сброс flow (пустое значение из админки) идёт через _post_inbound_update_client — в JSON
-        всегда передаётся ключ flow (py3xui иначе выкидывает \"\" как default и панель не сбрасывает).
+        Несколько inbound с одним email: get_by_email не используем — обновляется каждая строка.
 
         Returns: (updated_count, skipped_unchanged_count, errors_list).
         """
@@ -775,45 +797,23 @@ class X3:
                     work_items.append((int(inv_id), c))
 
         async def _one(inbound_id: int, c_list: Any) -> Tuple[str, Optional[str]]:
-            """
-            Подгружаем клиента через get_by_email; сверяем inbound_id — иначе дубликат email.
-            """
+            """Правим flow у конкретной строки clients[] этого inbound (без get_by_email)."""
             email = getattr(c_list, "email", None)
             if not email:
                 return "err", "?: нет email у записи клиента в inbound"
             email = str(email)
             async with sem:
                 try:
-                    # Не сравниваем flow со снимком из inbound.settings: у py3xui/панели поле часто
-                    # пустое в объекте при том, что в БД панели flow задан (как с exclude_defaults).
-                    # При target="" все 205 клиентов ошибочно попадали в skip без get_by_email.
-                    try:
-                        c = await self._api.client.get_by_email(email)
-                    except ValueError as e:
-                        if _value_error_client_absent_on_panel(e):
-                            return "err", f"{email}: клиент не найден (возможно удалён)"
-                        raise
-                    if c is None:
-                        return "err", f"{email}: клиент не найден"
-                    api_iid = int(getattr(c, "inbound_id", -1) or -1)
-                    if api_iid != int(inbound_id):
-                        return (
-                            "err",
-                            f"{email}: get_by_email вернул inbound {api_iid}, ожидался {inbound_id} "
-                            f"(один email в нескольких inbound — API отдаёт одну запись; разведите email или правьте вручную)",
-                        )
-                    actual = _normalize_client_flow_value(getattr(c, "flow", None))
-                    # getClientTraffics (get_by_email) часто не возвращает поле flow в JSON — в модели
-                    # Client тогда остаётся default "". При целевом сбросе (target "") получалось
-                    # actual == target и ложный skip, хотя на панели flow ещё заполнен.
-                    if actual == target and target != "":
-                        return "skip", None
-                    c.flow = target if target else ""
+                    c = c_list
                     self._ensure_client_id_for_update(c)
                     last_exc: Optional[Exception] = None
                     for attempt in range(3):
                         try:
-                            await self._post_inbound_update_client(c)
+                            await self._post_inbound_update_client(
+                                c,
+                                inbound_id_override=int(inbound_id),
+                                flow_override=target,
+                            )
                             return "ok", None
                         except Exception as up_e:
                             last_exc = up_e
