@@ -8,6 +8,7 @@ import datetime
 import json
 import logging
 import os
+import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
@@ -288,12 +289,26 @@ class X3:
         for sub in (self._api.client, self._api.inbound, self._api.database, self._api.server):
             sub.max_retries = mr
         self._logged_in = False
+        self._login_ts: float = 0.0
+        self._session_ttl: float = float(os.getenv("XUI_SESSION_TTL_SEC", "1800"))
         logger.debug("X3 (py3xui) создан для %s", host)
 
     async def _ensure_login(self) -> None:
+        now = time.monotonic()
+        if self._logged_in and (now - self._login_ts) >= self._session_ttl:
+            logger.debug("Сессия панели %s устарела (%.0f с), перелогин", self.host, now - self._login_ts)
+            self._logged_in = False
         if not self._logged_in:
             await self._api.login()
             self._logged_in = True
+            self._login_ts = time.monotonic()
+
+    async def _relogin(self) -> None:
+        """Принудительный повторный логин (при 401/session expired)."""
+        self._logged_in = False
+        await self._api.login()
+        self._logged_in = True
+        self._login_ts = time.monotonic()
 
     async def _ensure_connected(self) -> None:
         """Алиас для совместимости с прежним кодом."""

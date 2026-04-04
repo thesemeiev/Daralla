@@ -108,8 +108,8 @@ class SyncManager:
                     stats["total_servers_synced"] = cfg_stats.get("total_servers_synced", 0)
                     stats["total_clients_created"] += cfg_stats.get("clients_created", 0)
                     stats["errors"].extend(cfg_stats.get("errors", []))
-            except (RuntimeError, ValueError, TypeError) as e:
-                logger.error("Ошибка sync_servers_with_config: %s", e)
+            except Exception as e:
+                logger.error("Ошибка sync_servers_with_config: %s", e, exc_info=True)
                 stats["errors"].append(f"sync_servers_with_config: {e}")
 
             if not self.server_manager.servers:
@@ -118,14 +118,13 @@ class SyncManager:
                     "Убедитесь, что init_server_managers() выполнился и в БД есть активные серверы."
                 )
 
-            # Очистка сиротских клиентов (не связанных с подписками из get_subscriptions_to_sync)
             try:
                 orphaned_stats = await self.cleanup_orphaned_clients()
                 stats["orphaned_clients_deleted"] = orphaned_stats.get("deleted_count", 0)
                 if orphaned_stats.get("errors"):
                     stats["errors"].extend(orphaned_stats["errors"])
-            except (RuntimeError, ValueError, TypeError) as e:
-                logger.error("Ошибка cleanup_orphaned_clients: %s", e)
+            except Exception as e:
+                logger.error("Ошибка cleanup_orphaned_clients: %s", e, exc_info=True)
                 stats["errors"].append(f"cleanup_orphaned_clients: {e}")
 
             stats["total_errors"] = len(stats["errors"])

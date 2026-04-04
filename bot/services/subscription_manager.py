@@ -26,6 +26,7 @@ from ..db.subscriptions_db import (
     update_subscription_name,
 )
 from .server_manager import MultiServerManager
+from .xui_service import _panel_snapshot_matches_desired
 
 logger = logging.getLogger(__name__)
 
@@ -288,8 +289,17 @@ class SubscriptionManager:
                 on_panel = await xui.client_exists(client_email)
 
             if on_panel:
+                if panel_entry is not None and _panel_snapshot_matches_desired(
+                    panel_entry, expires_at, device_limit, client_flow
+                ):
+                    logger.debug(
+                        "Клиент %s на сервере %s — snapshot совпадает, reconcile не нужен",
+                        client_email, server_name,
+                    )
+                    return True, False
+
                 if panel_entry is not None:
-                    logger.debug("Клиент %s на сервере %s (снимок list)", client_email, server_name)
+                    logger.debug("Клиент %s на сервере %s (снимок list, требует reconcile)", client_email, server_name)
                 else:
                     logger.info(
                         "Клиент %s уже существует на сервере %s",
@@ -316,7 +326,7 @@ class SubscriptionManager:
                             client_email,
                             server_name,
                         )
-                except (RuntimeError, ValueError, TypeError, KeyError) as rec_e:
+                except Exception as rec_e:
                     logger.warning(
                         "Ошибка reconcile_client на сервере %s для %s: %s",
                         server_name,
@@ -376,30 +386,25 @@ class SubscriptionManager:
                                 f"Установка точного времени истечения и flow для клиента {client_email} "
                                 f"на сервере {server_name}: {expires_at}"
                             )
-                        ok_rec = False
-                        # После addClient панель может "увидеть" клиента не сразу.
-                        # Даем больше времени и сначала дожидаемся появления, затем reconcile.
-                        max_attempts = 10
-                        for attempt in range(max_attempts):
-                            ok_rec, _ = await xui.reconcile_client(
-                                client_email,
-                                expiry_sec=expires_at,
-                                limit_ip=device_limit,
-                                flow_from_config=client_flow,
-                            )
-                            if ok_rec:
-                                break
+                            ok_rec = False
+                            max_attempts = 10
+                            for attempt in range(max_attempts):
+                                ok_rec, _ = await xui.reconcile_client(
+                                    client_email,
+                                    expiry_sec=expires_at,
+                                    limit_ip=device_limit,
+                                    flow_from_config=client_flow,
+                                )
+                                if ok_rec:
+                                    break
 
-                            # Если reconcile пока не нашел клиента, проверяем наличие напрямую:
-                            # это помогает отличить "еще не появился" от реального отсутствия.
-                            try:
-                                exists_now = await xui.client_exists(client_email)
-                            except Exception:
-                                exists_now = False
+                                try:
+                                    exists_now = await xui.client_exists(client_email)
+                                except Exception:
+                                    exists_now = False
 
-                            # Небольшой backoff, чтобы не спамить API панели.
-                            # Суммарно ~11 секунд ожидания появления.
-                            await asyncio.sleep(0.2 if exists_now else min(2.0, 0.2 * (attempt + 1)))
+                                await asyncio.sleep(0.2 if exists_now else min(2.0, 0.2 * (attempt + 1)))
+
                             if ok_rec:
                                 logger.info(
                                     f"Точное время и flow синхронизированы для клиента {client_email} "
@@ -408,10 +413,11 @@ class SubscriptionManager:
                             else:
                                 logger.warning(
                                     f"Не удалось синхронизировать клиента {client_email} "
-                                    f"на сервере {server_name}: не найден на панели после создания"
+                                    f"на сервере {server_name}: не найден на панели после создания "
+                                    f"({max_attempts} попыток)"
                                 )
                                 return False, False
-                        except (RuntimeError, ValueError, TypeError) as set_expiry_e:
+                        except Exception as set_expiry_e:
                             logger.warning(
                                 f"Ошибка синхронизации после создания клиента {client_email} "
                                 f"на сервере {server_name}: {set_expiry_e}"
@@ -423,7 +429,7 @@ class SubscriptionManager:
                     logger.error(f"Не удалось создать клиента на сервере {server_name}: неизвестная ошибка")
                     return False, False
                     
-        except (RuntimeError, ValueError, TypeError, KeyError) as e:
+        except Exception as e:
             logger.error(f"Ошибка ensure_client_on_server для {server_name}: {e}")
             return False, False
 
@@ -636,11 +642,11 @@ class SubscriptionManager:
                             f"Удалена связь подписки {subscription_id} с сервером {server_name} "
                             f"(сервер удалён из группы или перенесён); панель X-UI не изменялась"
                         )
-                    except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                    except Exception as e:
                         logger.error(
                             f"Ошибка удаления сервера {server_name} для подписки {subscription_id}: {e}"
                         )
-            except (RuntimeError, ValueError, TypeError, KeyError) as e:
+            except Exception as e:
                 stats["errors"].append(f"Подписка {subscription_id}: {e}")
 
         # Фаза 2: один list() на X-UI сервер, затем ensure с снимком (без лишних get_by_email).
@@ -708,7 +714,7 @@ class SubscriptionManager:
                 try:
                     data = await xui.list()
                     email_map = clients_by_email_from_xui_list_response(data)
-                except (RuntimeError, ValueError, TypeError) as e:
+                except Exception as e:
                     logger.warning(
                         "list() для сервера %s не удался, ensure по API на клиента: %s",
                         server_name,
@@ -731,7 +737,7 @@ class SubscriptionManager:
                                 panel_entry=pe,
                             )
                             return (t, r)
-                        except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                        except Exception as e:
                             return (t, e)
 
                 pairs = await asyncio.gather(*[one(t) for t in tasks])
