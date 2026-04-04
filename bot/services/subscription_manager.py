@@ -122,6 +122,18 @@ class SubscriptionManager:
 
     def __init__(self, server_manager: MultiServerManager):
         self.server_manager = server_manager
+        # Точечные lock'и на пару (server_name, client_email) для serialize ensure.
+        self._ensure_locks_guard = asyncio.Lock()
+        self._ensure_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
+
+    async def _get_ensure_lock(self, server_name: str, client_email: str) -> asyncio.Lock:
+        key = (str(server_name), str(client_email))
+        async with self._ensure_locks_guard:
+            lock = self._ensure_locks.get(key)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._ensure_locks[key] = lock
+            return lock
 
     async def create_subscription_for_user(
         self,
@@ -315,66 +327,88 @@ class SubscriptionManager:
 
                 return True, False
             else:
-                logger.info(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
-                current_time = int(time.time())
-                days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
-                server_config = self.server_manager.get_server_config(server_name)
-                logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
-                client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
-                created = await xui.addClient(
-                    day=days_remaining,
-                    tg_id=user_id,
-                    user_email=client_email,
-                    timeout=15,
-                    key_name=token,
-                    limit_ip=device_limit,
-                    flow=client_flow
-                )
-                
-                if created:
-                    logger.info(f"Клиент {client_email} успешно создан на сервере {server_name}")
-
-                    # ВАЖНО: Устанавливаем точное время истечения из БД
-                    # addClient использует округление до дней, что может давать неточное время
-                    # Поэтому после создания устанавливаем точное время из expires_at
-                    try:
-                        logger.info(
-                            f"Установка точного времени истечения и flow для клиента {client_email} "
-                            f"на сервере {server_name}: {expires_at}"
+                ensure_lock = await self._get_ensure_lock(server_name, client_email)
+                async with ensure_lock:
+                    # Под lock перепроверяем факт наличия на панели:
+                    # другой параллельный ensure мог уже создать клиента.
+                    exists_now = await xui.client_exists(client_email)
+                    if exists_now:
+                        ok, did_update = await xui.reconcile_client(
+                            client_email,
+                            expiry_sec=expires_at,
+                            limit_ip=device_limit,
+                            flow_from_config=client_flow,
                         )
-                        ok_rec = False
-                        for attempt in range(3):
-                            ok_rec, _ = await xui.reconcile_client(
-                                client_email,
-                                expiry_sec=expires_at,
-                                limit_ip=device_limit,
-                                flow_from_config=client_flow,
-                            )
-                            if ok_rec:
-                                break
-                            await asyncio.sleep(0.4 * (attempt + 1))
-                        if ok_rec:
+                        if not ok:
+                            return False, False
+                        if did_update:
                             logger.info(
-                                f"Точное время и flow синхронизированы для клиента {client_email} "
-                                f"на сервере {server_name}"
+                                "Синхронизирован клиент %s на %s (expiry, limitIp, flow по БД/конфигу)",
+                                client_email,
+                                server_name,
                             )
-                        else:
+                        return True, False
+
+                    logger.info(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
+                    current_time = int(time.time())
+                    days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
+                    server_config = self.server_manager.get_server_config(server_name)
+                    logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
+                    client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
+                    created = await xui.addClient(
+                        day=days_remaining,
+                        tg_id=user_id,
+                        user_email=client_email,
+                        timeout=15,
+                        key_name=token,
+                        limit_ip=device_limit,
+                        flow=client_flow
+                    )
+                    
+                    if created:
+                        logger.info(f"Клиент {client_email} успешно создан на сервере {server_name}")
+
+                        # ВАЖНО: Устанавливаем точное время истечения из БД
+                        # addClient использует округление до дней, что может давать неточное время
+                        # Поэтому после создания устанавливаем точное время из expires_at
+                        try:
+                            logger.info(
+                                f"Установка точного времени истечения и flow для клиента {client_email} "
+                                f"на сервере {server_name}: {expires_at}"
+                            )
+                            ok_rec = False
+                            for attempt in range(3):
+                                ok_rec, _ = await xui.reconcile_client(
+                                    client_email,
+                                    expiry_sec=expires_at,
+                                    limit_ip=device_limit,
+                                    flow_from_config=client_flow,
+                                )
+                                if ok_rec:
+                                    break
+                                await asyncio.sleep(0.4 * (attempt + 1))
+                            if ok_rec:
+                                logger.info(
+                                    f"Точное время и flow синхронизированы для клиента {client_email} "
+                                    f"на сервере {server_name}"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Не удалось синхронизировать клиента {client_email} "
+                                    f"на сервере {server_name}: не найден на панели после создания"
+                                )
+                                return False, False
+                        except (RuntimeError, ValueError, TypeError) as set_expiry_e:
                             logger.warning(
-                                f"Не удалось синхронизировать клиента {client_email} "
-                                f"на сервере {server_name}: не найден на панели после создания"
+                                f"Ошибка синхронизации после создания клиента {client_email} "
+                                f"на сервере {server_name}: {set_expiry_e}"
                             )
                             return False, False
-                    except (RuntimeError, ValueError, TypeError) as set_expiry_e:
-                        logger.warning(
-                            f"Ошибка синхронизации после создания клиента {client_email} "
-                            f"на сервере {server_name}: {set_expiry_e}"
-                        )
-                        return False, False
 
-                    return True, True  # Клиент создан
+                        return True, True  # Клиент создан
 
-                logger.error(f"Не удалось создать клиента на сервере {server_name}: неизвестная ошибка")
-                return False, False
+                    logger.error(f"Не удалось создать клиента на сервере {server_name}: неизвестная ошибка")
+                    return False, False
                     
         except (RuntimeError, ValueError, TypeError, KeyError) as e:
             logger.error(f"Ошибка ensure_client_on_server для {server_name}: {e}")
