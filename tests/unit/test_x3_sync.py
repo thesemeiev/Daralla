@@ -2,7 +2,7 @@
 Unit tests for X3/sync: deleteClient return value and ensure_client_on_server with mocks.
 """
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -115,6 +115,12 @@ async def test_ensure_client_on_server_creates_client_when_addClient_succeeds(
     )
 
     assert result == (True, True)
-    mock_xui_for_ensure.client_exists.assert_awaited_once_with("user@test")
+    # client_exists вызывается дважды:
+    # 1) обычная проверка,
+    # 2) повторная проверка под lock перед create (защита от гонок).
+    assert mock_xui_for_ensure.client_exists.await_count == 2
+    mock_xui_for_ensure.client_exists.assert_has_awaits(
+        [call("user@test"), call("user@test")]
+    )
     mock_xui_for_ensure.addClient.assert_awaited_once()
     assert mock_xui_for_ensure.reconcile_client.await_count >= 1
