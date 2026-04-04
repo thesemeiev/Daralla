@@ -949,6 +949,8 @@ class X3:
                 if client.get("email") == user_email:
                     sub_id = client.get("subId", "")
                     if sub_id:
+                        if self.subscription_url:
+                            return f"{self.subscription_url.rstrip('/')}/{sub_id}"
                         host_part = self.host.split("//")[-1]
                         if "/panel" in host_part:
                             host_part = host_part.split("/panel")[0]
@@ -977,7 +979,6 @@ class X3:
             if not base_url and self.host:
                 scheme = "https" if self.host.startswith("https") else "http"
                 host_part = self.host.split("//")[-1].split("/panel")[0]
-                # Убираем порт панели (59580), чтобы подставить только subscription_port (2096)
                 if ":" in host_part:
                     host_only = host_part.rsplit(":", 1)[0]
                 else:
@@ -985,7 +986,7 @@ class X3:
                 host_for_sub = (self.vpn_host or host_only).strip()
                 if host_for_sub and ":" in host_for_sub:
                     host_for_sub = host_for_sub.rsplit(":", 1)[0]
-                base_url = f"{scheme}://{host_for_sub}:{self.subscription_port}"
+                base_url = f"{scheme}://{host_for_sub}:{self.subscription_port}/sub"
             client = await self._api.client.get_by_email(user_email)
             if not client:
                 logger.debug("get_subscription_links: клиент не найден email=%s", user_email)
@@ -1001,7 +1002,7 @@ class X3:
             if not sub_id:
                 logger.debug("get_subscription_links: sub_id пустой у клиента email=%s", user_email)
                 return []
-            sub_url = f"{base_url.rstrip('/')}/sub/{sub_id}"
+            sub_url = f"{base_url.rstrip('/')}/{sub_id}"
             try:
                 async with httpx.AsyncClient(verify=False, timeout=15.0) as hc:
                     r = await hc.get(sub_url)

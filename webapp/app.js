@@ -7594,7 +7594,6 @@ function editServerConfig(serverId) {
     document.getElementById('server-login-input').value = server.login;
     document.getElementById('server-pass-input').value = server.password;
     document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
-    document.getElementById('server-subscription-port-input').value = server.subscription_port != null ? String(server.subscription_port) : '2096';
     document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
     setServerClientFlowFormState(server.client_flow || '');
     document.getElementById('server-map-label-input').value = server.map_label || '';
@@ -7611,7 +7610,6 @@ function editServerConfig(serverId) {
 async function saveServerConfig(event) {
     event.preventDefault();
     const id = document.getElementById('server-id-input').value;
-    const portVal = document.getElementById('server-subscription-port-input').value;
     const body = {
         group_id: currentSelectedGroupId,
         name: document.getElementById('server-name-input').value,
@@ -7620,7 +7618,6 @@ async function saveServerConfig(event) {
         login: document.getElementById('server-login-input').value,
         password: document.getElementById('server-pass-input').value,
         vpn_host: document.getElementById('server-vpnhost-input').value || null,
-        subscription_port: portVal ? parseInt(portVal, 10) : null,
         subscription_url: document.getElementById('server-subscription-url-input').value || null,
         client_flow: getServerClientFlowPayload(),
         map_label: document.getElementById('server-map-label-input').value?.trim() || null,

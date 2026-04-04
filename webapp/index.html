@@ -1188,12 +1188,9 @@
                         <input type="text" id="server-vpnhost-input" placeholder="Оставьте пустым, если совпадает с хостом">
                     </div>
                     <div class="form-group">
-                        <label for="server-subscription-port-input">Порт подписки X-UI</label>
-                        <input type="number" id="server-subscription-port-input" min="1" max="65535" placeholder="2096" title="Порт, на котором X-UI отдаёт подписку (обычно 2096)">
-                    </div>
-                    <div class="form-group">
-                        <label for="server-subscription-url-input">URL подписки (необязательно)</label>
-                        <input type="text" id="server-subscription-url-input" placeholder="http://host:2096 — если пусто, считается из хоста и порта подписки">
+                        <label for="server-subscription-url-input">URL подписки</label>
+                        <input type="text" id="server-subscription-url-input" placeholder="https://host:2096/sub — полный путь без sub_id на конце">
+                        <p style="margin:4px 0 0;font-size:0.82em;color:var(--text-muted, #888);">Полный базовый URL подписки. Примеры: <code>https://89.169.15.98:2096/sub</code>, <code>https://89.169.15.98:2096/Daralla</code></p>
                     </div>
                     <div class="form-group">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
