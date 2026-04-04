@@ -110,10 +110,13 @@ async def test_reconcile_client_applies_flow_from_config_when_mismatch():
             x3._api.client.get_by_email.assert_called_once()
             assert mock_c.flow == "xtls-rprx-vision"
             x3._post_inbound_update_client.assert_called_once()
+            call_kw = x3._post_inbound_update_client.call_args
+            assert call_kw.kwargs.get("flow_override") == "xtls-rprx-vision"
 
 
 @pytest.mark.asyncio
-async def test_reconcile_client_no_update_when_already_matches():
+async def test_reconcile_client_always_posts_even_when_api_looks_in_sync():
+    """Даже если get_by_email совпадает с целью — всё равно update + flow_override (API про flow врёт)."""
     with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
         with patch("bot.services.xui_service.AsyncApi"):
             from bot.services.xui_service import X3
@@ -139,6 +142,7 @@ async def test_reconcile_client_no_update_when_already_matches():
                 flow_from_config="a",
             )
             assert ok is True
-            assert did_upd is False
+            assert did_upd is True
             x3._api.client.get_by_email.assert_called_once()
-            x3._post_inbound_update_client.assert_not_called()
+            x3._post_inbound_update_client.assert_called_once()
+            assert x3._post_inbound_update_client.call_args.kwargs.get("flow_override") == "a"

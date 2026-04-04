@@ -425,6 +425,7 @@ class X3:
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
         limit_ip_value = limit_ip if limit_ip is not None else 1
         client_uuid = str(uuid.uuid4())
+        flow_val = (str(flow).strip() if flow and str(flow).strip() else "")
 
         if protocol == "trojan":
             new_client = Py3xuiClient(
@@ -436,20 +437,19 @@ class X3:
                 expiry_time=x_time,
                 tg_id=str(tg_id),
                 sub_id=key_name or "",
+                flow=flow_val,
             )
         else:
-            kwargs = {
-                "id": client_uuid,
-                "email": str(user_email),
-                "enable": True,
-                "limit_ip": limit_ip_value,
-                "expiry_time": x_time,
-                "tg_id": str(tg_id),
-                "sub_id": key_name or "",
-                # Явно задаём flow: иначе панель может унаследовать шаблон inbound и разойтись с client_flow сервера
-                "flow": (str(flow).strip() if flow and str(flow).strip() else ""),
-            }
-            new_client = Py3xuiClient(**kwargs)
+            new_client = Py3xuiClient(
+                id=client_uuid,
+                email=str(user_email),
+                enable=True,
+                limit_ip=limit_ip_value,
+                expiry_time=x_time,
+                tg_id=str(tg_id),
+                sub_id=key_name or "",
+                flow=flow_val,
+            )
         await self._post_inbound_add_clients(int(inbound_id), [new_client])
         # Успех сигнализируется отсутствием исключения
         return True
@@ -511,10 +511,14 @@ class X3:
         flow_from_config: Optional[str],
     ) -> Tuple[bool, bool]:
         """
-        Выравнивает expiry (UNIX sec), limit_ip и flow с БД и конфигом сервера.
-        Пустой/отсутствующий client_flow в конфиге => на панели flow очищается.
-        Поле flow в JSON list() ненадёжно — сверка и обновление через get_by_email.
-        Returns: (success, did_update).
+        Всегда отправляет на панель целевые expiry, limit_ip и flow (как в конфиге сервера).
+
+        Не полагаемся на сравнение с ответом get_by_email: поле flow там часто пустое/не то,
+        из‑за чего раньше пропускался update и на панели оставался старый flow.
+
+        Пустой/отсутствующий client_flow в конфиге => в JSON уходит flow "" (сброс на панели).
+
+        Returns: (success, did_update). did_update всегда True при успешном update.
         """
         await self._ensure_login()
         try:
@@ -526,33 +530,12 @@ class X3:
         if c is None:
             return False, False
 
-        exp_ms = getattr(c, "expiry_time", 0) or 0
-        cur_sec = int(exp_ms) // 1000 if exp_ms else None
-        cur_li = getattr(c, "limit_ip", None)
-        cur_flow = _normalize_client_flow_value(getattr(c, "flow", None))
-
-        need = False
-        if cur_sec is None or abs(int(cur_sec) - int(expiry_sec)) > 300:
-            need = True
-        if cur_li is None or cur_li == 0:
-            need = True
-        else:
-            try:
-                if int(cur_li) != int(limit_ip):
-                    need = True
-            except (TypeError, ValueError):
-                need = True
         want_flow = (flow_from_config or "").strip()
-        if cur_flow != want_flow:
-            need = True
-        if not need:
-            return True, False
-
         c.expiry_time = int(expiry_sec) * 1000
         c.limit_ip = int(limit_ip)
         c.flow = want_flow
         self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(c)
+        await self._post_inbound_update_client(c, flow_override=want_flow)
         return True, True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
