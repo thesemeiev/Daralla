@@ -7268,23 +7268,28 @@ async function saveServerGroup(event) {
 async function loadAdminServerGroupPage(groupId) {
     const gid = Number(groupId);
     if (!gid || isNaN(gid)) {
+        currentSelectedGroupId = null;
         showPage('admin-server-management');
         return;
     }
+    // Сразу фиксируем группу, чтобы «+ Сервер» не ловил гонку с await loadServerGroups()
+    // (иначе модалка не открывается и показывается «Сначала откройте группу»).
+    currentSelectedGroupId = gid;
     if (!currentAdminGroups || !currentAdminGroups.length) {
         try {
             await loadServerGroups();
         } catch (e) {
+            currentSelectedGroupId = null;
             showPage('admin-server-management');
             return;
         }
     }
     const g = currentAdminGroups.find(function (x) { return x.id === gid; });
     if (!g) {
+        currentSelectedGroupId = null;
         showPage('admin-server-management');
         return;
     }
-    currentSelectedGroupId = gid;
     adminServerReorderMode = false;
     var reorderBtn = document.getElementById('admin-server-reorder-toggle-btn');
     if (reorderBtn) {
