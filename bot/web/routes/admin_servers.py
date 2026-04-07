@@ -4,7 +4,6 @@ server-config/update, server-config/sync-flow, server-config/delete, sync-all.
 """
 import asyncio
 import logging
-import time
 
 from quart import Blueprint, request, jsonify
 
@@ -29,8 +28,6 @@ from bot.client_flow import normalize_client_flow_for_storage
 
 logger = logging.getLogger(__name__)
 _SERVER_CONFIG_OP_LOCK = asyncio.Lock()
-_SYNC_DEBOUNCE_SECONDS = 2.0
-_last_sync_started_at = 0.0
 
 
 async def _background_sync_client_flow(server_id: int) -> None:
@@ -132,15 +129,6 @@ async def _run_sync_servers_with_config() -> tuple[dict | None, str | None]:
         return None, str(e)
 
 
-def _should_debounce_sync() -> bool:
-    global _last_sync_started_at
-    now = time.monotonic()
-    if (now - _last_sync_started_at) < _SYNC_DEBOUNCE_SECONDS:
-        return True
-    _last_sync_started_at = now
-    return False
-
-
 async def _reload_and_sync_serialized(need_sync: bool) -> tuple[dict | None, str | None, bool]:
     """
     Последовательно выполняет reload server_manager и (опционально) sync,
@@ -155,13 +143,6 @@ async def _reload_and_sync_serialized(need_sync: bool) -> tuple[dict | None, str
 
         if not need_sync:
             return None, None, False
-
-        if _should_debounce_sync():
-            logger.info(
-                "Sync после изменения сервера пропущен по debounce (окно %.1fs)",
-                _SYNC_DEBOUNCE_SECONDS,
-            )
-            return None, None, True
 
         sync_stats, sync_error = await _run_sync_servers_with_config()
         return sync_stats, sync_error, False

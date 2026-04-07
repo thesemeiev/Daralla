@@ -8,6 +8,7 @@ import base64
 import datetime
 import json
 import logging
+import os
 import time
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -387,7 +388,9 @@ class SubscriptionManager:
                                 f"на сервере {server_name}: {expires_at}"
                             )
                             ok_rec = False
-                            max_attempts = 10
+                            # Под нагрузкой панель может не сразу отдавать свежего клиента в list/get_by_email.
+                            # Не считаем это фатальной ошибкой создания: addClient уже успешен.
+                            max_attempts = 4
                             for attempt in range(max_attempts):
                                 ok_rec, _ = await xui.reconcile_client(
                                     client_email,
@@ -397,13 +400,7 @@ class SubscriptionManager:
                                 )
                                 if ok_rec:
                                     break
-
-                                try:
-                                    exists_now = await xui.client_exists(client_email)
-                                except Exception:
-                                    exists_now = False
-
-                                await asyncio.sleep(0.2 if exists_now else min(2.0, 0.2 * (attempt + 1)))
+                                await asyncio.sleep(min(1.2, 0.3 * (attempt + 1)))
 
                             if ok_rec:
                                 logger.info(
@@ -413,16 +410,18 @@ class SubscriptionManager:
                             else:
                                 logger.warning(
                                     f"Не удалось синхронизировать клиента {client_email} "
-                                    f"на сервере {server_name}: не найден на панели после создания "
-                                    f"({max_attempts} попыток)"
+                                    f"на сервере {server_name} сразу после создания "
+                                    f"({max_attempts} попыток). Клиент создан, параметры будут догнаны "
+                                    f"следующим sync/reconcile."
                                 )
-                                return False, False
+                                return True, True
                         except Exception as set_expiry_e:
                             logger.warning(
                                 f"Ошибка синхронизации после создания клиента {client_email} "
-                                f"на сервере {server_name}: {set_expiry_e}"
+                                f"на сервере {server_name}: {set_expiry_e}. "
+                                f"Клиент создан, параметры будут догнаны позднее."
                             )
-                            return False, False
+                            return True, True
 
                         return True, True  # Клиент создан
 
@@ -720,7 +719,12 @@ class SubscriptionManager:
                         server_name,
                         e,
                     )
-                sem = asyncio.Semaphore(15)
+                try:
+                    per_server_concurrency = int(os.getenv("XUI_SYNC_SERVER_CONCURRENCY", "2"))
+                except ValueError:
+                    per_server_concurrency = 2
+                per_server_concurrency = max(1, min(per_server_concurrency, 15))
+                sem = asyncio.Semaphore(per_server_concurrency)
 
                 async def one(t: dict):
                     async with sem:
@@ -741,6 +745,52 @@ class SubscriptionManager:
                             return (t, e)
 
                 pairs = await asyncio.gather(*[one(t) for t in tasks])
+
+                # Если панель под нагрузкой и часть ensure не прошла, делаем мягкий догон:
+                # повторяем только неуспешные задачи с меньшей параллельностью и без snapshot.
+                retry_candidates: List[dict] = []
+                for t, outcome in pairs:
+                    if isinstance(outcome, Exception):
+                        retry_candidates.append(t)
+                        continue
+                    client_exists, _ = outcome
+                    if not client_exists:
+                        retry_candidates.append(t)
+
+                if retry_candidates:
+                    logger.warning(
+                        "Сервер %s: первичный ensure неуспешен для %s клиентов, запускаем догон",
+                        server_name,
+                        len(retry_candidates),
+                    )
+                    retry_sem = asyncio.Semaphore(max(1, min(3, per_server_concurrency)))
+
+                    async def one_retry(t: dict):
+                        async with retry_sem:
+                            try:
+                                r = await self.ensure_client_on_server(
+                                    subscription_id=t["subscription_id"],
+                                    server_name=server_name,
+                                    client_email=t["client_email"],
+                                    user_id=t["user_id"],
+                                    expires_at=t["expires_at"],
+                                    token=t["token"],
+                                    device_limit=t["device_limit"],
+                                    panel_entry=None,
+                                )
+                                return (t, r)
+                            except Exception as e:
+                                return (t, e)
+
+                    retry_pairs = await asyncio.gather(*[one_retry(t) for t in retry_candidates])
+                    retry_by_key = {
+                        (rp[0]["subscription_id"], rp[0]["client_email"]): rp for rp in retry_pairs
+                    }
+                    merged_pairs = []
+                    for t, outcome in pairs:
+                        k = (t["subscription_id"], t["client_email"])
+                        merged_pairs.append(retry_by_key.get(k, (t, outcome)))
+                    pairs = merged_pairs
 
                 # Жёсткий режим: сервер должен содержать только клиентов, назначенных группе
                 # (email из ensure_tasks для этого server_name). Все лишние email удаляем.
