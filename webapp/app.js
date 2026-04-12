@@ -86,6 +86,11 @@ function applyTheme() {
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'light' ? '#f0f0f2' : '#131314');
     if (typeof platform !== 'undefined' && platform.reapplyTgUi) platform.reapplyTgUi();
+    if (typeof serverGlobe !== 'undefined' && serverGlobe && typeof serverGlobe.draw === 'function') {
+        try {
+            serverGlobe.draw();
+        } catch (e) {}
+    }
 }
 function initThemeToggle() {
     document.querySelectorAll('.theme-btn').forEach(function (btn) {
@@ -943,7 +948,7 @@ function initAboutPage() {
         aboutPageState.smoothedProgress = smoothedProgress;
         var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
         var isLight = themeLight ? (smoothedProgress < 0.5) : (smoothedProgress > 0.5);
-        document.body.style.backgroundColor = isLight ? '#f5f5f5' : '#1a1a1a';
+        document.body.style.backgroundColor = isLight ? '#f0f0f2' : '#131314';
         pageEl.classList.toggle('about-bg-light', isLight);
         if (aboutPageState.mesh) {
             var grp = aboutPageState.mesh;
@@ -987,7 +992,17 @@ function initAboutPage() {
                 });
             }
             if (aboutPageState.aboutNodeMaterial && aboutPageState.aboutNodeMaterial.envMapIntensity !== undefined) {
-                aboutPageState.aboutNodeMaterial.envMapIntensity = 0.92;
+                aboutPageState.aboutNodeMaterial.envMapIntensity = 0.82 + smoothedProgress * 0.08;
+            }
+            if (aboutPageState.aboutNodeMaterial && aboutPageState.threeRef && aboutPageState._nodeColA) {
+                var pCol = smoothedProgress;
+                aboutPageState.aboutNodeMaterial.color.copy(aboutPageState._nodeColA).lerp(aboutPageState._nodeColB, pCol);
+                aboutPageState.aboutNodeMaterial.emissive.copy(aboutPageState._nodeEmA).lerp(aboutPageState._nodeEmB, pCol * 0.78);
+                if (aboutPageState.aboutEdgeMaterials) {
+                    aboutPageState.aboutEdgeMaterials.forEach(function (mat) {
+                        mat.color.copy(aboutPageState._edgeColA).lerp(aboutPageState._edgeColB, pCol);
+                    });
+                }
             }
         }
         if (aboutPageState.lights) {
@@ -1019,21 +1034,21 @@ function initAboutPage() {
         renderer.setClearColor(0x000000, 0);
         if (renderer.outputColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
         else if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-        var ambient = new THREE.AmbientLight(0x303850, 0.58);
+        var ambient = new THREE.AmbientLight(0x3a3a42, 0.55);
         scene.add(ambient);
-        var dirLight = new THREE.DirectionalLight(0xffffff, 1.15);
+        var dirLight = new THREE.DirectionalLight(0xf2f2f5, 1.05);
         dirLight.position.set(3, 4, 5);
         scene.add(dirLight);
-        var rimLight = new THREE.DirectionalLight(0xc0d0ff, 0.8);
+        var rimLight = new THREE.DirectionalLight(0xd8d8e0, 0.55);
         rimLight.position.set(-4, -2, -3);
         scene.add(rimLight);
-        var fillLight = new THREE.DirectionalLight(0x8090b0, 0.4);
+        var fillLight = new THREE.DirectionalLight(0x9898a2, 0.35);
         fillLight.position.set(-2, 1, 3);
         scene.add(fillLight);
-        var highlightLight = new THREE.PointLight(0xffffff, 1.1, 8);
+        var highlightLight = new THREE.PointLight(0xffffff, 0.95, 8);
         highlightLight.position.set(2, 2, 2);
         scene.add(highlightLight);
-        var highlightLight2 = new THREE.PointLight(0xe8eeff, 0.6, 6);
+        var highlightLight2 = new THREE.PointLight(0xe4e4ea, 0.5, 6);
         highlightLight2.position.set(-2.5, 1.5, 2);
         scene.add(highlightLight2);
         if (aboutPageState) {
@@ -1048,12 +1063,12 @@ function initAboutPage() {
         }
         var networkGroup = new THREE.Group();
         var nodeMat = new THREE.MeshStandardMaterial({
-            color: 0x252a32,
-            metalness: 0.52,
-            roughness: 0.34,
-            emissive: 0x0a1524,
-            emissiveIntensity: 0.14,
-            envMapIntensity: 0.92
+            color: 0x2a2b30,
+            metalness: 0.45,
+            roughness: 0.38,
+            emissive: 0x0c0c10,
+            emissiveIntensity: 0.12,
+            envMapIntensity: 0.85
         });
         var nodeDefs = [
             { x: 0, y: 0.05, z: 0, r: 0.11 },
@@ -1086,7 +1101,7 @@ function initAboutPage() {
             var b = aboutNodeMeshes[pair[1]].position;
             var edgeGeo = new THREE.BufferGeometry().setFromPoints([a.clone(), b.clone()]);
             var lmat = new THREE.LineBasicMaterial({
-                color: 0x5c7394,
+                color: 0x7a7a86,
                 transparent: true,
                 opacity: 0.22,
                 depthWrite: false
@@ -1106,9 +1121,9 @@ function initAboutPage() {
                 c.height = size;
                 var ctx = c.getContext('2d');
                 var g = ctx.createLinearGradient(0, 0, size, size);
-                g.addColorStop(0, '#0c0d10');
-                g.addColorStop(0.5, '#22252a');
-                g.addColorStop(1, '#3a3e44');
+                g.addColorStop(0, '#0a0a0c');
+                g.addColorStop(0.5, '#1a1a1e');
+                g.addColorStop(1, '#2e2e34');
                 ctx.fillStyle = g;
                 ctx.fillRect(0, 0, size, size);
                 canvases.push(c);
@@ -1168,6 +1183,13 @@ function initAboutPage() {
         aboutPageState.aboutEdgeGeoms = aboutEdgeGeoms;
         aboutPageState.aboutEdgeMaterials = aboutEdgeMaterials;
         aboutPageState.resizeHandler = onResize;
+        aboutPageState.threeRef = THREE;
+        aboutPageState._nodeColA = new THREE.Color(0x26262c);
+        aboutPageState._nodeColB = new THREE.Color(0xdcdce2);
+        aboutPageState._nodeEmA = new THREE.Color(0x060608);
+        aboutPageState._nodeEmB = new THREE.Color(0x18181c);
+        aboutPageState._edgeColA = new THREE.Color(0x5c5c66);
+        aboutPageState._edgeColB = new THREE.Color(0x9a9aa4);
         aboutPageState.animId = requestAnimationFrame(animate);
     }).catch(function () {});
 }
@@ -2653,35 +2675,37 @@ class CustomGlobe {
     // Рисует точки крупных городов (серые)
     drawMajorCities(ctx) {
         const cities = this.getMajorCities();
-        const grayColor = '#888';
-        const size = 4; // Размер точки меньше, чем у серверов
-        
+        var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
+        const grayColor = themeLight ? '#9a9aa2' : '#7a7a82';
+        const cityStroke = themeLight ? '#c8c8d0' : '#4a4a52';
+        const cityLabelFill = themeLight ? '#1a1a1e' : '#ececed';
+        const cityLabelStroke = themeLight ? 'rgba(255, 255, 255, 0.92)' : 'rgba(0, 0, 0, 0.55)';
+        const size = 4;
+
         cities.forEach(city => {
             const pos = this.latLngToXY(city.lat, city.lng);
             if (!pos.visible) return;
-            
-            // Все города — одинаковый стиль (серые точки)
+
             ctx.fillStyle = grayColor;
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
-            ctx.strokeStyle = '#666';
+            ctx.strokeStyle = cityStroke;
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
-            
-            // Подпись города
+
             const label = city.name;
             const fontSize = 10;
             ctx.font = `${fontSize}px Arial, sans-serif`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            
+
             const padding = 6;
             const labelX = Math.round(pos.x + size + padding);
             const labelY = Math.round(pos.y);
-            
+
             ctx.imageSmoothingEnabled = false;
-            
-            ctx.fillStyle = '#fff';
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+
+            ctx.fillStyle = cityLabelFill;
+            ctx.strokeStyle = cityLabelStroke;
             ctx.lineWidth = 2;
             ctx.lineJoin = 'round';
             ctx.strokeText(label, labelX, labelY);
@@ -2864,11 +2888,13 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
-        /* Сфера одна и та же в светлой и тёмной теме */
-        var globeGradient = ['#24262c', '#1f2126', '#1a1a1a'];
-        var globeGridStroke = 'rgba(255, 255, 255, 0.11)';
-        var labelColor = '#fff';
-        var labelStroke = 'rgba(0, 0, 0, 0.5)';
+        var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
+        var globeGradient = themeLight
+            ? ['#f2f2f4', '#e4e4e8', '#d4d4dc']
+            : ['#34343a', '#222226', '#131314'];
+        var globeGridStroke = themeLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.14)';
+        var labelColor = themeLight ? '#1a1a1e' : '#ececed';
+        var labelStroke = themeLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.55)';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
