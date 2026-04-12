@@ -992,12 +992,13 @@ function initAboutPage() {
                 });
             }
             if (aboutPageState.aboutNodeMaterial && aboutPageState.aboutNodeMaterial.envMapIntensity !== undefined) {
-                aboutPageState.aboutNodeMaterial.envMapIntensity = 0.82 + smoothedProgress * 0.08;
+                aboutPageState.aboutNodeMaterial.envMapIntensity = 0.78 + smoothedProgress * 0.05;
             }
             if (aboutPageState.aboutNodeMaterial && aboutPageState.threeRef && aboutPageState._nodeColA) {
-                var pCol = smoothedProgress;
+                /* Не доводим смесь до 1 — к концу скролла фигура остаётся заметно темнее фона */
+                var pCol = Math.min(0.48, smoothedProgress * 0.92);
                 aboutPageState.aboutNodeMaterial.color.copy(aboutPageState._nodeColA).lerp(aboutPageState._nodeColB, pCol);
-                aboutPageState.aboutNodeMaterial.emissive.copy(aboutPageState._nodeEmA).lerp(aboutPageState._nodeEmB, pCol * 0.78);
+                aboutPageState.aboutNodeMaterial.emissive.copy(aboutPageState._nodeEmA).lerp(aboutPageState._nodeEmB, pCol * 0.55);
                 if (aboutPageState.aboutEdgeMaterials) {
                     aboutPageState.aboutEdgeMaterials.forEach(function (mat) {
                         mat.color.copy(aboutPageState._edgeColA).lerp(aboutPageState._edgeColB, pCol);
@@ -1185,11 +1186,11 @@ function initAboutPage() {
         aboutPageState.resizeHandler = onResize;
         aboutPageState.threeRef = THREE;
         aboutPageState._nodeColA = new THREE.Color(0x26262c);
-        aboutPageState._nodeColB = new THREE.Color(0xdcdce2);
+        aboutPageState._nodeColB = new THREE.Color(0x6e6e78);
         aboutPageState._nodeEmA = new THREE.Color(0x060608);
-        aboutPageState._nodeEmB = new THREE.Color(0x18181c);
+        aboutPageState._nodeEmB = new THREE.Color(0x121214);
         aboutPageState._edgeColA = new THREE.Color(0x5c5c66);
-        aboutPageState._edgeColB = new THREE.Color(0x9a9aa4);
+        aboutPageState._edgeColB = new THREE.Color(0x7a7a84);
         aboutPageState.animId = requestAnimationFrame(animate);
     }).catch(function () {});
 }
@@ -2890,9 +2891,9 @@ class CustomGlobe {
         const ctx = this.ctx;
         var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
         var globeGradient = themeLight
-            ? ['#f2f2f4', '#e4e4e8', '#d4d4dc']
+            ? ['#c4c4cc', '#a2a2ac', '#888892']
             : ['#34343a', '#222226', '#131314'];
-        var globeGridStroke = themeLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.14)';
+        var globeGridStroke = themeLight ? 'rgba(0, 0, 0, 0.22)' : 'rgba(255, 255, 255, 0.14)';
         var labelColor = themeLight ? '#1a1a1e' : '#ececed';
         var labelStroke = themeLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.55)';
         // Получаем реальные размеры с учетом devicePixelRatio

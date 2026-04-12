@@ -2317,9 +2317,9 @@ body.about-page-active {
     color: #1a1a1a;
 }
 .page-about-scroll.about-bg-light .about-contact-card {
-    background: rgba(232, 232, 236, 0.7);
-    border-color: rgba(0, 0, 0, 0.08);
-    color: #1a1a1a;
+    background: rgba(248, 248, 250, 0.92);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: #121214;
 }
 @media (hover: hover) and (pointer: fine) {
 .page-about-scroll.about-bg-light .about-contact-card:hover {
@@ -2328,10 +2328,12 @@ body.about-page-active {
 }
 }
 .page-about-scroll.about-bg-light .about-contact-card-label {
-    color: #555;
+    color: #3d3d44;
+    font-weight: 500;
 }
+/* Не var(--accent): в тёмной теме приложения акцент светлый — на светлой карточке текст пропадал */
 .page-about-scroll.about-bg-light .about-contact-card-value {
-    color: var(--about-accent);
+    color: #0e0e12;
 }
 
 /* Мягкое появление блоков при скролле */
@@ -2570,7 +2572,7 @@ body.about-page-active {
 }
 @media (hover: hover) and (pointer: fine) {
 .page-about-scroll.about-bg-light .about-link:hover {
-    color: var(--about-accent);
+    color: #0e0e12;
 }
 }
 .about-link {
