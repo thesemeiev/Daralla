@@ -7573,7 +7573,9 @@ function showAddServerConfigModal() {
     document.getElementById('server-login-input').value = '';
     document.getElementById('server-pass-input').value = '';
     document.getElementById('server-vpnhost-input').value = '';
-    document.getElementById('server-subscription-port-input').value = '2096';
+    // Поле server-subscription-port-input убрано из формы (порт в URL подписки / хосте); дефолт 2096 — на бэкенде.
+    var subPortEl = document.getElementById('server-subscription-port-input');
+    if (subPortEl) subPortEl.value = '2096';
     document.getElementById('server-subscription-url-input').value = '';
     setServerClientFlowFormState('');
     document.getElementById('server-map-label-input').value = '';
