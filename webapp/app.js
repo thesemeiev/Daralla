@@ -84,7 +84,7 @@ function applyTheme() {
     var root = document.documentElement;
     if (root) root.setAttribute('data-theme', theme);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'light' ? '#f5f5f5' : '#1a1a1a');
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#f0f0f2' : '#131314');
     if (typeof platform !== 'undefined' && platform.reapplyTgUi) platform.reapplyTgUi();
 }
 function initThemeToggle() {
@@ -112,7 +112,7 @@ var platform = (function () {
             _tg.ready();
             _tg.expand();
             if (_tg.disableVerticalSwipes) _tg.disableVerticalSwipes();
-            var color = (typeof getTheme === 'function' && getTheme() === 'light') ? '#f5f5f5' : '#1a1a1a';
+            var color = (typeof getTheme === 'function' && getTheme() === 'light') ? '#f0f0f2' : '#131314';
             _tg.setHeaderColor(color);
             _tg.setBackgroundColor(color);
         } catch (e) {}

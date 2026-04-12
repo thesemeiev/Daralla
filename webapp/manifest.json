@@ -3,8 +3,8 @@
   "short_name": "Daralla",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1a1a",
-  "theme_color": "#1a1a1a",
+  "background_color": "#131314",
+  "theme_color": "#131314",
   "icons": [
     {
       "src": "/icons/icon-128.png",
