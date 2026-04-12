@@ -2336,6 +2336,23 @@ body.about-page-active {
     color: #0e0e12;
 }
 
+/* Светлое приложение: низ страницы «О нас» — тёмный фон, светлые карточки без потери контраста */
+[data-theme="light"] .page-about-scroll:not(.about-bg-light) .about-block.about-contact .about-block-title {
+    color: #fafafa;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+[data-theme="light"] .page-about-scroll:not(.about-bg-light) .about-contact-card {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #fafafa;
+}
+[data-theme="light"] .page-about-scroll:not(.about-bg-light) .about-contact-card-label {
+    color: rgba(255, 255, 255, 0.82);
+}
+[data-theme="light"] .page-about-scroll:not(.about-bg-light) .about-contact-card-value {
+    color: #ffffff;
+}
+
 /* Мягкое появление блоков при скролле */
 .about-reveal {
     opacity: 0;
@@ -2555,17 +2572,11 @@ body.about-page-active {
     margin-bottom: 4px;
     transition: color 0.4s ease-out;
 }
-.page-about-scroll.about-bg-light .about-contact-card-label {
-    color: #555;
-}
 .about-contact-card-value {
     font-size: 18px;
     font-weight: 600;
     color: #ececed;
     transition: color 0.4s ease-out;
-}
-.page-about-scroll.about-bg-light .about-contact-card-value {
-    color: var(--about-accent);
 }
 .page-about-scroll.about-bg-light .about-link {
     color: #1a1a1a;
@@ -2617,6 +2628,13 @@ body.about-page-active {
     }
     .page-about-scroll.about-bg-light .about-contact-card {
         background: rgba(232, 232, 236, 0.95);
+        color: #121214;
+    }
+    .page-about-scroll.about-bg-light .about-contact-card-value {
+        color: #0e0e12;
+    }
+    .page-about-scroll.about-bg-light .about-contact-card-label {
+        color: #3d3d44;
     }
 }
 @media (max-width: 480px) {

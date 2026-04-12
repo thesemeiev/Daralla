@@ -2890,10 +2890,11 @@ class CustomGlobe {
     draw() {
         const ctx = this.ctx;
         var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
+        /* Светлая тема: «луна» — холодный сине-серый шар, читается на #f0f0f2 */
         var globeGradient = themeLight
-            ? ['#c4c4cc', '#a2a2ac', '#888892']
+            ? ['#b8c4cf', '#7d8c9a', '#4a5a68']
             : ['#34343a', '#222226', '#131314'];
-        var globeGridStroke = themeLight ? 'rgba(0, 0, 0, 0.22)' : 'rgba(255, 255, 255, 0.14)';
+        var globeGridStroke = themeLight ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.14)';
         var labelColor = themeLight ? '#1a1a1e' : '#ececed';
         var labelStroke = themeLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.55)';
         // Получаем реальные размеры с учетом devicePixelRatio
@@ -2920,8 +2921,14 @@ class CustomGlobe {
         ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
-        /* Без обводки диска — не выглядит как «рамка» на фоне страницы */
-        
+        if (themeLight) {
+            ctx.beginPath();
+            ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.16)';
+            ctx.lineWidth = Math.max(1, 1.25 / this.zoom);
+            ctx.stroke();
+        }
+
         // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
         ctx.strokeStyle = globeGridStroke;
         ctx.lineWidth = 1 / this.zoom; // Компенсируем толщину линии при зуме
@@ -3001,8 +3008,7 @@ class CustomGlobe {
             ctx.fillStyle = color;
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
-            // Обводка
-            ctx.strokeStyle = '#fff';
+            ctx.strokeStyle = themeLight ? 'rgba(0, 0, 0, 0.42)' : '#fff';
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
