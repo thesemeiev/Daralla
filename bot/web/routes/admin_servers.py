@@ -4,6 +4,7 @@ server-config/update, server-config/sync-flow, server-config/delete, sync-all.
 """
 import asyncio
 import logging
+import sqlite3
 
 from quart import Blueprint, request, jsonify
 
@@ -28,6 +29,33 @@ from bot.client_flow import normalize_client_flow_for_storage
 
 logger = logging.getLogger(__name__)
 _SERVER_CONFIG_OP_LOCK = asyncio.Lock()
+
+
+def _json_conflict_from_integrity(exc: sqlite3.IntegrityError) -> tuple[dict, int] | None:
+    """409 Conflict для нарушений UNIQUE; None — если это не типичный кейс админки."""
+    s = str(exc)
+    if "servers_config.name" in s:
+        return (
+            {
+                "success": False,
+                "error": "Сервер с таким идентификатором уже есть. Поле «Имя» уникально для всех групп.",
+            },
+            409,
+        )
+    if "server_groups.name" in s:
+        return (
+            {"success": False, "error": "Группа с таким именем уже существует."},
+            409,
+        )
+    if "UNIQUE constraint failed" in s:
+        return (
+            {
+                "success": False,
+                "error": "Такая запись уже есть в базе (ограничение уникальности).",
+            },
+            409,
+        )
+    return None
 
 
 async def _background_sync_client_flow(server_id: int) -> None:
@@ -166,7 +194,14 @@ def create_blueprint(bot_app):
             is_default = data.get("is_default", False)
             if not name:
                 return jsonify({"error": "Name is required"}), 400, _cors_headers()
-            group_id = await add_server_group(name, description, is_default)
+            try:
+                group_id = await add_server_group(name, description, is_default)
+            except sqlite3.IntegrityError as exc:
+                pair = _json_conflict_from_integrity(exc)
+                if pair:
+                    body, code = pair
+                    return jsonify(body), code, _cors_headers()
+                raise
             return jsonify({"success": True, "group_id": group_id}), 200, _cors_headers()
         return jsonify({"error": "Invalid action"}), 400, _cors_headers()
 
@@ -177,13 +212,20 @@ def create_blueprint(bot_app):
         group_id = data.get("id")
         if not group_id:
             return jsonify({"error": "Group ID is required"}), 400, _cors_headers()
-        await update_server_group(
-            group_id,
-            name=data.get("name"),
-            description=data.get("description"),
-            is_active=data.get("is_active"),
-            is_default=data.get("is_default"),
-        )
+        try:
+            await update_server_group(
+                group_id,
+                name=data.get("name"),
+                description=data.get("description"),
+                is_active=data.get("is_active"),
+                is_default=data.get("is_default"),
+            )
+        except sqlite3.IntegrityError as exc:
+            pair = _json_conflict_from_integrity(exc)
+            if pair:
+                body, code = pair
+                return jsonify(body), code, _cors_headers()
+            raise
         return jsonify({"success": True}), 200, _cors_headers()
 
     @bp.route("/api/admin/servers-config", methods=["POST", "OPTIONS"])
@@ -208,24 +250,31 @@ def create_blueprint(bot_app):
                 return jsonify({"error": cf_err}), 400, _cors_headers()
             raw_active = data.get("is_active")
             insert_active = 1 if (raw_active is None or _coerce_server_active(raw_active)) else 0
-            server_id = await add_server_config(
-                group_id,
-                name,
-                host,
-                login,
-                password,
-                display_name=data.get("display_name"),
-                vpn_host=data.get("vpn_host"),
-                lat=data.get("lat"),
-                lng=data.get("lng"),
-                subscription_port=data.get("subscription_port"),
-                subscription_url=data.get("subscription_url") or None,
-                client_flow=cf_norm,
-                map_label=data.get("map_label") or None,
-                location=data.get("location") or None,
-                max_concurrent_clients=data.get("max_concurrent_clients"),
-                is_active=insert_active,
-            )
+            try:
+                server_id = await add_server_config(
+                    group_id,
+                    name,
+                    host,
+                    login,
+                    password,
+                    display_name=data.get("display_name"),
+                    vpn_host=data.get("vpn_host"),
+                    lat=data.get("lat"),
+                    lng=data.get("lng"),
+                    subscription_port=data.get("subscription_port"),
+                    subscription_url=data.get("subscription_url") or None,
+                    client_flow=cf_norm,
+                    map_label=data.get("map_label") or None,
+                    location=data.get("location") or None,
+                    max_concurrent_clients=data.get("max_concurrent_clients"),
+                    is_active=insert_active,
+                )
+            except sqlite3.IntegrityError as exc:
+                pair = _json_conflict_from_integrity(exc)
+                if pair:
+                    body, code = pair
+                    return jsonify(body), code, _cors_headers()
+                raise
             sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
                 need_sync=(insert_active == 1)
             )
@@ -270,7 +319,14 @@ def create_blueprint(bot_app):
             old_cf = ((old_server.get("client_flow") or "").strip() or None)
             new_cf = update_data["client_flow"]
             client_flow_changed = old_cf != new_cf
-        await update_server_config(server_id, **update_data)
+        try:
+            await update_server_config(server_id, **update_data)
+        except sqlite3.IntegrityError as exc:
+            pair = _json_conflict_from_integrity(exc)
+            if pair:
+                body, code = pair
+                return jsonify(body), code, _cors_headers()
+            raise
         sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
             need_sync=_was_inactive_and_now_active(old_server, update_data)
         )

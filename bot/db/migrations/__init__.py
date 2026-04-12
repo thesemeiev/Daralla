@@ -58,6 +58,8 @@ async def run_migrations() -> int:
     applied = 0
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA foreign_keys = ON")
+        # Ожидание при конкурентных writer/readers (админка + фоновые задачи)
+        await db.execute("PRAGMA busy_timeout=15000")
         await _ensure_version_table(db)
         current = await _get_current_version(db)
         migrations = _discover_migrations()

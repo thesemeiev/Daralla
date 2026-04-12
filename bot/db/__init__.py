@@ -98,6 +98,8 @@ from .notifications_db import (
 )
 async def init_all_db():
     """Инициализирует схему БД через систему миграций."""
+    import aiosqlite
+
     os.makedirs(DATA_DIR, exist_ok=True)
     logger.info(f"Инициализация базы данных: {DB_PATH}")
 
@@ -106,6 +108,19 @@ async def init_all_db():
         logger.info("Применено %d миграций", applied)
     if await ensure_servers_config_client_sort_order_column():
         logger.info("Схема восстановлена: servers_config.client_sort_order")
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("PRAGMA busy_timeout=15000")
+            async with db.execute("PRAGMA journal_mode=WAL") as cur:
+                row = await cur.fetchone()
+            mode = (row[0] if row else None) or ""
+            if str(mode).upper() == "WAL":
+                logger.info("SQLite: journal_mode=WAL (лучше для конкурентного доступа)")
+            else:
+                logger.warning("SQLite: journal_mode=%s (ожидался WAL)", mode)
+            await db.commit()
+    except Exception as e:
+        logger.warning("Не удалось применить PRAGMA WAL/busy_timeout: %s", e)
     logger.info("База данных daralla.db готова")
 
 __all__ = [
