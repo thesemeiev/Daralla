@@ -3274,9 +3274,23 @@ body.about-page-active {
     color: var(--text-secondary);
     max-width: 36rem;
 }
+.admin-sm-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+}
 .admin-sm-btn-primary {
     padding: 10px 18px;
     font-size: 14px;
+    font-weight: 500;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.admin-sm-btn-sync {
+    padding: 10px 14px;
+    font-size: 13px;
     font-weight: 500;
     border-radius: 10px;
     flex-shrink: 0;

@@ -7717,6 +7717,12 @@ async function syncAllServers() {
     runSyncAllServers();
 }
 async function runSyncAllServers() {
+    var btns = [
+        document.getElementById('admin-sync-all-panels-btn'),
+        document.getElementById('admin-sync-all-panels-group-btn')
+    ].filter(Boolean);
+    btns.forEach(function (b) { b.disabled = true; });
+
     platform.mainButton.show('СИНХРОНИЗАЦИЯ...', function () {});
     platform.mainButton.disable();
     try {
@@ -7726,15 +7732,26 @@ async function runSyncAllServers() {
         });
         var result = await response.json();
         if (result.success) {
-            platform.showAlert('Синхронизация завершена!\nПроверено подписок: ' + result.stats.subscriptions_checked + '\nСоздано клиентов: ' + result.stats.total_clients_created);
+            var st = result.stats || {};
+            var parts = [
+                'Подписок проверено: ' + (st.subscriptions_checked != null ? st.subscriptions_checked : '—'),
+                'Узлов (ensure): ' + (st.total_servers_synced != null ? st.total_servers_synced : '—'),
+                'Клиентов создано: ' + (st.total_clients_created != null ? st.total_clients_created : '—'),
+                'Сирот удалено: ' + (st.orphaned_clients_deleted != null ? st.orphaned_clients_deleted : 0)
+            ];
+            var errN = st.total_errors;
+            if (errN == null && st.errors && st.errors.length) errN = st.errors.length;
+            if (errN) parts.push('Замечаний в логе sync: ' + errN);
+            platform.showAlert('Синхронизация завершена.\n\n' + parts.join('\n'));
             loadServerGroups();
         } else {
-            platform.showAlert('Ошибка: ' + result.error);
+            platform.showAlert('Ошибка: ' + (result.error || 'Неизвестно'));
         }
     } catch (err) {
         console.error('Ошибка синхронизации:', err);
-        platform.showAlert('Ошибка при выполнении синхронизации');
+        platform.showAlert('Ошибка при выполнении синхронизации: ' + (err.message || String(err)));
     } finally {
         platform.mainButton.hide();
+        btns.forEach(function (b) { b.disabled = false; });
     }
 }

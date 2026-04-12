@@ -3,16 +3,40 @@
 """
 import asyncio
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Переменная %s=%r не число, используется %s", name, raw, default)
+        return default
+
 
 async def start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager=None):
     """Запускает все фоновые задачи"""
     logger.info("🚀 Запуск цикла фоновых задач...")
     
-    # 1. Задача синхронизации и очистки (каждые 6 часов)
-    # Она удаляет подписки через 3 дня после истечения и правит время на серверах
+    # 1. Полный sync (интервал DARALLA_SYNC_INTERVAL_SECONDS, по умолчанию 6 ч)
     asyncio.create_task(sync_task_loop(sync_manager))
+
+    catchup_sec = _int_env("DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS", 15 * 60)
+    if catchup_sec > 0:
+        asyncio.create_task(client_catchup_loop(sync_manager))
+        logger.info(
+            "Фоновый догон клиентов на панелях: каждые %s с (~%.1f мин), "
+            "DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS (0 = выключить)",
+            catchup_sec,
+            catchup_sec / 60,
+        )
+    else:
+        logger.info("Фоновый догон клиентов выключен (DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS=0)")
     
     # 2. Задача проверки истекающих подписок для уведомлений (каждые 30 минут)
     asyncio.create_task(notifications_task_loop(notification_manager))
@@ -25,7 +49,13 @@ async def start_background_tasks(sync_manager, subscription_manager, notificatio
         asyncio.create_task(server_load_snapshot_loop(server_manager))
 
 async def sync_task_loop(sync_manager):
-    """Цикл синхронизации данных"""
+    """Полный sync: статусы, cleanup просроченных, клиенты на панелях, сироты."""
+    interval = max(60, _int_env("DARALLA_SYNC_INTERVAL_SECONDS", 6 * 3600))
+    logger.info(
+        "Полный sync (run_sync): каждые %s с (~%.2f ч), DARALLA_SYNC_INTERVAL_SECONDS",
+        interval,
+        interval / 3600,
+    )
     while True:
         try:
             await sync_manager.run_sync()
@@ -33,9 +63,27 @@ async def sync_task_loop(sync_manager):
             raise
         except Exception as e:
             logger.error("Ошибка в цикле синхронизации: %s", e, exc_info=True)
-        
-        # Раз в 6 часов
-        await asyncio.sleep(6 * 3600)
+
+        await asyncio.sleep(interval)
+
+
+async def client_catchup_loop(sync_manager):
+    """Лёгкий периодический догон только ensure клиентов (без полной уборки)."""
+    interval = max(60, _int_env("DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS", 15 * 60))
+    logger.info(
+        "Догон клиентов (sync_clients_from_db_only): каждые %s с (~%.1f мин)",
+        interval,
+        interval / 60,
+    )
+    await asyncio.sleep(90)
+    while True:
+        try:
+            await sync_manager.sync_clients_from_db_only()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("Ошибка в цикле догона клиентов: %s", e, exc_info=True)
+        await asyncio.sleep(interval)
 
 async def notifications_task_loop(notification_manager):
     """Цикл уведомлений"""

@@ -138,6 +138,28 @@ class SyncManager:
             )
             return stats
 
+    async def sync_clients_from_db_only(self) -> dict:
+        """
+        Только догон клиентов на панелях (sync_servers_with_config).
+
+        Без синка статусов подписок, без cleanup просроченных и без cleanup_orphaned_clients.
+        Тот же _sync_lock, что у run_sync / sync_all — не параллелится с ними.
+        """
+        if self._sync_lock.locked():
+            logger.info("sync_clients_from_db_only ждёт завершения текущего sync")
+        async with self._sync_lock:
+            stats = await self.subscription_manager.sync_servers_with_config(
+                auto_create_clients=True
+            )
+            err_n = len(stats.get("errors") or [])
+            logger.info(
+                "Лёгкий догон панелей: подписок=%s, ensure по нодам=%s, ошибок=%s",
+                stats.get("subscriptions_checked"),
+                stats.get("total_servers_synced"),
+                err_n,
+            )
+            return stats
+
     async def run_sync(self):
         """
         Запуск полной синхронизации БД с серверами X-UI.

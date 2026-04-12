@@ -1048,9 +1048,12 @@
                     <div class="admin-sm-toolbar">
                         <div class="admin-sm-toolbar-text">
                             <h2 id="admin-sm-groups-heading" class="page-section-title admin-sm-title">Группы серверов</h2>
-                            <p class="admin-sm-lead">Выберите группу, чтобы открыть список нод и порядок в подписке.</p>
+                            <p class="admin-sm-lead">Выберите группу, чтобы открыть список нод и порядок в подписке. Полная синхронизация догоняет клиентов на всех панелях 3x-ui по базе (может занять несколько минут).</p>
                         </div>
-                        <button type="button" class="btn-primary admin-sm-btn-primary" onclick="showAddServerGroupModal()">+ Группа</button>
+                        <div class="admin-sm-toolbar-actions">
+                            <button type="button" class="btn-secondary admin-sm-btn-sync" id="admin-sync-all-panels-btn" onclick="syncAllServers()">Полная синхронизация с панелями</button>
+                            <button type="button" class="btn-primary admin-sm-btn-primary" onclick="showAddServerGroupModal()">+ Группа</button>
+                        </div>
                     </div>
                     <div id="admin-server-groups-list"></div>
                 </section>
@@ -1066,6 +1069,7 @@
             <div class="admin-page-content admin-server-group-page" id="admin-server-group-page-root">
                 <div class="admin-server-group-toolbar">
                     <button type="button" class="btn-primary admin-server-group-toolbar-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
+                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-sync-all-panels-group-btn" onclick="syncAllServers()">Полная синхронизация с панелями</button>
                     <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-reorder-toggle-btn" onclick="toggleAdminServerReorderMode()">Порядок</button>
                     <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-group-edit-btn" onclick="editServerGroup(currentSelectedGroupId)" title="Редактировать группу">⋯</button>
                 </div>
@@ -1447,6 +1451,6 @@
         </div>
     </div>
 
-    <script src="/app.js?v=22"></script>
+    <script src="/app.js?v=23"></script>
 </body>
 </html>
