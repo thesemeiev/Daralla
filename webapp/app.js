@@ -2890,11 +2890,11 @@ class CustomGlobe {
     draw() {
         const ctx = this.ctx;
         var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
-        /* Светлая тема: «луна» — холодный сине-серый шар, читается на #f0f0f2 */
+        /* Светлая тема: тот же градиент, что в тёмной, но на шаг светлее по каждому стопу */
         var globeGradient = themeLight
-            ? ['#b8c4cf', '#7d8c9a', '#4a5a68']
+            ? ['#3f3f47', '#2d2d34', '#1e1e24']
             : ['#34343a', '#222226', '#131314'];
-        var globeGridStroke = themeLight ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.14)';
+        var globeGridStroke = 'rgba(255, 255, 255, 0.14)';
         var labelColor = themeLight ? '#1a1a1e' : '#ececed';
         var labelStroke = themeLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.55)';
         // Получаем реальные размеры с учетом devicePixelRatio
@@ -2921,13 +2921,6 @@ class CustomGlobe {
         ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
-        if (themeLight) {
-            ctx.beginPath();
-            ctx.arc(0, 0, scaledRadius, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.16)';
-            ctx.lineWidth = Math.max(1, 1.25 / this.zoom);
-            ctx.stroke();
-        }
 
         // Рисуем сетку (меридианы и параллели) в пиксельном стиле с учетом наклона
         ctx.strokeStyle = globeGridStroke;
@@ -3008,7 +3001,7 @@ class CustomGlobe {
             ctx.fillStyle = color;
             ctx.fillRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
-            ctx.strokeStyle = themeLight ? 'rgba(0, 0, 0, 0.42)' : '#fff';
+            ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
             
