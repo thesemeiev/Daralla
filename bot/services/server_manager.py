@@ -172,16 +172,10 @@ class MultiServerManager:
         # Выполняем реальную проверку
         try:
             if server_info["x3"] is None:
-                # Пытаемся переподключиться только если не в режиме Circuit Breaker
-                if not force_check:
-                    health_status = self.server_health.get(server_name, {})
-                    consecutive_failures = health_status.get("consecutive_failures", 0)
-                    if consecutive_failures >= CIRCUIT_BREAKER_FAILURE_THRESHOLD:
-                        # Не пытаемся переподключаться, если Circuit Breaker активен
-                        logger.debug(f"Circuit Breaker: пропускаем переподключение для {server_name}")
-                        return False
-                
-                # Пытаемся переподключиться
+                # После длительного даунтайма x3 обнуляется (>3 неудач). Сюда попадаем только если
+                # не сработали ранние return'ы кэша/CB — значит либо force_check, либо кэш протух,
+                # либо прошёл CIRCUIT_BREAKER_COOLDOWN. В этом случае обязательно пересоздаём клиент,
+                # иначе нода никогда не вернётся в работу без перезапуска процесса.
                 server_config = server_info["config"]
                 server_info["x3"] = X3(
                     login=server_config["login"],
