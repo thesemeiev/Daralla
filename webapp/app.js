@@ -1500,7 +1500,7 @@ function showSubscriptionDetail(sub) {
                     </button>
                 ` : ''}
                 ${sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial' ? `
-                    <button class="action-button" onclick="showExtendSubscriptionModal(${sub.id})" style="background: var(--accent);">
+                    <button type="button" class="action-button action-button--accent" onclick="showExtendSubscriptionModal(${sub.id})">
                         Продлить подписку
                     </button>
                 ` : ''}

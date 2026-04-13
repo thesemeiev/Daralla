@@ -32,13 +32,16 @@ services:
       - ./.env:/app/.env:ro
     networks:
       - bot-network
-    # Ограничения ресурсов для продакшена
+    # Память: Quart + бот + параллельные запросы к X-UI + sync тянут больше 512M.
+    # mem_limit — для обычного `docker compose up` (ограничение cgroups).
+    # deploy.resources — для Swarm / `docker stack deploy`; иначе можно игнорироваться.
+    mem_limit: 1536m
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1536M
         reservations:
-          memory: 256M
+          memory: 512M
 
 networks:
   bot-network:

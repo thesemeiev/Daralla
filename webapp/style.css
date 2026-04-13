@@ -2216,6 +2216,24 @@ h1 {
     border-top: 1px solid var(--card-border);
 }
 
+/* «Продлить»: только background без контраста давал невидимый текст в тёмной теме */
+.detail-actions .action-button--accent {
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .detail-actions .action-button--accent:hover {
+        background: var(--accent-hover);
+        color: var(--accent-contrast);
+    }
+}
+
+.detail-actions .action-button--accent:active {
+    background: var(--accent-active);
+    color: var(--accent-contrast);
+}
+
 /* Страница серверов */
 .server-card {
     background: var(--card-bg);
