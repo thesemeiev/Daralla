@@ -29,7 +29,8 @@ async def db_with_event(db):
 
 
 @pytest.mark.asyncio
-async def test_add_counted_payment_and_leaderboard(db_with_event):
+@pytest.mark.usefixtures("db_with_event")
+async def test_add_counted_payment_and_leaderboard():
     """add_counted_payment adds record; get_leaderboard returns referrer with count."""
     active = await list_events_active()
     assert len(active) >= 1
@@ -51,7 +52,8 @@ async def test_add_counted_payment_and_leaderboard(db_with_event):
 
 
 @pytest.mark.asyncio
-async def test_add_counted_payment_idempotent(db_with_event):
+@pytest.mark.usefixtures("db_with_event")
+async def test_add_counted_payment_idempotent():
     """Same payment_id + event_id is idempotent (INSERT OR IGNORE)."""
     active = await list_events_active()
     assert len(active) >= 1

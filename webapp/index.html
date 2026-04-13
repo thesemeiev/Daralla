@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=30">
+    <link rel="stylesheet" href="/style.css?v=31">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -408,9 +408,24 @@
                     <div class="theme-toggle-row">
                         <span class="theme-toggle-label">Тема</span>
                         <div class="theme-toggle-buttons">
-                            <button type="button" class="theme-btn" data-theme="light" title="Светлая">☀️</button>
-                            <button type="button" class="theme-btn" data-theme="system" title="Как в системе">🌗</button>
-                            <button type="button" class="theme-btn" data-theme="dark" title="Тёмная">🌙</button>
+                            <button type="button" class="theme-btn" data-theme="light" title="Светлая" aria-label="Светлая тема">
+                                <svg class="theme-btn-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M6.35 17.65l-1.42 1.42M19.07 4.93l-1.42 1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                            <button type="button" class="theme-btn" data-theme="system" title="Как в системе" aria-label="Тема как в системе">
+                                <svg class="theme-btn-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M12 2v20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M12 6a6 6 0 0 1 0 12V6z" fill="currentColor" fill-opacity="0.22"/>
+                                </svg>
+                            </button>
+                            <button type="button" class="theme-btn" data-theme="dark" title="Тёмная" aria-label="Тёмная тема">
+                                <svg class="theme-btn-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </div>

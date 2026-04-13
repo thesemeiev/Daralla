@@ -43,7 +43,8 @@ def mock_managers():
 
 
 @pytest.mark.asyncio
-async def test_process_payment_webhook_idempotent(db_with_server, mock_managers):
+@pytest.mark.usefixtures("db_with_server")
+async def test_process_payment_webhook_idempotent(mock_managers):
     """Calling process_payment_webhook twice with succeeded does not create duplicate subscription."""
     user_id = "web_idemuser"
     await get_or_create_subscriber(user_id)
@@ -70,9 +71,8 @@ async def test_process_payment_webhook_idempotent(db_with_server, mock_managers)
 
 
 @pytest.mark.asyncio
-async def test_process_payment_webhook_new_purchase_creates_subscription(
-    db_with_server, mock_managers
-):
+@pytest.mark.usefixtures("db_with_server")
+async def test_process_payment_webhook_new_purchase_creates_subscription(mock_managers):
     """process_payment_webhook with succeeded creates subscription and activates payment."""
     user_id = "web_newbuyer"
     await get_or_create_subscriber(user_id)

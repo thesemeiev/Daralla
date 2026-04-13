@@ -15,7 +15,6 @@ from typing import List
 
 from ..db import (
     DB_PATH,
-    init_notifications_db,
     record_notification_metrics,
     cleanup_old_notifications,
     get_notification_stats,

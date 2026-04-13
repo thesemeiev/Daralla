@@ -24,7 +24,8 @@ async def db_with_server(db):
 
 
 @pytest.mark.asyncio
-async def test_create_subscription_and_get_by_token(db_with_server):
+@pytest.mark.usefixtures("db_with_server")
+async def test_create_subscription_and_get_by_token():
     """create_subscription returns (sub_id, token); get_subscription_by_token returns sub."""
     user_id = "web_subuser"
     subscriber_id = await get_or_create_subscriber(user_id)
@@ -51,7 +52,8 @@ async def test_create_subscription_and_get_by_token(db_with_server):
 
 
 @pytest.mark.asyncio
-async def test_get_subscription_by_id_owner(db_with_server):
+@pytest.mark.usefixtures("db_with_server")
+async def test_get_subscription_by_id_owner():
     """get_subscription_by_id returns sub for owner user_id."""
     user_id = "web_owner"
     subscriber_id = await get_or_create_subscriber(user_id)
@@ -69,7 +71,8 @@ async def test_get_subscription_by_id_owner(db_with_server):
 
 
 @pytest.mark.asyncio
-async def test_get_subscription_by_id_other_user_none(db_with_server):
+@pytest.mark.usefixtures("db_with_server")
+async def test_get_subscription_by_id_other_user_none():
     """get_subscription_by_id returns None for different user_id."""
     user_id = "web_owner2"
     other_user_id = "web_other"

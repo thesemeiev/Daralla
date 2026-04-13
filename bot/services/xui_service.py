@@ -66,13 +66,11 @@ def _value_error_client_absent_on_panel(exc: ValueError) -> bool:
 try:
     from py3xui import AsyncApi
     from py3xui import Client as Py3xuiClient
-    from py3xui import Inbound as Py3xuiInbound
     PY3XUI_AVAILABLE = True
 except ImportError:
     PY3XUI_AVAILABLE = False
     AsyncApi = None
     Py3xuiClient = None
-    Py3xuiInbound = None
 
 _py3xui_timeout_patch_applied = False
 

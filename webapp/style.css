@@ -2732,6 +2732,9 @@ body.about-page-active {
     gap: 8px;
 }
 .theme-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 44px;
     height: 44px;
     border-radius: 12px;
@@ -2743,6 +2746,11 @@ body.about-page-active {
     transition: border-color 0.2s, background 0.2s, transform 0.15s;
     outline: none;
     -webkit-tap-highlight-color: transparent;
+}
+.theme-btn-svg {
+    display: block;
+    flex-shrink: 0;
+    pointer-events: none;
 }
 @media (hover: hover) and (pointer: fine) {
 .theme-btn:hover {
