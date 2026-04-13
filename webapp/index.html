@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=33">
+    <link rel="stylesheet" href="/style.css?v=34">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -419,11 +419,10 @@
                                     <defs>
                                         <clipPath id="theme-system-icon-clip"><circle cx="12" cy="12" r="10"/></clipPath>
                                     </defs>
-                                    <g clip-path="url(#theme-system-icon-clip)">
+                                    <g clip-path="url(#theme-system-icon-clip)" shape-rendering="geometricPrecision">
                                         <rect class="theme-icon-sys-left" x="2" y="2" width="10" height="20"/>
                                         <rect class="theme-icon-sys-right" x="12" y="2" width="10" height="20"/>
                                     </g>
-                                    <path d="M12 2v20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                                     <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
                                 </svg>
                             </button>

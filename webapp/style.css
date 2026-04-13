@@ -2753,27 +2753,29 @@ body.about-page-active {
     pointer-events: none;
 }
 
-/* Иконка «системная тема»: две половины по 10px внутри круга (clipPath), контраст под фон кнопки */
+/*
+ * Иконка «системная»: две половины 10+10 в clipPath. Без вертикального stroke — иначе светлый
+ * currentColor «режет» тёмную половину и она кажется меньше на тёмной теме.
+ */
 .theme-btn[data-theme="system"] .theme-icon-sys-left {
-    fill: #f2f2f8;
+    fill: #ececf4;
     stroke: none;
 }
 .theme-btn[data-theme="system"] .theme-icon-sys-right {
-    fill: #2a2a32;
+    fill: #050508;
     stroke: none;
-}
-/* В тёмной теме тёмная половина не должна сливаться с var(--card-bg-hover) кнопки */
-[data-theme="dark"] .theme-btn[data-theme="system"] .theme-icon-sys-right {
-    fill: #0a0a10;
-}
-[data-theme="dark"] .theme-btn[data-theme="system"] .theme-icon-sys-left {
-    fill: #ececf4;
 }
 [data-theme="light"] .theme-btn[data-theme="system"]:not(.active) .theme-icon-sys-left {
     fill: #ffffff;
 }
 [data-theme="light"] .theme-btn[data-theme="system"]:not(.active) .theme-icon-sys-right {
-    fill: #1e1e26;
+    fill: #1a1a22;
+}
+.theme-btn[data-theme="system"].active .theme-icon-sys-left {
+    fill: #f4f4fa;
+}
+.theme-btn[data-theme="system"].active .theme-icon-sys-right {
+    fill: #03030a;
 }
 @media (hover: hover) and (pointer: fine) {
 .theme-btn:hover {
