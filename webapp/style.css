@@ -2752,6 +2752,22 @@ body.about-page-active {
     flex-shrink: 0;
     pointer-events: none;
 }
+
+/* Иконка «системная тема»: явно светлая / тёмная половина (не полупрозрачный currentColor) */
+.theme-btn[data-theme="system"] .theme-icon-sys-left {
+    fill: #f2f2f8;
+    stroke: none;
+}
+.theme-btn[data-theme="system"] .theme-icon-sys-right {
+    fill: #2a2a32;
+    stroke: none;
+}
+[data-theme="light"] .theme-btn[data-theme="system"]:not(.active) .theme-icon-sys-left {
+    fill: #ffffff;
+}
+[data-theme="light"] .theme-btn[data-theme="system"]:not(.active) .theme-icon-sys-right {
+    fill: #1e1e26;
+}
 @media (hover: hover) and (pointer: fine) {
 .theme-btn:hover {
     background: var(--card-border-hover);

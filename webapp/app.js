@@ -2091,11 +2091,25 @@ async function submitAdminEventForm(event) {
     event.preventDefault();
     var name = document.getElementById('admin-event-name').value.trim();
     var description = document.getElementById('admin-event-description').value.trim();
-    var startAt = document.getElementById('admin-event-start').value;
-    var endAt = document.getElementById('admin-event-end').value;
+    var startAt = (document.getElementById('admin-event-start').value || '').trim();
+    var endAt = (document.getElementById('admin-event-end').value || '').trim();
     if (!startAt || !endAt) { await appShowAlert('Укажите начало и окончание', { title: 'Ошибка', variant: 'error' }); return; }
     if (startAt.length === 16) startAt += ':00';
     if (endAt.length === 16) endAt += ':00';
+    var forParse = function (v) {
+        if (v.indexOf('T') < 0 && v.indexOf(' ') > 0) return v.replace(' ', 'T');
+        return v;
+    };
+    var tsStart = Date.parse(forParse(startAt));
+    var tsEnd = Date.parse(forParse(endAt));
+    if (isNaN(tsStart) || isNaN(tsEnd)) {
+        await appShowAlert('Не удалось разобрать дату или время. Проверьте поля «Начало» и «Окончание».', { title: 'Ошибка', variant: 'error' });
+        return;
+    }
+    if (tsStart >= tsEnd) {
+        await appShowAlert('Дата начала должна быть раньше даты окончания.', { title: 'Ошибка', variant: 'error' });
+        return;
+    }
     var r1 = (document.getElementById('admin-event-reward1').value || '').trim();
     var r2 = (document.getElementById('admin-event-reward2').value || '').trim();
     var r3 = (document.getElementById('admin-event-reward3').value || '').trim();

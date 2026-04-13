@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=31">
+    <link rel="stylesheet" href="/style.css?v=32">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
@@ -415,10 +415,11 @@
                                 </svg>
                             </button>
                             <button type="button" class="theme-btn" data-theme="system" title="Как в системе" aria-label="Тема как в системе">
-                                <svg class="theme-btn-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                <svg class="theme-btn-svg theme-btn-svg--system" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path class="theme-icon-sys-left" d="M12 2A10 10 0 0 0 12 22Z"/>
+                                    <path class="theme-icon-sys-right" d="M12 2A10 10 0 0 1 12 22Z"/>
                                     <path d="M12 2v20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                                    <path d="M12 6a6 6 0 0 1 0 12V6z" fill="currentColor" fill-opacity="0.22"/>
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
                                 </svg>
                             </button>
                             <button type="button" class="theme-btn" data-theme="dark" title="Тёмная" aria-label="Тёмная тема">
@@ -1470,6 +1471,6 @@
         </div>
     </div>
 
-    <script src="/app.js?v=32"></script>
+    <script src="/app.js?v=33"></script>
 </body>
 </html>
