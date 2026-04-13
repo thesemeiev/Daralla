@@ -1,7 +1,7 @@
 """Integration tests for payment webhook and successful payment flow."""
 import datetime
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
