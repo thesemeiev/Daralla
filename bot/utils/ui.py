@@ -4,8 +4,6 @@ UI компоненты для бота (эмодзи, стили, кнопки,
 import os
 from telegram import InlineKeyboardButton
 
-from ..prices_config import PRICE_MONTH, PRICE_3MONTH
-
 
 def get_site_urls():
     """
@@ -54,11 +52,6 @@ class UIStyles:
     def success_message(text: str) -> str:
         """Сообщение об успехе"""
         return f"{UIEmojis.SUCCESS} <b>{text}</b>"
-    
-    @staticmethod
-    def warning_message(text: str) -> str:
-        """Предупреждение"""
-        return f"{UIEmojis.WARNING} <b>{text}</b>"
 
 
 class UIButtons:
@@ -157,61 +150,4 @@ class UIMessages:
             f"{UIStyles.header(header_text)}\n\n"
             f"{UIStyles.description('Быстрый и стабильный доступ к серверам по всему миру.')}"
         )
-
-    @staticmethod
-    def subscription_expiring_message(time_remaining, days_until_expiry, expiry_datetime=None):
-        """Сообщение об истекающей подписке"""
-        # Форматируем дату истечения, если передана
-        expiry_str = ""
-        if expiry_datetime:
-            expiry_str = expiry_datetime.strftime('%d.%m.%Y %H:%M')
-        
-        if days_until_expiry == 0:
-            # Менее чем через час - срочное уведомление
-            message = (
-                f" <b>СРОЧНО! Ваша подписка истекает!</b>\n\n"
-                f" Осталось: <b>{time_remaining}</b>\n"
-            )
-            if expiry_str:
-                message += f" Истекает: <b>{expiry_str}</b>\n"
-            message += (
-                f"\n"
-                f"Продлите подписку сейчас, чтобы не потерять доступ к VPN.\n\n"
-                f" <b>Цены:</b>\n"
-                f"• 1 месяц — {PRICE_MONTH}₽\n"
-                f"• 3 месяца — {PRICE_3MONTH}₽ (выгоднее)\n"
-            )
-            return message
-        elif days_until_expiry <= 1:
-            # Завтра или сегодня - важное уведомление
-            message = (
-                f" <b>Ваша подписка истекает!</b>\n\n"
-                f" Осталось: <b>{time_remaining}</b>\n"
-            )
-            if expiry_str:
-                message += f" Истекает: <b>{expiry_str}</b>\n"
-            message += (
-                f"\n"
-                f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
-                f" <b>Цены:</b>\n"
-                f"• 1 месяц — {PRICE_MONTH}₽\n"
-                f"• 3 месяца — {PRICE_3MONTH}₽ (выгоднее)\n"
-            )
-            return message
-        else:
-            # За несколько дней - информационное напоминание
-            message = (
-                f" <b>Напоминание: ваша подписка истекает!</b>\n\n"
-                f" Осталось: <b>{time_remaining}</b>\n"
-            )
-            if expiry_str:
-                message += f" Истекает: <b>{expiry_str}</b>\n"
-            message += (
-                f"\n"
-                f"Продлите подписку заранее, чтобы не прерывать использование VPN.\n\n"
-                f" <b>Цены:</b>\n"
-                f"• 1 месяц — {PRICE_MONTH}₽\n"
-                f"• 3 месяца — {PRICE_3MONTH}₽ (выгоднее)\n"
-            )
-            return message
 

@@ -253,7 +253,7 @@ def run():
     # Текстовые сообщения в ЛС — предлагаем открыть приложение
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, open_mini_app_fallback_text))
 
-    # Fallback для старых callback-кнопок (не перехватываем link_confirm_ — привязка Telegram)
+    # Fallback для старых callback-кнопок (не перехватываем link_confirm_ — привязка Telegram).
     app.add_handler(CallbackQueryHandler(open_mini_app_fallback, pattern=r"^(?!link_confirm_).*$"))
 
     app.run_polling()

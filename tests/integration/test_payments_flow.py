@@ -1,7 +1,7 @@
 """Integration tests for payment webhook and successful payment flow."""
 import datetime
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -28,16 +28,6 @@ async def db_with_server(db):
 
 
 @pytest.fixture
-def mock_bot_app():
-    """Minimal bot app mock for payment_processors (send_message, etc.)."""
-    app = MagicMock()
-    app.bot = MagicMock()
-    app.bot.send_message = AsyncMock()
-    app.bot.edit_message_text = AsyncMock()
-    return app
-
-
-@pytest.fixture
 def mock_managers():
     """Real SubscriptionManager with mock server_manager; ensure_client_on_server mocked."""
     server_manager = MagicMock(spec=MultiServerManager)
@@ -53,7 +43,7 @@ def mock_managers():
 
 
 @pytest.mark.asyncio
-async def test_process_payment_webhook_idempotent(db_with_server, mock_bot_app, mock_managers):
+async def test_process_payment_webhook_idempotent(db_with_server, mock_managers):
     """Calling process_payment_webhook twice with succeeded does not create duplicate subscription."""
     user_id = "web_idemuser"
     await get_or_create_subscriber(user_id)
@@ -70,9 +60,9 @@ async def test_process_payment_webhook_idempotent(db_with_server, mock_bot_app, 
         "bot.handlers.api_support.payment_processors.get_globals",
         return_value=mock_managers,
     ):
-        await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
+        await process_payment_webhook(payment_id, "succeeded")
         subs_after_first = await get_all_subscriptions_by_user(user_id, include_deleted=False)
-        await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
+        await process_payment_webhook(payment_id, "succeeded")
         subs_after_second = await get_all_subscriptions_by_user(user_id, include_deleted=False)
 
     assert len(subs_after_first) >= 1
@@ -81,7 +71,7 @@ async def test_process_payment_webhook_idempotent(db_with_server, mock_bot_app, 
 
 @pytest.mark.asyncio
 async def test_process_payment_webhook_new_purchase_creates_subscription(
-    db_with_server, mock_bot_app, mock_managers
+    db_with_server, mock_managers
 ):
     """process_payment_webhook with succeeded creates subscription and activates payment."""
     user_id = "web_newbuyer"
@@ -99,7 +89,7 @@ async def test_process_payment_webhook_new_purchase_creates_subscription(
         "bot.handlers.api_support.payment_processors.get_globals",
         return_value=mock_managers,
     ):
-        await process_payment_webhook(mock_bot_app, payment_id, "succeeded")
+        await process_payment_webhook(payment_id, "succeeded")
 
     payment = await get_payment_by_id(payment_id)
     assert payment is not None

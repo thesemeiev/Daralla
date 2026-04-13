@@ -4,15 +4,8 @@
 import logging
 import json
 import datetime
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 from ...db import get_payment_by_id, update_payment_status, update_payment_activation
-from ...db.users_db import get_telegram_chat_id_for_notification
-from ...utils import (
-    UIEmojis, UIStyles, UIMessages,
-    safe_edit_message_with_photo, safe_send_message_with_photo
-)
-from ...navigation import MenuTypes
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +21,7 @@ def get_globals():
     }
 
 
-async def process_payment_webhook(bot_app, payment_id, status):
+async def process_payment_webhook(payment_id, status):
     """Обрабатывает платеж из webhook'а (YooKassa и CryptoCloud)."""
     try:
         # Нормализуем статус: CryptoCloud может присылать "cancelled"
@@ -67,43 +60,37 @@ async def process_payment_webhook(bot_app, payment_id, status):
         # Обрабатываем платеж в зависимости от статуса
         if status == 'succeeded':
             # Успешная оплата - создаем или продлеваем подписку
-            await process_successful_payment(bot_app, payment_id, user_id, meta)
+            await process_successful_payment(payment_id, user_id, meta)
         elif status in ['canceled', 'refunded']:
             # Отмененная/возвращенная оплата
-            await process_canceled_payment(bot_app, payment_id, user_id, meta, status)
+            await process_canceled_payment(payment_id, user_id, status)
         elif status not in ['pending']:
             # Любой другой неуспешный статус
-            await process_failed_payment(bot_app, payment_id, user_id, meta, status)
+            await process_failed_payment(payment_id, user_id, status)
         
     except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки webhook платежа {payment_id}: {e}")
 
 
-async def process_successful_payment(bot_app, payment_id, user_id, meta):
+async def process_successful_payment(payment_id, user_id, meta):
     """Обрабатывает успешный платеж"""
     try:
         period = meta.get('type', 'month')
-        device_limit = int(meta.get('device_limit', 1))
-        # Получаем message_id из мета-данных платежа
-        message_id = meta.get('message_id')
-        
+
         # Проверяем, это продление или новая покупка
         is_extension = period.startswith('extend_')
         if is_extension:
-            # Обработка продления подписки
-            await process_extension_payment(bot_app, payment_id, user_id, meta, message_id)
+            await process_extension_payment(payment_id, user_id, meta)
         else:
-            # Обработка новой покупки подписки
-            await process_new_purchase_payment(bot_app, payment_id, user_id, meta, message_id)
+            await process_new_purchase_payment(payment_id, user_id, meta)
             
     except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки успешного платежа {payment_id}: {e}")
 
 
-async def process_extension_payment(bot_app, payment_id, user_id, meta, message_id):
+async def process_extension_payment(payment_id, user_id, meta):
     """Обрабатывает продление подписки"""
     try:
-        chat_id = await get_telegram_chat_id_for_notification(user_id)
         period = meta.get('type', 'month')
         # Убираем префиксы: extend_sub_month -> month, extend_sub_3month -> 3month
         actual_period = period
@@ -234,34 +221,6 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
             if not successful_extensions:
                 logger.error(f"Не удалось синхронизировать клиентов ни на одном сервере для подписки {extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
-                # Уведомляем пользователя
-                if message_id and chat_id:
-                    error_message = (
-                        f"{UIStyles.header('Ошибка продления подписки')}\n\n"
-                        f"{UIEmojis.ERROR} <b>Не удалось продлить подписку!</b>\n\n"
-                        f"<b>Причина:</b> Не удалось синхронизировать клиентов на серверах\n\n"
-                        f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
-                    )
-                    # Создаем кнопку для открытия мини-приложения
-                    from ...utils import UIButtons
-                    webapp_button = UIButtons.create_webapp_button(
-                        action='subscriptions'
-                    )
-                    
-                    buttons = []
-                    if webapp_button:
-                        buttons.append([webapp_button])
-                    
-                    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                    await safe_edit_message_with_photo(
-                        bot_app.bot,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=error_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_FAILED
-                    )
                 return
 
             # Проверяем, что синхронизация прошла на всех серверах
@@ -282,68 +241,18 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
                     await events_on_payment_success(user_id, payment_id, meta)
             except (ImportError, RuntimeError, ValueError) as events_e:
                 logger.debug("events.on_payment_success (extension): %s", events_e)
-            
-            # Отправляем уведомление о продлении подписки
-            try:
-                expiry_time = datetime.datetime.fromtimestamp(new_expires_at)
-                expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
-                period_text = "3 месяца" if actual_period == "3month" else "1 месяц"
-                
-                extension_message = (
-                    f"{UIStyles.header('Подписка продлена!')}\n\n"
-                    f"{UIEmojis.SUCCESS} <b>Ваша подписка успешно продлена</b>\n\n"
-                    f"<b>Период:</b> {period_text}\n"
-                    f"<b>Новое окончание:</b> {expiry_str}\n"
-                    f"<b>Серверов продлено:</b> {len(successful_extensions)} из {len(servers)}\n\n"
-                )
-                
-                if failed_extensions:
-                    extension_message += (
-                        f"{UIEmojis.WARNING} <b>Внимание!</b> Не удалось продлить на серверах: {', '.join(failed_extensions)}\n\n"
-                        f"{UIStyles.description('Клиент должен быть на всех серверах подписки. Обратитесь в поддержку для решения проблемы.')}\n\n"
-                    )
-                
-                extension_message += f"{UIStyles.description('Подписка активна и готова к использованию.')}"
-                
-                if chat_id:
-                    # Создаем кнопку для открытия мини-приложения
-                    from ...utils import UIButtons
-                    webapp_button = UIButtons.create_webapp_button(
-                        action='subscription',
-                        params=extension_subscription_id
-                    )
-                    
-                    buttons = []
-                    if webapp_button:
-                        buttons.append([webapp_button])
-                    
-                    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                    
-                    if message_id:
-                        await safe_edit_message_with_photo(
-                            bot_app.bot,
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            text=extension_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type=MenuTypes.PAYMENT_SUCCESS
-                        )
-                        logger.info(f"Отредактировано сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
-                    else:
-                        await safe_send_message_with_photo(
-                            bot_app.bot,
-                            chat_id=chat_id,
-                            text=extension_message,
-                            reply_markup=keyboard,
-                            parse_mode="HTML",
-                            menu_type=MenuTypes.PAYMENT_SUCCESS
-                        )
-                        logger.info(f"Отправлено новое сообщение о продлении подписки {extension_subscription_id} пользователю {user_id}")
-                    
-            except (RuntimeError, ValueError, TypeError) as e:
-                logger.error(f"Ошибка отправки уведомления о продлении подписки: {e}")
-            
+
+            expiry_str = datetime.datetime.fromtimestamp(new_expires_at).strftime('%d.%m.%Y %H:%M')
+            logger.info(
+                "Продление подписки оплачено: user_id=%s payment_id=%s subscription_id=%s expires=%s ok=%s/%s failed=%s",
+                user_id,
+                payment_id,
+                extension_subscription_id,
+                expiry_str,
+                len(successful_extensions),
+                len(servers),
+                failed_extensions or "-",
+            )
             return
         else:
             # Это не продление подписки - ошибка
@@ -355,10 +264,9 @@ async def process_extension_payment(bot_app, payment_id, user_id, meta, message_
         logger.error(f"Ошибка обработки продления подписки {payment_id}: {e}")
 
 
-async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, message_id):
+async def process_new_purchase_payment(payment_id, user_id, meta):
     """Обрабатывает новую покупку - создаёт подписку и клиентов на всех доступных серверах"""
     try:
-        chat_id = await get_telegram_chat_id_for_notification(user_id)
         period = meta.get('type', 'month')
         days = 90 if period == '3month' else 30
         device_limit = int(meta.get('device_limit', 1))
@@ -425,37 +333,6 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         if not servers_in_db or len(servers_in_db) == 0:
             logger.error("Нет серверов в БД для создания подписки")
             await update_payment_status(payment_id, 'failed')
-            # Уведомляем пользователя
-            try:
-                error_message = (
-                    f"{UIStyles.header('Ошибка создания подписки')}\n\n"
-                    f"{UIEmojis.ERROR} <b>Не удалось создать подписку!</b>\n\n"
-                    f"<b>Причина:</b> Серверы еще не добавлены в систему\n\n"
-                    f"{UIStyles.description('Обратитесь к администратору')}"
-                )
-                # Создаем кнопку для открытия мини-приложения
-                from ...utils import UIButtons
-                webapp_button = UIButtons.create_webapp_button(
-                    action='subscriptions'
-                )
-                
-                buttons = []
-                if webapp_button:
-                    buttons.append([webapp_button])
-                
-                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                if chat_id and message_id:
-                    await safe_edit_message_with_photo(
-                        bot_app.bot,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=error_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_FAILED
-                    )
-            except Exception as e:
-                logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
 
         # Преобразуем список серверов из БД в список имен серверов
@@ -539,34 +416,6 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
                     logger.error(f"Ошибка отката подписки {sub_dict['id']}: {rollback_e}")
             
             await update_payment_status(payment_id, 'failed')
-            # Уведомляем пользователя
-            try:
-                error_message = (
-                    f"{UIStyles.header('Ошибка создания подписки')}\n\n"
-                    f"{UIEmojis.ERROR} <b>Не удалось создать подписку!</b>\n\n"
-                    f"<b>Причина:</b> Не удалось создать клиентов на серверах\n\n"
-                    f"{UIStyles.description('Попробуйте позже или обратитесь в поддержку')}"
-                )
-                if message_id and chat_id:
-                    from ...utils import UIButtons
-                    webapp_button = UIButtons.create_webapp_button(
-                        action='subscriptions'
-                    )
-                    buttons = []
-                    if webapp_button:
-                        buttons.append([webapp_button])
-                    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                    await safe_edit_message_with_photo(
-                        bot_app.bot,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=error_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_FAILED
-                    )
-            except Exception as e:
-                logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
             return
 
         # Шаг 4: Обновляем статус платежа
@@ -592,254 +441,65 @@ async def process_new_purchase_payment(bot_app, payment_id, user_id, meta, messa
         else:
             logger.info(f"Подписка {sub_dict['id']} создана: клиенты созданы на всех {len(successful_servers)} серверах")
         
-        # Шаг 5: Отправляем информацию о подписке пользователю
+        # Шаг 5: публичный URL подписки в лог (статус и ссылка пользователь видит в веб/Mini App)
         try:
-            # Вычисляем время истечения
-            expiry_time = datetime.datetime.now() + datetime.timedelta(days=days)
-            expiry_str = expiry_time.strftime('%d.%m.%Y %H:%M')
-            expiry_timestamp = int(expiry_time.timestamp())
-
-            # Получаем WEBHOOK_URL для формирования полного URL подписки
-            # WEBHOOK_URL должен быть публичным URL вашего webhook сервера (например, через ngrok или домен)
-            # Формат: http://your-domain.com или https://your-domain.com
             import os
-            webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
-
-            try:
-                from ...app_context import get_ctx
-                vpn_brand_name = get_ctx().vpn_brand_name
-            except RuntimeError:
-                vpn_brand_name = os.getenv('VPN_BRAND_NAME', 'Daralla VPN').strip()
-            
-            # Формируем subscription URL
-            # Для Happ клиента лучше использовать поддомен (как делают другие разработчики: auth.zkodes.ru)
-            # Happ использует домен из URL как название группы подписки
             import urllib.parse
-            
-            # Проверяем, есть ли специальный URL для подписок (поддомен)
+
+            expiry_str = (datetime.datetime.now() + datetime.timedelta(days=days)).strftime('%d.%m.%Y %H:%M')
+            webhook_url = os.getenv("WEBHOOK_URL", "").rstrip("/")
             subscription_base_url = os.getenv("SUBSCRIPTION_URL", "").rstrip("/")
-            
-            # Если SUBSCRIPTION_URL не установлен, извлекаем базовый URL из WEBHOOK_URL
-            # (убираем путь /webhook/yookassa, оставляем только домен)
             if subscription_base_url:
                 base_url = subscription_base_url
             elif webhook_url:
-                # Извлекаем базовый URL (домен) из WEBHOOK_URL
                 parsed = urllib.parse.urlparse(webhook_url)
                 base_url = f"{parsed.scheme}://{parsed.netloc}"
             else:
                 base_url = None
-            
             if base_url:
-                # Для Happ клиента используем поддомен в URL (например: daralla-vpn.ghosttunnel.space)
-                # Happ автоматически использует поддомен (или первую часть) как название группы
-                # Параметр name убираем, так как он может вызывать проблемы с эмодзи и 502 ошибки
-                # Поддомен в URL - это основной способ для Happ
                 subscription_url = f"{base_url}/sub/{token}"
-                logger.info(f"Subscription URL сформирован: {subscription_url}")
             else:
-                # Если WEBHOOK_URL не установлен, предупреждаем
-                # В продакшене это должно быть обязательно установлено!
-                subscription_url = f"http://localhost:5000/sub/{token}"  # Временный fallback для разработки
+                subscription_url = f"http://localhost:5000/sub/{token}"
                 logger.warning(
-                    "⚠️ WEBHOOK_URL не установлен! "
-                    "Установите переменную окружения WEBHOOK_URL с публичным URL вашего webhook сервера. "
-                    "Например: WEBHOOK_URL=https://your-domain.com или через ngrok: WEBHOOK_URL=https://xxxx.ngrok.io"
+                    "WEBHOOK_URL/SUBSCRIPTION_URL не заданы — в логе URL с localhost; payment_id=%s",
+                    payment_id,
                 )
-            
-            # Формируем сообщение о подписке
-            period_text = "3 месяца" if period == "3month" else "1 месяц"
-            subscription_message = (
-                f"{UIStyles.header('Подписка активирована!')}\n\n"
-                f"{UIEmojis.SUCCESS} <b>Ваша подписка успешно создана</b>\n\n"
-                f"<b>Период:</b> {period_text}\n"
-                f"<b>Окончание:</b> {expiry_str}\n"
-                f"<b>Серверов:</b> {len(successful_servers)}\n"
-                f"<b>Устройств:</b> {device_limit}\n\n"
-                f"{UIStyles.header('Ссылка на подписку:')}\n"
-                f"<code>{subscription_url}</code>\n\n"
-                f"{UIStyles.description('Используйте эту ссылку для импорта в VPN-клиент. Подписка включает все доступные серверы.')}"
+            logger.info(
+                "Новая подписка активирована: user_id=%s payment_id=%s sub_id=%s period=%s expires=%s "
+                "servers_ok=%s subscription_url=%s deferred_servers=%s",
+                user_id,
+                payment_id,
+                sub_dict["id"],
+                period,
+                expiry_str,
+                len(successful_servers),
+                subscription_url,
+                ",".join(failed_servers) if failed_servers else "-",
             )
-            
-            if failed_servers:
-                subscription_message += f"\n\n{UIEmojis.WARNING} <i>Не удалось создать клиентов на серверах: {', '.join(failed_servers)}</i>"
-            
-            # Создаем кнопку для открытия мини-приложения
-            from ...utils import UIButtons
-            webapp_button = UIButtons.create_webapp_button(
-                action='subscription',
-                params=sub_dict['id'] if sub_dict else None
-            )
-            
-            buttons = []
-            if webapp_button:
-                buttons.append([webapp_button])
-            
-            keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-            
-            # Получаем message_id из мета-данных платежа
-            payment_info = await get_payment_by_id(payment_id)
-            stored_message_id = None
-            if payment_info and payment_info.get('meta'):
-                if isinstance(payment_info['meta'], dict):
-                    stored_message_id = payment_info['meta'].get('message_id')
-                elif isinstance(payment_info['meta'], str):
-                    try:
-                        meta_dict = json.loads(payment_info['meta'])
-                        stored_message_id = meta_dict.get('message_id')
-                    except (TypeError, ValueError, json.JSONDecodeError):
-                        pass
-            
-            # Используем message_id из webhook или из базы данных
-            # Для платежей из мини-приложения message_id может быть None - не отправляем сообщение в бот
-            actual_message_id = message_id or stored_message_id
-            
-            if chat_id and actual_message_id:
-                try:
-                    await safe_edit_message_with_photo(
-                        bot_app.bot,
-                        chat_id=chat_id,
-                        message_id=actual_message_id,
-                        text=subscription_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_SUCCESS
-                    )
-                    logger.info(f"Отредактировано сообщение с оплатой {actual_message_id} на информацию о подписке")
-                except (RuntimeError, ValueError, TypeError) as edit_error:
-                    error_str = str(edit_error).lower()
-                    if "no text" in error_str or "can't be edited" in error_str:
-                        logger.debug(f"Сообщение {actual_message_id} уже отредактировано как медиа, пропускаем: {edit_error}")
-                    else:
-                        logger.error(f"Ошибка редактирования сообщения {actual_message_id}: {edit_error}")
-                    await safe_send_message_with_photo(
-                        bot_app.bot,
-                        chat_id=chat_id,
-                        text=subscription_message,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                        menu_type=MenuTypes.PAYMENT_SUCCESS
-                    )
-                    logger.info(f"Отправлено новое сообщение с подпиской для user_id={user_id}")
-            elif not actual_message_id:
-                logger.info(f"Платеж из мини-приложения для user_id={user_id} - сообщение в бот не отправляется (нет message_id)")
-                
         except (RuntimeError, ValueError, TypeError, KeyError) as e:
-            logger.error(f"Ошибка отправки информации о подписке пользователю: {e}")
+            logger.warning("Не удалось залогировать URL новой подписки: %s", e)
             
     except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки новой покупки {payment_id}: {e}")
         await update_payment_status(payment_id, 'failed')
 
 
-async def process_canceled_payment(bot_app, payment_id, user_id, meta, status):
+async def process_canceled_payment(payment_id, user_id, status):
     """Обрабатывает отмененный/возвращенный платеж. В БД сохраняем реальный статус (canceled/refunded) для корректного отображения на фронте."""
     try:
-        # Сохраняем фактический статус, чтобы API отдал его фронту и пользователь видел «отменен»/«возвращен»
         await update_payment_status(payment_id, status if status in ('canceled', 'refunded') else 'failed')
         await update_payment_activation(payment_id, 0)
-        
-        message_id = meta.get('message_id')
-        chat_id = await get_telegram_chat_id_for_notification(user_id)
-        if message_id and chat_id:
-            error_message = (
-                f"{UIStyles.header('Ошибка оплаты')}\n\n"
-                f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
-                f"<b>Причина:</b> Платеж был отменен или возвращен\n"
-                f"<b>Статус:</b> {status}\n\n"
-                f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
-            )
-            from ...utils import UIButtons
-            webapp_button = UIButtons.create_webapp_button(action='subscriptions', text="Открыть в приложении")
-            buttons = [[webapp_button]] if webapp_button else []
-            keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-            await safe_edit_message_with_photo(
-                bot_app.bot,
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                menu_type=MenuTypes.PAYMENT_FAILED
-            )
-            logger.info(f"Отправлено сообщение об ошибке оплаты пользователю {user_id}")
-                    
+        logger.info("Платёж отменён/возвращён: payment_id=%s user_id=%s status=%s", payment_id, user_id, status)
     except (RuntimeError, ValueError, TypeError, KeyError) as e:
         logger.error(f"Ошибка обработки отмененного платежа {payment_id}: {e}")
 
 
-async def process_failed_payment(bot_app, payment_id, user_id, meta, status):
+async def process_failed_payment(payment_id, user_id, status):
     """Обрабатывает неудачный платеж"""
     try:
         await update_payment_status(payment_id, 'failed')
         await update_payment_activation(payment_id, 0)
-        
-        chat_id = await get_telegram_chat_id_for_notification(user_id)
-        period = meta.get('type', 'month')
-        is_extension = period.startswith('extend_')
-        
-        message_id = meta.get('message_id')
-        if message_id and chat_id:
-            if is_extension:
-                # Ошибка продления подписки
-                extension_subscription_id = meta.get('extension_subscription_id', 'Неизвестно')
-                error_message = (
-                    f"{UIStyles.header('Ошибка продления подписки')}\n\n"
-                    f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
-                    f"<b>Подписка ID:</b> {extension_subscription_id}\n"
-                    f"<b>Причина:</b> Платеж был отклонен\n"
-                    f"<b>Статус:</b> {status}\n\n"
-                    f"{UIStyles.description('Попробуйте продлить заново или обратитесь в поддержку')}"
-                )
-                
-                # Создаем кнопку для открытия мини-приложения
-                from ...utils import UIButtons
-                webapp_button = UIButtons.create_webapp_button(
-                    action='subscriptions'
-                )
-                
-                buttons = []
-                if webapp_button:
-                    buttons.append([webapp_button])
-                
-                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                
-                menu_type = MenuTypes.PAYMENT_FAILED
-            else:
-                # Ошибка обычной покупки
-                error_message = (
-                    f"{UIStyles.header('Ошибка оплаты')}\n\n"
-                    f"{UIEmojis.ERROR} <b>Платеж не прошел!</b>\n\n"
-                    f"<b>Причина:</b> Платеж был отклонен\n"
-                    f"<b>Статус:</b> {status}\n\n"
-                    f"{UIStyles.description('Попробуйте оплатить заново или обратитесь в поддержку')}"
-                )
-                
-                # Создаем кнопку для открытия мини-приложения
-                from ...utils import UIButtons
-                webapp_button = UIButtons.create_webapp_button(
-                    action='subscriptions'
-                )
-                
-                buttons = []
-                if webapp_button:
-                    buttons.append([webapp_button])
-                
-                keyboard = InlineKeyboardMarkup(buttons) if buttons else None
-                
-                menu_type = MenuTypes.PAYMENT_FAILED
-            
-            await safe_edit_message_with_photo(
-                bot_app.bot,
-                chat_id=chat_id,
-                message_id=message_id,
-                text=error_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                menu_type=menu_type
-            )
-            logger.info(f"Отправлено сообщение об ошибке пользователю {user_id}")
-            
+        logger.info("Платёж неуспешен: payment_id=%s user_id=%s status=%s", payment_id, user_id, status)
     except (RuntimeError, ValueError, TypeError, KeyError) as e:
         logger.error(f"Ошибка обработки неудачного платежа {payment_id}: {e}")
 

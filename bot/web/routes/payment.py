@@ -121,11 +121,11 @@ def create_blueprint(bot_app):
             logger.info("CryptoCloud postback: status=%s, raw_id=%s, payment_id=%s, found=%s", status, raw_id, payment_id, bool(info))
             if status == "success":
                 if info:
-                    asyncio.create_task(_process_webhook(bot_app, payment_id, "succeeded"))
+                    asyncio.create_task(_process_webhook(payment_id, "succeeded"))
             else:
                 our_status = "canceled" if status in ("cancelled", "canceled") else "failed"
                 if info:
-                    asyncio.create_task(_process_webhook(bot_app, payment_id, our_status))
+                    asyncio.create_task(_process_webhook(payment_id, our_status))
             return jsonify({"status": "ok"}), 200
         except (TypeError, ValueError) as e:
             logger.warning("CryptoCloud webhook invalid payload: %s", e)
@@ -182,7 +182,7 @@ def create_blueprint(bot_app):
             else:
                 logger.info("WEBHOOK: Неизвестный статус: %s", status)
 
-            asyncio.create_task(_process_webhook(bot_app, payment_id, status))
+            asyncio.create_task(_process_webhook(payment_id, status))
 
             return jsonify({"status": "ok"})
         except (TypeError, ValueError) as e:
@@ -195,10 +195,10 @@ def create_blueprint(bot_app):
     return bp
 
 
-async def _process_webhook(bot_app, payment_id, status):
+async def _process_webhook(payment_id, status):
     """Background task: run process_payment_webhook and log errors."""
     try:
-        await process_payment_webhook(bot_app, payment_id, status)
+        await process_payment_webhook(payment_id, status)
     except asyncio.CancelledError:
         raise
     except Exception as e:

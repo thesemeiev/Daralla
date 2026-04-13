@@ -61,24 +61,61 @@ function isMiniAppHost() {
     return typeof window !== 'undefined' && window.location && (window.location.hostname || '').toLowerCase() === MINI_APP_HOST;
 }
 
-// Тема оформления: сохранение в localStorage, применение data-theme
+// Тема оформления: localStorage = light | dark | system; data-theme = разрешённая light | dark
 var THEME_KEY = 'daralla-theme';
-function getTheme() {
+var _themeSchemeMq = null;
+var _themeSchemeHandler = null;
+
+function getThemePreference() {
     try {
         var stored = localStorage.getItem(THEME_KEY);
-        if (stored === 'light' || stored === 'dark') return stored;
-        if (typeof window !== 'undefined' && window.matchMedia) {
-            var mq = window.matchMedia('(prefers-color-scheme: light)');
-            if (mq && mq.matches) return 'light';
-        }
-        return 'dark';
-    } catch (e) { return 'dark'; }
+        if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    } catch (e) {}
+    return 'system';
 }
+
+function resolveSystemTheme() {
+    if (typeof window === 'undefined' || !window.matchMedia) return 'dark';
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+/** Разрешённая тема (для data-theme, графики, Telegram header) */
+function getTheme() {
+    var pref = getThemePreference();
+    if (pref === 'light' || pref === 'dark') return pref;
+    return resolveSystemTheme();
+}
+
+function syncThemeSchemeListener() {
+    if (_themeSchemeMq && _themeSchemeHandler) {
+        if (_themeSchemeMq.removeEventListener) {
+            _themeSchemeMq.removeEventListener('change', _themeSchemeHandler);
+        } else if (_themeSchemeMq.removeListener) {
+            _themeSchemeMq.removeListener(_themeSchemeHandler);
+        }
+        _themeSchemeMq = null;
+        _themeSchemeHandler = null;
+    }
+    if (getThemePreference() !== 'system' || typeof window === 'undefined' || !window.matchMedia) return;
+    _themeSchemeMq = window.matchMedia('(prefers-color-scheme: dark)');
+    _themeSchemeHandler = function () {
+        applyTheme();
+    };
+    if (_themeSchemeMq.addEventListener) {
+        _themeSchemeMq.addEventListener('change', _themeSchemeHandler);
+    } else {
+        _themeSchemeMq.addListener(_themeSchemeHandler);
+    }
+}
+
 function setTheme(theme) {
-    if (theme !== 'light' && theme !== 'dark') return;
-    try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+    if (theme !== 'light' && theme !== 'dark' && theme !== 'system') return;
+    try {
+        localStorage.setItem(THEME_KEY, theme);
+    } catch (e) {}
     applyTheme();
 }
+
 function applyTheme() {
     var theme = getTheme();
     var root = document.documentElement;
@@ -91,17 +128,25 @@ function applyTheme() {
             serverGlobe.draw();
         } catch (e) {}
     }
+    syncThemeSchemeListener();
 }
+
+function refreshThemeToggleUi() {
+    var pref = getThemePreference();
+    document.querySelectorAll('.theme-btn').forEach(function (b) {
+        var t = b.getAttribute('data-theme');
+        if (t) b.classList.toggle('active', t === pref);
+    });
+}
+
 function initThemeToggle() {
+    refreshThemeToggleUi();
     document.querySelectorAll('.theme-btn').forEach(function (btn) {
-        var theme = btn.getAttribute('data-theme');
-        if (!theme) return;
-        btn.classList.toggle('active', getTheme() === theme);
+        var pref = btn.getAttribute('data-theme');
+        if (!pref) return;
         btn.addEventListener('click', function () {
-            setTheme(theme);
-            document.querySelectorAll('.theme-btn').forEach(function (b) {
-                b.classList.toggle('active', b.getAttribute('data-theme') === theme);
-            });
+            setTheme(pref);
+            refreshThemeToggleUi();
         });
     });
 }
@@ -442,6 +487,49 @@ function hideFormMessage(containerOrId) {
         box.textContent = '';
         box.style.display = 'none';
     }
+}
+
+/** Короткое уведомление внизу экрана (оплата, общий UX) */
+function showAppToast(message, duration, variant) {
+    duration = duration || 5000;
+    variant = variant || '';
+    var el = document.getElementById('app-toast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'app-toast';
+        el.className = 'app-toast';
+        el.setAttribute('role', 'status');
+        document.body.appendChild(el);
+    }
+    el.textContent = message || '';
+    el.classList.remove('app-toast--success');
+    if (variant === 'success') el.classList.add('app-toast--success');
+    el.classList.add('app-toast--visible');
+    clearTimeout(showAppToast._timer);
+    showAppToast._timer = setTimeout(function () {
+        el.classList.remove('app-toast--visible');
+    }, duration);
+}
+
+function removePaymentResultSubline() {
+    var sub = document.getElementById('payment-result-subline');
+    if (sub) sub.remove();
+}
+
+function ensurePaymentResultSubline(page) {
+    var sub = document.getElementById('payment-result-subline');
+    if (!sub) {
+        sub = document.createElement('p');
+        sub.id = 'payment-result-subline';
+        sub.className = 'payment-result-subline';
+        var header = page.querySelector('.detail-header');
+        if (header && header.parentNode) {
+            header.parentNode.insertBefore(sub, header.nextSibling);
+        } else {
+            return null;
+        }
+    }
+    return sub;
 }
 
 // Инициализация tg.ready/expand/цветов выполняется в DOMContentLoaded после waitForTelegram
@@ -3580,6 +3668,7 @@ function showPaymentPage() {
     var page = document.getElementById('page-payment');
     var hintEl = document.getElementById('payment-widget-hint');
     if (page) {
+        removePaymentResultSubline();
         var statusEl = page.querySelector('.detail-status');
         if (statusEl) {
             statusEl.textContent = 'Ожидает оплаты';
@@ -3672,6 +3761,11 @@ function showPaymentSuccessState() {
         statusEl.textContent = '\u2713 Оплата прошла';
         statusEl.className = 'detail-status success';
     }
+    var sub = ensurePaymentResultSubline(page);
+    if (sub) {
+        sub.textContent =
+            'Подписка уже активна. Ссылку на ключи и продление смотрите в разделе «Подписки».';
+    }
     var btn = document.getElementById('payment-link-button');
     if (btn) btn.style.display = 'none';
     var hint = document.getElementById('payment-widget-hint');
@@ -3683,14 +3777,15 @@ function showPaymentSuccessState() {
         toSubs = document.createElement('button');
         toSubs.id = 'payment-to-subscriptions-button';
         toSubs.type = 'button';
-        toSubs.className = 'action-button payment-link-button';
-        toSubs.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
+        toSubs.className = 'action-button action-button--accent payment-link-button';
         toSubs.textContent = 'К подпискам';
         toSubs.onclick = function () {
             showPage('subscriptions');
             loadSubscriptions();
         };
         actions.appendChild(toSubs);
+    } else {
+        toSubs.className = 'action-button action-button--accent payment-link-button';
     }
     toSubs.style.display = '';
 }
@@ -3701,9 +3796,11 @@ function showPaymentErrorState(message) {
     if (!page) return;
     var statusEl = page.querySelector('.detail-status');
     if (statusEl) {
-        statusEl.textContent = message;
+        statusEl.textContent = 'Ошибка оплаты';
         statusEl.className = 'detail-status expired';
     }
+    var sub = ensurePaymentResultSubline(page);
+    if (sub) sub.textContent = message || '';
     var btn = document.getElementById('payment-link-button');
     if (btn) btn.style.display = 'none';
     var hint = document.getElementById('payment-widget-hint');
@@ -3717,11 +3814,12 @@ function showPaymentErrorState(message) {
         retryBtn = document.createElement('button');
         retryBtn.id = 'payment-retry-button';
         retryBtn.type = 'button';
-        retryBtn.className = 'action-button payment-link-button';
-        retryBtn.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer;font-size:15px;font-weight:500;';
+        retryBtn.className = 'action-button action-button--accent payment-link-button';
         retryBtn.textContent = 'Попробовать снова';
         retryBtn.onclick = function () { goBackFromPayment(); };
         actions.appendChild(retryBtn);
+    } else {
+        retryBtn.className = 'action-button action-button--accent payment-link-button';
     }
     retryBtn.style.display = '';
 }
@@ -3763,9 +3861,15 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                         const currentPage = document.querySelector('.page.active');
                         const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
                         if (isOnPaymentPage) {
-                            showPaymentErrorState('Ссылка истекла');
+                            showPaymentErrorState(
+                                'Время на оплату вышло. Создайте новый платёж в разделе «Подписки».'
+                            );
                         } else {
-                            showFormMessage('payment-form-message', 'error', 'Платеж не был оплачен. Ссылка истекла. Вы можете создать новый платеж.');
+                            showFormMessage(
+                                'payment-form-message',
+                                'error',
+                                'Платёж не был завершён: время ссылки истекло. Создайте новый платёж в «Подписках».'
+                            );
                             goBackFromPayment();
                         }
                     }
@@ -3798,6 +3902,11 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                         loadSubscriptions();
                     }, 2500);
                 } else {
+                    showAppToast(
+                        'Оплата прошла, подписка активна. Откройте «Подписки», чтобы скопировать ключ.',
+                        5500,
+                        'success'
+                    );
                     showPage('subscriptions');
                     setTimeout(loadSubscriptions, 1000);
                 }
@@ -3807,12 +3916,20 @@ async function checkPaymentStatus(paymentId, subscriptionId = null) {
                 paymentCheckInterval = null;
                 const currentPage = document.querySelector('.page.active');
                 const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
-                const statusMessage = data.status === 'canceled' ? 'Платеж отменен' :
-                                      data.status === 'refunded' ? 'Платеж возвращен' : 'Платеж не прошел';
+                const statusMessage =
+                    data.status === 'canceled'
+                        ? 'Платёж отменён — средства не списывались. Попробуйте оплатить снова.'
+                        : data.status === 'refunded'
+                          ? 'Средства возвращены на карту или счёт. При необходимости создайте новый платёж.'
+                          : 'Банк или платёжная система отклонили операцию. Попробуйте другой способ или позже.';
                 if (isOnPaymentPage) {
                     showPaymentErrorState(statusMessage);
                 } else {
-                    showFormMessage('payment-form-message', 'error', statusMessage + '. Вы можете попробовать оплатить снова.');
+                    showFormMessage(
+                        'payment-form-message',
+                        'error',
+                        'Ошибка оплаты: ' + statusMessage + ' Раздел «Подписки» или выбор способа оплаты.'
+                    );
                     goBackFromPayment();
                 }
             }

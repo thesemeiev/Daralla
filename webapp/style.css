@@ -3307,8 +3307,9 @@ body.about-page-active {
     line-height: 1.2;
 }
 
-/* Тост для админки (синхронизация после вкл. сервера) */
-.admin-toast {
+/* Тост: админка и пользовательский поток (оплата и т.д.) */
+.admin-toast,
+.app-toast {
     position: fixed;
     left: 50%;
     bottom: 24px;
@@ -3327,10 +3328,29 @@ body.about-page-active {
     pointer-events: none;
     transition: transform 0.28s ease, opacity 0.28s ease;
 }
-.admin-toast.admin-toast--visible {
+.app-toast {
+    text-align: center;
+}
+.admin-toast.admin-toast--visible,
+.app-toast.app-toast--visible {
     transform: translateX(-50%) translateY(0);
     opacity: 1;
     pointer-events: auto;
+}
+
+.app-toast.app-toast--success {
+    border-color: rgba(52, 199, 89, 0.35);
+    box-shadow: 0 8px 28px rgba(52, 199, 89, 0.12);
+}
+
+/* Подзаголовок под статусом на экране оплаты (успех / ошибка) */
+.payment-result-subline {
+    margin: 10px auto 0;
+    max-width: 300px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    text-align: center;
 }
 
 /* --- Админ: управление серверами --- */
