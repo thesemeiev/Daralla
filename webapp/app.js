@@ -3115,8 +3115,7 @@ class CustomGlobe {
             ctx.fillStyle = glow;
             ctx.fillRect(Math.floor(pos.x - glowSize), Math.floor(pos.y - glowSize), glowSize * 2, glowSize * 2);
             
-            // Подпись сервера: приоритет — map_label из настроек, иначе display_name или location
-            const label = (server.map_label || server.display_name || server.location || server.name || '').trim();
+            const label = this.getGlobeServerLabel(server);
             if (label) {
                 // Размер шрифта фиксированный, не масштабируется с зумом
                 const fontSize = 10;

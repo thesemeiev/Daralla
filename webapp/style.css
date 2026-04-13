@@ -2753,7 +2753,7 @@ body.about-page-active {
     pointer-events: none;
 }
 
-/* Иконка «системная тема»: явно светлая / тёмная половина (не полупрозрачный currentColor) */
+/* Иконка «системная тема»: две половины по 10px внутри круга (clipPath), контраст под фон кнопки */
 .theme-btn[data-theme="system"] .theme-icon-sys-left {
     fill: #f2f2f8;
     stroke: none;
@@ -2761,6 +2761,13 @@ body.about-page-active {
 .theme-btn[data-theme="system"] .theme-icon-sys-right {
     fill: #2a2a32;
     stroke: none;
+}
+/* В тёмной теме тёмная половина не должна сливаться с var(--card-bg-hover) кнопки */
+[data-theme="dark"] .theme-btn[data-theme="system"] .theme-icon-sys-right {
+    fill: #0a0a10;
+}
+[data-theme="dark"] .theme-btn[data-theme="system"] .theme-icon-sys-left {
+    fill: #ececf4;
 }
 [data-theme="light"] .theme-btn[data-theme="system"]:not(.active) .theme-icon-sys-left {
     fill: #ffffff;
