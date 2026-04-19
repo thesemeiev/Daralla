@@ -51,6 +51,24 @@ def _cryptocloud_extract_address(result):
     return ""
 
 
+def _normalize_map_lat_lng(lat, lng):
+    """Возвращает (lat, lng) как float или (None, None), если координат нет или они некорректны."""
+    if lat is None or lng is None:
+        return None, None
+    if isinstance(lat, str) and not str(lat).strip():
+        return None, None
+    if isinstance(lng, str) and not str(lng).strip():
+        return None, None
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return None, None
+    if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lng_f <= 180.0):
+        return None, None
+    return lat_f, lng_f
+
+
 def create_blueprint(bot_app):
     bp = Blueprint("api_user", __name__)
 
@@ -569,23 +587,23 @@ def create_blueprint(bot_app):
                     display_name = server["config"].get("display_name", server_name)
                     map_label = server["config"].get("map_label")
                     location = server["config"].get("location") or "Other"
-                    lat = server["config"].get("lat")
-                    lng = server["config"].get("lng")
-                    if lat is not None and lng is not None:
-                        usage_data = server_usage.get(server_name, {"count": 0, "percentage": 0})
-                        status_info = health_status.get(server_name, {})
-                        status = status_info.get("status", "unknown")
-                        servers_info.append({
-                            "name": server_name,
-                            "display_name": display_name,
-                            "map_label": map_label,
-                            "location": location,
-                            "lat": lat,
-                            "lng": lng,
-                            "usage_count": usage_data["count"],
-                            "usage_percentage": usage_data["percentage"],
-                            "status": status,
-                        })
+                    raw_lat = server["config"].get("lat")
+                    raw_lng = server["config"].get("lng")
+                    lat, lng = _normalize_map_lat_lng(raw_lat, raw_lng)
+                    usage_data = server_usage.get(server_name, {"count": 0, "percentage": 0})
+                    status_info = health_status.get(server_name, {})
+                    status = status_info.get("status", "unknown")
+                    servers_info.append({
+                        "name": server_name,
+                        "display_name": display_name,
+                        "map_label": map_label,
+                        "location": location,
+                        "lat": lat,
+                        "lng": lng,
+                        "usage_count": usage_data["count"],
+                        "usage_percentage": usage_data["percentage"],
+                        "status": status,
+                    })
             return jsonify({"success": True, "servers": servers_info}), 200, _cors_headers()
         except Exception as e:
             logger.error("Ошибка в API /api/user/server-usage: %s", e, exc_info=True)

@@ -2543,6 +2543,22 @@ async function testSendNotificationRule() {
 let serverGlobe = null;
 let globeAnimationId = null;
 
+/** Координаты для отрисовки на глобусе; null если нет или невалидны (широта/долгота 0 считаются валидными). */
+function serverMapCoords(server) {
+    if (!server) return null;
+    var lat = Number(server.lat);
+    var lng = Number(server.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat: lat, lng: lng };
+}
+
+/** Держим угол в (-π, π], чтобы cos/sin не теряли точность при долгом вращении. */
+function _wrapAngleRad(a) {
+    var twoPi = Math.PI * 2;
+    return ((a + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
+}
+
 // Кастомный 2D глобус на Canvas
 class CustomGlobe {
     constructor(canvas, servers) {
@@ -2668,7 +2684,7 @@ class CustomGlobe {
         // Горизонтальное вращение (влево-вправо)
         // Скорость вращения обратно пропорциональна зуму (при большом зуме - медленнее)
         const rotationSpeed = 0.01 / this.zoom;
-        this.rotation += deltaX * rotationSpeed;
+        this.rotation = _wrapAngleRad(this.rotation + deltaX * rotationSpeed);
         
         // Вертикальное вращение (вверх-вниз) - ограничиваем угол наклона
         const pitchSpeed = 0.01 / this.zoom;
@@ -2720,14 +2736,16 @@ class CustomGlobe {
         const baseCenterY = this.baseHeight / 2;
         const x = baseCenterX + scaledRadius * x3d;
         const y = baseCenterY - scaledRadius * yRotated; // Инвертируем Y для правильной ориентации
-        
-        // Проверяем видимость (точка видна, если она на передней стороне сферы)
-        // Учитываем увеличенный радиус при зуме для проверки границ
-        const maxDistance = Math.max(this.baseWidth, this.baseHeight) * 0.6 * this.zoom;
-        const visible = zRotated >= 0 && 
-                       Math.abs(x - baseCenterX) < maxDistance && 
-                       Math.abs(y - baseCenterY) < maxDistance;
-        
+
+        // Видимость: ортографическая проекция вдоль +Z — видна передняя полусфера (z >= 0 после поворота).
+        // Проекция лежит внутри круга радиуса scaledRadius; без «квадрата» maxDistance (он давал ложные отсечения).
+        const limbEps = 1e-4;
+        const dx = x - baseCenterX;
+        const dy = y - baseCenterY;
+        const r2 = dx * dx + dy * dy;
+        const rMax2 = scaledRadius * scaledRadius + limbEps;
+        const visible = zRotated >= -limbEps && r2 <= rMax2;
+
         return { x, y, visible };
     }
     
@@ -2748,25 +2766,26 @@ class CustomGlobe {
         }
         
         // Если location не подходит, пробуем определить по координатам
-        if (server.lat && server.lng) {
+        var c = serverMapCoords(server);
+        if (c) {
             // Warsaw: 52.2297, 21.0122
-            if (Math.abs(server.lat - 52.2297) < 0.5 && Math.abs(server.lng - 21.0122) < 0.5) {
+            if (Math.abs(c.lat - 52.2297) < 0.5 && Math.abs(c.lng - 21.0122) < 0.5) {
                 return 'Warsaw';
             }
             // Dronten: 52.5167, 5.7167
-            if (Math.abs(server.lat - 52.5167) < 0.5 && Math.abs(server.lng - 5.7167) < 0.5) {
+            if (Math.abs(c.lat - 52.5167) < 0.5 && Math.abs(c.lng - 5.7167) < 0.5) {
                 return 'Dronten';
             }
             // Moscow: 55.7558, 37.6173
-            if (Math.abs(server.lat - 55.7558) < 0.5 && Math.abs(server.lng - 37.6173) < 0.5) {
+            if (Math.abs(c.lat - 55.7558) < 0.5 && Math.abs(c.lng - 37.6173) < 0.5) {
                 return 'Moscow';
             }
             // Riga: 56.9496, 24.1052
-            if (Math.abs(server.lat - 56.9496) < 0.5 && Math.abs(server.lng - 24.1052) < 0.5) {
+            if (Math.abs(c.lat - 56.9496) < 0.5 && Math.abs(c.lng - 24.1052) < 0.5) {
                 return 'Riga';
             }
             // Frankfurt am Main: 50.1109, 8.6821
-            if (Math.abs(server.lat - 50.1109) < 0.5 && Math.abs(server.lng - 8.6821) < 0.5) {
+            if (Math.abs(c.lat - 50.1109) < 0.5 && Math.abs(c.lng - 8.6821) < 0.5) {
                 return 'Frankfurt';
             }
         }
@@ -3076,9 +3095,10 @@ class CustomGlobe {
         
         // Рисуем точки серверов
         this.servers.forEach(server => {
-            if (!server.lat || !server.lng) return;
-            
-            const pos = this.latLngToXY(server.lat, server.lng);
+            var coords = serverMapCoords(server);
+            if (!coords) return;
+
+            const pos = this.latLngToXY(coords.lat, coords.lng);
             if (!pos.visible) return;
             
             // Определяем цвет и размер на основе здоровья сервера
@@ -3154,7 +3174,8 @@ class CustomGlobe {
     
     animate() {
         if (!this.isDragging) {
-            this.rotation += 0.005; // Медленное автоматическое вращение
+            // Угол держим в узком диапазоне — иначе rotation раздувается, cos/sin теряют точность и точки «теряются».
+            this.rotation = _wrapAngleRad(this.rotation + 0.005);
         }
         this.draw();
         this.animationId = requestAnimationFrame(() => this.animate());
@@ -6870,6 +6891,7 @@ const instructionSteps = {
                 title: 'Нужна помощь?',
                 content: `
                     <p>Если у вас возникли проблемы или вопросы, обратитесь в поддержку через Telegram.</p>
+                    <p style="margin-top: 14px;"><a href="https://t.me/DarallaSupport" target="_blank" rel="noopener noreferrer" class="instruction-link">Написать в поддержку @DarallaSupport</a></p>
                 `
             }
         ]

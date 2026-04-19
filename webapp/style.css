@@ -2943,6 +2943,14 @@ body.about-page-active {
     text-align: center;
 }
 
+a.instruction-platform-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: inherit;
+}
+
 @media (hover: hover) and (pointer: fine) {
 .instruction-platform-btn:hover {
     background: var(--card-bg-hover);
