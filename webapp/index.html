@@ -56,11 +56,11 @@
                             <button type="button" class="landing-btn landing-btn-primary" onclick="showPage('login')">Войти</button>
                             <button type="button" class="landing-btn landing-btn-secondary" onclick="showPage('register')">Создать аккаунт</button>
                         </div>
-                        <p class="hint" style="text-align: center; margin-top: 14px;">
-                            <a href="/terms" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
-                            ·
-                            <a href="/privacy" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
-                        </p>
+                        <div class="legal-inline legal-inline--landing" aria-label="Юридические документы">
+                            <a href="/terms" target="_blank" rel="noopener noreferrer">Соглашение</a>
+                            <span class="legal-inline-sep">·</span>
+                            <a href="/privacy" target="_blank" rel="noopener noreferrer">Конфиденциальность</a>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -238,13 +238,13 @@
                         <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
                     </label>
                 </div>
-                <p class="hint" style="margin-top: 16px; text-align: center; font-size: 13px;">
-                    Перед оплатой ознакомьтесь с
-                    <a href="/terms" target="_blank" rel="noopener noreferrer">Пользовательским соглашением</a>
-                    и
-                    <a href="/privacy" target="_blank" rel="noopener noreferrer">Политикой конфиденциальности</a>.
-                </p>
                 <button type="button" class="btn-primary" id="choose-payment-submit" style="width: 100%; margin-top: 24px;">Оплатить</button>
+                <p class="legal-inline legal-inline--payment">
+                    Оплачивая, вы принимаете
+                    <a href="/terms" target="_blank" rel="noopener noreferrer">Соглашение</a>
+                    и
+                    <a href="/privacy" target="_blank" rel="noopener noreferrer">Политику</a>.
+                </p>
             </div>
         </div>
 

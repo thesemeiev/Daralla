@@ -498,6 +498,41 @@
     margin-top: 8px;
 }
 
+.legal-inline {
+    margin: 0;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.legal-inline a {
+    color: var(--text-secondary);
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+    transition: color 0.2s ease;
+}
+
+.legal-inline-sep {
+    opacity: 0.45;
+}
+
+@media (hover: hover) and (pointer: fine) {
+.legal-inline a:hover {
+    color: var(--text-primary);
+}
+}
+
+.legal-inline--landing {
+    margin-top: 12px;
+}
+
+.legal-inline--payment {
+    margin-top: 10px;
+    font-size: 11px;
+    opacity: 0.72;
+}
+
 @media (hover: hover) and (pointer: fine) {
 .landing-back-link:hover {
     color: var(--text-primary);
