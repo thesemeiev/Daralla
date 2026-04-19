@@ -145,9 +145,3 @@ class UIMessages:
             header_text = f'Добро пожаловать в {vpn_brand_name}!'
         else:
             header_text = f'Рады снова видеть вас в {vpn_brand_name}!'
-        
-        return (
-            f"{UIStyles.header(header_text)}\n\n"
-            f"{UIStyles.description('Быстрый и стабильный доступ к серверам по всему миру.')}"
-        )
-
