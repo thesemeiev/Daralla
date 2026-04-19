@@ -2571,6 +2571,8 @@ class CustomGlobe {
         this.lastX = 0;
         this.lastY = 0;
         this.zoom = 1;
+        /** После отпускания мыши/пальца автоповорот возобновляется не сразу, а через паузу (мс). */
+        this.autoRotatePausedUntil = 0;
         this.mapContainer = canvas.parentElement; // Сохраняем ссылку на контейнер
         
         // Получаем реальные размеры с учетом devicePixelRatio
@@ -2660,6 +2662,7 @@ class CustomGlobe {
             e.preventDefault();
             this.zoom += e.deltaY * -0.001;
             this.zoom = Math.max(0.5, Math.min(6, this.zoom)); // Увеличиваем максимум до 6x
+            this.autoRotatePausedUntil = Date.now() + CustomGlobe.AUTO_ROTATE_PAUSE_MS;
             this.draw();
         });
     }
@@ -2698,6 +2701,7 @@ class CustomGlobe {
     
     onMouseUp() {
         this.isDragging = false;
+        this.autoRotatePausedUntil = Date.now() + CustomGlobe.AUTO_ROTATE_PAUSE_MS;
     }
     
     // Вычисление расстояния между двумя точками касания
@@ -2792,6 +2796,25 @@ class CustomGlobe {
         
         // Fallback на display_name или server_name
         return server.display_name || server.server_name || server.location || '';
+    }
+
+    /**
+     * Подпись к точке сервера на глобусе (раньше метод не был объявлен — draw() падал после первой точки).
+     * Приоритет: название на карте из админки → отображаемое имя → внутреннее имя ноды → локация.
+     */
+    getGlobeServerLabel(server) {
+        if (!server) return '';
+        var ml = server.map_label;
+        if (ml != null && String(ml).trim() !== '') return String(ml).trim();
+        var dn = server.display_name;
+        if (dn != null && String(dn).trim() !== '') return String(dn).trim();
+        var nm = server.name;
+        if (nm != null && String(nm).trim() !== '') return String(nm).trim();
+        var loc = server.location;
+        if (loc != null && String(loc).trim() !== '' && String(loc).trim() !== 'Other') {
+            return String(loc).trim();
+        }
+        return '';
     }
     
     // Рисует точки крупных городов (серые)
@@ -3173,11 +3196,17 @@ class CustomGlobe {
     }
     
     animate() {
-        if (!this.isDragging) {
-            // Угол держим в узком диапазоне — иначе rotation раздувается, cos/sin теряют точность и точки «теряются».
-            this.rotation = _wrapAngleRad(this.rotation + 0.005);
+        try {
+            var pauseUntil = this.autoRotatePausedUntil || 0;
+            var allowAuto = !this.isDragging && Date.now() >= pauseUntil;
+            if (allowAuto) {
+                // Угол держим в узком диапазоне — иначе rotation раздувается, cos/sin теряют точность.
+                this.rotation = _wrapAngleRad(this.rotation + 0.005);
+            }
+            this.draw();
+        } catch (err) {
+            console.error('Globe animate/draw:', err);
         }
-        this.draw();
         this.animationId = requestAnimationFrame(() => this.animate());
     }
     
@@ -3187,6 +3216,9 @@ class CustomGlobe {
         }
     }
 }
+
+/** Пауза автоповорота после взаимодействия (мс), затем снова крутится сам. */
+CustomGlobe.AUTO_ROTATE_PAUSE_MS = 3500;
 
 // Загрузка кастомного глобуса серверов
 async function loadServerMap() {
