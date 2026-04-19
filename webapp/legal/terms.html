@@ -10,13 +10,12 @@
     <style>
         :root {
             --bg: #0f1014;
-            --bg-soft: #161923;
-            --card: #1b1f2b;
-            --line: #2c3447;
+            --bg-soft: #16181d;
+            --card: #1b1d24;
+            --line: #2c303b;
             --text: #edf0f8;
-            --muted: #aab3c8;
-            --accent: #cfd8ff;
-            --accent-line: rgba(207, 216, 255, 0.28);
+            --muted: #aeb3c0;
+            --accent-line: rgba(255, 255, 255, 0.22);
             --shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
         }
         * {
@@ -27,8 +26,8 @@
             color: var(--text);
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background:
-                radial-gradient(1200px 680px at -10% -10%, #2d3860 0%, transparent 50%),
-                radial-gradient(900px 600px at 110% 0%, #25314f 0%, transparent 52%),
+                radial-gradient(1200px 680px at -10% -10%, #2a2e39 0%, transparent 50%),
+                radial-gradient(900px 600px at 110% 0%, #232833 0%, transparent 52%),
                 linear-gradient(180deg, #12141c 0%, var(--bg) 38%, #0d0f16 100%);
             line-height: 1.65;
         }
@@ -48,7 +47,7 @@
             align-items: center;
             gap: 6px;
             padding: 10px 14px;
-            background: rgba(28, 34, 49, 0.78);
+            background: rgba(27, 30, 38, 0.82);
             border: 1px solid var(--line);
             border-radius: 999px;
             color: var(--text);
@@ -62,7 +61,7 @@
             transform: translateY(-1px);
         }
         .hero {
-            background: linear-gradient(180deg, rgba(29, 36, 52, .88), rgba(23, 27, 39, .88));
+            background: linear-gradient(180deg, rgba(30, 33, 41, .9), rgba(24, 27, 34, .9));
             border: 1px solid var(--line);
             border-radius: 18px;
             padding: 22px;
@@ -83,11 +82,11 @@
         }
         .lead {
             margin: 0;
-            color: #dce2f2;
+            color: #d9dce5;
         }
         .section {
             margin-top: 12px;
-            background: linear-gradient(180deg, rgba(28, 33, 46, .94), rgba(24, 28, 40, .94));
+            background: linear-gradient(180deg, rgba(27, 31, 40, .95), rgba(23, 26, 34, .95));
             border: 1px solid var(--line);
             border-radius: 16px;
             padding: 20px;
@@ -122,11 +121,15 @@
             font-size: 14px;
         }
         a {
-            color: var(--accent);
+            color: inherit;
             text-decoration: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        a:visited {
+            color: inherit;
         }
         a:hover {
-            text-decoration: underline;
+            border-bottom-color: rgba(255, 255, 255, 0.42);
         }
     </style>
 </head>
