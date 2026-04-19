@@ -124,7 +124,12 @@ async def process_extension_payment(payment_id, user_id, meta):
                 return
             
             # Проверяем, что подписка принадлежит пользователю
-            from ...db.subscriptions_db import get_subscription_by_id, get_subscription_servers
+            from ...db.subscriptions_db import (
+                get_subscription_by_id,
+                get_subscription_servers,
+                update_subscription_expiry,
+                update_subscription_price,
+            )
             sub = await get_subscription_by_id(extension_subscription_id, user_id)
             
             if not sub:
@@ -149,37 +154,22 @@ async def process_extension_payment(payment_id, user_id, meta):
                 await update_payment_status(payment_id, 'failed')
                 return
             
-            # Шаг 1: Вычисляем новое время истечения и обновляем БД
-            # Это делаем ПЕРВЫМ, чтобы БД была источником истины
+            # Считаем новый срок и (при необходимости) цену после конвертации пробной — в БД пишем только
+            # после успешной синхронизации хотя бы на одном сервере, иначе платёж failed, а срок уже
+            # увеличен в БД (рассинхрон с оплатой).
             import time
             current_time = int(time.time())
-            if sub:
-                # Если продлевают пробную (price=0) — обновляем price, чтобы конверсия учитывалась
-                sub_price = float(sub.get('price') or 0)
-                if sub_price == 0:
-                    from ...prices_config import PRICES
-                    paid_price = PRICES.get(actual_period, 150)
-                    from ...db.subscriptions_db import update_subscription_price
-                    await update_subscription_price(extension_subscription_id, float(paid_price))
-                    logger.info(f"Пробная подписка {extension_subscription_id} конвертирована в платную (price={paid_price})")
+            paid_price_after_trial = None
+            sub_price = float(sub.get('price') or 0)
+            if sub_price == 0:
+                from ...prices_config import PRICES
+                paid_price_after_trial = float(PRICES.get(actual_period, 150))
 
-                # Вычисляем новое время истечения
-                current_expires_at = sub['expires_at']
-                # Если подписка уже истекла, начинаем с текущего времени, иначе продлеваем от текущего expires_at
-                base_time = max(current_expires_at, current_time)
-                new_expires_at = base_time + days * 24 * 60 * 60
+            current_expires_at = sub['expires_at']
+            base_time = max(current_expires_at, current_time)
+            new_expires_at = base_time + days * 24 * 60 * 60
 
-                # Обновляем expires_at в БД ПЕРЕД синхронизацией серверов
-                from ...db.subscriptions_db import update_subscription_expiry
-                await update_subscription_expiry(extension_subscription_id, new_expires_at)
-                logger.info(f"Подписка {extension_subscription_id} продлена до {new_expires_at} в БД")
-            else:
-                # Если подписка не найдена, используем текущее время + дни
-                new_expires_at = current_time + days * 24 * 60 * 60
-                logger.warning(f"Подписка {extension_subscription_id} не найдена в БД, используем расчетное время: {new_expires_at}")
-            
-            # Шаг 2: Синхронизируем время на всех серверах через ensure_client_on_server
-            # Эта функция сама проверит время на сервере и синхронизирует его с БД
+            # Шаг 1: панели — reconcile по переданному expires_at (без предварительного update в БД)
             successful_extensions = []
             failed_extensions = []
             
@@ -191,14 +181,13 @@ async def process_extension_payment(payment_id, user_id, meta):
                 client_email = server_info['client_email']
                 
                 try:
-                    # Используем ensure_client_on_server с НОВЫМ expires_at
-                    # Он сам проверит время на сервере и синхронизирует его с БД и limitIp
+                    # Используем ensure_client_on_server с целевым expires_at (запись в БД — после успеха)
                     client_exists, client_created = await subscription_manager.ensure_client_on_server(
                         subscription_id=extension_subscription_id,
                         server_name=server_name,
                         client_email=client_email,
                         user_id=user_id,
-                        expires_at=new_expires_at,  # Используем НОВОЕ время из БД
+                        expires_at=new_expires_at,
                         token=sub['subscription_token'] if sub else '',
                         device_limit=device_limit  # Передаем device_limit для синхронизации limitIp
                     )
@@ -222,6 +211,20 @@ async def process_extension_payment(payment_id, user_id, meta):
                 logger.error(f"Не удалось синхронизировать клиентов ни на одном сервере для подписки {extension_subscription_id}")
                 await update_payment_status(payment_id, 'failed')
                 return
+
+            if paid_price_after_trial is not None:
+                await update_subscription_price(extension_subscription_id, paid_price_after_trial)
+                logger.info(
+                    "Пробная подписка %s конвертирована в платную (price=%s) после успешной синхронизации на панели",
+                    extension_subscription_id,
+                    paid_price_after_trial,
+                )
+            await update_subscription_expiry(extension_subscription_id, new_expires_at)
+            logger.info(
+                "Подписка %s продлена до %s в БД (после успешной синхронизации хотя бы на одном сервере)",
+                extension_subscription_id,
+                new_expires_at,
+            )
 
             # Проверяем, что синхронизация прошла на всех серверах
             if failed_extensions:

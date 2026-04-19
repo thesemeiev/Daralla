@@ -111,6 +111,18 @@ async def test_post_api_auth_register_success(quart_app_with_routes: Quart, db):
 
 
 @pytest.mark.asyncio
+async def test_legal_pages_are_publicly_available(quart_app_with_routes: Quart):
+    """GET /privacy и /terms возвращают HTML с 200."""
+    client = quart_app_with_routes.test_client()
+    privacy_response = await client.get("/privacy")
+    terms_response = await client.get("/terms")
+    assert privacy_response.status_code == 200
+    assert terms_response.status_code == 200
+    assert "text/html" in (privacy_response.content_type or "")
+    assert "text/html" in (terms_response.content_type or "")
+
+
+@pytest.mark.asyncio
 async def test_post_api_auth_register_missing_credentials_returns_400(quart_app_with_routes: Quart):
     """POST /api/auth/register without username/password returns 400."""
     client = quart_app_with_routes.test_client()

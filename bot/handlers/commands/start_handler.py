@@ -276,6 +276,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{UIStyles.description('Откройте мини-приложение, чтобы управлять подписками, продлевать и смотреть инструкции в пару нажатий.')}"
         )
         welcome_text += trial_info
+
+    _, site_url = get_site_urls()
+    if site_url:
+        site_base = site_url.rstrip("/")
+        legal_info = (
+            "\n\n"
+            "Используя сервис, вы соглашаетесь с условиями:\n"
+            f"• <a href=\"{site_base}/terms\">Пользовательское соглашение</a>\n"
+            f"• <a href=\"{site_base}/privacy\">Политика конфиденциальности</a>"
+        )
+        welcome_text += legal_info
     
     # Создаем кнопки главного меню используя единый стиль
     buttons = UIButtons.main_menu_buttons()
