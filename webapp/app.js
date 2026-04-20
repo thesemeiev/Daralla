@@ -1,65 +1,10 @@
-// Парсим initData из URL hash (Telegram передаёт tgWebAppData в hash при открытии Mini App).
-// Работает без скрипта telegram.org, если внешний ресурс недоступен.
-function parseInitDataFromHash() {
-    var hash = (window.location.hash || '').replace(/^#/, '');
-    if (!hash || hash.indexOf('tgWebAppData') === -1) return null;
-    var queryPart = hash;
-    var qIdx = hash.indexOf('?');
-    if (qIdx >= 0) queryPart = hash.substr(qIdx + 1);
-    var params = {};
-    queryPart.split('&').forEach(function (p) {
-        var eq = p.indexOf('=');
-        if (eq >= 0) {
-            params[decodeURIComponent(p.substr(0, eq))] = decodeURIComponent(p.substr(eq + 1));
-        }
-    });
-    var raw = params.tgWebAppData;
-    if (!raw) return null;
-    var unsafe = { user: {} };
-    raw.split('&').forEach(function (p) {
-        var eq = p.indexOf('=');
-        if (eq >= 0) {
-            var k = decodeURIComponent(p.substr(0, eq));
-            var v = decodeURIComponent(p.substr(eq + 1));
-            try {
-                if ((v.charAt(0) === '{' && v.slice(-1) === '}') || (v.charAt(0) === '[' && v.slice(-1) === ']')) {
-                    v = JSON.parse(v);
-                }
-            } catch (e) {}
-            unsafe[k] = v;
-        }
-    });
-    if (unsafe.user && typeof unsafe.user === 'object') {
-        unsafe.user = unsafe.user;
-    }
-    return { initData: raw, initDataUnsafe: unsafe };
-}
-
-// Telegram Web App API — заглушка, если скрипт не загрузился (например, ресурс временно недоступен)
-var TG_STUB = {
-    initData: '',
-    initDataUnsafe: { user: {} },
-    ready: function() {},
-    expand: function() {},
-    setHeaderColor: function() {},
-    setBackgroundColor: function() {},
-    disableVerticalSwipes: false,
-    openLink: function() {},
-    showAlert: function() {},
-    showConfirm: function(msg, cb) { if (typeof cb === 'function') cb(false); },
-    MainButton: {
-        setText: function() {},
-        show: function() {},
-        hide: function() {},
-        disable: function() {},
-        enable: function() {}
-    }
-};
-
-var MINI_APP_HOST = 'app.daralla.ru';
-function isMiniAppHost() {
-    return typeof window !== 'undefined' && window.location && (window.location.hostname || '').toLowerCase() === MINI_APP_HOST;
-}
+var TG_STUB = window.DarallaPlatform.TG_STUB;
+var isMiniAppHost = window.DarallaPlatform.isMiniAppHost;
+var ROUTE_PAGE_NAMES = window.DarallaRouting.ROUTE_PAGE_NAMES;
+var getPageFromHash = window.DarallaRouting.getPageFromHash;
+var parseHashRoute = window.DarallaRouting.parseHashRoute;
+var buildHash = window.DarallaRouting.buildHash;
+var isPageAllowedForUser = window.DarallaRouting.isPageAllowedForUser;
 
 // Тема оформления: localStorage = light | dark | system; data-theme = разрешённая light | dark
 var THEME_KEY = 'daralla-theme';
@@ -151,156 +96,233 @@ function initThemeToggle() {
     });
 }
 
-// Адаптер платформы: веб vs Telegram Mini App. Вся логика различий сосредоточена здесь.
-var platform = (function () {
-    var _tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
-    var _isTelegram = !!(_tg && _tg.initData);
-
-    function applyTgUi() {
-        if (!_isTelegram || !_tg) return;
-        try {
-            _tg.ready();
-            _tg.expand();
-            if (_tg.disableVerticalSwipes) _tg.disableVerticalSwipes();
-            var color = (typeof getTheme === 'function' && getTheme() === 'light') ? '#f0f0f2' : '#131314';
-            _tg.setHeaderColor(color);
-            _tg.setBackgroundColor(color);
-        } catch (e) {}
-    }
-
-    return {
-        init: function () {
-            if (!isMiniAppHost()) {
-                _isTelegram = false;
-                _tg = TG_STUB;
-                return Promise.resolve();
-            }
-            var hashInit = parseInitDataFromHash();
-            if (hashInit && hashInit.initData) {
-                _tg = Object.assign({}, TG_STUB, { initData: hashInit.initData, initDataUnsafe: hashInit.initDataUnsafe || { user: {} } });
-                _isTelegram = true;
-                try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
-                return loadTelegramScript(400).then(function () {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        _tg = window.Telegram.WebApp;
-                        try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
-                    }
-                    applyTgUi();
-                });
-            }
-            var stored = '';
-            try { stored = sessionStorage.getItem('tg_init_data') || ''; } catch (e) {}
-            if (stored) {
-                _tg = Object.assign({}, TG_STUB, { initData: stored, initDataUnsafe: { user: {} } });
-                _isTelegram = true;
-                return loadTelegramScript(400).then(function () {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        _tg = window.Telegram.WebApp;
-                        try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
-                    }
-                    applyTgUi();
-                });
-            }
-            return loadTelegramScript(400).then(function () {
-                _tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
-                _isTelegram = !!(_tg && _tg.initData);
-                if (_tg.initData) try { sessionStorage.setItem('tg_init_data', _tg.initData); } catch (e) {}
-                applyTgUi();
-            });
-        },
-        isTelegram: function () { return _isTelegram; },
-        getAuth: function () {
-            if (_isTelegram && _tg && _tg.initData) return { type: 'tg', initData: _tg.initData };
-            return { type: 'web', token: (typeof webAuthToken !== 'undefined' ? webAuthToken : null) || null };
-        },
-        reapplyTgUi: applyTgUi,
-        getTgRef: function () { return _tg; },
-        getTgUser: function () { return _tg && _tg.initDataUnsafe && _tg.initDataUnsafe.user ? _tg.initDataUnsafe.user : null; },
-        openExternalUrl: function (url) {
-            if (!url || String(url).indexOf('http') !== 0) return;
-            if (_isTelegram) {
-                var webApp = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : _tg;
-                var hasOpenLink = webApp && typeof webApp.openLink === 'function' && webApp.openLink !== TG_STUB.openLink;
-                if (hasOpenLink) {
-                    try {
-                        webApp.openLink(url);
-                    } catch (err) {
-                        window.location.href = url;
-                    }
-                } else {
-                    window.location.href = url;
-                }
-            } else {
-                var a = document.createElement('a');
-                a.href = url;
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }
-        },
-        getDefaultPage: function (isAuthenticated) {
-            if (_isTelegram) return 'subscriptions';
-            var route = parseHashRoute();
-            if (route && ROUTE_PAGE_NAMES.has(route.pageName)) return route.pageName;
-            return isAuthenticated ? 'subscriptions' : 'landing';
-        },
-        canShowPage: function (pageName) {
-            if (_isTelegram && pageName === 'landing') return false;
-            return true;
-        },
-        mainButton: {
-            _onClick: null,
-            show: function (text, onClick) {
-                if (!_isTelegram || !_tg || !_tg.MainButton) return;
-                try {
-                    this._onClick = onClick;
-                    _tg.MainButton.setText(text || '');
-                    _tg.MainButton.onClick(function () {
-                        if (typeof platform.mainButton._onClick === 'function') platform.mainButton._onClick();
-                    });
-                    _tg.MainButton.show();
-                } catch (e) { console.warn('MainButton.show error', e); }
-            },
-            hide: function () {
-                if (!_isTelegram || !_tg || !_tg.MainButton) return;
-                try { _tg.MainButton.hide(); } catch (e) {}
-                this._onClick = null;
-            },
-            disable: function () {
-                if (_isTelegram && _tg && _tg.MainButton && typeof _tg.MainButton.disable === 'function') _tg.MainButton.disable();
-            },
-            enable: function () {
-                if (_isTelegram && _tg && _tg.MainButton && typeof _tg.MainButton.enable === 'function') _tg.MainButton.enable();
-            }
-        },
-        showAlert: function (msg) {
-            appShowAlert(String(msg || ''), { title: 'Сообщение' });
-        },
-        showConfirm: function (msg, callback) {
-            appShowConfirm(String(msg || ''), { title: 'Подтверждение' }).then(function (ok) {
-                if (typeof callback === 'function') callback(ok);
-            });
-        }
-    };
-})();
+// Адаптер платформы: веб vs Telegram Mini App.
+var platform = window.DarallaPlatform.createPlatform({
+    getTheme: getTheme,
+    parseHashRoute: parseHashRoute,
+    routePageNames: ROUTE_PAGE_NAMES,
+    loadTelegramScript: loadTelegramScript,
+    appShowAlert: appShowAlert,
+    appShowConfirm: appShowConfirm,
+    getWebAuthToken: function () { return webAuthToken; }
+});
 
 // Обратная совместимость: глобальные tg и isWebMode выставляются в DOMContentLoaded после platform.init()
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
+var uiGuardsFeature = window.DarallaUiGuards.create();
+uiGuardsFeature.installFocusGuard();
+var navIndicatorFeature = window.DarallaNavigationIndicatorFeature.create({
+    showPage: function (pageName) { return showPage(pageName); }
+});
+var aboutSceneFeature = window.DarallaAboutSceneFeature.create({
+    getCurrentPage: function () { return currentPage; },
+    getTheme: function () { return getTheme(); }
+});
 
 // Глобальные переменные для веб-авторизации
 let webAuthToken = window.DarallaAuthSession.getInitialToken();
 let currentUserId = null;
 let isWebMode = !tg.initData;
+let currentSubscriptionDetail = null;
+
+var authFeature = window.DarallaAuthFeature.create({
+    onRemoveAuthToken: function (token) { webAuthToken = token; },
+    setCurrentUserId: function (userId) { currentUserId = userId; },
+    showPage: function (pageName, params) { showPage(pageName, params); },
+    getPlatform: function () { return platform; },
+    apiFetch: function (url, options) { return apiFetch(url, options); }
+});
+
+var authFormsFeature = window.DarallaAuthFormsFeature.create({
+    setAuthToken: function (token) { return setAuthToken(token); },
+    setWebAuthToken: function (token) { webAuthToken = token; },
+    setCurrentUserId: function (userId) { currentUserId = userId; },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    checkAdminAccess: function () { return checkAdminAccess(); },
+    showFormMessage: function (container, type, text) { return showFormMessage(container, type, text); }
+});
+
+var authAccountFeature = window.DarallaAuthAccountFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    showFormMessage: function (container, type, text) { return showFormMessage(container, type, text); },
+    showModal: function (modalId) { return showModal(modalId); },
+    closeModal: function (modalId) { return closeModal(modalId); },
+    platform: platform,
+    getTgInitData: function () { return tg && tg.initData; },
+    getWebAuthToken: function () { return webAuthToken; },
+    updateProfileCard: function (userId, username) { return updateProfileCard(userId, username); },
+    setProfileAvatarFromInitData: function () { return setProfileAvatarFromInitData(); },
+    loadProfileAvatar: function () { return loadProfileAvatar(); }
+});
+
+var subscriptionsFeature = window.DarallaSubscriptionsFeature.create({
+    escapeHtml: escapeHtml,
+    formatTimeRemaining: formatTimeRemaining,
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    platform: platform,
+    initTelegramFlow: function () { return initTelegramFlow(); },
+    showPage: function (pageName, params) { showPage(pageName, params); },
+    setCurrentSubscriptionDetail: function (sub) { currentSubscriptionDetail = sub; },
+    onBuySubscription: function () {
+        currentPaymentPeriod = 'month';
+        currentExtendSubscriptionId = null;
+        resetCheckoutPaymentState();
+        showPage('choose-payment-method');
+    }
+});
+
+var adminUsersFeature = window.DarallaAdminUsersFeature.create({
+    setCurrentCreatingSubscriptionUserId: function (value) { currentCreatingSubscriptionUserId = value; },
+    getCurrentCreatingSubscriptionUserId: function () { return currentCreatingSubscriptionUserId; },
+    setPreviousAdminPage: function (value) { previousAdminPage = value; },
+    getPreviousAdminPage: function () { return previousAdminPage; },
+    showPage: function (pageName, params) { showPage(pageName, params); },
+    showAdminUserDetail: function (userId) { showAdminUserDetail(userId); }
+});
+
+var adminUsersListFeature = window.DarallaAdminUsersListFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    buildHash: buildHash,
+    escapeHtml: escapeHtml,
+    showError: function (elementId, message) { return showError(elementId, message); },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    setPreviousAdminPage: function (value) { previousAdminPage = value; },
+    setCurrentAdminUserDetailUserId: function (value) { currentAdminUserDetailUserId = value; },
+    getCurrentAdminUserSearch: function () { return currentAdminUserSearch; },
+    setCurrentAdminUserPage: function (value) { currentAdminUserPage = value; },
+    setCurrentAdminUserSearch: function (value) { currentAdminUserSearch = value; }
+});
+
+var adminUsersActionsFeature = window.DarallaAdminUsersActionsFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    platform: platform,
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    loadAdminUsers: function (page, search) { return loadAdminUsers(page, search); }
+});
+
+var adminSubscriptionEditFeature = window.DarallaAdminSubscriptionEditFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    showModal: function (modalId) { return showModal(modalId); },
+    escapeHtml: escapeHtml,
+    copyTextToClipboard: function (text) { return copyTextToClipboard(text); },
+    getCurrentPage: function () { return currentPage; },
+    getCurrentEditingSubscriptionId: function () { return currentEditingSubscriptionId; },
+    setCurrentEditingSubscriptionId: function (value) { currentEditingSubscriptionId = value; },
+    getOriginalSubscriptionData: function () { return originalSubscriptionData; },
+    setOriginalSubscriptionData: function (value) { originalSubscriptionData = value; },
+    getCurrentSubscriptionServers: function () { return currentSubscriptionServers; },
+    setCurrentSubscriptionServers: function (value) { currentSubscriptionServers = value; },
+    getPreviousAdminPage: function () { return previousAdminPage; },
+    setPreviousAdminPage: function (value) { previousAdminPage = value; },
+    getCurrentAdminSubscriptionsPage: function () { return currentAdminSubscriptionsPage; },
+    getCurrentAdminSubscriptionsStatus: function () { return currentAdminSubscriptionsStatus; },
+    getCurrentAdminSubscriptionsOwnerQuery: function () { return currentAdminSubscriptionsOwnerQuery; },
+    getCurrentAdminUserDetailUserId: function () { return currentAdminUserDetailUserId; },
+    showAdminUserDetail: function (userId) { return showAdminUserDetail(userId); }
+});
+
+var adminSubscriptionCreateFeature = window.DarallaAdminSubscriptionCreateFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    getCurrentCreatingSubscriptionUserId: function () { return currentCreatingSubscriptionUserId; },
+    goBackFromCreateSubscription: function () { return goBackFromCreateSubscription(); }
+});
+
+var adminStatsDashboardFeature = window.DarallaAdminStatsDashboardFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    escapeHtml: escapeHtml,
+    getCurrentPage: function () { return currentPage; },
+    getServerLoadChartInterval: function () { return serverLoadChartInterval; },
+    setServerLoadChartInterval: function (value) { serverLoadChartInterval = value; },
+    getDashRevenueChart: function () { return dashRevenueChart; },
+    setDashRevenueChart: function (value) { dashRevenueChart = value; }
+});
+
+var adminBroadcastFeature = window.DarallaAdminBroadcastFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
+    platform: platform,
+    escapeHtml: escapeHtml
+});
+
+var serversFeature = window.DarallaServersFeature.createList({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    loadServerMap: function () { return loadServerMap(); },
+    escapeHtml: escapeHtml
+});
+
+var eventsFeature = window.DarallaEventsFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    renderEventCard: function (ev, isLive, isEnded) { return renderEventCard(ev, isLive, isEnded); },
+    moveNavIndicator: function (index) { return moveNavIndicator(index); },
+    getEventDetailLeaderboardTimer: function () { return eventDetailLeaderboardTimer; },
+    setEventDetailLeaderboardTimer: function (value) { eventDetailLeaderboardTimer = value; },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    isEventLive: function (ev) { return isEventLive(ev); },
+    getEventDaysText: function (ev, isLive, isEnded) { return getEventDaysText(ev, isLive, isEnded); },
+    getEventIcons: function () { return { live: EVENT_ICON_LIVE, clock: EVENT_ICON_CLOCK }; },
+    escapeHtml: escapeHtml,
+    buildLeaderboardHtml: function (leaderboard, myPlace) { return buildLeaderboardHtml(leaderboard, myPlace); },
+    copyTextToClipboard: function (text) { return copyTextToClipboard(text); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    showModal: function (modalId) { return showModal(modalId); }
+});
+
+var notificationsFeature = window.DarallaNotificationsFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    escapeHtml: escapeHtml,
+    notifCardPreviewText: function (rule) { return notifCardPreviewText(rule); },
+    notifTriggerLabel: function (rule) { return notifTriggerLabel(rule); },
+    notifFormatHours: function (hours) { return notifFormatHours(hours); },
+    getNotifEventLabels: function () { return NOTIF_EVENT_LABELS; },
+    notifParseTemplate: function (raw) { return notifParseTemplate(raw); },
+    setRepeatData: function (repeatHours, maxRepeats) { return setRepeatData(repeatHours, maxRepeats); },
+    setNotifTriggerFromHours: function (hours, eventType) { return setNotifTriggerFromHours(hours, eventType); },
+    onNotifRuleEventTypeChange: function () { return onNotifRuleEventTypeChange(); },
+    updateNotifPreview: function () { return updateNotifPreview(); },
+    showModal: function (modalId) { return showModal(modalId); },
+    setNotifRuleEditingId: function (value) { notifRuleEditingId = value; },
+    getNotifRuleEditingId: function () { return notifRuleEditingId; },
+    setNotifSelectedTriggerHours: function (value) { notifSelectedTriggerHours = value; },
+    getNotifTriggerHours: function () { return getNotifTriggerHours(); },
+    getRepeatData: function () { return getRepeatData(); },
+    buildNotifTemplate: function () { return buildNotifTemplate(); },
+    closeNotificationRuleForm: function () { return closeNotificationRuleForm(); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    appShowConfirm: function (message, options) { return appShowConfirm(message, options); }
+});
+
+var paymentsFeature = window.DarallaPaymentsFeature.create({
+    setCurrentPaymentData: function (value) { currentPaymentData = value; },
+    getCurrentPaymentData: function () { return currentPaymentData; },
+    setCurrentExtendSubscriptionId: function (value) { currentExtendSubscriptionId = value; },
+    getCurrentExtendSubscriptionId: function () { return currentExtendSubscriptionId; },
+    setCurrentPaymentPeriod: function (value) { currentPaymentPeriod = value; },
+    getCurrentPaymentPeriod: function () { return currentPaymentPeriod; },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    isHttpUrl: function (value) { return isHttpUrl(value); },
+    getReferralCodeFromCurrentPage: function () { return getReferralCodeFromCurrentPage(); },
+    showFormMessage: function (container, type, text) { return showFormMessage(container, type, text); },
+    hideFormMessage: function (container) { return hideFormMessage(container); },
+    removePaymentResultSubline: function () { return removePaymentResultSubline(); },
+    ensurePaymentResultSubline: function (page) { return ensurePaymentResultSubline(page); },
+    showAppToast: function (message, duration, variant) { return showAppToast(message, duration, variant); },
+    loadSubscriptions: function () { return loadSubscriptions(); },
+    openPaymentUrl: function () { return openPaymentUrl(); }
+});
 
 function setAuthToken(token) {
-    webAuthToken = window.DarallaAuthSession.setAuthToken(token);
+    webAuthToken = authFeature.setAuthToken(token);
 }
 
 function removeAuthToken() {
-    webAuthToken = window.DarallaAuthSession.removeAuthToken();
+    webAuthToken = authFeature.removeAuthToken();
 }
 
 // Функция для выполнения защищенных запросов к API
@@ -309,12 +331,7 @@ async function apiFetch(url, options = {}) {
 }
 
 async function logout() {
-    try {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    } catch (e) {}
-    removeAuthToken();
-    currentUserId = null;
-    showPage('login');
+    return authFeature.logout();
 }
 
 /** Таймаут автоскрытия сообщения формы (мс). 0 = не скрывать автоматически. */
@@ -369,52 +386,6 @@ function ensurePaymentResultSubline(page) {
 // Текущая страница
 let currentPage = 'subscriptions';
 
-// URL-роутинг: допустимые имена страниц для hash
-var ROUTE_PAGE_NAMES = new Set([
-    'landing', 'login', 'register',
-    'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'choose-payment-method', 'payment',
-    'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
-    'admin-stats', 'admin-users', 'admin-broadcast',
-    'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management', 'admin-server-group',
-    'admin-commerce', 'admin-events'
-]);
-var ROUTE_PAGES_GUEST = new Set(['landing', 'login', 'register']);
-function isPageAdminOnly(pageName) { return pageName && pageName.startsWith('admin-'); }
-function getPageFromHash() {
-    var r = parseHashRoute();
-    return r ? r.pageName : null;
-}
-function parseHashRoute() {
-    var raw = (location.hash || '').replace(/^#/, '').trim();
-    var question = raw.indexOf('?');
-    var pageName = question >= 0 ? raw.slice(0, question).trim() : raw;
-    var query = question >= 0 ? raw.slice(question + 1) : '';
-    if (!ROUTE_PAGE_NAMES.has(pageName)) return null;
-    var params = {};
-    if (query) {
-        try {
-            var sp = new URLSearchParams(query);
-            sp.forEach(function (v, k) { params[k] = v; });
-        } catch (e) {}
-    }
-    return { pageName: pageName, params: params };
-}
-function buildHash(pageName, params) {
-    if (!params || Object.keys(params).length === 0) return '#' + pageName;
-    var q = Object.keys(params)
-        .filter(function (k) { return params[k] != null && params[k] !== ''; })
-        .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])); })
-        .join('&');
-    return q ? '#' + pageName + '?' + q : '#' + pageName;
-}
-function isPageAllowedForUser(pageName, isAuthenticated, isAdminUser) {
-    if (!pageName) return false;
-    if (pageName === 'landing' && isAuthenticated) return false;
-    if (ROUTE_PAGES_GUEST.has(pageName)) return true;
-    if (!isAuthenticated) return false;
-    if (isPageAdminOnly(pageName)) return !!isAdminUser;
-    return true;
-}
 function applyRoute(route, isAuthenticated, isAdmin) {
     if (!route) return false;
     var pageName = route.pageName;
@@ -702,50 +673,15 @@ function showPage(pageName, params) {
 }
 
 function updateProfileCard(userId, username) {
-    var titleEl = document.getElementById('profile-card-title');
-    var subtitleEl = document.getElementById('profile-card-subtitle');
-    if (!titleEl || !subtitleEl) return;
-    titleEl.textContent = (username && username !== '—') ? username : 'Мой аккаунт';
-    subtitleEl.textContent = (userId && userId !== '—') ? userId : 'Нажмите, чтобы открыть';
+    return authFeature.updateProfileCard(userId, username);
 }
 
-var profileCardAvatarObjectURL = null;
-
 function setProfileAvatarFromInitData() {
-    var user = platform.getTgUser();
-    var photoUrl = user && user.photo_url;
-    if (!photoUrl || typeof photoUrl !== 'string') return false;
-    var iconEl = document.querySelector('.profile-card-icon');
-    var imgEl = document.getElementById('profile-card-avatar');
-    if (!iconEl || !imgEl) return false;
-    if (profileCardAvatarObjectURL) {
-        URL.revokeObjectURL(profileCardAvatarObjectURL);
-        profileCardAvatarObjectURL = null;
-    }
-    imgEl.src = photoUrl;
-    iconEl.classList.add('has-avatar');
-    return true;
+    return authFeature.setProfileAvatarFromInitData();
 }
 
 async function loadProfileAvatar() {
-    var iconEl = document.querySelector('.profile-card-icon');
-    var imgEl = document.getElementById('profile-card-avatar');
-    if (!iconEl || !imgEl) return;
-    if (profileCardAvatarObjectURL) {
-        URL.revokeObjectURL(profileCardAvatarObjectURL);
-        profileCardAvatarObjectURL = null;
-    }
-    iconEl.classList.remove('has-avatar');
-    try {
-        var r = await apiFetch('/api/user/avatar', { method: 'GET' });
-        if (!r.ok) return;
-        var blob = await r.blob();
-        profileCardAvatarObjectURL = URL.createObjectURL(blob);
-        imgEl.src = profileCardAvatarObjectURL;
-        iconEl.classList.add('has-avatar');
-    } catch (e) {
-        console.warn('loadProfileAvatar:', e);
-    }
+    return authFeature.loadProfileAvatar();
 }
 
 function initLandingObserver() {
@@ -794,348 +730,8 @@ function initLandingWheelAndHint() {
 }
 
 // --- Страница «О нас»: 3D-сеть узлов + рёбра, фон тёмный → белый при скролле ---
-var aboutPageState = null;
-
-function loadScript(src) {
-    return new Promise(function (resolve, reject) {
-        if (document.querySelector('script[src="' + src + '"]')) {
-            resolve();
-            return;
-        }
-        var s = document.createElement('script');
-        s.src = src;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-    });
-}
-
-function initAboutPage() {
-    if (aboutPageState && aboutPageState.disposed) aboutPageState = null;
-    var pageEl = document.getElementById('page-about');
-    var wrapEl = document.getElementById('about-hero-canvas-wrap');
-    if (!pageEl || !wrapEl) return;
-
-    document.body.classList.add('about-page-active');
-    var targetProgress = 0;
-    var scrollListener = function () {
-        if (currentPage !== 'about') return;
-        var scrollTop = window.scrollY || document.documentElement.scrollTop;
-        var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        targetProgress = Math.min(1, Math.max(0, scrollTop / maxScroll));
-    };
-    var getTargetProgress = function () {
-        var scrollTop = window.scrollY || document.documentElement.scrollTop;
-        var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        return Math.min(1, Math.max(0, scrollTop / maxScroll));
-    };
-
-    var observer = new IntersectionObserver(
-        function (entries) {
-            entries.forEach(function (e) {
-                if (e.isIntersecting) e.target.classList.add('in-view');
-            });
-        },
-        { root: null, rootMargin: '0px 0px -12% 0px', threshold: 0.15 }
-    );
-    pageEl.querySelectorAll('.about-reveal').forEach(function (el) { observer.observe(el); });
-    pageEl.querySelectorAll('.about-contact-card').forEach(function (el) { observer.observe(el); });
-    var heroEl = pageEl.querySelector('.about-hero');
-    if (heroEl) heroEl.classList.add('in-view');
-
-    var smoothedProgress = 0;
-    aboutPageState = {
-        scrollListener: scrollListener,
-        observer: observer,
-        disposed: false,
-        renderer: null,
-        resizeHandler: null,
-        animId: null,
-        smoothedProgress: 0
-    };
-    window.addEventListener('scroll', scrollListener, { passive: true });
-    scrollListener();
-    aboutPageState.animId = requestAnimationFrame(animate);
-
-    var isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 0));
-    var lerpFactor = isTouchDevice ? 0.028 : 0.06;
-    function animate() {
-        if (!aboutPageState || aboutPageState.disposed) return;
-        aboutPageState.animId = requestAnimationFrame(animate);
-        targetProgress = getTargetProgress();
-        var t = lerpFactor;
-        smoothedProgress += (targetProgress - smoothedProgress) * t;
-        aboutPageState.smoothedProgress = smoothedProgress;
-        var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
-        var isLight = themeLight ? (smoothedProgress < 0.5) : (smoothedProgress > 0.5);
-        document.body.style.backgroundColor = isLight ? '#f0f0f2' : '#131314';
-        pageEl.classList.toggle('about-bg-light', isLight);
-        if (aboutPageState.mesh) {
-            var grp = aboutPageState.mesh;
-            grp.rotation.y = smoothedProgress * Math.PI * 2;
-            grp.rotation.x = smoothedProgress * Math.PI * 0.5;
-            var time = performance.now() * 0.001;
-            var reducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            var breatheAmp = reducedMotion ? 0 : 0.028;
-            if (aboutPageState.aboutNodeBases) {
-                aboutPageState.aboutNodeBases.forEach(function (item) {
-                    var m = item.mesh;
-                    var b = item.base;
-                    var ph = item.phase;
-                    m.position.set(
-                        b.x + Math.sin(time * 0.35 + ph) * breatheAmp,
-                        b.y + Math.cos(time * 0.28 + ph * 1.3) * breatheAmp,
-                        b.z + Math.sin(time * 0.31 + ph * 0.7) * breatheAmp * 0.75
-                    );
-                });
-            }
-            if (aboutPageState.aboutNodeMeshes && aboutPageState.aboutEdgePairs && aboutPageState.aboutEdgeGeoms) {
-                var nodes = aboutPageState.aboutNodeMeshes;
-                aboutPageState.aboutEdgeGeoms.forEach(function (geo, ei) {
-                    var pair = aboutPageState.aboutEdgePairs[ei];
-                    var p0 = nodes[pair[0]].position;
-                    var p1 = nodes[pair[1]].position;
-                    var arr = geo.attributes.position.array;
-                    arr[0] = p0.x;
-                    arr[1] = p0.y;
-                    arr[2] = p0.z;
-                    arr[3] = p1.x;
-                    arr[4] = p1.y;
-                    arr[5] = p1.z;
-                    geo.attributes.position.needsUpdate = true;
-                });
-            }
-            if (aboutPageState.aboutEdgeMaterials) {
-                var p = smoothedProgress;
-                aboutPageState.aboutEdgeMaterials.forEach(function (mat, i) {
-                    mat.opacity = 0.16 + p * 0.22 + Math.sin(time * 0.85 + i * 0.65) * 0.032;
-                });
-            }
-            if (aboutPageState.aboutNodeMaterial && aboutPageState.aboutNodeMaterial.envMapIntensity !== undefined) {
-                aboutPageState.aboutNodeMaterial.envMapIntensity = 0.78 + smoothedProgress * 0.05;
-            }
-            if (aboutPageState.aboutNodeMaterial && aboutPageState.threeRef && aboutPageState._nodeColA) {
-                /* Не доводим смесь до 1 — к концу скролла фигура остаётся заметно темнее фона */
-                var pCol = Math.min(0.48, smoothedProgress * 0.92);
-                aboutPageState.aboutNodeMaterial.color.copy(aboutPageState._nodeColA).lerp(aboutPageState._nodeColB, pCol);
-                aboutPageState.aboutNodeMaterial.emissive.copy(aboutPageState._nodeEmA).lerp(aboutPageState._nodeEmB, pCol * 0.55);
-                if (aboutPageState.aboutEdgeMaterials) {
-                    aboutPageState.aboutEdgeMaterials.forEach(function (mat) {
-                        mat.color.copy(aboutPageState._edgeColA).lerp(aboutPageState._edgeColB, pCol);
-                    });
-                }
-            }
-        }
-        if (aboutPageState.lights) {
-            var k = 1;
-            aboutPageState.lights.ambient.intensity = 0.58 * k;
-            aboutPageState.lights.dirLight.intensity = 1.15 * k;
-            aboutPageState.lights.rimLight.intensity = 0.8 * k;
-            aboutPageState.lights.fillLight.intensity = 0.4 * k;
-            aboutPageState.lights.highlight1.intensity = 1.1 * k;
-            aboutPageState.lights.highlight2.intensity = 0.6 * k;
-        }
-        if (aboutPageState.renderer && aboutPageState.scene && aboutPageState.camera) {
-            aboutPageState.renderer.render(aboutPageState.scene, aboutPageState.camera);
-        }
-    }
-
-    import('three').then(function (THREE) {
-        if (currentPage !== 'about' || !aboutPageState || aboutPageState.disposed || !wrapEl.parentNode) return;
-        if (!THREE || !THREE.Scene) return;
-        var canvas = document.createElement('canvas');
-        wrapEl.innerHTML = '';
-        wrapEl.appendChild(canvas);
-        var scene = new THREE.Scene();
-        var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 4;
-        var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.setClearColor(0x000000, 0);
-        if (renderer.outputColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
-        else if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-        var ambient = new THREE.AmbientLight(0x3a3a42, 0.55);
-        scene.add(ambient);
-        var dirLight = new THREE.DirectionalLight(0xf2f2f5, 1.05);
-        dirLight.position.set(3, 4, 5);
-        scene.add(dirLight);
-        var rimLight = new THREE.DirectionalLight(0xd8d8e0, 0.55);
-        rimLight.position.set(-4, -2, -3);
-        scene.add(rimLight);
-        var fillLight = new THREE.DirectionalLight(0x9898a2, 0.35);
-        fillLight.position.set(-2, 1, 3);
-        scene.add(fillLight);
-        var highlightLight = new THREE.PointLight(0xffffff, 0.95, 8);
-        highlightLight.position.set(2, 2, 2);
-        scene.add(highlightLight);
-        var highlightLight2 = new THREE.PointLight(0xe4e4ea, 0.5, 6);
-        highlightLight2.position.set(-2.5, 1.5, 2);
-        scene.add(highlightLight2);
-        if (aboutPageState) {
-            aboutPageState.lights = {
-                ambient: ambient,
-                dirLight: dirLight,
-                rimLight: rimLight,
-                fillLight: fillLight,
-                highlight1: highlightLight,
-                highlight2: highlightLight2
-            };
-        }
-        var networkGroup = new THREE.Group();
-        var nodeMat = new THREE.MeshStandardMaterial({
-            color: 0x2a2b30,
-            metalness: 0.45,
-            roughness: 0.38,
-            emissive: 0x0c0c10,
-            emissiveIntensity: 0.12,
-            envMapIntensity: 0.85
-        });
-        var nodeDefs = [
-            { x: 0, y: 0.05, z: 0, r: 0.11 },
-            { x: -0.95, y: 0.32, z: 0.18, r: 0.065 },
-            { x: 0.88, y: -0.22, z: 0.12, r: 0.07 },
-            { x: 0.12, y: 0.78, z: -0.22, r: 0.062 },
-            { x: -0.42, y: -0.48, z: 0.28, r: 0.058 },
-            { x: 0.52, y: 0.38, z: -0.58, r: 0.06 },
-            { x: -0.32, y: 0.15, z: 0.68, r: 0.055 }
-        ];
-        var aboutNodeMeshes = [];
-        var aboutNodeBases = [];
-        nodeDefs.forEach(function (d, i) {
-            var sg = new THREE.SphereGeometry(d.r, 22, 18);
-            var sphere = new THREE.Mesh(sg, nodeMat);
-            sphere.position.set(d.x, d.y, d.z);
-            networkGroup.add(sphere);
-            aboutNodeMeshes.push(sphere);
-            aboutNodeBases.push({
-                mesh: sphere,
-                base: new THREE.Vector3(d.x, d.y, d.z),
-                phase: i * 0.85
-            });
-        });
-        var aboutEdgePairs = [[0, 1], [0, 2], [0, 3], [0, 4], [1, 5], [2, 6], [3, 5]];
-        var aboutEdgeGeoms = [];
-        var aboutEdgeMaterials = [];
-        aboutEdgePairs.forEach(function (pair) {
-            var a = aboutNodeMeshes[pair[0]].position;
-            var b = aboutNodeMeshes[pair[1]].position;
-            var edgeGeo = new THREE.BufferGeometry().setFromPoints([a.clone(), b.clone()]);
-            var lmat = new THREE.LineBasicMaterial({
-                color: 0x7a7a86,
-                transparent: true,
-                opacity: 0.22,
-                depthWrite: false
-            });
-            networkGroup.add(new THREE.Line(edgeGeo, lmat));
-            aboutEdgeGeoms.push(edgeGeo);
-            aboutEdgeMaterials.push(lmat);
-        });
-        networkGroup.scale.setScalar(1.2);
-        scene.add(networkGroup);
-        (function setDefaultEnvMap() {
-            var size = 64;
-            var canvases = [];
-            for (var i = 0; i < 6; i++) {
-                var c = document.createElement('canvas');
-                c.width = size;
-                c.height = size;
-                var ctx = c.getContext('2d');
-                var g = ctx.createLinearGradient(0, 0, size, size);
-                g.addColorStop(0, '#0a0a0c');
-                g.addColorStop(0.5, '#1a1a1e');
-                g.addColorStop(1, '#2e2e34');
-                ctx.fillStyle = g;
-                ctx.fillRect(0, 0, size, size);
-                canvases.push(c);
-            }
-            var cubeEnv = new THREE.CubeTexture(canvases);
-            cubeEnv.mapping = THREE.CubeReflectionMapping;
-            cubeEnv.needsUpdate = true;
-            scene.environment = cubeEnv;
-        })();
-        (function loadEnvMapHDR() {
-            import('https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js').then(function (mod) {
-                var RGBELoader = mod.default;
-                var rl = new RGBELoader();
-                rl.load('https://dl.polyhaven.org/file/ahjdyrye/industrial_sunset_puresky_2k.hdr', function (hdr) {
-                    if (!aboutPageState || aboutPageState.disposed) return;
-                    var pmrem = new THREE.PMREMGenerator(renderer);
-                    var envMap = pmrem.fromEquirectangular(hdr).texture;
-                    scene.environment = envMap;
-                    hdr.dispose();
-                    pmrem.dispose();
-                }, undefined, function () {});
-            }).catch(function () {});
-        })();
-        var lastResizeW = 0;
-        var lastResizeH = 0;
-        var resizeDebounce = null;
-        var RESIZE_THRESHOLD = 10;
-        function onResize() {
-            if (!aboutPageState || aboutPageState.disposed) return;
-            var w = window.innerWidth;
-            var h = window.innerHeight;
-            if (resizeDebounce) clearTimeout(resizeDebounce);
-            resizeDebounce = setTimeout(function () {
-                resizeDebounce = null;
-                if (!aboutPageState || aboutPageState.disposed) return;
-                var widthChanged = Math.abs(w - lastResizeW) > RESIZE_THRESHOLD;
-                if (widthChanged || lastResizeW === 0) {
-                    lastResizeW = w;
-                    lastResizeH = h;
-                    camera.aspect = w / h;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(w, h);
-                }
-            }, 280);
-        }
-        lastResizeW = window.innerWidth;
-        lastResizeH = window.innerHeight;
-        window.addEventListener('resize', onResize);
-        aboutPageState.renderer = renderer;
-        aboutPageState.scene = scene;
-        aboutPageState.camera = camera;
-        aboutPageState.mesh = networkGroup;
-        aboutPageState.aboutNodeMeshes = aboutNodeMeshes;
-        aboutPageState.aboutNodeBases = aboutNodeBases;
-        aboutPageState.aboutNodeMaterial = nodeMat;
-        aboutPageState.aboutEdgePairs = aboutEdgePairs;
-        aboutPageState.aboutEdgeGeoms = aboutEdgeGeoms;
-        aboutPageState.aboutEdgeMaterials = aboutEdgeMaterials;
-        aboutPageState.resizeHandler = onResize;
-        aboutPageState.threeRef = THREE;
-        aboutPageState._nodeColA = new THREE.Color(0x26262c);
-        aboutPageState._nodeColB = new THREE.Color(0x6e6e78);
-        aboutPageState._nodeEmA = new THREE.Color(0x060608);
-        aboutPageState._nodeEmB = new THREE.Color(0x121214);
-        aboutPageState._edgeColA = new THREE.Color(0x5c5c66);
-        aboutPageState._edgeColB = new THREE.Color(0x7a7a84);
-        aboutPageState.animId = requestAnimationFrame(animate);
-    }).catch(function () {});
-}
-
-function aboutPageDispose() {
-    if (!aboutPageState) return;
-    aboutPageState.disposed = true;
-    if (aboutPageState.animId) cancelAnimationFrame(aboutPageState.animId);
-    window.removeEventListener('scroll', aboutPageState.scrollListener);
-    if (aboutPageState.resizeHandler) window.removeEventListener('resize', aboutPageState.resizeHandler);
-    if (aboutPageState.observer) aboutPageState.observer.disconnect();
-    if (aboutPageState.renderer) {
-        aboutPageState.renderer.dispose();
-        if (aboutPageState.renderer.domElement && aboutPageState.renderer.domElement.parentNode) {
-            aboutPageState.renderer.domElement.parentNode.removeChild(aboutPageState.renderer.domElement);
-        }
-    }
-    var wrapEl = document.getElementById('about-hero-canvas-wrap');
-    if (wrapEl) wrapEl.innerHTML = '';
-    var pageEl = document.getElementById('page-about');
-    if (pageEl) pageEl.classList.remove('about-bg-light');
-    document.body.classList.remove('about-page-active');
-    document.body.style.backgroundColor = '';
-    aboutPageState = null;
-}
+function initAboutPage() { return aboutSceneFeature.initAboutPage(); }
+function aboutPageDispose() { return aboutSceneFeature.aboutPageDispose(); }
 
 // Функция показа модального окна
 function showModal(modalId) {
@@ -1163,35 +759,11 @@ function closeModal(modalId) {
  * @returns {Promise<boolean>}
  */
 function copyTextToClipboard(text) {
-    var s = String(text || '');
-    if (!s) return Promise.resolve(false);
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        return navigator.clipboard.writeText(s).then(function () { return true; }).catch(function () {
-            return copyTextToClipboardExec(s);
-        });
-    }
-    return Promise.resolve(copyTextToClipboardExec(s));
+    return window.DarallaClipboard.copyTextToClipboard(text);
 }
 
 function copyTextToClipboardExec(s) {
-    try {
-        var ta = document.createElement('textarea');
-        ta.value = s;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        ta.style.top = '0';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        ta.setSelectionRange(0, s.length);
-        var ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        return ok;
-    } catch (e) {
-        console.warn('execCommand copy failed', e);
-        return false;
-    }
+    return window.DarallaClipboard.copyTextToClipboardExec(s);
 }
 
 function _appDialogOnEscape(e) {
@@ -1347,249 +919,29 @@ function appShowPrompt(labelText, defaultValue, opts) {
     });
 }
 
-// Глобальная переменная для хранения текущей подписки
-let currentSubscriptionDetail = null;
-
 // Функция показа детальной информации о подписке
 function showSubscriptionDetail(sub) {
-    // Сбрасываем скролл наверх перед открытием деталей
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    
-    const pageEl = document.getElementById('page-subscription-detail');
-    const nameEl = document.getElementById('detail-subscription-name');
-    const contentEl = document.getElementById('subscription-detail-content');
-    
-    // Сохраняем подписку для использования в функциях переименования
-    currentSubscriptionDetail = sub;
-    
-    // Проверяем существование элемента перед использованием
-    if (nameEl) {
-        nameEl.textContent = escapeHtml(sub.name);
-    }
-    
-    const isActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
-    const statusClass = isActive ? 'active' : 'expired';
-    const statusText = sub.status === 'active' ? 'Активна' : 
-                      sub.status === 'expired' ? 'Истекла' : 
-                      sub.status === 'trial' ? 'Пробная' : sub.status;
-    
-    contentEl.innerHTML = `
-        <div class="detail-card">
-            <div class="detail-header">
-                <div class="detail-status ${statusClass}">${statusText}</div>
-            </div>
-            
-            <div class="detail-info-grid">
-                <div class="detail-info-item">
-                    <div class="detail-info-label">Название</div>
-                    <div class="detail-info-value" id="subscription-name-display">${escapeHtml(sub.name)}</div>
-                </div>
-                
-                <div class="detail-info-item">
-                    <div class="detail-info-label">Устройств</div>
-                    <div class="detail-info-value">${sub.device_limit}</div>
-                </div>
-                
-                <div class="detail-info-item">
-                    <div class="detail-info-label">Создана</div>
-                    <div class="detail-info-value">${sub.created_at_formatted}</div>
-                </div>
-                
-                <div class="detail-info-item">
-                    <div class="detail-info-label">${isActive ? 'Истекает' : 'Истекла'}</div>
-                    <div class="detail-info-value">${sub.expires_at_formatted}</div>
-                </div>
-                
-                ${isActive && sub.expires_at ? `
-                    <div class="detail-info-item full-width">
-                        <div class="detail-info-label">Осталось</div>
-                        <div class="detail-info-value days-highlight">${formatTimeRemaining(sub.expires_at)}</div>
-                    </div>
-                ` : ''}
-            </div>
-            
-            <div class="detail-actions">
-                <button class="action-button" onclick="showRenameSubscriptionModal()" style="margin-bottom: 12px;">
-                    Переименовать подписку
-                </button>
-                ${isActive ? `
-                    <button class="action-button" onclick="copySubscriptionLink('${sub.token}')" style="margin-bottom: 12px;">
-                        Копировать ссылку подписки
-                    </button>
-                ` : ''}
-                ${sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial' ? `
-                    <button type="button" class="action-button action-button--accent" onclick="showExtendSubscriptionModal(${sub.id})">
-                        Продлить подписку
-                    </button>
-                ` : ''}
-            </div>
-        </div>
-    `;
-    
-    showPage('subscription-detail', { id: String(sub.id) });
+    return subscriptionsFeature.showSubscriptionDetail(sub);
 }
 
 // Функция загрузки подписок
 async function loadSubscriptions() {
-    const loadingEl = document.getElementById('loading');
-    const errorEl = document.getElementById('error');
-    const emptyEl = document.getElementById('empty');
-    const subscriptionsEl = document.getElementById('subscriptions');
-    
-    // Показываем загрузку
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (errorEl) errorEl.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = 'none';
-    if (subscriptionsEl) subscriptionsEl.style.display = 'none';
-    
-    try {
-        // Запрашиваем подписки через защищенный API (cache-busting — всегда свежий список, без удалённых)
-        const response = await apiFetch(`/api/subscriptions?_t=${Date.now()}`);
-        
-        if (response.status === 401 && platform.isTelegram()) {
-            // Если в Telegram получили 401 - значит аккаунт не найден (был отвязан)
-            // Пробуем зарегистрироваться заново
-            console.log('Unauthorized in loadSubscriptions (TG mode), retrying registration...');
-            const regOk = await initTelegramFlow();
-            return;
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Ошибка получения данных');
-        }
-        
-        // Скрываем загрузку
-        if (loadingEl) loadingEl.style.display = 'none';
-        
-        // Обновляем статистику
-        const totalEl = document.getElementById('total-count');
-        const activeEl = document.getElementById('active-count');
-        if (totalEl) totalEl.textContent = data.total || 0;
-        if (activeEl) activeEl.textContent = data.active || 0;
-        
-        if (!data.subscriptions || data.subscriptions.length === 0) {
-            // Нет подписок
-            if (emptyEl) emptyEl.style.display = 'block';
-        } else {
-            // Показываем подписки
-            if (subscriptionsEl) subscriptionsEl.style.display = 'block';
-            window.allSubscriptions = data.subscriptions;
-            renderSubscriptions(data.subscriptions);
-        }
-        
-        // Добавляем кнопку "Купить подписку" в список подписок
-        const subscriptionsListEl = document.getElementById('subscriptions-list');
-        if (subscriptionsListEl && !document.getElementById('buy-subscription-button')) {
-            const buyButton = document.createElement('button');
-            buyButton.id = 'buy-subscription-button';
-            buyButton.className = 'btn-primary';
-            buyButton.style.cssText = 'width: 100%; margin-top: 16px;';
-            buyButton.textContent = 'Купить подписку';
-            buyButton.onclick = function () {
-            currentPaymentPeriod = 'month';
-            currentExtendSubscriptionId = null;
-            resetCheckoutPaymentState();
-            showPage('choose-payment-method');
-        };
-            subscriptionsListEl.appendChild(buyButton);
-        }
-        
-    } catch (error) {
-        console.error('Ошибка загрузки подписок:', error);
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (errorEl) errorEl.style.display = 'block';
-    }
+    return subscriptionsFeature.loadSubscriptions();
 }
 
 // Функция отображения подписок
 function renderSubscriptions(subscriptions) {
-    const listEl = document.getElementById('subscriptions-list');
-    listEl.innerHTML = '';
-    
-    subscriptions.forEach(sub => {
-        const card = createSubscriptionCard(sub);
-        listEl.appendChild(card);
-    });
+    return subscriptionsFeature.renderSubscriptions(subscriptions);
 }
 
 // Функция создания карточки подписки
 function createSubscriptionCard(sub) {
-    const card = document.createElement('div');
-    card.className = `subscription-card ${sub.status}`;
-    card.style.cursor = 'pointer';
-    card.onclick = () => showSubscriptionDetail(sub);
-    
-    const isActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
-    const statusClass = isActive ? 'active' : 'expired';
-    const statusText = sub.status === 'active' ? 'Активна' : 
-                      sub.status === 'expired' ? 'Истекла' : 
-                      sub.status === 'trial' ? 'Пробная' : sub.status;
-    
-    card.innerHTML = `
-        <div class="subscription-header">
-            <div class="subscription-name">${escapeHtml(sub.name)}</div>
-            <div class="subscription-status subscription-status-blink ${statusClass}">${statusText}</div>
-        </div>
-        ${isActive && sub.expires_at ? `
-            <div class="days-badge">
-                <span class="info-label">Осталось</span>
-                <span class="days-remaining">${formatTimeRemaining(sub.expires_at)}</span>
-            </div>
-        ` : ''}
-    `;
-    
-    return card;
+    return subscriptionsFeature.createSubscriptionCard(sub);
 }
 
 // Функция загрузки серверов
 async function loadServers() {
-    const loadingEl = document.getElementById('servers-loading');
-    const errorEl = document.getElementById('servers-error');
-    const contentEl = document.getElementById('servers-content');
-    const listEl = document.getElementById('servers-list');
-    
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (errorEl) errorEl.style.display = 'none';
-    if (contentEl) contentEl.style.display = 'none';
-    
-    try {
-        // Карта не зависит от /api/servers (server-usage); не ждём опрос панелей
-        loadServerMap();
-
-        const response = await apiFetch(`/api/servers`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Ошибка получения данных');
-        }
-        
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'block';
-        
-        if (!data.servers || data.servers.length === 0) {
-            if (listEl) listEl.innerHTML = '<div class="empty"><p>Серверы не найдены</p></div>';
-        } else {
-            renderServers(data.servers);
-        }
-        
-    } catch (error) {
-        console.error('Ошибка загрузки серверов:', error);
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (errorEl) errorEl.style.display = 'block';
-    }
+    return serversFeature.loadServers();
 }
 
 // Иконки для событий (inline SVG, без смайликов)
@@ -1624,67 +976,13 @@ function renderEventCard(ev, isLive, isEnded) {
 
 // Загрузка списка событий (модуль событий)
 async function loadEvents() {
-    var loadingEl = document.getElementById('events-loading');
-    var emptyEl = document.getElementById('events-empty');
-    var listWrap = document.getElementById('events-list-wrap');
-    var listEl = document.getElementById('events-list');
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (emptyEl) emptyEl.style.display = 'none';
-    if (listWrap) listWrap.style.display = 'none';
-    try {
-        var response = await apiFetch('/api/events/');
-        var data = { events: [], active: [], upcoming: [] };
-        if (response.ok) {
-            try { data = await response.json(); } catch (e) {}
-        }
-        var active = data.active || [];
-        var upcoming = data.upcoming || [];
-        var ended = data.ended || [];
-        var hasAny = active.length > 0 || upcoming.length > 0 || ended.length > 0;
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (!hasAny) {
-            if (emptyEl) emptyEl.style.display = 'block';
-        } else {
-            if (listWrap) listWrap.style.display = 'block';
-            if (listEl) {
-                var html = '';
-                if (active.length > 0) {
-                    html += '<p class="event-section-title">Событие идёт</p>';
-                    html += active.map(function (ev) { return renderEventCard(ev, true); }).join('');
-                }
-                if (upcoming.length > 0) {
-                    html += '<p class="event-section-title">Скоро</p>';
-                    html += upcoming.map(function (ev) { return renderEventCard(ev, false); }).join('');
-                }
-                if (ended.length > 0) {
-                    html += '<p class="event-section-title">Завершённые</p>';
-                    html += ended.map(function (ev) { return renderEventCard(ev, false, true); }).join('');
-                }
-                listEl.innerHTML = html;
-            }
-        }
-    } catch (e) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (emptyEl) { emptyEl.style.display = 'block'; }
-    }
-    if (typeof window.currentNavIndex !== 'undefined' && typeof moveNavIndicator === 'function') {
-        requestAnimationFrame(function () {
-            requestAnimationFrame(function () { moveNavIndicator(window.currentNavIndex); });
-        });
-    }
+    return eventsFeature.loadEvents();
 }
 
 var eventDetailLeaderboardTimer = null;
 
 function showEventDetail(eventId) {
-    if (eventDetailLeaderboardTimer) {
-        clearInterval(eventDetailLeaderboardTimer);
-        eventDetailLeaderboardTimer = null;
-    }
-    var contentEl = document.getElementById('event-detail-content');
-    if (contentEl) contentEl.innerHTML = '<div class="loading"><p>Загрузка...</p></div>';
-    showPage('event-detail', { id: eventId });
-    loadEventDetail(eventId);
+    return eventsFeature.showEventDetail(eventId);
 }
 
 function isEventLive(ev) {
@@ -1747,109 +1045,10 @@ function buildLeaderboardHtml(leaderboard, myPlace) {
 }
 
 function loadEventDetail(eventId) {
-    var contentEl = document.getElementById('event-detail-content');
-    if (!contentEl) return;
-    contentEl.innerHTML = '<div class="loading"><p>Загрузка...</p></div>';
-    Promise.all([
-        apiFetch('/api/events/' + eventId).then(function (r) { return r.ok ? r.json() : null; }),
-        apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
-        apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; }),
-        apiFetch('/api/events/my-code').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.code || ''; })
-    ]).then(function (results) {
-        var ev = results[0];
-        var leaderboard = results[1];
-        var myPlace = results[2];
-        var myCode = results[3];
-        if (!contentEl) return;
-        if (!ev) { contentEl.innerHTML = '<p class="hint">Событие не найдено</p>'; return; }
-        var live = isEventLive(ev);
-        var ended = (ev.computed_status === 'ended') || (ev.end_at && new Date(ev.end_at) < new Date());
-        var statusClass = live ? 'event-detail-status event-detail-status--live' : (ended ? 'event-detail-status event-detail-status--ended' : 'event-detail-status event-detail-status--upcoming');
-        var statusIcon = live ? EVENT_ICON_LIVE : (ended ? '🏁' : EVENT_ICON_CLOCK);
-        var statusText = live ? 'Идёт' : (ended ? 'Завершено' : 'Скоро');
-        var daysText = getEventDaysText(ev, live, ended);
-        var innerClass = live ? 'event-detail-inner event-detail-live' : 'event-detail-inner';
-        var html = '<div class="' + innerClass + '" style="padding:16px;">' +
-            '<div class="' + statusClass + '">' + statusIcon + '<span>' + statusText + '</span></div>' +
-            '<h2 style="margin:0 0 12px 0;">' + (ev.name || 'Событие') + '</h2>' +
-            (ev.description ? '<p class="event-description" style="margin:0 0 12px 0;">' + ev.description + '</p>' : '') +
-            '<p class="event-dates" style="font-size:14px;">' + (ev.start_at || '').slice(0, 10) + ' — ' + (ev.end_at || '').slice(0, 10) + '</p>';
-        if (daysText) html += '<p class="event-days">' + daysText + '</p>';
-        var rewards = ev.rewards || [];
-        var winningPlaces = rewards.map(function (r) { return r.place; });
-        var isWinner = myPlace && winningPlaces.indexOf(myPlace.place) >= 0;
-        if (ended) {
-            html += '<p class="event-thanks">Спасибо за участие!</p>';
-            if (isWinner && ev.support_url) {
-                html += '<div class="event-winner-block">';
-                html += '<p class="event-winner-text">Поздравляем! Вы в числе победителей.</p>';
-                html += '<p class="event-winner-hint">За вашей наградой обратитесь в службу поддержки.</p>';
-                html += '<a href="' + escapeHtml(ev.support_url) + '" target="_blank" rel="noopener" class="btn-primary" style="display:inline-block;padding:10px 20px;text-decoration:none;color:inherit;">Служба поддержки</a>';
-                html += '</div>';
-            }
-        }
-        if (rewards.length > 0) {
-            html += '<div class="event-rewards-block"><p class="event-rewards-title">Награды</p><ul class="event-rewards-list">';
-            rewards.forEach(function (r) {
-                var text = r.description || (r.days ? (r.days + ' дн.') : 'приз');
-                var placeClass = r.place === 1 ? 'event-reward-place--1' : r.place === 2 ? 'event-reward-place--2' : r.place === 3 ? 'event-reward-place--3' : '';
-                html += '<li class="event-reward-item"><span class="event-reward-place ' + placeClass + '">' + r.place + ' место</span> — ' + text + '</li>';
-            });
-            html += '</ul></div>';
-        }
-        if (live) {
-            html += '<p class="event-referral-hint">Приглашайте друзей — поднимайтесь в рейтинге.</p>';
-            html += '<p class="event-referral-code-hint">Дайте другу свой код. Когда он введёт его при покупке или продлении, ваш рейтинг вырастет.</p>';
-            if (myCode) {
-                html += '<div class="event-referral-code-block" style="margin-bottom:16px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">';
-                html += '<code class="event-referral-code">' + escapeHtml(myCode) + '</code>';
-                html += '<button type="button" class="btn-primary" style="padding:8px 16px;flex-shrink:0;" onclick="copyEventReferralCode(\'' + myCode.replace(/'/g, "\\'") + '\')">Копировать</button>';
-                html += '</div>';
-            }
-        }
-        html += buildLeaderboardHtml(leaderboard, myPlace);
-        html += '</div>';
-        contentEl.innerHTML = html;
-        contentEl.setAttribute('data-event-detail-id', String(eventId));
-        if (live) {
-            eventDetailLeaderboardTimer = setInterval(function () {
-                var el = document.getElementById('event-detail-content');
-                if (!el || el.getAttribute('data-event-detail-id') !== String(eventId)) {
-                    if (eventDetailLeaderboardTimer) clearInterval(eventDetailLeaderboardTimer);
-                    eventDetailLeaderboardTimer = null;
-                    return;
-                }
-                Promise.all([
-                    apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
-                    apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; })
-                ]).then(function (res) {
-                    var list = res[0];
-                    var myPlace = res[1];
-                    var wrap = el && el.querySelector('.live-ranking');
-                    if (wrap && wrap.parentNode) {
-                        var temp = document.createElement('div');
-                        temp.innerHTML = buildLeaderboardHtml(list, myPlace);
-                        var newWrap = temp.firstElementChild;
-                        if (newWrap) wrap.parentNode.replaceChild(newWrap, wrap);
-                    }
-                });
-            }, 30000);
-        }
-    }).catch(function () {
-        if (contentEl) contentEl.innerHTML = '<p class="hint">Не удалось загрузить событие</p>';
-    });
+    return eventsFeature.loadEventDetail(eventId);
 }
 async function copyEventReferralCode(code) {
-    var ok = await copyTextToClipboard(code);
-    if (ok) {
-        await appShowAlert('Код скопирован в буфер обмена.', { title: 'Готово', variant: 'success' });
-    } else {
-        var el = document.getElementById('generic-copy-manual-url');
-        var h = document.getElementById('generic-copy-manual-heading');
-        if (el) el.value = code;
-        if (h) h.textContent = 'Скопируйте код вручную';
-        showModal('generic-copy-manual-modal');
-    }
+    return eventsFeature.copyEventReferralCode(code);
 }
 
 var adminEventEditingId = null;
@@ -2124,106 +1323,11 @@ function updateNotifPreview() {
 }
 
 async function loadNotificationRules() {
-    var loadingEl = document.getElementById('admin-notifications-loading');
-    var listEl = document.getElementById('admin-notifications-list');
-    var errorEl = document.getElementById('admin-notifications-error');
-    loadingEl.style.display = 'block';
-    listEl.style.display = 'none';
-    errorEl.style.display = 'none';
-
-    try {
-        var response = await apiFetch('/api/admin/notification-rules', { method: 'GET' });
-        if (!response.ok) throw new Error('Ошибка загрузки');
-        var data = await response.json();
-        loadingEl.style.display = 'none';
-        listEl.style.display = 'block';
-
-        if (!data.rules || data.rules.length === 0) {
-            listEl.innerHTML = '<p style="text-align:center;opacity:0.5;">Нет правил</p>';
-            return;
-        }
-
-        listEl.innerHTML = data.rules.map(function (rule) {
-            var badge = rule.event_type === 'expiry_warning' ? 'badge-warning' : 'badge-info';
-            var direction = rule.event_type === 'expiry_warning' ? 'до истечения' : 'после потери подписки';
-            var activeClass = rule.is_active ? 'active' : 'inactive';
-            var preview = escapeHtml(notifCardPreviewText(rule));
-            return '<div class="admin-notification-card ' + activeClass + '" data-id="' + rule.id + '">' +
-                '<div class="notif-rule-header">' +
-                    '<span class="notif-rule-badge ' + badge + '">' + escapeHtml(NOTIF_EVENT_LABELS[rule.event_type] || rule.event_type) + '</span>' +
-                    '<label class="toggle-switch toggle-sm" onclick="event.stopPropagation()">' +
-                        '<input type="checkbox" ' + (rule.is_active ? 'checked' : '') +
-                        ' onchange="toggleNotificationRule(' + rule.id + ', this.checked)">' +
-                        '<span class="toggle-slider"></span>' +
-                    '</label>' +
-                '</div>' +
-                '<div class="notif-rule-trigger">' + notifTriggerLabel(rule) + ' ' + direction + '</div>' +
-                (rule.repeat_every_hours > 0 && rule.max_repeats > 1
-                    ? '<div class="notif-rule-repeat-info">Повтор: каждые ' + notifFormatHours(rule.repeat_every_hours) + ', макс. ' + rule.max_repeats + ' раз</div>'
-                    : '') +
-                '<div class="notif-rule-template">' + preview + '</div>' +
-                '<div class="notif-rule-actions">' +
-                    '<button class="btn-secondary btn-sm" onclick="showNotificationRuleForm(' + rule.id + ')">Изменить</button>' +
-                    '<button class="btn-danger btn-sm" onclick="deleteNotificationRule(' + rule.id + ')">Удалить</button>' +
-                '</div>' +
-            '</div>';
-        }).join('');
-    } catch (e) {
-        loadingEl.style.display = 'none';
-        errorEl.textContent = 'Ошибка загрузки правил';
-        errorEl.style.display = 'block';
-    }
+    return notificationsFeature.loadNotificationRules();
 }
 
 async function showNotificationRuleForm(ruleId) {
-    notifRuleEditingId = ruleId || null;
-    notifSelectedTriggerHours = null;
-
-    var formTitle = document.getElementById('admin-notification-form-title');
-    var eventTypeEl = document.getElementById('notif-rule-event-type');
-    var titleEl = document.getElementById('notif-rule-title');
-    var bodyEl = document.getElementById('notif-rule-body');
-    var showTimeEl = document.getElementById('notif-rule-show-time');
-    var showExpiryEl = document.getElementById('notif-rule-show-expiry');
-    var activeEl = document.getElementById('notif-rule-active');
-
-    formTitle.textContent = ruleId ? 'Изменить правило' : 'Создать правило';
-
-    if (ruleId) {
-        try {
-            var resp = await apiFetch('/api/admin/notification-rules', { method: 'GET' });
-            var data = await resp.json();
-            var rule = (data.rules || []).find(function (r) { return r.id === ruleId; });
-            if (rule) {
-                eventTypeEl.value = rule.event_type;
-                var t = notifParseTemplate(rule.message_template);
-                titleEl.value = t.title || '';
-                bodyEl.value = t.body || '';
-                showTimeEl.checked = !!t.show_time_remaining;
-                showExpiryEl.checked = !!t.show_expiry_date;
-                activeEl.checked = !!rule.is_active;
-                setRepeatData(rule.repeat_every_hours || 0, rule.max_repeats || 1);
-
-                var hint = document.getElementById('notif-rule-trigger-hint');
-                hint.textContent = rule.event_type === 'expiry_warning'
-                    ? 'За сколько ДО истечения подписки отправить уведомление'
-                    : 'Через сколько ПОСЛЕ потери подписки отправить уведомление';
-                setNotifTriggerFromHours(Math.abs(rule.trigger_hours), rule.event_type);
-            }
-        } catch (e) { /* ignore */ }
-    } else {
-        eventTypeEl.value = 'expiry_warning';
-        titleEl.value = '';
-        bodyEl.value = '';
-        showTimeEl.checked = true;
-        showExpiryEl.checked = true;
-        activeEl.checked = true;
-        setRepeatData(0, 1);
-        onNotifRuleEventTypeChange();
-    }
-
-    updateNotifPreview();
-    showModal('admin-notification-form-modal');
+    return notificationsFeature.showNotificationRuleForm(ruleId);
 }
 
 function closeNotificationRuleForm() {
@@ -2279,95 +1383,19 @@ function buildNotifTemplate() {
 }
 
 async function saveNotificationRule(e) {
-    e.preventDefault();
-    var eventType = document.getElementById('notif-rule-event-type').value;
-    var hours = getNotifTriggerHours();
-    var titleVal = (document.getElementById('notif-rule-title').value || '').trim();
-    var bodyVal = (document.getElementById('notif-rule-body').value || '').trim();
-    var isActive = document.getElementById('notif-rule-active').checked;
-
-    if (!hours) { await appShowAlert('Укажите время срабатывания', { title: 'Ошибка', variant: 'error' }); return; }
-    if (!titleVal && !bodyVal) { await appShowAlert('Заполните заголовок или текст сообщения', { title: 'Ошибка', variant: 'error' }); return; }
-
-    var triggerHours = eventType === 'expiry_warning' ? -hours : hours;
-    var repeat = getRepeatData();
-    var payload = {
-        event_type: eventType,
-        trigger_hours: triggerHours,
-        message_template: buildNotifTemplate(),
-        is_active: isActive,
-        repeat_every_hours: repeat.repeat_every_hours,
-        max_repeats: repeat.max_repeats
-    };
-
-    try {
-        var url = '/api/admin/notification-rules';
-        var method = 'POST';
-        if (notifRuleEditingId) {
-            url += '/' + notifRuleEditingId;
-            method = 'PUT';
-        }
-        var resp = await apiFetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (resp.ok) {
-            closeNotificationRuleForm();
-            loadNotificationRules();
-        } else {
-            var d = await resp.json().catch(function () { return {}; });
-            await appShowAlert(d.error || 'Ошибка сохранения', { title: 'Ошибка', variant: 'error' });
-        }
-    } catch (err) { await appShowAlert('Ошибка сети', { variant: 'error' }); }
+    return notificationsFeature.saveNotificationRule(e);
 }
 
 async function deleteNotificationRule(ruleId) {
-    var ok = await appShowConfirm('Удалить правило уведомления?', { title: 'Подтверждение' });
-    if (!ok) return;
-    try {
-        var r = await apiFetch('/api/admin/notification-rules/' + ruleId, { method: 'DELETE' });
-        if (r.ok) loadNotificationRules(); else await appShowAlert('Ошибка удаления', { variant: 'error' });
-    } catch (e) {
-        await appShowAlert('Ошибка сети', { variant: 'error' });
-    }
+    return notificationsFeature.deleteNotificationRule(ruleId);
 }
 
 async function toggleNotificationRule(ruleId, isActive) {
-    try {
-        var r = await apiFetch('/api/admin/notification-rules/' + ruleId, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_active: isActive })
-        });
-        if (!r.ok) { await appShowAlert('Ошибка', { variant: 'error' }); loadNotificationRules(); }
-    } catch (e) {
-        await appShowAlert('Ошибка сети', { variant: 'error' });
-        loadNotificationRules();
-    }
+    return notificationsFeature.toggleNotificationRule(ruleId, isActive);
 }
 
 async function testSendNotificationRule() {
-    var template = buildNotifTemplate();
-    var btn = document.querySelector('.btn-outline[onclick*="testSend"]');
-    if (btn) { btn.disabled = true; btn.textContent = 'Отправка…'; }
-    try {
-        var resp = await apiFetch('/api/admin/notification-rules-test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message_template: template })
-        });
-        var d = await resp.json().catch(function () { return {}; });
-        if (resp.ok) {
-            if (btn) { btn.textContent = 'Отправлено ✓'; setTimeout(function () { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }, 2000); }
-        } else {
-            await appShowAlert(d.error || 'Ошибка отправки', { variant: 'error' });
-            if (btn) { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }
-        }
-    } catch (err) {
-        await appShowAlert('Ошибка сети', { variant: 'error' });
-        if (btn) { btn.textContent = 'Отправить тест мне'; btn.disabled = false; }
-    }
+    return notificationsFeature.testSendNotificationRule();
 }
 
 // Функция отображения серверов
@@ -3169,24 +2197,7 @@ async function loadServerMap() {
 }
 
 function renderServers(servers) {
-    const listEl = document.getElementById('servers-list');
-    listEl.innerHTML = '';
-    
-    servers.forEach(server => {
-        const card = document.createElement('div');
-        card.className = `server-card ${server.status === 'online' ? 'online' : 'offline'}`;
-        
-        const statusText = server.status === 'online' ? 'Онлайн' : 'Офлайн';
-        
-        card.innerHTML = `
-            <div class="server-header">
-                <div class="server-name">${escapeHtml(server.name)}</div>
-                <div class="server-status server-status-badge server-status-blink ${server.status}">${statusText}</div>
-            </div>
-        `;
-        
-        listEl.appendChild(card);
-    });
+    return serversFeature.renderServers(servers);
 }
 
 // Функция копирования ссылки подписки
@@ -3228,54 +2239,32 @@ function isHttpUrl(s) {
 }
 
 function extractPaymentUrlFromCreateResponse(data) {
-    if (!data || typeof data !== 'object') return '';
-    var u = data.payment_url || data.paymentUrl || data.confirmation_url || data.confirmationUrl;
-    if (u != null && typeof u === 'object' && u.url) u = u.url;
-    return u != null ? String(u).trim() : '';
+    return paymentsFeature.extractPaymentUrlFromCreateResponse(data);
 }
 
 /** Сброс состояния незавершённого платежа перед новым оформлением (не трогает sessionStorage продления). */
 function resetCheckoutPaymentState() {
-    clearPaymentStatusPolling();
-    currentPaymentData = null;
+    return paymentsFeature.resetCheckoutPaymentState();
 }
 
 // Функция показа страницы продления подписки (сразу на оформление с карточками)
 async function showExtendSubscriptionModal(subscriptionId) {
-    if (!subscriptionId) {
-        await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
-        return;
-    }
-    currentExtendSubscriptionId = subscriptionId;
-    currentPaymentPeriod = 'month';
-    resetCheckoutPaymentState();
-    showPage('choose-payment-method');
+    return paymentsFeature.showExtendSubscriptionModal(subscriptionId);
 }
 
 // Переход на страницу оформления (покупка — с подписок)
 function goToChoosePaymentMethod(period, subscriptionId) {
-    currentPaymentPeriod = period === '3month' ? '3month' : 'month';
-    if (subscriptionId != null) currentExtendSubscriptionId = subscriptionId;
-    else currentExtendSubscriptionId = null;
-    resetCheckoutPaymentState();
-    showPage('choose-payment-method');
+    return paymentsFeature.goToChoosePaymentMethod(period, subscriptionId);
 }
 
 // Функция возврата со страницы оформления
 function goBackFromChoosePayment() {
-    if (currentExtendSubscriptionId) {
-        showPage('subscription-detail');
-    } else {
-        showPage('subscriptions');
-    }
+    return paymentsFeature.goBackFromChoosePayment();
 }
 
 // Функция возврата с страницы оплаты (на страницу оформления)
 function goBackFromPayment() {
-    clearPaymentStatusPolling();
-    try { sessionStorage.removeItem('payment_return_payment_id'); } catch (e) {}
-    currentPaymentData = null;
-    showPage('choose-payment-method');
+    return paymentsFeature.goBackFromPayment();
 }
 
 /** После редиректа с сайта ЮKassa: payment_return=1; payment_id в query или в sessionStorage */
@@ -3466,377 +2455,34 @@ function bindChoosePaymentSubmit() {
 
 // Функция создания платежа (вызывается со страницы оформления)
 async function createPayment(period, subscriptionId, gateway) {
-    if (subscriptionId === undefined) subscriptionId = null;
-    if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud')) gateway = 'yookassa';
-    try {
-        var referrerCode = getReferralCodeFromCurrentPage();
-        var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
-        if (referrerCode) body.referrer_code = referrerCode;
-        // Показываем страницу оплаты с индикатором загрузки
-        currentPaymentData = null; // Сбрасываем, чтобы показать загрузку
-        showPaymentPage();
-        
-        const response = await apiFetch('/api/user/payment/create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Ошибка создания платежа');
-        }
-        
-        const data = await response.json();
-
-        if (!data.success || !data.payment_id) {
-            throw new Error('Не удалось создать платёж');
-        }
-
-        if (gateway === 'yookassa') {
-            var ykUrl = extractPaymentUrlFromCreateResponse(data);
-            if (!isHttpUrl(ykUrl)) {
-                throw new Error('Не удалось получить ссылку на оплату');
-            }
-            if (subscriptionId) {
-                sessionStorage.setItem('payment_extend_sub_id', String(subscriptionId));
-            } else {
-                try { sessionStorage.removeItem('payment_extend_sub_id'); } catch (e) {}
-            }
-            try {
-                sessionStorage.setItem('payment_return_payment_id', String(data.payment_id));
-            } catch (e) {}
-            currentPaymentData = {
-                payment_id: data.payment_id,
-                payment_url: String(ykUrl).trim(),
-                amount: data.amount,
-                period: data.period,
-                gateway: 'yookassa',
-                extend_subscription_id: subscriptionId || null
-            };
-            showPaymentPage();
-            return;
-        }
-
-        var payUrl = extractPaymentUrlFromCreateResponse(data);
-        if (!isHttpUrl(payUrl)) {
-            throw new Error('Не удалось получить ссылку на оплату');
-        }
-
-        if (subscriptionId) {
-            try { sessionStorage.setItem('payment_extend_sub_id', String(subscriptionId)); } catch (e) {}
-        } else {
-            try { sessionStorage.removeItem('payment_extend_sub_id'); } catch (e) {}
-        }
-        currentPaymentData = {
-            payment_id: data.payment_id,
-            payment_url: String(payUrl).trim(),
-            amount: data.amount,
-            period: data.period,
-            gateway: gateway,
-            extend_subscription_id: subscriptionId || null
-        };
-
-        showPaymentPage();
-        
-    } catch (error) {
-        console.error('Ошибка создания платежа:', error);
-        
-        var btn = document.getElementById('payment-link-button');
-        if (btn) {
-            btn.textContent = 'Перейти к оплате';
-            btn.classList.remove('payment-link-disabled');
-            btn.setAttribute('aria-disabled', 'false');
-        }
-        
-        showFormMessage('payment-form-message', 'error', 'Ошибка создания платежа: ' + error.message);
-        
-        // Возвращаемся назад при ошибке
-        goBackFromPayment();
-    }
+    return paymentsFeature.createPayment(period, subscriptionId, gateway);
 }
 
 // Функция показа страницы оплаты
 function showPaymentPage() {
-    hideFormMessage('payment-form-message');
-    clearPaymentStatusPolling();
-    showPage('payment');
-    var page = document.getElementById('page-payment');
-    var hintEl = document.getElementById('payment-widget-hint');
-    if (page) {
-        removePaymentResultSubline();
-        var statusEl = page.querySelector('.detail-status');
-        if (statusEl) {
-            statusEl.textContent = 'Ожидает оплаты';
-            statusEl.className = 'detail-status active';
-        }
-        var toSubs = document.getElementById('payment-to-subscriptions-button');
-        if (toSubs) toSubs.style.display = 'none';
-        var retryBtn = document.getElementById('payment-retry-button');
-        if (retryBtn) retryBtn.style.display = 'none';
-        if (hintEl) hintEl.style.display = '';
-    }
-    var btn = document.getElementById('payment-link-button');
-    if (btn) btn.style.display = '';
-    if (!currentPaymentData) {
-        document.getElementById('payment-period').textContent = 'Загрузка...';
-        document.getElementById('payment-amount').textContent = 'Загрузка...';
-        if (hintEl) hintEl.textContent = 'Ссылка действительна 15 минут';
-        if (btn) {
-            btn.textContent = 'Создание платежа...';
-            btn.classList.add('payment-link-disabled');
-            btn.setAttribute('aria-disabled', 'true');
-            delete btn.dataset.paymentUrl;
-            delete btn.dataset.paymentId;
-            btn.onclick = null;
-            btn.style.display = '';
-        }
-        return;
-    }
-
-    var gw = currentPaymentData.gateway || 'yookassa';
-    var periodText = currentPaymentData.period === 'month' ? '1 месяц' : (currentPaymentData.period === '3month' ? '3 месяца' : '—');
-    document.getElementById('payment-period').textContent = periodText;
-    document.getElementById('payment-amount').textContent =
-        currentPaymentData.amount != null ? String(currentPaymentData.amount) + '₽' : '—';
-
-    if (currentPaymentData.payment_id &&
-        !isHttpUrl(currentPaymentData.payment_url)) {
-        if (hintEl) hintEl.textContent = 'Проверяем статус платежа…';
-        if (btn) btn.style.display = 'none';
-        var extWait = currentPaymentData.extend_subscription_id;
-        if (extWait == null) {
-            try {
-                var _ers = sessionStorage.getItem('payment_extend_sub_id');
-                var _ei = _ers ? parseInt(_ers, 10) : NaN;
-                if (_ers && !isNaN(_ei)) extWait = _ei;
-            } catch (_e) {}
-        }
-        checkPaymentStatus(currentPaymentData.payment_id, extWait != null ? extWait : null);
-        return;
-    }
-
-    if (hintEl) {
-        if (gw === 'yookassa') {
-            hintEl.textContent = 'Оплата откроется на сайте ЮKassa в браузере. После оплаты вы вернётесь в приложение — статус проверится автоматически.';
-        } else if (gw === 'cryptocloud') {
-            hintEl.textContent = 'Оплата на странице CryptoCloud в браузере. Счёт действителен 15 минут; статус обновится после зачисления.';
-        } else {
-            hintEl.textContent = 'Ссылка действительна 15 минут';
-        }
-    }
-    if (btn) {
-        btn.textContent = 'Перейти к оплате';
-        btn.classList.remove('payment-link-disabled');
-        btn.setAttribute('aria-disabled', 'false');
-        btn.dataset.paymentUrl = currentPaymentData.payment_url || '';
-        btn.dataset.paymentId = currentPaymentData.payment_id;
-        btn.onclick = function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            if (btn.classList.contains('payment-link-disabled') || btn.getAttribute('aria-disabled') === 'true') return;
-            openPaymentUrl();
-            return false;
-        };
-        btn.style.display = '';
-    }
-    checkPaymentStatus(
-        currentPaymentData.payment_id,
-        currentPaymentData.extend_subscription_id || null
-    );
+    return paymentsFeature.showPaymentPage();
 }
 
 // Показать на странице оплаты состояние «Оплата прошла» (обновить карточку, кнопка «К подпискам»)
 function showPaymentSuccessState() {
-    try { sessionStorage.removeItem('payment_return_payment_id'); } catch (e) {}
-    var page = document.getElementById('page-payment');
-    if (!page) return;
-    var statusEl = page.querySelector('.detail-status');
-    if (statusEl) {
-        statusEl.textContent = '\u2713 Оплата прошла';
-        statusEl.className = 'detail-status success';
-    }
-    var sub = ensurePaymentResultSubline(page);
-    if (sub) {
-        sub.textContent =
-            'Подписка уже активна. Ссылку на ключи и продление смотрите в разделе «Подписки».';
-    }
-    var btn = document.getElementById('payment-link-button');
-    if (btn) btn.style.display = 'none';
-    var hint = document.getElementById('payment-widget-hint');
-    if (hint) hint.style.display = 'none';
-    var actions = page.querySelector('.detail-actions');
-    if (!actions) return;
-    var toSubs = document.getElementById('payment-to-subscriptions-button');
-    if (!toSubs) {
-        toSubs = document.createElement('button');
-        toSubs.id = 'payment-to-subscriptions-button';
-        toSubs.type = 'button';
-        toSubs.className = 'action-button action-button--accent payment-link-button';
-        toSubs.textContent = 'К подпискам';
-        toSubs.onclick = function () {
-            showPage('subscriptions');
-            loadSubscriptions();
-        };
-        actions.appendChild(toSubs);
-    } else {
-        toSubs.className = 'action-button action-button--accent payment-link-button';
-    }
-    toSubs.style.display = '';
+    return paymentsFeature.showPaymentSuccessState();
 }
 
 // Показать на странице оплаты состояние отмены/ошибки (красный статус, кнопка «Попробовать снова»)
 function showPaymentErrorState(message) {
-    var page = document.getElementById('page-payment');
-    if (!page) return;
-    var statusEl = page.querySelector('.detail-status');
-    if (statusEl) {
-        statusEl.textContent = 'Ошибка оплаты';
-        statusEl.className = 'detail-status expired';
-    }
-    var sub = ensurePaymentResultSubline(page);
-    if (sub) sub.textContent = message || '';
-    var btn = document.getElementById('payment-link-button');
-    if (btn) btn.style.display = 'none';
-    var hint = document.getElementById('payment-widget-hint');
-    if (hint) hint.style.display = 'none';
-    var actions = page.querySelector('.detail-actions');
-    if (!actions) return;
-    var toSubs = document.getElementById('payment-to-subscriptions-button');
-    if (toSubs) toSubs.style.display = 'none';
-    var retryBtn = document.getElementById('payment-retry-button');
-    if (!retryBtn) {
-        retryBtn = document.createElement('button');
-        retryBtn.id = 'payment-retry-button';
-        retryBtn.type = 'button';
-        retryBtn.className = 'action-button action-button--accent payment-link-button';
-        retryBtn.textContent = 'Попробовать снова';
-        retryBtn.onclick = function () { goBackFromPayment(); };
-        actions.appendChild(retryBtn);
-    } else {
-        retryBtn.className = 'action-button action-button--accent payment-link-button';
-    }
-    retryBtn.style.display = '';
+    return paymentsFeature.showPaymentErrorState(message);
 }
 
 // Функция проверки статуса платежа
 // Примечание: основная обработка платежа идет через вебхук от YooKassa (/webhook/yookassa)
 // Polling здесь нужен только для UX - чтобы пользователь видел обновление в мини-приложении
 // Вебхук обрабатывает платеж на сервере и обновляет БД, polling просто проверяет статус в БД
-let paymentCheckInterval = null;
-
 function clearPaymentStatusPolling() {
-    if (paymentCheckInterval) {
-        clearInterval(paymentCheckInterval);
-        paymentCheckInterval = null;
-    }
+    return paymentsFeature.clearPaymentStatusPolling();
 }
 
 async function checkPaymentStatus(paymentId, subscriptionId = null) {
-    // Останавливаем предыдущую проверку, если она есть
-    if (paymentCheckInterval) {
-        clearInterval(paymentCheckInterval);
-    }
-    
-    let checkCount = 0;
-    const maxChecks = 180; // Проверяем в течение 15 минут (каждые 5 секунд) - столько же, сколько YooKassa хранит pending платеж
-    
-    paymentCheckInterval = setInterval(async () => {
-        try {
-            checkCount++;
-            
-            if (checkCount > maxChecks) {
-                clearInterval(paymentCheckInterval);
-                paymentCheckInterval = null;
-                // Конечная проверка статуса
-                const finalResponse = await apiFetch(`/api/user/payment/status/${paymentId}`);
-                if (finalResponse.ok) {
-                    const finalData = await finalResponse.json();
-                    if (finalData.success && finalData.status === 'pending') {
-                        const currentPage = document.querySelector('.page.active');
-                        const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
-                        if (isOnPaymentPage) {
-                            showPaymentErrorState(
-                                'Время на оплату вышло. Создайте новый платёж в разделе «Подписки».'
-                            );
-                        } else {
-                            showFormMessage(
-                                'payment-form-message',
-                                'error',
-                                'Платёж не был завершён: время ссылки истекло. Создайте новый платёж в «Подписках».'
-                            );
-                            goBackFromPayment();
-                        }
-                    }
-                }
-                return;
-            }
-        
-        const response = await apiFetch(`/api/user/payment/status/${paymentId}`);
-        
-        if (!response.ok) {
-            return; // Продолжаем проверку
-        }
-        
-        const data = await response.json();
-
-            // Проверяем, что платеж успешен И обработан вебхуком (activated = true)
-            // Вебхук обрабатывает платеж и устанавливает activated = true
-            if (data.success && data.status === 'succeeded' && data.activated) {
-                // Платеж успешно обработан вебхуком
-                clearInterval(paymentCheckInterval);
-                paymentCheckInterval = null;
-                
-                const currentPage = document.querySelector('.page.active');
-                const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
-                
-                if (isOnPaymentPage) {
-                    showPaymentSuccessState();
-                    setTimeout(function () {
-                        showPage('subscriptions');
-                        loadSubscriptions();
-                    }, 2500);
-                } else {
-                    showAppToast(
-                        'Оплата прошла, подписка активна. Откройте «Подписки», чтобы скопировать ключ.',
-                        5500,
-                        'success'
-                    );
-                    showPage('subscriptions');
-                    setTimeout(loadSubscriptions, 1000);
-                }
-            } else if (data.success && (data.status === 'canceled' || data.status === 'refunded' || data.status === 'failed')) {
-                // Платеж отменен, возвращен или не прошел — показываем состояние на странице оплаты
-                clearInterval(paymentCheckInterval);
-                paymentCheckInterval = null;
-                const currentPage = document.querySelector('.page.active');
-                const isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
-                const statusMessage =
-                    data.status === 'canceled'
-                        ? 'Платёж отменён — средства не списывались. Попробуйте оплатить снова.'
-                        : data.status === 'refunded'
-                          ? 'Средства возвращены на карту или счёт. При необходимости создайте новый платёж.'
-                          : 'Банк или платёжная система отклонили операцию. Попробуйте другой способ или позже.';
-                if (isOnPaymentPage) {
-                    showPaymentErrorState(statusMessage);
-                } else {
-                    showFormMessage(
-                        'payment-form-message',
-                        'error',
-                        'Ошибка оплаты: ' + statusMessage + ' Раздел «Подписки» или выбор способа оплаты.'
-                    );
-                    goBackFromPayment();
-                }
-            }
-            
-        } catch (error) {
-            console.error('Ошибка проверки статуса платежа:', error);
-            // Продолжаем проверку
-        }
-    }, 5000); // Проверяем каждые 5 секунд (вебхук обычно приходит быстрее)
+    return paymentsFeature.checkPaymentStatus(paymentId, subscriptionId);
 }
 
 // Функция переименования подписки
@@ -3927,6 +2573,7 @@ function formatTimeRemaining(expiresAt) {
 let isAdmin = false;
 let currentAdminUserPage = 1;
 let currentAdminUserSearch = '';
+let currentAdminUserDetailUserId = null;
 let currentEditingSubscriptionId = null;
 let previousAdminPage = 'admin-users';
 
@@ -4171,915 +2818,116 @@ function updateAdminUI() {
 
 // Загрузка списка пользователей
 async function loadAdminUsers(page = 1, search = '') {
-    try {
-        const response = await apiFetch('/api/admin/users', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                page,
-                limit: 20,
-                search
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки пользователей');
-        }
-        
-        const data = await response.json();
-        
-        document.getElementById('admin-users-loading').style.display = 'none';
-        document.getElementById('admin-users-content').style.display = 'block';
-        
-        // Обновляем статистику
-        document.getElementById('admin-total-users').textContent = data.total || 0;
-        
-        // Отображаем список пользователей
-        const listEl = document.getElementById('admin-users-list');
-        listEl.innerHTML = '';
-        
-        if (data.users && data.users.length > 0) {
-            data.users.forEach(user => {
-                const card = document.createElement('div');
-                card.className = 'admin-user-card';
-                card.onclick = () => showAdminUserDetail(user.user_id);
-                
-                const firstSeen = new Date(user.first_seen * 1000).toLocaleDateString('ru-RU');
-                const lastSeen = new Date(user.last_seen * 1000).toLocaleDateString('ru-RU');
-                
-                const extra = [user.telegram_id && `TG: ${escapeHtml(user.telegram_id)}`, user.username && `Логин: ${escapeHtml(user.username)}`].filter(Boolean).join(' · ');
-                card.innerHTML = `
-                    <div class="admin-user-id">ID: ${escapeHtml(user.user_id)}</div>
-                    ${extra ? `<div class="admin-user-extra">${extra}</div>` : ''}
-                    <div class="admin-user-meta">
-                        <span>Создан: ${firstSeen}</span>
-                        <span>Активен: ${lastSeen}</span>
-                    </div>
-                    <div class="admin-user-subscriptions">Подписок: ${user.subscriptions_count || 0}</div>
-                `;
-                
-                listEl.appendChild(card);
-            });
-            
-            // Отображаем пагинацию
-            if (data.pages > 1) {
-                showAdminPagination(data.page, data.pages);
-            } else {
-                document.getElementById('admin-users-pagination').style.display = 'none';
-            }
-        } else {
-            listEl.innerHTML = '<div class="empty"><p>Пользователи не найдены</p></div>';
-            document.getElementById('admin-users-pagination').style.display = 'none';
-        }
-        
-        currentAdminUserPage = page;
-        currentAdminUserSearch = search;
-        var searchInput = document.getElementById('admin-user-search');
-        if (searchInput) searchInput.value = search;
-        try { location.hash = buildHash('admin-users', { page: String(page), search: search }); } catch (e) {}
-    } catch (error) {
-        console.error('Ошибка загрузки пользователей:', error);
-        document.getElementById('admin-users-loading').style.display = 'none';
-        showError('admin-users-error', 'Ошибка загрузки пользователей');
-    }
+    return adminUsersListFeature.loadAdminUsers(page, search);
 }
 
 // Поиск пользователей
-let searchTimeout;
 function handleAdminUserSearch() {
-    clearTimeout(searchTimeout);
-    const searchInput = document.getElementById('admin-user-search');
-    const search = searchInput.value.trim();
-    
-    searchTimeout = setTimeout(() => {
-        loadAdminUsers(1, search);
-    }, 500);
+    return adminUsersListFeature.handleAdminUserSearch();
 }
 
 // Пагинация
 function showAdminPagination(currentPage, totalPages) {
-    const paginationEl = document.getElementById('admin-users-pagination');
-    paginationEl.style.display = 'flex';
-    paginationEl.innerHTML = '';
-    
-    // Кнопка "Назад"
-    const prevBtn = document.createElement('button');
-    prevBtn.textContent = '←';
-    prevBtn.disabled = currentPage === 1;
-    prevBtn.onclick = () => loadAdminUsers(currentPage - 1, currentAdminUserSearch);
-    paginationEl.appendChild(prevBtn);
-    
-    // Номера страниц
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, currentPage + 2);
-    
-    for (let i = startPage; i <= endPage; i++) {
-        const pageBtn = document.createElement('button');
-        pageBtn.textContent = i;
-        pageBtn.className = i === currentPage ? 'active' : '';
-        pageBtn.onclick = () => loadAdminUsers(i, currentAdminUserSearch);
-        paginationEl.appendChild(pageBtn);
-    }
-    
-    // Кнопка "Вперед"
-    const nextBtn = document.createElement('button');
-    nextBtn.textContent = '→';
-    nextBtn.disabled = currentPage === totalPages;
-    nextBtn.onclick = () => loadAdminUsers(currentPage + 1, currentAdminUserSearch);
-    paginationEl.appendChild(nextBtn);
+    return adminUsersListFeature.showAdminPagination(currentPage, totalPages);
 }
 
 // Показать детальную информацию о пользователе
 async function showAdminUserDetail(userId) {
-    try {
-        previousAdminPage = 'admin-users';
-        showPage('admin-user-detail', { id: userId });
-        
-        document.getElementById('admin-user-detail-loading').style.display = 'block';
-        document.getElementById('admin-user-detail-content').innerHTML = '';
-        
-        const response = await apiFetch(`/api/admin/user/${userId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки информации о пользователе');
-        }
-        
-        const data = await response.json();
-        
-        document.getElementById('admin-user-detail-loading').style.display = 'none';
-        
-        // Сохраняем userId для использования при возврате назад
-        currentAdminUserDetailUserId = userId;
-        
-        const contentEl = document.getElementById('admin-user-detail-content');
-        
-        // Информация о пользователе
-        const user = data.user;
-        const infoRows = [
-            { label: 'ID аккаунта', value: user.user_id },
-            user.telegram_id ? { label: 'Telegram ID', value: user.telegram_id } : null,
-            user.username ? { label: 'Логин', value: user.username } : null,
-            { label: 'Первый запуск', value: user.first_seen_formatted },
-            { label: 'Последняя активность', value: user.last_seen_formatted }
-        ].filter(Boolean);
-        contentEl.innerHTML = `
-            <div class="admin-user-detail-section">
-                <h3>Информация</h3>
-                ${infoRows.map(r => `
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">${escapeHtml(r.label)}</span>
-                        <span class="admin-detail-value">${escapeHtml(r.value)}</span>
-                    </div>
-                `).join('')}
-            </div>
-            
-            <div class="admin-user-detail-section">
-                <h3>Подписки (${data.subscriptions.length})</h3>
-                ${data.subscriptions.length > 0 ? 
-                    data.subscriptions.map(sub => {
-                        const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
-                        const statusClass = sub.status === 'deleted' ? 'deleted' : sub.status === 'canceled' ? 'canceled' : (isSubActive ? 'active' : 'expired');
-                        const statusLabel = sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : sub.status === 'trial' ? 'Пробная' : sub.status === 'deleted' ? 'Удалена' : 'Отменена';
-                        return `
-                        <div class="admin-subscription-card" onclick="showAdminSubscriptionEdit(${sub.id})">
-                            <div class="admin-subscription-name">${escapeHtml(sub.name)}</div>
-                            <div class="admin-subscription-status ${statusClass}">${statusLabel}</div>
-                            <div class="admin-subscription-info">
-                                <div>Создана: ${escapeHtml(sub.created_at_formatted)}</div>
-                                <div>Истекает: ${escapeHtml(sub.expires_at_formatted)}</div>
-                                <div>Устройств: ${sub.device_limit}</div>
-                            </div>
-                        </div>
-                    `;
-                    }).join('') :
-                    '<p class="admin-detail-empty hint">Нет подписок</p>'
-                }
-            </div>
-            
-            ${data.payments && data.payments.length > 0 ? `
-                <div class="admin-user-detail-section">
-                    <h3>Платежи (${data.payments.length})</h3>
-                    ${data.payments.map(payment => `
-                        <div class="admin-detail-item">
-                            <span class="admin-detail-label">${escapeHtml(payment.created_at_formatted)}</span>
-                            <span class="admin-detail-value">${(payment.amount || 0).toLocaleString('ru-RU')} ₽ (${escapeHtml(payment.status)})</span>
-                        </div>
-                    `).join('')}
-                </div>
-            ` : ''}
-            
-            <div class="admin-user-detail-actions">
-                <button type="button" class="btn-primary" onclick="showCreateSubscriptionForm('${escapeHtml(data.user.user_id)}')">Создать подписку</button>
-                <button type="button" class="btn-danger" onclick="showDeleteUserConfirm('${escapeHtml(data.user.user_id)}')">Удалить пользователя</button>
-            </div>
-        `;
-    } catch (error) {
-        console.error('Ошибка загрузки информации о пользователе:', error);
-        document.getElementById('admin-user-detail-loading').style.display = 'none';
-        document.getElementById('admin-user-detail-content').innerHTML = 
-            '<div class="error"><p>Ошибка загрузки информации</p></div>';
-    }
+    return adminUsersListFeature.showAdminUserDetail(userId);
 }
 
 // Показать форму редактирования подписки
 // Глобальная переменная для хранения исходных значений подписки
 let originalSubscriptionData = null;
+let currentSubscriptionServers = [];
 
 async function showAdminSubscriptionEdit(subId) {
-    try {
-        // Источник перехода: список подписок или детали пользователя
-        if (currentPage === 'admin-subscriptions') {
-            previousAdminPage = 'admin-subscriptions';
-        } else {
-            previousAdminPage = 'admin-user-detail';
-        }
-        currentEditingSubscriptionId = subId;
-        showPage('admin-subscription-edit', { id: String(subId) });
-        
-        document.getElementById('admin-subscription-edit-loading').style.display = 'block';
-        document.getElementById('admin-subscription-edit-content').style.display = 'none';
-        
-        const response = await apiFetch(`/api/admin/subscription/${subId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка загрузки подписки');
-        }
-        
-        const data = await response.json();
-        const sub = data.subscription;
-        const servers = data.servers || [];
-        
-        // Сохраняем исходные данные для сравнения
-        originalSubscriptionData = {
-            name: sub.name || '',
-            device_limit: sub.device_limit || 1,
-            status: sub.status || 'active',
-            expires_at: sub.expires_at
-        };
-        
-        // Сохраняем данные серверов для отображения во вкладке "Ключи"
-        currentSubscriptionServers = servers;
-        
-        document.getElementById('admin-subscription-edit-loading').style.display = 'none';
-        document.getElementById('admin-subscription-edit-content').style.display = 'block';
-        
-        // ВАЖНО: Восстанавливаем состояние кнопки submit при загрузке
-        const form = document.getElementById('admin-subscription-edit-form');
-        if (form) {
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Сохранить';
-            }
-        }
-        
-        // Заполняем форму
-        document.getElementById('sub-name').value = sub.name || '';
-        document.getElementById('sub-device-limit').value = sub.device_limit || 1;
-        
-        // Показываем текущий статус (только информационный блок)
-        const statusDisplayGroup = document.getElementById('sub-status-display-group');
-        const statusDisplay = document.getElementById('sub-status-display');
-        const statusHint = document.getElementById('sub-status-hint');
-        
-        const statusNames = {
-            'active': 'Активна',
-            'expired': 'Истекла',
-            'deleted': 'Удалена'
-        };
-        const currentStatusName = statusNames[sub.status] || sub.status;
-        
-        if (sub.status === 'deleted') {
-            statusDisplay.textContent = `Текущий статус: ${currentStatusName}`;
-            statusDisplay.className = 'sub-status-display sub-status-expired';
-            statusHint.textContent = 'Финальный статус, нельзя изменить';
-            statusDisplayGroup.style.display = 'block';
-        } else {
-            // Для active/expired статус управляется автоматически
-            statusDisplay.textContent = `Текущий статус: ${currentStatusName}`;
-            const isSubActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
-            statusDisplay.className = 'sub-status-display ' + (isSubActive ? 'sub-status-active' : 'sub-status-expired');
-            statusHint.textContent = 'Управляется автоматически через дату истечения';
-            statusDisplayGroup.style.display = 'block';
-        }
-        
-        // Конвертируем timestamp в datetime-local формат
-        const expiresDate = new Date(sub.expires_at * 1000);
-        const year = expiresDate.getFullYear();
-        const month = String(expiresDate.getMonth() + 1).padStart(2, '0');
-        const day = String(expiresDate.getDate()).padStart(2, '0');
-        const hours = String(expiresDate.getHours()).padStart(2, '0');
-        const minutes = String(expiresDate.getMinutes()).padStart(2, '0');
-        document.getElementById('sub-expires-at').value = `${year}-${month}-${day}T${hours}:${minutes}`;
-        
-        // Загружаем ключи для отображения
-        loadSubscriptionKeys(servers);
-        
-        // Загружаем ключи для отображения
-        loadSubscriptionKeys(servers);
-    } catch (error) {
-        console.error('Ошибка загрузки подписки:', error);
-        document.getElementById('admin-subscription-edit-loading').style.display = 'none';
-        await appShowAlert('Не удалось загрузить подписку.', { title: 'Ошибка', variant: 'error' });
-    }
+    return adminSubscriptionEditFeature.showAdminSubscriptionEdit(subId);
 }
 
 // Сохранение изменений подписки
 async function saveSubscriptionChanges(event) {
-    event.preventDefault();
-    
-    // ВАЖНО: Восстанавливаем состояние кнопки submit сразу после preventDefault
-    const submitBtn = event.target.querySelector('button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Сохранить';
-    }
-    
-    if (!currentEditingSubscriptionId || !originalSubscriptionData) {
-        await appShowAlert('Данные подписки не загружены.', { title: 'Ошибка', variant: 'error' });
-        return;
-    }
-    
-    const form = event.target;
-    const newData = {
-        name: form.name.value,
-        device_limit: parseInt(form.device_limit.value),
-        expires_at: Math.floor(new Date(form.expires_at.value).getTime() / 1000)
-    };
-    
-    // Статус не отправляем - он управляется автоматически через expires_at
-    // Исключение: deleted статус можно установить только через кнопку удаления
-    
-    // Определяем, что изменилось
-    const changes = [];
-    if (newData.name !== originalSubscriptionData.name) {
-        changes.push({
-            field: 'Название',
-            old: originalSubscriptionData.name || '(не указано)',
-            new: newData.name || '(не указано)'
-        });
-    }
-    if (newData.device_limit !== originalSubscriptionData.device_limit) {
-        changes.push({
-            field: 'Лимит устройств',
-            old: originalSubscriptionData.device_limit,
-            new: newData.device_limit
-        });
-    }
-    // Статус не включаем в изменения - он управляется автоматически
-    if (newData.expires_at !== originalSubscriptionData.expires_at) {
-        const oldDate = new Date(originalSubscriptionData.expires_at * 1000).toLocaleString('ru-RU');
-        const newDate = new Date(newData.expires_at * 1000).toLocaleString('ru-RU');
-        changes.push({
-            field: 'Дата истечения',
-            old: oldDate,
-            new: newDate
-        });
-    }
-    
-    // Если есть изменения, показываем модальное окно
-    if (changes.length > 0) {
-        // Сохраняем данные формы для использования после подтверждения
-        window.pendingSubscriptionUpdate = newData;
-        
-        // Показываем список изменений
-        const changesList = document.getElementById('subscription-changes-list');
-        changesList.innerHTML = changes.map(change => `
-            <div class="subscription-change-item">
-                <div class="subscription-change-field">${escapeHtml(change.field)}</div>
-                <div class="subscription-change-old">Было: ${escapeHtml(String(change.old))}</div>
-                <div class="subscription-change-new">Станет: ${escapeHtml(String(change.new))}</div>
-            </div>
-        `).join('');
-        
-        // Показываем модальное окно
-        document.getElementById('subscription-confirm-modal').style.display = 'flex';
-    } else {
-        await appShowAlert('Нет изменений для сохранения.', { title: 'Сообщение' });
-    }
+    return adminSubscriptionEditFeature.saveSubscriptionChanges(event);
 }
 
 // Закрытие модального окна
 function closeSubscriptionConfirmModal() {
-    // Восстанавливаем кнопку перед закрытием
-    const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
-    if (confirmBtn) {
-        confirmBtn.textContent = 'Подтвердить и сохранить';
-        confirmBtn.disabled = false;
-    }
-    
-    document.getElementById('subscription-confirm-modal').style.display = 'none';
-    window.pendingSubscriptionUpdate = null;
+    return adminSubscriptionEditFeature.closeSubscriptionConfirmModal();
 }
 
 // Подтверждение и сохранение изменений
 async function confirmSaveSubscriptionChanges() {
-    if (!window.pendingSubscriptionUpdate) {
-        closeSubscriptionConfirmModal();
-        return;
-    }
-    
-    // Получаем кнопку и сохраняем оригинальный текст
-    const confirmBtn = document.querySelector('#subscription-confirm-modal .btn-primary');
-    const originalText = confirmBtn ? confirmBtn.textContent : 'Подтвердить и сохранить';
-    
-    try {
-        // Показываем индикатор загрузки
-        if (confirmBtn) {
-            confirmBtn.textContent = 'Сохранение...';
-            confirmBtn.disabled = true;
-        }
-        
-        const response = await apiFetch(`/api/admin/subscription/${currentEditingSubscriptionId}/update`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ...window.pendingSubscriptionUpdate
-            })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Ошибка сохранения');
-        }
-        
-        const data = await response.json();
-        
-        // ВАЖНО: Восстанавливаем кнопку ПЕРЕД закрытием модального окна
-        if (confirmBtn) {
-            confirmBtn.textContent = originalText;
-            confirmBtn.disabled = false;
-        }
-        
-        // Закрываем модальное окно
-        closeSubscriptionConfirmModal();
-        
-        await appShowAlert('Изменения сохранены и синхронизированы с серверами.', { title: 'Готово', variant: 'success' });
-        
-        goBackFromSubscriptionEdit();
-    } catch (error) {
-        console.error('Ошибка сохранения подписки:', error);
-        await appShowAlert('Ошибка сохранения: ' + error.message, { title: 'Ошибка', variant: 'error' });
-        
-        // Восстанавливаем кнопку при ошибке
-        if (confirmBtn) {
-            confirmBtn.textContent = originalText;
-            confirmBtn.disabled = false;
-        }
-    }
+    return adminSubscriptionEditFeature.confirmSaveSubscriptionChanges();
 }
 
 // Синхронизация подписки
 async function syncSubscription() {
-    try {
-        if (!currentEditingSubscriptionId) {
-            await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
-            return;
-        }
-        
-        const syncBtn = document.querySelector('.btn-sync');
-        syncBtn.disabled = true;
-        syncBtn.textContent = 'Синхронизация...';
-        
-        const response = await apiFetch(`/api/admin/subscription/${currentEditingSubscriptionId}/sync`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка синхронизации');
-        }
-        
-        const data = await response.json();
-        
-        // Отображаем результаты
-        const resultsEl = document.getElementById('sync-results');
-        resultsEl.style.display = 'block';
-        resultsEl.innerHTML = '<h4>Результаты синхронизации:</h4>' +
-            data.sync_results.map(result => `
-                <div class="sync-result-item">
-                    <span>${escapeHtml(result.server)}: </span>
-                    <span class="${result.status === 'success' ? 'sync-result-success' : 'sync-result-error'}">
-                        ${result.status === 'success' ? '✓ Успешно' : '✗ Ошибка: ' + escapeHtml(result.error || 'Неизвестная ошибка')}
-                    </span>
-                </div>
-            `).join('');
-        
-        syncBtn.disabled = false;
-        syncBtn.textContent = 'Синхронизировать';
-    } catch (error) {
-        console.error('Ошибка синхронизации:', error);
-        await appShowAlert('Ошибка синхронизации: ' + error.message, { title: 'Ошибка', variant: 'error' });
-        const syncBtn = document.querySelector('.btn-sync');
-        syncBtn.disabled = false;
-        syncBtn.textContent = 'Синхронизировать';
-    }
+    return adminSubscriptionEditFeature.syncSubscription();
 }
 
 // Переключение между вкладками редактирования подписки
 function switchSubscriptionTab(tabName) {
-    // Убираем активный класс со всех вкладок
-    const tabButtons = document.querySelectorAll('#page-admin-subscription-edit .tab-button');
-    tabButtons.forEach(btn => btn.classList.remove('active'));
-    
-    // Скрываем все содержимое вкладок
-    const tabContents = document.querySelectorAll('#page-admin-subscription-edit .tab-content');
-    tabContents.forEach(content => content.classList.remove('active'));
-    
-    // Активируем выбранную вкладку
-    if (tabName === 'params') {
-        const paramsBtn = document.querySelector('#page-admin-subscription-edit .tab-button[onclick*="params"]');
-        if (paramsBtn) paramsBtn.classList.add('active');
-        const paramsContent = document.getElementById('subscription-tab-params');
-        if (paramsContent) paramsContent.classList.add('active');
-    } else if (tabName === 'keys') {
-        const keysBtn = document.querySelector('#page-admin-subscription-edit .tab-button[onclick*="keys"]');
-        if (keysBtn) keysBtn.classList.add('active');
-        const keysContent = document.getElementById('subscription-tab-keys');
-        if (keysContent) keysContent.classList.add('active');
-        // Загружаем ключи, если они еще не загружены
-        if (currentSubscriptionServers && currentSubscriptionServers.length >= 0) {
-            loadSubscriptionKeys(currentSubscriptionServers);
-        }
-    }
+    return adminSubscriptionEditFeature.switchSubscriptionTab(tabName);
 }
 
 // Загрузка и отображение ключей подписки
 function loadSubscriptionKeys(servers) {
-    const keysListEl = document.getElementById('subscription-keys-list');
-    if (!keysListEl) return;
-    
-    if (!servers || servers.length === 0) {
-        keysListEl.innerHTML = `
-            <div class="empty-state">
-                <p>У этой подписки нет привязанных серверов</p>
-            </div>
-        `;
-        return;
-    }
-    
-    let html = '<div class="keys-list">';
-    html += '<div class="keys-header"><h3>Ключи подписки</h3></div>';
-    html += '<div class="keys-items">';
-    
-    servers.forEach((server, index) => {
-        const serverName = escapeHtml(server.server_name || 'Неизвестный сервер');
-        const clientEmail = escapeHtml(server.client_email || 'Не указан');
-        
-        html += `
-            <div class="key-item">
-                <div class="key-server">${serverName}</div>
-                <div class="key-email">
-                    <code class="key-email-code">${clientEmail}</code>
-                    <button class="btn-copy-key" onclick="copyToClipboard('${clientEmail.replace(/'/g, "\\'")}', this)" title="Копировать">
-                        📋
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    html += `<div class="keys-summary">Всего ключей: ${servers.length}</div>`;
-    html += '</div>';
-    
-    keysListEl.innerHTML = html;
+    return adminSubscriptionEditFeature.loadSubscriptionKeys(servers);
 }
 
 // Функция копирования в буфер обмена (админка)
 async function copyToClipboard(text, button) {
-    if (!button) return;
-    const ok = await copyTextToClipboard(text);
-    if (ok) {
-        const originalText = button.textContent;
-        button.textContent = '✓';
-        button.style.color = '#4caf50';
-        setTimeout(() => {
-            button.textContent = originalText;
-            button.style.color = '';
-        }, 2000);
-    } else {
-        var el = document.getElementById('generic-copy-manual-url');
-        var h = document.getElementById('generic-copy-manual-heading');
-        if (el) el.value = text;
-        if (h) h.textContent = 'Скопируйте вручную';
-        showModal('generic-copy-manual-modal');
-    }
+    return adminSubscriptionEditFeature.copyToClipboard(text, button);
 }
 
 // Возврат назад из редактирования подписки
 function goBackFromSubscriptionEdit() {
-    // Сбрасываем активную вкладку на "Параметры"
-    switchSubscriptionTab('params');
-    if (previousAdminPage === 'admin-subscriptions') {
-        // Возврат к списку подписок с сохранёнными фильтрами и страницей
-        showPage('admin-subscriptions', {
-            page: currentAdminSubscriptionsPage,
-            status: currentAdminSubscriptionsStatus || '',
-            owner: currentAdminSubscriptionsOwnerQuery || ''
-        });
-    } else if (previousAdminPage === 'admin-user-detail') {
-        // Нужно перезагрузить информацию о пользователе
-        if (currentAdminUserDetailUserId) {
-            showAdminUserDetail(currentAdminUserDetailUserId);
-        } else {
-            showPage('admin-users');
-        }
-    } else {
-        showPage('admin-users');
-    }
-    currentEditingSubscriptionId = null;
+    return adminSubscriptionEditFeature.goBackFromSubscriptionEdit();
 }
 
 // Показать форму создания подписки
 function showCreateSubscriptionForm(userId) {
-    currentCreatingSubscriptionUserId = userId;
-    previousAdminPage = 'admin-user-detail';
-    showPage('admin-create-subscription', userId ? { userId: userId } : {});
-    
-    // Очищаем форму
-    document.getElementById('create-sub-name').value = '';
-    document.getElementById('create-sub-expires-at').value = '';
-    document.getElementById('create-sub-device-limit').value = '1';
-    document.getElementById('create-sub-period').value = 'month';
-    
-    // Сбрасываем кнопку отправки, чтобы не оставалась «Создание...» при повторном открытии
-    const form = document.getElementById('admin-create-subscription-form');
-    if (form) {
-        const submitBtn = form.querySelector('button[type="submit"]');
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Создать';
-        }
-    }
+    return adminUsersFeature.showCreateSubscriptionForm(userId);
 }
 
 // Возврат назад из создания подписки
 function goBackFromCreateSubscription() {
-    if (previousAdminPage === 'admin-user-detail' && currentCreatingSubscriptionUserId) {
-        showAdminUserDetail(currentCreatingSubscriptionUserId);
-    } else {
-        showPage('admin-users');
-    }
-    currentCreatingSubscriptionUserId = null;
+    return adminUsersFeature.goBackFromCreateSubscription();
 }
 
 // Возврат назад из детальной информации о пользователе
 function goBackFromUserDetail() {
-    showPage('admin-users');
+    return adminUsersActionsFeature.goBackFromUserDetail();
 }
 
 // Показать модальное окно подтверждения удаления пользователя
 function showDeleteUserConfirm(userId) {
-    const modal = document.getElementById('delete-user-confirm-modal');
-    if (!modal) {
-        // Создаем модальное окно, если его нет
-        const modalHTML = `
-            <div id="delete-user-confirm-modal" class="modal" style="display: none;">
-                <div class="modal-content">
-                    <h2>⚠️ Удаление пользователя</h2>
-                    <p class="delete-modal-text">
-                        Вы уверены, что хотите удалить этого пользователя?<br><br>
-                        Это действие удалит:
-                        <ul class="delete-modal-list">
-                            <li>Все подписки пользователя</li>
-                            <li>Все клиенты на серверах</li>
-                            <li>Все платежи</li>
-                            <li>Все данные пользователя</li>
-                        </ul>
-                        <strong class="delete-modal-warning">Это действие нельзя отменить!</strong>
-                    </p>
-                    <div style="display: flex; gap: 12px; margin-top: 24px; align-items: stretch;">
-                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Отмена</button>
-                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Удалить</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-    }
-    
-    // Обновляем userId в кнопке подтверждения
-    const confirmBtn = document.getElementById('delete-user-confirm-btn');
-    if (confirmBtn) {
-        confirmBtn.onclick = () => confirmDeleteUser(userId);
-    }
-    
-    document.getElementById('delete-user-confirm-modal').style.display = 'flex';
+    return adminUsersActionsFeature.showDeleteUserConfirm(userId);
 }
 
 // Закрыть модальное окно удаления пользователя
 function closeDeleteUserModal() {
-    const modal = document.getElementById('delete-user-confirm-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    
-    // Всегда сбрасывать состояние кнопки при закрытии модального окна
-    const confirmBtn = document.getElementById('delete-user-confirm-btn');
-    if (confirmBtn) {
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = 'Удалить';
-    }
+    return adminUsersActionsFeature.closeDeleteUserModal();
 }
 
 // Подтвердить удаление пользователя
 async function confirmDeleteUser(userId) {
-    try {
-        const confirmBtn = document.getElementById('delete-user-confirm-btn');
-        if (confirmBtn) {
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = 'Удаление...';
-        }
-        
-        const response = await apiFetch(`/api/admin/user/${userId}/delete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                confirm: true
-            })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ошибка удаления пользователя');
-        }
-        
-        const data = await response.json();
-        
-        closeDeleteUserModal();
-        
-        // Показываем уведомление об успехе
-        var successMsg = 'Пользователь удален:\n- Подписок: ' + data.stats.subscriptions_deleted + '\n- Платежей: ' + data.stats.payments_deleted + '\n- Серверов очищено: ' + data.deleted_servers.length;
-        platform.showAlert(successMsg);
-        
-        // Возвращаемся к списку пользователей
-        setTimeout(() => {
-            showPage('admin-users');
-            loadAdminUsers(1, '');
-        }, 500);
-        
-        // Убеждаемся, что кнопка сброшена после успешного удаления
-        const confirmBtnAfter = document.getElementById('delete-user-confirm-btn');
-        if (confirmBtnAfter) {
-            confirmBtnAfter.disabled = false;
-            confirmBtnAfter.textContent = 'Удалить';
-        }
-        
-    } catch (error) {
-        console.error('Ошибка удаления пользователя:', error);
-        platform.showAlert('Ошибка удаления пользователя: ' + (error && error.message));
-        
-        // Всегда сбрасывать состояние кнопки при ошибке
-        const confirmBtn = document.getElementById('delete-user-confirm-btn');
-        if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Удалить';
-        }
-    }
+    return adminUsersActionsFeature.confirmDeleteUser(userId);
 }
 
 // Создание подписки
 async function createSubscription(event) {
-    event.preventDefault();
-    
-    try {
-        if (!currentCreatingSubscriptionUserId) {
-            await appShowAlert('ID пользователя не найден.', { title: 'Ошибка', variant: 'error' });
-            return;
-        }
-        
-        const form = event.target;
-        const formData = {
-            period: form.period.value,
-            device_limit: parseInt(form.device_limit.value),
-            name: form.name.value.trim() || null
-        };
-        
-        // Если указана дата истечения, добавляем её
-        if (form.expires_at.value) {
-            formData.expires_at = Math.floor(new Date(form.expires_at.value).getTime() / 1000);
-        }
-        
-        const submitBtn = form.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Создание...';
-        
-        const response = await apiFetch(`/api/admin/user/${currentCreatingSubscriptionUserId}/create-subscription`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ...formData
-            })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Ошибка создания подписки');
-        }
-        
-        const data = await response.json();
-        
-        let message = 'Подписка успешно создана!';
-        if (data.failed_servers && data.failed_servers.length > 0) {
-            message += `\n\nПредупреждение: не удалось создать клиентов на серверах: ${data.failed_servers.map(s => s.server).join(', ')}`;
-        }
-        
-        await appShowAlert(message, { title: 'Готово', variant: 'success' });
-        
-        // Сбрасываем кнопку до навигации, чтобы при повторном открытии формы она была в нужном состоянии
-        const formEl = event.target;
-        const btn = formEl && formEl.querySelector('button[type="submit"]');
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Создать';
-        }
-        
-        // Возвращаемся назад и обновляем информацию о пользователе
-        goBackFromCreateSubscription();
-    } catch (error) {
-        console.error('Ошибка создания подписки:', error);
-        await appShowAlert('Ошибка создания: ' + error.message, { title: 'Ошибка', variant: 'error' });
-        const formEl = event.target;
-        const submitBtn = formEl && formEl.querySelector('button[type="submit"]');
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Создать';
-        }
-    }
+    return adminSubscriptionCreateFeature.createSubscription(event);
 }
 
 // Подтверждение удаления подписки
 async function confirmDeleteSubscription() {
-    if (!currentEditingSubscriptionId) {
-        await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
-        return;
-    }
-    const subscriptionName = document.getElementById('sub-name').value || `Подписка ${currentEditingSubscriptionId}`;
-    const msg = 'Вы уверены, что хотите удалить подписку «' + subscriptionName + '»?\n\nЭто действие необратимо. Подписка будет удалена из базы данных, а клиенты удалены со всех серверов.';
-    const ok = await appShowConfirm(msg, { title: 'Удаление подписки', confirmText: 'Удалить' });
-    if (ok) deleteSubscription();
+    return adminSubscriptionEditFeature.confirmDeleteSubscription();
 }
 
 // Удаление подписки
 async function deleteSubscription() {
-    try {
-        if (!currentEditingSubscriptionId) {
-            await appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
-            return;
-        }
-        
-        const deleteBtn = document.querySelector('.btn-danger');
-        deleteBtn.disabled = true;
-        deleteBtn.textContent = 'Удаление...';
-        
-        const response = await apiFetch(`/api/admin/subscription/${currentEditingSubscriptionId}/delete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                confirm: true
-            })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Ошибка удаления');
-        }
-        
-        const data = await response.json();
-        
-        await appShowAlert('Подписка успешно удалена.', { title: 'Готово', variant: 'success' });
-        
-        goBackFromSubscriptionEdit();
-    } catch (error) {
-        console.error('Ошибка удаления подписки:', error);
-        await appShowAlert('Ошибка удаления: ' + error.message, { title: 'Ошибка', variant: 'error' });
-        const deleteBtn = document.querySelector('.btn-danger');
-        deleteBtn.disabled = false;
-        deleteBtn.textContent = 'Удалить подписку';
-    }
+    return adminSubscriptionEditFeature.deleteSubscription();
 }
 
 // Вспомогательная функция для отображения ошибок
@@ -5095,257 +2943,34 @@ function showError(elementId, message) {
 let dashRevenueChart = null;
 
 async function loadAdminStats() {
-    const loadingEl = document.getElementById('admin-stats-loading');
-    const dashboardEl = document.getElementById('admin-dashboard');
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (dashboardEl) dashboardEl.style.display = 'none';
-
-    try {
-        const response = await apiFetch('/api/admin/stats', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const result = await response.json();
-        if (!result.success) throw new Error('API error');
-        const s = result.stats;
-
-        document.getElementById('dash-mrr').textContent = formatRub(s.mrr || 0);
-        const mrrPct = s.mrr_change_percent || 0;
-        const mrrTrendEl = document.getElementById('dash-mrr-trend');
-        if (mrrPct > 0) {
-            mrrTrendEl.textContent = `+${mrrPct.toFixed(1)}%`;
-            mrrTrendEl.className = 'dashboard-card-trend trend-up';
-        } else if (mrrPct < 0) {
-            mrrTrendEl.textContent = `${mrrPct.toFixed(1)}%`;
-            mrrTrendEl.className = 'dashboard-card-trend trend-down';
-        } else {
-            mrrTrendEl.textContent = '';
-        }
-
-        document.getElementById('dash-active-subs').textContent = s.subscriptions.active;
-        document.getElementById('dash-users').textContent = s.users.total;
-        const usersTrendEl = document.getElementById('dash-users-trend');
-        if (s.users.new_30d > 0) {
-            usersTrendEl.textContent = `+${s.users.new_30d} за 30д`;
-            usersTrendEl.className = 'dashboard-card-trend trend-up';
-        } else {
-            usersTrendEl.textContent = '';
-        }
-        document.getElementById('dash-conversion').textContent = (s.conversion_rate || 0) + '%';
-
-        renderRevenueChart(s.daily_revenue || []);
-        renderGatewaySplit(s.gateway_split || {});
-
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (dashboardEl) dashboardEl.style.display = 'block';
-
-        loadDashboardServers();
-
-        if (serverLoadChartInterval) clearInterval(serverLoadChartInterval);
-        serverLoadChartInterval = setInterval(() => {
-            if (currentPage === 'admin-stats') loadDashboardServers();
-        }, 2 * 60 * 1000);
-    } catch (err) {
-        console.error('Dashboard load error:', err);
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (dashboardEl) dashboardEl.style.display = 'block';
-    }
+    return adminStatsDashboardFeature.loadAdminStats();
 }
 
 function formatRub(v) {
-    return Math.round(v).toLocaleString('ru-RU') + ' ₽';
+    return adminStatsDashboardFeature.formatRub(v);
 }
 
 function renderRevenueChart(data) {
-    const ctx = document.getElementById('dash-revenue-chart');
-    if (!ctx) return;
-    if (dashRevenueChart) { dashRevenueChart.destroy(); dashRevenueChart = null; }
-
-    const labels = data.map(d => {
-        const parts = d.date.split('-');
-        return parts[2] + '.' + parts[1];
-    });
-    const values = data.map(d => d.revenue || 0);
-
-    const isDark = document.body.classList.contains('dark') ||
-        getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim().startsWith('#1');
-
-    dashRevenueChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                data: values,
-                backgroundColor: isDark ? 'rgba(99,132,255,0.6)' : 'rgba(54,120,220,0.7)',
-                borderRadius: 4,
-                maxBarThickness: 18,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: {
-                callbacks: { label: (c) => formatRub(c.raw) }
-            }},
-            scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: {
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 7,
-                        color: isDark ? '#888' : '#666',
-                        font: { size: 11 }
-                    }
-                },
-                y: {
-                    grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
-                    ticks: {
-                        callback: (v) => v >= 1000 ? (v / 1000) + 'k' : v,
-                        color: isDark ? '#888' : '#666',
-                        font: { size: 11 }
-                    },
-                    beginAtZero: true,
-                }
-            }
-        }
-    });
+    return adminStatsDashboardFeature.renderRevenueChart(data);
 }
 
 function renderGatewaySplit(gw) {
-    const el = document.getElementById('dash-gateway-split');
-    if (!el) return;
-    const entries = Object.entries(gw);
-    if (entries.length === 0) { el.textContent = ''; return; }
-    const total = entries.reduce((s, [, v]) => s + v, 0);
-    if (total === 0) { el.textContent = ''; return; }
-    const names = { yookassa: 'YooKassa', cryptocloud: 'CryptoCloud' };
-    el.textContent = entries.map(([k, v]) => {
-        const pct = Math.round(v / total * 100);
-        return `${names[k] || k}: ${formatRub(v)} (${pct}%)`;
-    }).join('  ·  ');
+    return adminStatsDashboardFeature.renderGatewaySplit(gw);
 }
 
 async function loadDashboardServers() {
-    const container = document.getElementById('dash-servers-load');
-    if (!container) return;
-    if (!container.querySelector('.server-load-card')) {
-        container.innerHTML = '<p class="empty-hint">Загрузка нагрузки серверов…</p>';
-    }
-    try {
-        const response = await apiFetch('/api/admin/charts/server-load', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        if (!response.ok) throw new Error('Ошибка загрузки данных');
-        const result = await response.json();
-        if (!result.success || !result.data) {
-            container.innerHTML = '<p class="empty-hint">Нет данных</p>';
-            return;
-        }
-        const serverData = result.data.servers || [];
-        if (serverData.length === 0) {
-            container.innerHTML = '<p class="empty-hint">Нет данных о нагрузке</p>';
-            return;
-        }
-        const getLoadClass = (p) => (p >= 80 ? 'high' : p >= 50 ? 'medium' : 'low');
-        container.innerHTML = serverData.map((item) => {
-            const pct = item.load_percentage ?? 0;
-            const online = item.online_clients ?? 0;
-            const total = item.total_active ?? 0;
-            const name = escapeHtml(item.display_name || item.server_name);
-            const cls = getLoadClass(pct);
-            const details = [];
-            if (total > 0) details.push(`${online} онлайн / ${total} всего`);
-            if (item.avg_online_24h != null || item.max_online_24h != null) {
-                const parts = [];
-                if (item.avg_online_24h != null) parts.push(`среднее: ${item.avg_online_24h}`);
-                if (item.max_online_24h != null) parts.push(`пик: ${item.max_online_24h}`);
-                if (parts.length) details.push(parts.join(' · '));
-            }
-            return `
-                <div class="server-load-card" title="${item.location ? 'Локация: ' + escapeHtml(item.location) : ''}">
-                    <div class="server-load-card-header">
-                        <span class="server-load-card-name">${name}</span>
-                        <span class="server-load-card-percent ${cls}">${Math.round(pct)}%</span>
-                    </div>
-                    <div class="server-load-progress-track">
-                        <div class="server-load-progress-fill ${cls}" style="width: ${Math.min(100, pct)}%;"></div>
-                    </div>
-                    ${details.length ? `<div class="server-load-card-details">${escapeHtml(details.join(' · '))}</div>` : ''}
-                </div>
-            `;
-        }).join('');
-    } catch (error) {
-        console.error('Ошибка загрузки нагрузки серверов:', error);
-        container.innerHTML = '<p class="error-text">Ошибка загрузки данных</p>';
-    }
+    return adminStatsDashboardFeature.loadDashboardServers();
 }
 
 // Предотвращаем закрытие приложения при скролле вверх
 function preventCloseOnScroll() {
-    let touchStartY = 0;
-    let touchEndY = 0;
-    let isScrolling = false;
-    
-    // Обработка начала касания
-    document.addEventListener('touchstart', (e) => {
-        touchStartY = e.touches[0].clientY;
-        isScrolling = false;
-    }, { passive: true });
-    
-    // Обработка движения
-    document.addEventListener('touchmove', (e) => {
-        if (!touchStartY) return;
-        
-        touchEndY = e.touches[0].clientY;
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const isScrollingUp = touchEndY > touchStartY;
-        
-        // Если скроллим вверх и мы уже вверху страницы, предотвращаем закрытие
-        if (isScrollingUp && scrollTop === 0) {
-            // Разрешаем небольшой overscroll, но предотвращаем закрытие
-            const overscroll = touchEndY - touchStartY;
-            if (overscroll > 50) {
-                // Если overscroll слишком большой, предотвращаем его
-                e.preventDefault();
-            }
-        }
-        
-        isScrolling = true;
-    }, { passive: false });
-    
-    // Обработка окончания касания
-    document.addEventListener('touchend', () => {
-        touchStartY = 0;
-        touchEndY = 0;
-        isScrolling = false;
-    }, { passive: true });
+    return uiGuardsFeature.preventCloseOnScroll();
 }
 
 // [Удалено: loadNotificationStats, loadNotificationDeliveryChart и др. графики уведомлений — оставлена только аналитика серверов]
 
-// Убираем мигающую каретку при фокусе на нередактируемых элементах (div, section, p и т.д.)
-document.addEventListener('focusin', function (e) {
-    var el = e.target;
-    if (!el || el === document.body || el === document.documentElement) {
-        setTimeout(function () {
-            if (document.activeElement === document.body || document.activeElement === document.documentElement) {
-                document.body && document.body.blur && document.body.blur();
-            }
-        }, 0);
-        return;
-    }
-    var tag = (el.tagName || '').toUpperCase();
-    var role = (el.getAttribute && el.getAttribute('role')) || '';
-    var editable = el.isContentEditable;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || role === 'button' || editable) return;
-    setTimeout(function () {
-        if (document.activeElement === el && (el.tagName || '').toUpperCase() !== 'INPUT' && (el.tagName || '').toUpperCase() !== 'TEXTAREA' && (el.tagName || '').toUpperCase() !== 'SELECT') {
-            el.blur && el.blur();
-        }
-    }, 0);
-});
+// Убираем мигающую каретку при фокусе на нередактируемых элементах
+// (listener инициализируется в platform/ui-guards.js).
 
 // Загружаем цены с сервера и обновляем отображение (публичный API, без авторизации)
 function applyLoadedPrices(prices) {
@@ -5559,1576 +3184,76 @@ async function initTelegramFlow() {
 
 // Обработчики веб-авторизации
 async function handleWebLogin(event) {
-    event.preventDefault();
-    const username = document.getElementById('login-username').value;
-    const password = document.getElementById('login-password').value;
-    const remember = document.getElementById('login-remember').checked;
-    
-    const btn = event.target.querySelector('button[type="submit"]');
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Вход...';
-
-    try {
-        const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, remember })
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            if (remember) {
-                setAuthToken(result.token);
-            } else {
-                webAuthToken = result.token;
-            }
-            currentUserId = result.user_id;
-            var formEl = event.target;
-            var successMsg = document.getElementById('login-success-msg');
-            if (formEl && successMsg) {
-                formEl.style.display = 'none';
-                successMsg.style.display = 'block';
-                successMsg.classList.add('auth-success-visible');
-                setTimeout(function () {
-                    showPage('subscriptions');
-                    checkAdminAccess();
-                }, 1500);
-            } else {
-                showPage('subscriptions');
-                checkAdminAccess();
-            }
-        } else {
-            var loginForm = document.getElementById('login-form');
-            if (loginForm) {
-                loginForm.classList.remove('form-shake');
-                void loginForm.offsetHeight;
-                loginForm.classList.add('form-shake');
-                setTimeout(function () { loginForm.classList.remove('form-shake'); }, 400);
-            }
-            showFormMessage('login-form-message', 'error', result.error || 'Ошибка входа');
-        }
-    } catch (e) {
-        var loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.classList.remove('form-shake');
-            void loginForm.offsetHeight;
-            loginForm.classList.add('form-shake');
-            setTimeout(function () { loginForm.classList.remove('form-shake'); }, 400);
-        }
-        showFormMessage('login-form-message', 'error', 'Ошибка сети');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-    }
+    return authFormsFeature.handleWebLogin(event);
 }
 
 async function handleWebRegister(event) {
-    event.preventDefault();
-    const username = document.getElementById('register-username').value;
-    const password = document.getElementById('register-password').value;
-    const confirm = document.getElementById('register-confirm').value;
-    
-    if (password !== confirm) {
-        var registerForm = document.getElementById('register-form');
-        if (registerForm) {
-            registerForm.classList.remove('form-shake');
-            void registerForm.offsetHeight;
-            registerForm.classList.add('form-shake');
-            setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
-        }
-        showFormMessage('register-form-message', 'error', 'Пароли не совпадают');
-        return;
-    }
-
-    const btn = event.target.querySelector('button[type="submit"]');
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Регистрация...';
-
-    try {
-        const response = await fetch('/api/auth/register', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username: username,
-                password: password
-            })
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            setAuthToken(result.token);
-            currentUserId = result.user_id;
-            var formEl = event.target;
-            var successMsg = document.getElementById('register-success-msg');
-            if (formEl && successMsg) {
-                formEl.style.display = 'none';
-                successMsg.style.display = 'block';
-                successMsg.classList.add('auth-success-visible');
-                setTimeout(function () {
-                    showPage('subscriptions');
-                    checkAdminAccess();
-                }, 1500);
-            } else {
-                showPage('subscriptions');
-                checkAdminAccess();
-            }
-        } else {
-            var registerForm = document.getElementById('register-form');
-            if (registerForm) {
-                registerForm.classList.remove('form-shake');
-                void registerForm.offsetHeight;
-                registerForm.classList.add('form-shake');
-                setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
-            }
-            showFormMessage('register-form-message', 'error', result.error || 'Ошибка регистрации');
-        }
-    } catch (e) {
-        var registerForm = document.getElementById('register-form');
-        if (registerForm) {
-            registerForm.classList.remove('form-shake');
-            void registerForm.offsetHeight;
-            registerForm.classList.add('form-shake');
-            setTimeout(function () { registerForm.classList.remove('form-shake'); }, 400);
-        }
-        showFormMessage('register-form-message', 'error', 'Ошибка сети');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-    }
+    return authFormsFeature.handleWebRegister(event);
 }
 
 // === НАСТРОЙКА ВЕБ-ДОСТУПА (ИЗ ТГ) ===
 
 function showWebAccessModal() {
-    var usernameEl = document.getElementById('web-access-username');
-    var pwEl = document.getElementById('web-access-password');
-    var pw2El = document.getElementById('web-access-password-confirm');
-    if (usernameEl) usernameEl.value = '';
-    if (pwEl) pwEl.value = '';
-    if (pw2El) pw2El.value = '';
-    showModal('web-access-modal');
+    return authAccountFeature.showWebAccessModal();
 }
 
 async function handleWebAccessSetup(event) {
-    event.preventDefault();
-    const username = (document.getElementById('web-access-username').value || '').trim().toLowerCase();
-    const password = document.getElementById('web-access-password').value;
-    const confirm = document.getElementById('web-access-password-confirm').value;
-    
-    if (username.length < 3) {
-        await appShowAlert('Логин должен быть не менее 3 символов', { title: 'Ошибка', variant: 'error' });
-        return;
-    }
-    if (password.length < 6) {
-        await appShowAlert('Пароль: минимум 8 символов, нужны буква и цифра', { title: 'Ошибка', variant: 'error' });
-        return;
-    }
-    if (password !== confirm) {
-        await appShowAlert('Пароли не совпадают', { title: 'Ошибка', variant: 'error' });
-        return;
-    }
-
-    const btn = event.target.querySelector('button[type="submit"]');
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Сохранение...';
-
-    try {
-        const response = await fetch('/api/user/web-access/setup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                initData: tg.initData,
-                username: username,
-                password: password 
-            })
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            closeModal('web-access-modal');
-            refreshAboutAccount();
-            platform.showAlert(result.message);
-        } else {
-            platform.showAlert(result.error || 'Ошибка при настройке');
-        }
-    } catch (e) {
-        platform.showAlert('Ошибка сети');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-    }
+    return authAccountFeature.handleWebAccessSetup(event);
 }
 
 async function refreshAboutAccount() {
-    var userIdEl = document.getElementById('about-user-id');
-    var loginEl = document.getElementById('about-login');
-    var tgIdEl = document.getElementById('about-telegram-id');
-    var unlinked = document.getElementById('link-telegram-unlinked');
-    var linked = document.getElementById('link-telegram-linked');
-    var tgSetup = document.getElementById('tg-web-access-setup');
-    var tgManage = document.getElementById('tg-web-access-manage');
-    var loginSection = document.getElementById('link-telegram-section');
-    if (!userIdEl || !loginEl || !tgIdEl) return;
-
-    if (!platform.isTelegram() && !webAuthToken) {
-        userIdEl.textContent = '—';
-        loginEl.textContent = '—';
-        tgIdEl.textContent = '—';
-        if (loginSection) loginSection.style.display = 'none';
-        if (unlinked && linked) { unlinked.style.display = 'block'; linked.style.display = 'none'; }
-        updateProfileCard(null, null);
-        return;
-    }
-
-    try {
-        var r = await apiFetch('/api/user/link-status', { method: 'GET' });
-        var data = await r.json();
-
-        if (data.success) {
-            userIdEl.textContent = data.user_id || '—';
-            loginEl.textContent = data.username || '—';
-            tgIdEl.textContent = data.telegram_id || '—';
-            updateProfileCard(data.user_id, data.username);
-            if (data.telegram_linked) {
-                if (!setProfileAvatarFromInitData()) loadProfileAvatar();
-            }
-
-            // 1. Блоки "Настроить / Изменить веб-доступ" (для Mini App)
-            if (tgSetup && tgManage) {
-                if (data.web_access_enabled) {
-                    tgSetup.style.display = 'none';
-                    tgManage.style.display = 'block';
-                } else {
-                    tgSetup.style.display = 'block';
-                    tgManage.style.display = 'none';
-                }
-            }
-
-            if (!platform.isTelegram() || webAuthToken) {
-                if (loginSection) loginSection.style.display = 'block';
-                if (unlinked && linked) {
-                    if (data.telegram_linked) {
-                        unlinked.style.display = 'none';
-                        linked.style.display = 'block';
-                    } else {
-                        unlinked.style.display = 'block';
-                        linked.style.display = 'none';
-                    }
-                }
-            } else {
-                if (loginSection) loginSection.style.display = 'none';
-            }
-        } else {
-            if (platform.isTelegram()) {
-                var u = platform.getTgUser();
-                var tid = (u && u.id != null) ? String(u.id) : '—';
-                userIdEl.textContent = '—';
-                loginEl.textContent = tid;
-                tgIdEl.textContent = tid;
-                updateProfileCard(null, tid);
-            } else {
-                updateProfileCard(null, null);
-            }
-            if (loginSection) loginSection.style.display = 'none';
-        }
-    } catch (e) {
-        console.error('refreshAboutAccount error:', e);
-        if (platform.isTelegram()) {
-            var u = platform.getTgUser();
-            var tid = (u && u.id != null) ? String(u.id) : '—';
-            userIdEl.textContent = '—';
-            loginEl.textContent = tid;
-            tgIdEl.textContent = tid;
-            updateProfileCard(null, tid);
-        } else {
-            updateProfileCard(null, null);
-        }
-    }
+    return authAccountFeature.refreshAboutAccount();
 }
 
 async function handleLinkTelegram(event) {
-    if (event) event.preventDefault();
-    if (platform.isTelegram() || !webAuthToken) return;
-    var btn = document.getElementById('link-telegram-btn');
-    var originalText = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = 'Переход...'; }
-    try {
-        var r = await apiFetch('/api/user/link-telegram/start', { method: 'POST' });
-        var data = await r.json();
-        if (data.success && data.link) {
-            window.location.href = data.link;
-            return;
-        }
-        showFormMessage('account-form-message', 'error', data.error || 'Ошибка привязки');
-    } catch (e) {
-        showFormMessage('account-form-message', 'error', 'Ошибка сети');
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = originalText; }
-    }
+    return authAccountFeature.handleLinkTelegram(event);
 }
 
 async function handleChangeLogin(event) {
-    event.preventDefault();
-    if (!platform.isTelegram() && !webAuthToken) return;
-    var form = document.getElementById('form-change-login');
-    var btn = form && form.querySelector('button[type="submit"]');
-    var current = document.getElementById('change-login-current');
-    var newLogin = document.getElementById('change-login-new');
-    if (!current || !newLogin) return;
-    var cur = (current.value || '').trim();
-    var neu = (newLogin.value || '').trim().toLowerCase();
-    if (!cur) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
-    if (neu.length < 3) { showFormMessage('account-form-message', 'error', 'Логин слишком короткий (минимум 3 символа)'); return; }
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    try {
-        var r = await apiFetch('/api/user/change-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ current_password: cur, new_login: neu })
-        });
-        var data = await r.json();
-        if (data.success) {
-            current.value = '';
-            newLogin.value = '';
-            closeModal('change-login-modal');
-            refreshAboutAccount();
-            showFormMessage('account-form-message', 'success', data.message || 'Логин изменён');
-        } else {
-            showFormMessage('account-form-message', 'error', data.error || 'Ошибка смены логина');
-        }
-    } catch (e) {
-        showFormMessage('account-form-message', 'error', 'Ошибка сети');
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Сменить логин'; }
-    }
+    return authAccountFeature.handleChangeLogin(event);
 }
 
 async function handleChangePassword(event) {
-    event.preventDefault();
-    if (!platform.isTelegram() && !webAuthToken) return;
-    var form = document.getElementById('form-change-password');
-    var btn = form && form.querySelector('button[type="submit"]');
-    var current = document.getElementById('change-pw-current');
-    var newPw = document.getElementById('change-pw-new');
-    var confirm = document.getElementById('change-pw-confirm');
-    if (!current || !newPw || !confirm) return;
-    var cur = (current.value || '').trim();
-    var neu = (newPw.value || '').trim();
-    var conf = (confirm.value || '').trim();
-    if (!cur) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
-    if (neu.length < 8) { showFormMessage('account-form-message', 'error', 'Новый пароль: минимум 8 символов, нужны буква и цифра'); return; }
-    if (neu !== conf) { showFormMessage('account-form-message', 'error', 'Пароли не совпадают'); return; }
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    try {
-        var r = await apiFetch('/api/user/change-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ current_password: cur, new_password: neu })
-        });
-        var data = await r.json();
-        if (data.success) {
-            current.value = '';
-            newPw.value = '';
-            confirm.value = '';
-            closeModal('change-password-modal');
-            showFormMessage('account-form-message', 'success', data.message || 'Пароль изменён');
-        } else {
-            showFormMessage('account-form-message', 'error', data.error || 'Ошибка смены пароля');
-        }
-    } catch (e) {
-        showFormMessage('account-form-message', 'error', 'Ошибка сети');
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Сменить пароль'; }
-    }
+    return authAccountFeature.handleChangePassword(event);
 }
 
 async function handleUnlinkTelegram(event) {
-    event.preventDefault();
-    if (!platform.isTelegram() && !webAuthToken) return;
-    var form = document.getElementById('form-unlink-telegram');
-    var btn = form && form.querySelector('button[type="submit"]');
-    var password = document.getElementById('unlink-telegram-password');
-    if (!password) return;
-    var pwd = (password.value || '').trim();
-    if (!pwd) { showFormMessage('account-form-message', 'error', 'Введите текущий пароль'); return; }
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    try {
-        var r = await apiFetch('/api/user/unlink-telegram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ current_password: pwd })
-        });
-        var data = await r.json();
-        if (data.success) {
-            password.value = '';
-            closeModal('unlink-telegram-modal');
-            refreshAboutAccount();
-            showFormMessage('account-form-message', 'success', data.message || 'Telegram успешно отвязан');
-        } else {
-            showFormMessage('account-form-message', 'error', data.error || 'Ошибка отвязки Telegram');
-        }
-    } catch (e) {
-        showFormMessage('account-form-message', 'error', 'Ошибка сети');
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Отвязать'; }
-    }
+    return authAccountFeature.handleUnlinkTelegram(event);
 }
 
 // Загрузка статистики подписок
 
-// Глобальные переменные для рассылки
-let broadcastSelectedUsers = []; // Массив выбранных user_id
-let broadcastUserSearchTimeout = null;
-let broadcastSendMode = 'all'; // 'all' | 'selected'
-let broadcastCurrentQuery = '';
-let broadcastCurrentResults = []; // Последняя выдача API (объекты users)
-let broadcastTotalUsers = 0; // Общее число пользователей из статистики
+// Страница рассылки (админ)
+async function loadBroadcastPage() { return adminBroadcastFeature.loadBroadcastPage(); }
+function setBroadcastMode(mode) { return adminBroadcastFeature.setBroadcastMode(mode); }
+function renderBroadcastUserResults() { return adminBroadcastFeature.renderBroadcastUserResults(); }
+async function searchUsersForBroadcast() { return adminBroadcastFeature.searchUsersForBroadcast(); }
+function toggleUserForBroadcast(userId) { return adminBroadcastFeature.toggleUserForBroadcast(userId); }
+function clearUserSelection() { return adminBroadcastFeature.clearUserSelection(); }
+function updateSelectedCount() { return adminBroadcastFeature.updateSelectedCount(); }
+function updateBroadcastRecipientsCount() { return adminBroadcastFeature.updateBroadcastRecipientsCount(); }
+function updateSendButtonState() { return adminBroadcastFeature.updateSendButtonState(); }
+function updateSelectedChips() { return adminBroadcastFeature.updateSelectedChips(); }
+function removeUserFromSelection(userId) { return adminBroadcastFeature.removeUserFromSelection(userId); }
+function selectAllBroadcastResults() { return adminBroadcastFeature.selectAllBroadcastResults(); }
+function highlightMatchRaw(text, queryLower) { return adminBroadcastFeature.highlightMatchRaw(text, queryLower); }
+async function sendBroadcast() { return adminBroadcastFeature.sendBroadcast(); }
 
-// Загрузка страницы рассылки
-async function loadBroadcastPage() {
-    const loadingEl = document.getElementById('admin-broadcast-loading');
-    const errorEl = document.getElementById('admin-broadcast-error');
-    const contentEl = document.getElementById('admin-broadcast-content');
-    const recipientsCountEl = document.getElementById('broadcast-recipients-count');
-    const resultEl = document.getElementById('broadcast-result');
-    
-    // Скрываем ошибки и результаты
-    if (errorEl) errorEl.style.display = 'none';
-    if (resultEl) resultEl.style.display = 'none';
-    
-    // Показываем загрузку
-    if (loadingEl) loadingEl.style.display = 'flex';
-    const loadingTextEl = document.getElementById('broadcast-loading-text');
-    if (loadingTextEl) loadingTextEl.textContent = 'Загрузка данных...';
-    if (contentEl) contentEl.style.display = 'none';
-    
-    try {
-        // Получаем статистику для определения количества пользователей
-        const statsResponse = await apiFetch('/api/admin/stats', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!statsResponse.ok) {
-            throw new Error('Ошибка загрузки данных');
-        }
-        
-        const statsData = await statsResponse.json();
-        // Структура ответа: stats.users.total (как в loadAdminStats)
-        const totalUsers = statsData.stats?.users?.total || 0;
-        broadcastTotalUsers = totalUsers;
-        
-        // Сбрасываем выбор пользователей при загрузке страницы
-        broadcastSelectedUsers = [];
-        broadcastCurrentQuery = '';
-        broadcastCurrentResults = [];
-        
-        // Инициализируем режим отправки
-        const modeAll = document.getElementById('broadcast-mode-all');
-        const modeSelected = document.getElementById('broadcast-mode-selected');
-        if (modeAll && modeSelected) {
-            modeAll.onchange = () => setBroadcastMode('all');
-            modeSelected.onchange = () => setBroadcastMode('selected');
-            modeAll.checked = true;
-            modeSelected.checked = false;
-        }
-        setBroadcastMode('all');
-        
-        // Показываем количество получателей (исключая админов, но показываем общее количество)
-        recipientsCountEl.textContent = totalUsers;
-        
-        // Скрываем загрузку и показываем контент
-        loadingEl.style.display = 'none';
-        contentEl.style.display = 'block';
-        
-    } catch (error) {
-        console.error('Ошибка загрузки страницы рассылки:', error);
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
-        document.getElementById('broadcast-error-text').textContent = error.message || 'Ошибка загрузки данных';
-    }
-}
-
-// Установка режима отправки (всем / выбранным)
-function setBroadcastMode(mode) {
-    broadcastSendMode = mode;
-    const selectionDiv = document.getElementById('broadcast-user-selection');
-    const hintEl = document.getElementById('broadcast-mode-hint');
-    const searchInput = document.getElementById('broadcast-user-search');
-    
-    if (mode === 'selected') {
-        if (selectionDiv) selectionDiv.style.display = 'block';
-        if (hintEl) hintEl.textContent = 'Отправка только выбранным пользователям';
-        // В режиме выбранных по умолчанию показываем пустой state до ввода поиска
-        broadcastCurrentQuery = (searchInput?.value || '').trim();
-        renderBroadcastUserResults();
-    } else {
-        if (selectionDiv) selectionDiv.style.display = 'none';
-        broadcastSelectedUsers = [];
-        broadcastCurrentQuery = '';
-        broadcastCurrentResults = [];
-        if (searchInput) searchInput.value = '';
-        if (hintEl) hintEl.textContent = 'Отправка всем пользователям';
-    }
-    
-    updateSelectedCount();
-    updateBroadcastRecipientsCount();
-    updateSendButtonState();
-}
-
-function renderBroadcastUserResults() {
-    const listEl = document.getElementById('broadcast-users-list');
-    if (!listEl) return;
-    
-    const query = (broadcastCurrentQuery || '').trim();
-    if (!query) {
-        listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Введите ID для поиска</div>';
-        return;
-    }
-    
-    // Фильтруем: выбранные показываем только в чипах
-    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
-    if (usersToShow.length === 0) {
-        listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Нет результатов</div>';
-        return;
-    }
-    
-    listEl.innerHTML = '';
-    const qLower = query.toLowerCase();
-    
-    usersToShow.forEach(user => {
-        const userCard = document.createElement('div');
-        userCard.className = 'broadcast-user-card';
-        
-        userCard.onclick = () => toggleUserForBroadcast(user.user_id);
-        
-        // В этой модели чекбокс можно убрать, но оставляем как визуальный affordance (всегда unchecked)
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = false;
-        checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
-        checkbox.onclick = (e) => {
-            e.stopPropagation();
-            toggleUserForBroadcast(user.user_id);
-        };
-        
-        const userInfo = document.createElement('div');
-        userInfo.style.cssText = 'flex: 1;';
-        
-        const idLine = highlightMatchRaw(`ID: ${String(user.user_id)}`, qLower);
-        const subsText = `Подписок: ${user.subscriptions_count || 0}`;
-        userInfo.innerHTML = `
-            <div class="broadcast-user-id">${idLine}</div>
-            <div class="broadcast-user-subs">${escapeHtml(subsText)}</div>
-        `;
-        
-        userCard.appendChild(checkbox);
-        userCard.appendChild(userInfo);
-        listEl.appendChild(userCard);
-    });
-}
-
-// Поиск пользователей для рассылки
-async function searchUsersForBroadcast() {
-    clearTimeout(broadcastUserSearchTimeout);
-    const searchInput = document.getElementById('broadcast-user-search');
-    const search = (searchInput?.value || '').trim();
-    const listEl = document.getElementById('broadcast-users-list');
-    
-    broadcastCurrentQuery = search;
-    
-    // Пустой поиск — не дергаем API, показываем подсказку
-    if (!search) {
-        broadcastCurrentResults = [];
-        renderBroadcastUserResults();
-        return;
-    }
-    
-    broadcastUserSearchTimeout = setTimeout(async () => {
-        try {
-            listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Поиск...</div>';
-            
-            const response = await apiFetch('/api/admin/users', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    page: 1,
-                    limit: 50, // Ограничиваем до 50 результатов
-                    search
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Ошибка поиска пользователей');
-            }
-            
-            const data = await response.json();
-            
-            if (!data.users || data.users.length === 0) {
-                listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Пользователи не найдены</div>';
-                return;
-            }
-            
-            broadcastCurrentResults = data.users;
-            renderBroadcastUserResults();
-            
-        } catch (error) {
-            console.error('Ошибка поиска пользователей:', error);
-            listEl.innerHTML = '<div class="error-text" style="padding: 16px;">Ошибка загрузки пользователей</div>';
-        }
-    }, 500);
-}
-
-// Переключение выбора пользователя
-function toggleUserForBroadcast(userId) {
-    const index = broadcastSelectedUsers.indexOf(userId);
-    if (index === -1) {
-        broadcastSelectedUsers.push(userId);
-    } else {
-        // В текущей UX модели повторный клик в выдаче не должен случаться, т.к. выбранный исчезает.
-        broadcastSelectedUsers.splice(index, 1);
-    }
-    
-    updateSelectedCount();
-    updateBroadcastRecipientsCount();
-    updateSendButtonState();
-    renderBroadcastUserResults();
-}
-
-// Очистить выбор пользователей
-function clearUserSelection() {
-    broadcastSelectedUsers = [];
-    updateSelectedCount();
-    updateBroadcastRecipientsCount();
-    updateSendButtonState();
-    renderBroadcastUserResults();
-}
-
-// Обновить счетчик выбранных пользователей
-function updateSelectedCount() {
-    const countEl = document.getElementById('broadcast-selected-count');
-    if (countEl) {
-        countEl.textContent = broadcastSelectedUsers.length;
-    }
-    updateSelectedChips();
-}
-
-// Обновить счетчик получателей рассылки
-function updateBroadcastRecipientsCount() {
-    const recipientsCountEl = document.getElementById('broadcast-recipients-count');
-    if (!recipientsCountEl) return;
-    
-    if (broadcastSendMode === 'selected') {
-        recipientsCountEl.textContent = broadcastSelectedUsers.length;
-    } else {
-        recipientsCountEl.textContent = broadcastTotalUsers || '-';
-    }
-}
-
-// Обновить состояние кнопки отправки
-function updateSendButtonState() {
-    const sendBtn = document.getElementById('broadcast-send-btn');
-    if (!sendBtn) return;
-    
-    if (broadcastSendMode === 'selected' && broadcastSelectedUsers.length === 0) {
-        sendBtn.disabled = true;
-        sendBtn.textContent = 'Отправить рассылку';
-    } else {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Отправить рассылку';
-    }
-}
-
-// Плашки выбранных пользователей
-function updateSelectedChips() {
-    const chipsEl = document.getElementById('broadcast-selected-chips');
-    if (!chipsEl) return;
-    
-    chipsEl.innerHTML = '';
-    if (broadcastSelectedUsers.length === 0) {
-        chipsEl.style.display = 'none';
-        return;
-    }
-    chipsEl.style.display = 'flex';
-    
-    broadcastSelectedUsers.forEach((userId) => {
-        const chip = document.createElement('div');
-        chip.className = 'chip';
-        chip.innerHTML = `
-            <span>${escapeHtml(userId)}</span>
-            <button aria-label="Удалить" onclick="removeUserFromSelection('${userId}')">×</button>
-        `;
-        chipsEl.appendChild(chip);
-    });
-}
-
-function removeUserFromSelection(userId) {
-    const idx = broadcastSelectedUsers.indexOf(userId);
-    if (idx > -1) {
-        broadcastSelectedUsers.splice(idx, 1);
-        updateSelectedCount();
-        updateBroadcastRecipientsCount();
-        updateSendButtonState();
-        renderBroadcastUserResults();
-    }
-}
-
-// Выбрать все в текущей выдаче
-function selectAllBroadcastResults() {
-    const usersToShow = (broadcastCurrentResults || []).filter(u => !broadcastSelectedUsers.includes(u.user_id));
-    if (!usersToShow.length) return;
-    usersToShow.forEach((u) => broadcastSelectedUsers.push(u.user_id));
-    updateSelectedCount();
-    updateBroadcastRecipientsCount();
-    updateSendButtonState();
-    renderBroadcastUserResults();
-}
-
-// Подсветка совпадений для сырого текста
-function highlightMatchRaw(text, queryLower) {
-    if (!queryLower) return escapeHtml(text);
-    const lower = text.toLowerCase();
-    const idx = lower.indexOf(queryLower);
-    if (idx === -1) return escapeHtml(text);
-    const before = text.slice(0, idx);
-    const match = text.slice(idx, idx + queryLower.length);
-    const after = text.slice(idx + queryLower.length);
-    return `${escapeHtml(before)}<span class="highlight-match">${escapeHtml(match)}</span>${escapeHtml(after)}`;
-}
-
-// Отправка рассылки
-async function sendBroadcast() {
-    const messageEl = document.getElementById('broadcast-message');
-    const sendBtn = document.getElementById('broadcast-send-btn');
-    const loadingEl = document.getElementById('admin-broadcast-loading');
-    const errorEl = document.getElementById('admin-broadcast-error');
-    const resultEl = document.getElementById('broadcast-result');
-    const contentEl = document.getElementById('admin-broadcast-content');
-    
-    const message = messageEl.value.trim();
-    
-    if (!message) {
-        platform.showAlert('Пожалуйста, введите текст сообщения');
-        return;
-    }
-    var isSelectMode = broadcastSendMode === 'selected';
-    if (isSelectMode && broadcastSelectedUsers.length === 0) {
-        platform.showAlert('Пожалуйста, выберите хотя бы одного пользователя');
-        return;
-    }
-    var confirmText = isSelectMode
-        ? 'Вы уверены, что хотите отправить рассылку ' + broadcastSelectedUsers.length + ' выбранным пользователям?'
-        : 'Вы уверены, что хотите отправить рассылку всем пользователям?';
-    var confirmed = await appShowConfirm(confirmText, { title: 'Рассылка' });
-    if (!confirmed) return;
-    
-    // Блокируем кнопку и показываем загрузку
-    sendBtn.disabled = true;
-    sendBtn.textContent = 'Отправка...';
-    loadingEl.style.display = 'flex';
-    document.getElementById('broadcast-loading-text').textContent = 'Отправка рассылки...';
-    errorEl.style.display = 'none';
-    resultEl.style.display = 'none';
-    contentEl.style.display = 'none';
-    
-    try {
-        // Формируем тело запроса
-        const requestBody = {
-            message: message
-        };
-        
-        // Если выбран режим выбора пользователей - добавляем user_ids
-        if (isSelectMode && broadcastSelectedUsers.length > 0) {
-            requestBody.user_ids = broadcastSelectedUsers;
-        }
-        
-        const response = await apiFetch('/api/admin/broadcast', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ошибка отправки рассылки');
-        }
-        
-        const data = await response.json();
-        
-        // Показываем результат
-        document.getElementById('broadcast-sent-count').textContent = data.sent || 0;
-        document.getElementById('broadcast-failed-count').textContent = data.failed || 0;
-        document.getElementById('broadcast-total-count').textContent = data.total || 0;
-        
-        resultEl.style.display = 'block';
-        loadingEl.style.display = 'none';
-        contentEl.style.display = 'block';
-        
-        // Очищаем поле сообщения
-        messageEl.value = '';
-        
-        var resultMsg = 'Рассылка завершена!\n\nОтправлено: ' + data.sent + '\nОшибок: ' + data.failed + '\nВсего: ' + data.total;
-        platform.showAlert(resultMsg);
-        
-    } catch (error) {
-        console.error('Ошибка отправки рассылки:', error);
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
-        document.getElementById('broadcast-error-text').textContent = (error && error.message) || 'Ошибка отправки рассылки';
-        contentEl.style.display = 'block';
-    } finally {
-        // Разблокируем кнопку
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Отправить рассылку';
-    }
-}
-
-// Глобальные переменные для инструкций
-let currentInstructionPlatform = null;
-let currentInstructionStep = 0;
-let currentInstructionSteps = [];
-
-// Структура пошаговых инструкций
-const instructionSteps = {
-    android: {
-        title: 'Android (v2RayTun, Happ)',
-        steps: [
-            {
-                title: 'Шаг 1: Выберите приложение',
-                content: `
-                    <p>Выберите одно из приложений для Android:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" class="instruction-link">v2RayTun из Google Play</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/search?q=happ+plus&c=apps" target="_blank" class="instruction-link">Happ из Google Play</a></li>
-                    </ul>
-                    <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
-                `
-            },
-            {
-                title: 'Шаг 2: Получите ссылку на подписку',
-                content: `
-                    <p>В мини-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
-                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
-                    </ol>
-                    <p>Ссылка будет скопирована в буфер обмена.</p>
-                `
-            },
-            {
-                title: 'Шаг 3: Добавьте подписку в приложение',
-                content: `
-                    <p>В выбранном VPN-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
-                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
-                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 4: Подключитесь к VPN',
-                content: `
-                    <p>После импорта подписки:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Выберите добавленный профиль</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку подключения</li>
-                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Советы и рекомендации',
-                content: `
-                    <p><strong>Если VPN не подключается:</strong></p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Проверьте подключение к интернету</li>
-                        <li style="margin-bottom: 8px;">Перезапустите VPN-приложение</li>
-                        <li style="margin-bottom: 8px;">Перезагрузите устройство</li>
-                        <li style="margin-bottom: 8px;">Скопируйте ссылку заново</li>
-                    </ul>
-                    <p><strong>Важно:</strong> Используйте только одну VPN-программу одновременно. Не делитесь своей ссылкой с другими пользователями.</p>
-                `
-            }
-        ]
-    },
-    ios: {
-        title: 'iOS (v2RayTun, Happ)',
-        steps: [
-            {
-                title: 'Шаг 1: Выберите приложение',
-                content: `
-                    <p>Выберите одно из приложений для iPhone:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank" class="instruction-link">v2RayTun из App Store</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973" target="_blank" class="instruction-link">Happ из App Store</a></li>
-                    </ul>
-                    <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
-                `
-            },
-            {
-                title: 'Шаг 2: Получите ссылку на подписку',
-                content: `
-                    <p>В мини-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
-                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 3: Откройте VPN-приложение',
-                content: `
-                    <p>Откройте установленное VPN-приложение на вашем iPhone.</p>
-                `
-            },
-            {
-                title: 'Шаг 4: Добавьте подписку',
-                content: `
-                    <p>В VPN-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
-                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
-                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 5: Подключитесь',
-                content: `
-                    <p>После импорта:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Выберите добавленный профиль</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку подключения</li>
-                        <li style="margin-bottom: 8px;">Разрешите создание VPN-подключения при запросе системы</li>
-                    </ol>
-                    <p><strong>Важно:</strong> Не делитесь своей ссылкой с другими пользователями.</p>
-                `
-            }
-        ]
-    },
-    windows: {
-        title: 'Windows (v2RayTun, Happ)',
-        steps: [
-            {
-                title: 'Шаг 1: Скачайте приложение',
-                content: `
-                    <p>Выберите и скачайте одно из приложений:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank" class="instruction-link">v2RayTun для Windows</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" target="_blank" class="instruction-link">Happ для Windows</a></li>
-                    </ul>
-                    <p>Установите приложение на ваш компьютер.</p>
-                `
-            },
-            {
-                title: 'Шаг 2: Получите ссылку на подписку',
-                content: `
-                    <p>В мини-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
-                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 3: Добавьте подписку в приложение',
-                content: `
-                    <p>В VPN-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
-                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
-                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 4: Включите VPN',
-                content: `
-                    <p>После импорта:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Найдите добавленный профиль в списке</li>
-                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
-                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
-                    </ol>
-                    <p><strong>Важно:</strong> Используйте только одну VPN-программу одновременно.</p>
-                `
-            }
-        ]
-    },
-    macos: {
-        title: 'macOS (v2RayTun, Happ)',
-        steps: [
-            {
-                title: 'Шаг 1: Скачайте приложение',
-                content: `
-                    <p>Выберите и скачайте одно из приложений:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank" class="instruction-link">v2RayTun для Mac</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?platform=mac" target="_blank" class="instruction-link">Happ для Mac</a></li>
-                    </ul>
-                    <p>Установите приложение на ваш Mac.</p>
-                `
-            },
-            {
-                title: 'Шаг 2: Получите ссылку на подписку',
-                content: `
-                    <p>В мини-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
-                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 3: Добавьте подписку',
-                content: `
-                    <p>В VPN-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
-                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
-                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 4: Включите VPN',
-                content: `
-                    <p>После импорта:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Найдите добавленный профиль</li>
-                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
-                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
-                    </ol>
-                    <p><strong>Важно:</strong> Используйте только одну VPN-программу одновременно.</p>
-                `
-            }
-        ]
-    },
-    linux: {
-        title: 'Linux (Happ)',
-        steps: [
-            {
-                title: 'Шаг 1: Скачайте Happ',
-                content: `
-                    <p><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/Happ.linux.x64.deb" target="_blank" class="instruction-link">Скачайте Happ для Linux</a> и установите на ваш компьютер.</p>
-                `
-            },
-            {
-                title: 'Шаг 2: Получите ссылку на подписку',
-                content: `
-                    <p>В мини-приложении:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
-                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 3: Добавьте подписку',
-                content: `
-                    <p>В Happ:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
-                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
-                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 4: Включите VPN',
-                content: `
-                    <p>После импорта:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Найдите добавленный профиль</li>
-                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
-                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
-                    </ol>
-                `
-            }
-        ]
-    },
-    tv: {
-        title: 'Android TV (v2RayTun, Happ)',
-        steps: [
-            {
-                title: 'Шаг 1: Выберите приложение',
-                content: `
-                    <p>Выберите одно из приложений для Android TV:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" class="instruction-link">v2RayTun для Android TV</a></li>
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank" class="instruction-link">Happ для Android TV</a></li>
-                    </ul>
-                `
-            },
-            {
-                title: 'Шаг 2: Получите ссылку на подписку',
-                content: `
-                    <p>В мини-приложении на вашем телефоне:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите на вкладку "Подписки"</li>
-                        <li style="margin-bottom: 8px;">Выберите вашу подписку</li>
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "Копировать ссылку"</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 3: Добавьте подписку',
-                content: `
-                    <p>В VPN-приложении на Android TV:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Нажмите кнопку "+" (добавить)</li>
-                        <li style="margin-bottom: 8px;">Выберите "Добавить из буфера обмена"</li>
-                        <li style="margin-bottom: 8px;">Подписка будет автоматически импортирована</li>
-                    </ol>
-                `
-            },
-            {
-                title: 'Шаг 4: Включите VPN',
-                content: `
-                    <p>После импорта:</p>
-                    <ol style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Выберите добавленный профиль</li>
-                        <li style="margin-bottom: 8px;">Нажмите на переключатель или кнопку "Включить"</li>
-                        <li style="margin-bottom: 8px;">Дождитесь установления соединения</li>
-                    </ol>
-                `
-            }
-        ]
-    },
-    faq: {
-        title: 'FAQ - Частые вопросы',
-        steps: [
-            {
-                title: 'VPN не подключается',
-                content: `
-                    <p>Если VPN не подключается, попробуйте следующее:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Проверьте подключение к интернету</li>
-                        <li style="margin-bottom: 8px;">Перезапустите VPN-приложение</li>
-                        <li style="margin-bottom: 8px;">Перезагрузите устройство</li>
-                        <li style="margin-bottom: 8px;">Скопируйте ссылку на подписку заново</li>
-                        <li style="margin-bottom: 8px;">Убедитесь, что никому не передавали свою ссылку</li>
-                        <li style="margin-bottom: 8px;">Отключите другие VPN-приложения</li>
-                    </ul>
-                `
-            },
-            {
-                title: 'Не импортируется ссылка',
-                content: `
-                    <p>Если ссылка не импортируется:</p>
-                    <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">Скопируйте ссылку полностью, от начала до конца</li>
-                        <li style="margin-bottom: 8px;">Убедитесь, что ссылка начинается с "https://"</li>
-                        <li style="margin-bottom: 8px;">Обновите VPN-приложение до последней версии</li>
-                        <li style="margin-bottom: 8px;">Попробуйте скопировать ссылку еще раз</li>
-                    </ul>
-                `
-            },
-            {
-                title: 'Мультисерверность',
-                content: `
-                    <p>Ваша подписка включает все доступные серверы сразу. Вы можете переключаться между серверами в настройках VPN-приложения.</p>
-                `
-            },
-            {
-                title: 'Нужна помощь?',
-                content: `
-                    <p>Если у вас возникли проблемы или вопросы, обратитесь в поддержку через Telegram.</p>
-                    <p style="margin-top: 14px;"><a href="https://t.me/DarallaSupport" target="_blank" rel="noopener noreferrer" class="instruction-link">Написать в поддержку @DarallaSupport</a></p>
-                `
-            }
-        ]
-    }
-};
-
-// Функции для работы с модальным окном инструкций
-function showInstructionModal(platform) {
-    currentInstructionPlatform = platform;
-    currentInstructionStep = 0;
-    
-    const instruction = instructionSteps[platform];
-    if (!instruction) return;
-    
-    currentInstructionSteps = instruction.steps;
-    
-    document.getElementById('instruction-modal-title').textContent = instruction.title;
-    document.getElementById('instruction-modal').style.display = 'flex';
-    
-    renderInstructionStep();
-}
-
-function renderInstructionStep() {
-    const container = document.getElementById('instruction-steps-container');
-    const step = currentInstructionSteps[currentInstructionStep];
-    
-    if (!step) return;
-    
-    container.innerHTML = `
-        <div class="instruction-step-box">
-            <h3 class="instruction-step-title">${step.title}</h3>
-            <div class="instruction-step-body">
-                ${step.content}
-            </div>
-        </div>
-    `;
-    
-    // Обновляем индикатор шага
-    document.getElementById('instruction-step-indicator').textContent = 
-        `Шаг ${currentInstructionStep + 1} из ${currentInstructionSteps.length}`;
-    
-    // Управление кнопками
-    const prevBtn = document.getElementById('instruction-prev-btn');
-    const nextBtn = document.getElementById('instruction-next-btn');
-    const closeBtn = document.getElementById('instruction-close-btn');
-    
-    prevBtn.style.display = currentInstructionStep > 0 ? 'block' : 'none';
-    
-    if (currentInstructionStep === currentInstructionSteps.length - 1) {
-        nextBtn.style.display = 'none';
-        closeBtn.style.display = 'block';
-    } else {
-        nextBtn.style.display = 'block';
-        closeBtn.style.display = 'none';
-    }
-}
-
-function nextInstructionStep() {
-    if (currentInstructionStep < currentInstructionSteps.length - 1) {
-        currentInstructionStep++;
-        renderInstructionStep();
-    }
-}
-
-function prevInstructionStep() {
-    if (currentInstructionStep > 0) {
-        currentInstructionStep--;
-        renderInstructionStep();
-    }
-}
-
-function closeInstructionModal() {
-    document.getElementById('instruction-modal').style.display = 'none';
-    currentInstructionPlatform = null;
-    currentInstructionStep = 0;
-    currentInstructionSteps = [];
-}
+// Блок инструкций вынесен в features/instructions/setup.js
 
 // --- Нижняя навигация: индикатор с CSS-переходами и перетаскиванием (одинаково на всех ширинах) ---
-(function () {
-    const navIndicatorState = {
-        currentX: 0,
-        currentWidth: 56,
-        currentScale: 1,
-        targetX: 0,
-        targetWidth: 56,
-        targetScale: 1,
-        isDragging: false
-    };
-    const DRAG_SCALE = 1.28;
-    const DRAG_PILL_WIDTH = 80;
-    const DRAG_PILL_HEIGHT = 56;
-
-    function getNavIconCenterX(item, navRect) {
-        const icon = item && item.querySelector('svg');
-        const rect = icon ? icon.getBoundingClientRect() : item.getBoundingClientRect();
-        return (rect.left + rect.right) / 2 - navRect.left;
-    }
-
-    function setNavIndicatorTargetFromIndex(index) {
-        const nav = document.querySelector('.bottom-nav');
-        const items = document.querySelectorAll('.nav-item');
-        const indicator = document.querySelector('.nav-glass-indicator');
-        if (!nav || !items[index] || !indicator) return;
-        const navRect = nav.getBoundingClientRect();
-        const item = items[index];
-        const itemRect = item.getBoundingClientRect();
-        const icon = item.querySelector('svg');
-        const iconRect = icon ? icon.getBoundingClientRect() : itemRect;
-        const iconCenterX = (iconRect.left + iconRect.right) / 2 - navRect.left;
-        const w = Math.max(56, itemRect.width * 0.8);
-        navIndicatorState.targetWidth = w;
-        let x = iconCenterX - w / 2;
-        if (!navIndicatorState.isDragging) {
-            x = Math.max(0, Math.min(navRect.width - w, x));
-        }
-        navIndicatorState.targetX = x;
-        window.currentNavIndex = index;
-        navIndicatorState.currentX = navIndicatorState.targetX;
-        navIndicatorState.currentWidth = navIndicatorState.targetWidth;
-        navIndicatorState.currentScale = navIndicatorState.targetScale;
-        applyNavIndicatorPosition();
-    }
-
-    function applyNavIndicatorPosition() {
-        const indicator = document.querySelector('.nav-glass-indicator');
-        if (!indicator) return;
-        const s = navIndicatorState;
-        indicator.style.width = s.currentWidth + 'px';
-        if (s.isDragging) {
-            indicator.style.height = DRAG_PILL_HEIGHT + 'px';
-        } else {
-            indicator.style.height = '';
-        }
-        indicator.style.transform =
-            'translateX(' + (s.currentX | 0) + 'px) translateY(-50%) scale(' + s.currentScale.toFixed(3) + ')';
-        updateNavIndicatorOverItem();
-        var nav = document.querySelector('.bottom-nav');
-        if (nav) {
-            // Цвет выделения на иконке показываем только когда индикатор НЕ в режиме drag
-            // и практически «сдулся» (scale близок к 1)
-            if (!s.isDragging && s.currentScale < 1.08) {
-                nav.classList.add('nav-indicator-has-color');
-            } else {
-                nav.classList.remove('nav-indicator-has-color');
-            }
-        }
-    }
-
-    function updateNavIndicatorOverItem() {
-        const nav = document.querySelector('.bottom-nav');
-        const items = document.querySelectorAll('.nav-item');
-        if (!nav || !items.length) return;
-        const navRect = nav.getBoundingClientRect();
-        const s = navIndicatorState;
-        const indicatorCenterX = s.currentX + s.currentWidth / 2;
-        const halfW = s.currentWidth / 2;
-        var bestIdx = -1;
-        var bestDist = 1e9;
-        items.forEach(function (item, i) {
-            var iconCenterX = getNavIconCenterX(item, navRect);
-            var d = Math.abs(iconCenterX - indicatorCenterX);
-            if (d < halfW + 20 && d < bestDist) {
-                bestDist = d;
-                bestIdx = i;
-            }
-        });
-        items.forEach(function (item, i) {
-            if (i === bestIdx) item.classList.add('indicator-over');
-            else item.classList.remove('indicator-over');
-        });
-    }
-
-    function moveNavIndicator(index) {
-        setNavIndicatorTargetFromIndex(index);
-    }
-
-    window.moveNavIndicator = moveNavIndicator;
-
-    window.addEventListener('resize', function () {
-        if (typeof window.currentNavIndex !== 'undefined') {
-            setNavIndicatorTargetFromIndex(window.currentNavIndex);
-        }
-    });
-
-    function initNavIndicator() {
-        const navItems = document.querySelectorAll('.nav-item');
-        const indicator = document.querySelector('.nav-glass-indicator');
-        const nav = document.querySelector('.bottom-nav');
-
-        if (!indicator || !nav || !navItems.length) return;
-
-        indicator.classList.add('nav-indicator-mobile');
-
-        function setInitialPosition() {
-            const activeItem = document.querySelector('.nav-item.active');
-            const idx = activeItem ? Array.from(navItems).indexOf(activeItem) : 0;
-            const i = idx >= 0 ? idx : 0;
-            setNavIndicatorTargetFromIndex(i);
-            navIndicatorState.currentX = navIndicatorState.targetX;
-            navIndicatorState.currentWidth = navIndicatorState.targetWidth;
-            navIndicatorState.currentScale = navIndicatorState.targetScale = 1;
-            applyNavIndicatorPosition();
-        }
-
-        requestAnimationFrame(function () {
-            requestAnimationFrame(setInitialPosition);
-        });
-
-        navItems.forEach(function (item, index) {
-            item.addEventListener('click', function () {
-                moveNavIndicator(index);
-            });
-        });
-
-        function triggerPressEffect() {
-            indicator.classList.add('pressing');
-            setTimeout(function () {
-                indicator.classList.remove('pressing');
-            }, 180);
-        }
-        navItems.forEach(function (item) {
-            item.addEventListener('mousedown', triggerPressEffect);
-            item.addEventListener('touchstart', triggerPressEffect, { passive: true });
-        });
-
-        // Перетаскивание индикатора (круг следует центром за пальцем)
-        let dragStartX = 0;
-        let dragStartCenterX = 0;
-
-        function getPointerX(e) {
-            return e.touches ? e.touches[0].clientX : e.clientX;
-        }
-
-        function onPointerDown(e) {
-            if (e.button !== 0 && !e.touches) return;
-            const nav = document.querySelector('.bottom-nav');
-            if (!nav || nav.style.display === 'none') return;
-            navIndicatorState.isDragging = true;
-            navIndicatorState.lastAction = 'drag';
-            nav.classList.add('bottom-nav--dragging');
-            indicator.classList.add('dragging');
-            dragStartX = getPointerX(e);
-            dragStartCenterX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
-            navIndicatorState.targetScale = DRAG_SCALE;
-            navIndicatorState.targetWidth = DRAG_PILL_WIDTH;
-            navIndicatorState.targetX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
-            navIndicatorState.currentScale = DRAG_SCALE;
-            navIndicatorState.currentWidth = DRAG_PILL_WIDTH;
-            navIndicatorState.currentX = dragStartCenterX - DRAG_PILL_WIDTH / 2;
-            applyNavIndicatorPosition();
-            e.preventDefault();
-        }
-
-        function onPointerMove(e) {
-            if (!navIndicatorState.isDragging) return;
-            var px = getPointerX(e);
-            var delta = px - dragStartX;
-            var centerX = dragStartCenterX + delta;
-            navIndicatorState.targetX = centerX - DRAG_PILL_WIDTH / 2;
-            navIndicatorState.currentX = navIndicatorState.targetX;
-            applyNavIndicatorPosition();
-            e.preventDefault();
-        }
-
-        function onPointerUp() {
-            if (!navIndicatorState.isDragging) return;
-            navIndicatorState.isDragging = false;
-            indicator.classList.remove('dragging');
-            const nav = document.querySelector('.bottom-nav');
-            if (nav) nav.classList.remove('bottom-nav--dragging');
-            const items = document.querySelectorAll('.nav-item');
-            const navRect = nav.getBoundingClientRect();
-            const centerX = navIndicatorState.currentX + navIndicatorState.currentWidth / 2;
-            var bestIdx = 0;
-            var bestDist = 1e9;
-            items.forEach(function (item, i) {
-                var iconCenter = getNavIconCenterX(item, navRect);
-                var d = Math.abs(centerX - iconCenter);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestIdx = i;
-                }
-            });
-            var page = items[bestIdx].getAttribute('data-page');
-            if (page && typeof showPage === 'function') showPage(page);
-            setNavIndicatorTargetFromIndex(bestIdx);
-            navIndicatorState.targetScale = 1;
-            navIndicatorState.currentScale = 1;
-            navIndicatorState.currentX = navIndicatorState.targetX;
-            navIndicatorState.currentWidth = navIndicatorState.targetWidth;
-            applyNavIndicatorPosition();
-        }
-
-        indicator.addEventListener('mousedown', onPointerDown);
-        indicator.addEventListener('touchstart', onPointerDown, { passive: false });
-        document.addEventListener('mousemove', onPointerMove);
-        document.addEventListener('mouseup', onPointerUp);
-        document.addEventListener('touchmove', onPointerMove, { passive: false });
-        document.addEventListener('touchend', onPointerUp);
-        document.addEventListener('touchcancel', onPointerUp);
-    }
-
-    window.initNavIndicator = initNavIndicator;
-})();
+function moveNavIndicator(index) { return navIndicatorFeature.moveNavIndicator(index); }
+function initNavIndicator() { return navIndicatorFeature.initNavIndicator(); }
 
 // === ЦЕНЫ И ЛИМИТ УСТРОЙСТВ (АДМИН) ===
 
-async function loadAdminCommercePage() {
-    var loadingEl = document.getElementById('admin-commerce-loading');
-    var formEl = document.getElementById('admin-commerce-form');
-    var errEl = document.getElementById('admin-commerce-error');
-    var msgEl = document.getElementById('admin-commerce-form-message');
-    if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; msgEl.className = 'form-message'; }
-    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (formEl) formEl.style.display = 'none';
-    try {
-        var res = await apiFetch('/api/admin/commerce', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
-        var data = await res.json();
-        if (!res.ok || !data.success) {
-            throw new Error(data.error || 'Не удалось загрузить настройки');
-        }
-        var pm = document.getElementById('admin-commerce-price-month');
-        var p3 = document.getElementById('admin-commerce-price-3month');
-        var dl = document.getElementById('admin-commerce-device-limit');
-        if (pm) pm.value = String(data.price_month != null ? data.price_month : 150);
-        if (p3) p3.value = String(data.price_3month != null ? data.price_3month : 350);
-        if (dl) dl.value = String(data.default_device_limit != null ? data.default_device_limit : 1);
-    } catch (e) {
-        console.error('loadAdminCommercePage', e);
-        if (errEl) {
-            errEl.textContent = e.message || String(e);
-            errEl.style.display = 'block';
-        }
-    } finally {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (formEl) formEl.style.display = 'block';
-    }
-}
+var adminCommerceFeature = window.DarallaAdminCommerceFeature.create({
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    loadPrices: function () { return loadPrices(); }
+});
 
-async function saveAdminCommerce(event) {
-    event.preventDefault();
-    var pm = parseInt(document.getElementById('admin-commerce-price-month').value, 10);
-    var p3 = parseInt(document.getElementById('admin-commerce-price-3month').value, 10);
-    var dl = parseInt(document.getElementById('admin-commerce-device-limit').value, 10);
-    var msgEl = document.getElementById('admin-commerce-form-message');
-    if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; }
-    if (isNaN(pm) || isNaN(p3) || isNaN(dl)) {
-        if (msgEl) { msgEl.className = 'form-message form-message--error'; msgEl.textContent = 'Введите целые числа'; msgEl.style.display = 'block'; }
-        return;
-    }
-    try {
-        var res = await apiFetch('/api/admin/commerce', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ price_month: pm, price_3month: p3, default_device_limit: dl })
-        });
-        var data = await res.json();
-        if (!res.ok || !data.success) {
-            throw new Error(data.error || 'Ошибка сохранения');
-        }
-        if (msgEl) {
-            msgEl.className = 'form-message form-message--success';
-            msgEl.textContent = 'Сохранено. Цены и лимит применяются для новых оплат и пробного периода.';
-            msgEl.style.display = 'block';
-        }
-        loadPrices();
-    } catch (e) {
-        console.error('saveAdminCommerce', e);
-        if (msgEl) {
-            msgEl.className = 'form-message form-message--error';
-            msgEl.textContent = e.message || String(e);
-            msgEl.style.display = 'block';
-        }
-    }
-}
+async function loadAdminCommercePage() { return adminCommerceFeature.loadAdminCommercePage(); }
+async function saveAdminCommerce(event) { return adminCommerceFeature.saveAdminCommerce(event); }
 
 // === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
 
@@ -7137,659 +3262,46 @@ let currentAdminServers = [];
 let currentSelectedGroupId = null;
 /** Режим только перестановки на экране admin-server-group */
 let adminServerReorderMode = false;
+var adminServersFeature = window.DarallaAdminServersFeature.create({
+    getCurrentAdminGroups: function () { return currentAdminGroups; },
+    setCurrentAdminGroups: function (value) { currentAdminGroups = value; },
+    getCurrentAdminServers: function () { return currentAdminServers; },
+    setCurrentAdminServers: function (value) { currentAdminServers = value; },
+    getCurrentSelectedGroupId: function () { return currentSelectedGroupId; },
+    setCurrentSelectedGroupId: function (value) { currentSelectedGroupId = value; },
+    getAdminServerReorderMode: function () { return adminServerReorderMode; },
+    setAdminServerReorderMode: function (value) { adminServerReorderMode = value; },
+    apiFetch: function (url, options) { return apiFetch(url, options); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
+    showModal: function (modalId) { return showModal(modalId); },
+    closeModal: function (modalId) { return closeModal(modalId); },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    escapeHtml: escapeHtml,
+    platform: platform
+});
 
-// Загрузка страницы управления серверами
-async function loadServerManagement() {
-    const loadingEl = document.getElementById('admin-server-management-loading');
-    const contentEl = document.getElementById('admin-server-management-content');
-    
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (contentEl) contentEl.style.display = 'none';
-
-    try {
-        await loadServerGroups();
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'block';
-    } catch (err) {
-        console.error('Ошибка загрузки управления серверами:', err);
-        if (loadingEl) loadingEl.style.display = 'none';
-        await appShowAlert('Ошибка при загрузке данных: ' + err.message, { title: 'Ошибка', variant: 'error' });
-    }
-}
-
-// Загрузка групп серверов
-async function loadServerGroups() {
-    console.log('Загрузка групп серверов...');
-    const listEl = document.getElementById('admin-server-groups-list');
-    
-    try {
-        const response = await apiFetch('/api/admin/server-groups', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка сети при получении групп');
-        }
-        
-        const result = await response.json();
-        console.log('Результат загрузки групп:', result);
-        if (result.success) {
-            currentAdminGroups = result.groups || [];
-            const stats = result.stats || [];
-            renderServerGroups(currentAdminGroups, stats);
-        } else {
-            throw new Error(result.error || 'Ошибка API');
-        }
-    } catch (err) {
-        console.error('Ошибка в loadServerGroups:', err);
-        if (listEl) {
-            listEl.innerHTML = `<p class="error-text">Ошибка: ${err.message}</p>`;
-        }
-        throw err;
-    }
-}
-
-// Отрисовка списка групп
-function renderServerGroups(groups, stats) {
-    console.log('Отрисовка групп:', groups, stats);
-    const listEl = document.getElementById('admin-server-groups-list');
-    if (!listEl) return;
-    
-    if (!groups || groups.length === 0) {
-        listEl.innerHTML = '<div class="admin-sm-empty"><p class="admin-sm-empty-title">Групп пока нет</p><p class="admin-sm-empty-hint">Создайте первую группу — в неё добавятся серверы для подписок.</p></div>';
-        return;
-    }
-
-    const cards = groups.map(group => {
-        const groupStats = (stats || []).find(s => s.id === group.id) || {};
-        const safeName = escapeHtml(group.name);
-        const subs = groupStats.active_subscriptions || 0;
-        const srv = groupStats.active_servers || 0;
-        return `
-            <div id="group-card-${group.id}" class="admin-user-card group-card" role="button" tabindex="0" data-group-id="${group.id}"
-                onclick="showPage('admin-server-group', { groupId: '${group.id}' })"
-                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('admin-server-group', { groupId: '${group.id}' });}">
-                <div class="card-content-wrapper">
-                    <div class="card-main-info">
-                        <div class="card-title-row">
-                            <span class="card-title">${safeName}</span>
-                            <div class="card-badges">
-                                ${group.is_default ? '<span class="badge-default">По умолчанию</span>' : ''}
-                                ${!group.is_active ? '<span class="badge-inactive">Неактивна</span>' : ''}
-                            </div>
-                        </div>
-                        <div class="card-description">${escapeHtml(group.description || 'Без описания')}</div>
-                        <div class="card-stats-row">
-                            <span class="admin-stat-pill" title="Активные подписки"><span class="admin-stat-pill__value">${subs}</span> подписок</span>
-                            <span class="admin-stat-pill" title="Активные серверы в группе"><span class="admin-stat-pill__value">${srv}</span> серверов</span>
-                        </div>
-                    </div>
-                    <div class="group-card-side">
-                        <button type="button" class="btn-secondary card-action-btn" onclick="event.stopPropagation(); editServerGroup(${group.id})">Изменить</button>
-                        <span class="group-card-chevron" aria-hidden="true"></span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    listEl.innerHTML = '<div class="admin-server-groups-grid">' + cards + '</div>';
-}
-
-// Показать модалку добавления группы
-function showAddServerGroupModal() {
-    console.log('Открытие модалки добавления группы');
-    const titleEl = document.getElementById('server-group-modal-title');
-    const idEl = document.getElementById('group-id-input');
-    const nameEl = document.getElementById('group-name-input');
-    const descEl = document.getElementById('group-desc-input');
-    const defaultEl = document.getElementById('group-default-input');
-
-    if (titleEl) titleEl.innerText = 'Добавить группу';
-    if (idEl) idEl.value = '';
-    if (nameEl) nameEl.value = '';
-    if (descEl) descEl.value = '';
-    if (defaultEl) defaultEl.checked = false;
-    
-    showModal('server-group-modal');
-}
-
-// Показать модалку редактирования группы
-function editServerGroup(groupId) {
-    if (groupId == null || groupId === '') return;
-    const group = currentAdminGroups.find(g => g.id === groupId);
-    if (!group) return;
-
-    document.getElementById('server-group-modal-title').innerText = 'Редактировать группу';
-    document.getElementById('group-id-input').value = group.id;
-    document.getElementById('group-name-input').value = group.name;
-    document.getElementById('group-desc-input').value = group.description || '';
-    document.getElementById('group-default-input').checked = !!group.is_default;
-    showModal('server-group-modal');
-}
-
-// Сохранение группы
-async function saveServerGroup(event) {
-    event.preventDefault();
-    const id = document.getElementById('group-id-input').value;
-    const name = document.getElementById('group-name-input').value;
-    const description = document.getElementById('group-desc-input').value;
-    const is_default = document.getElementById('group-default-input').checked ? 1 : 0;
-
-    try {
-        const url = id ? '/api/admin/server-group/update' : '/api/admin/server-groups';
-        const body = {
-            name, description, is_default,
-            action: id ? undefined : 'add',
-            id: id || undefined
-        };
-
-        const response = await apiFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const result = await response.json();
-        if (result.success) {
-            closeModal('server-group-modal');
-            loadServerGroups();
-        } else {
-            await appShowAlert('Ошибка: ' + result.error, { title: 'Ошибка', variant: 'error' });
-        }
-    } catch (err) {
-        console.error('Ошибка сохранения группы:', err);
-        await appShowAlert('Ошибка при сохранении', { title: 'Ошибка', variant: 'error' });
-    }
-}
-
-async function loadAdminServerGroupPage(groupId) {
-    const gid = Number(groupId);
-    if (!gid || isNaN(gid)) {
-        currentSelectedGroupId = null;
-        showPage('admin-server-management');
-        return;
-    }
-    // Сразу фиксируем группу, чтобы «+ Сервер» не ловил гонку с await loadServerGroups()
-    // (иначе модалка не открывается и показывается «Сначала откройте группу»).
-    currentSelectedGroupId = gid;
-    if (!currentAdminGroups || !currentAdminGroups.length) {
-        try {
-            await loadServerGroups();
-        } catch (e) {
-            currentSelectedGroupId = null;
-            showPage('admin-server-management');
-            return;
-        }
-    }
-    const g = currentAdminGroups.find(function (x) { return x.id === gid; });
-    if (!g) {
-        currentSelectedGroupId = null;
-        showPage('admin-server-management');
-        return;
-    }
-    adminServerReorderMode = false;
-    var reorderBtn = document.getElementById('admin-server-reorder-toggle-btn');
-    if (reorderBtn) {
-        reorderBtn.textContent = 'Порядок';
-        reorderBtn.classList.remove('is-active');
-    }
-    var groupRoot = document.getElementById('admin-server-group-page-root');
-    if (groupRoot) groupRoot.classList.remove('admin-server-group-page--reorder');
-
-    var titleEl = document.getElementById('admin-server-group-page-title');
-    if (titleEl) {
-        titleEl.textContent = g.name ? ('Серверы — ' + g.name) : 'Серверы';
-    }
-
-    var listEl = document.getElementById('admin-servers-in-group-list');
-    if (!listEl) return;
-    listEl.innerHTML = '<div class="spinner"></div>';
-
-    try {
-        const response = await apiFetch('/api/admin/servers-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list', group_id: gid })
-        });
-        const result = await response.json();
-        if (result.success) {
-            currentAdminServers = result.servers;
-            renderServersInGroup(result.servers);
-        } else {
-            listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
-        }
-    } catch (err) {
-        console.error('Ошибка загрузки серверов:', err);
-        listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
-    }
-}
-
-function toggleAdminServerReorderMode() {
-    adminServerReorderMode = !adminServerReorderMode;
-    var reorderBtn = document.getElementById('admin-server-reorder-toggle-btn');
-    if (reorderBtn) {
-        reorderBtn.textContent = adminServerReorderMode ? 'Готово' : 'Порядок';
-        reorderBtn.classList.toggle('is-active', adminServerReorderMode);
-    }
-    var groupRoot = document.getElementById('admin-server-group-page-root');
-    if (groupRoot) groupRoot.classList.toggle('admin-server-group-page--reorder', adminServerReorderMode);
-    renderServersInGroup(currentAdminServers || []);
-}
+async function loadServerManagement() { return adminServersFeature.loadServerManagement(); }
+async function loadServerGroups() { return adminServersFeature.loadServerGroups(); }
+function renderServerGroups(groups, stats) { return adminServersFeature.renderServerGroups(groups, stats); }
+function showAddServerGroupModal() { return adminServersFeature.showAddServerGroupModal(); }
+function editServerGroup(groupId) { return adminServersFeature.editServerGroup(groupId); }
+async function saveServerGroup(event) { return adminServersFeature.saveServerGroup(event); }
+async function loadAdminServerGroupPage(groupId) { return adminServersFeature.loadAdminServerGroupPage(groupId); }
+function toggleAdminServerReorderMode() { return adminServersFeature.toggleAdminServerReorderMode(); }
+async function toggleServerActive(serverId, makeActive) { return adminServersFeature.toggleServerActive(serverId, makeActive); }
+function sortAdminServersByClientOrder(servers) { return adminServersFeature.sortAdminServersByClientOrder(servers); }
+async function refreshAdminServersInGroup() { return adminServersFeature.refreshAdminServersInGroup(); }
+async function nudgeServerOrder(serverId, delta) { return adminServersFeature.nudgeServerOrder(serverId, delta); }
+function renderServersInGroup(servers) { return adminServersFeature.renderServersInGroup(servers); }
+function setServerClientFlowFormState(serverFlowRaw) { return adminServersFeature.setServerClientFlowFormState(serverFlowRaw); }
+function getServerClientFlowPayload() { return adminServersFeature.getServerClientFlowPayload(); }
+function showAddServerConfigModal() { return adminServersFeature.showAddServerConfigModal(); }
+function editServerConfig(serverId) { return adminServersFeature.editServerConfig(serverId); }
+async function saveServerConfig(event) { return adminServersFeature.saveServerConfig(event); }
+async function deleteServerConfig(serverId) { return adminServersFeature.deleteServerConfig(serverId); }
+async function syncAllServers() { return adminServersFeature.syncAllServers(); }
+async function runSyncAllServers() { return adminServersFeature.runSyncAllServers(); }
 
 window.toggleAdminServerReorderMode = toggleAdminServerReorderMode;
-
-/** Короткое уведомление внизу экрана (без блокирующего alert) */
-function showAdminToast(message, duration) {
-    duration = duration || 4500;
-    var el = document.getElementById('admin-toast');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'admin-toast';
-        el.className = 'admin-toast';
-        el.setAttribute('role', 'status');
-        document.body.appendChild(el);
-    }
-    el.textContent = message;
-    el.classList.add('admin-toast--visible');
-    clearTimeout(showAdminToast._timer);
-    showAdminToast._timer = setTimeout(function () {
-        el.classList.remove('admin-toast--visible');
-    }, duration);
-}
-
-/** Быстрое вкл/выкл ноды с карточки (без открытия модалки) */
-async function toggleServerActive(serverId, makeActive) {
-    var input = document.querySelector('input[data-server-toggle="' + serverId + '"]');
-    if (!input || input.dataset.busy === '1') return;
-    input.dataset.busy = '1';
-    input.disabled = true;
-    var revertTo = !makeActive;
-    try {
-        var response = await apiFetch('/api/admin/server-config/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: serverId, is_active: makeActive ? 1 : 0 })
-        });
-        var result = await response.json();
-        if (!result.success) throw new Error(result.error || 'Ошибка');
-        var srv = currentAdminServers.find(function (s) { return s.id === serverId; });
-        if (srv) srv.is_active = makeActive ? 1 : 0;
-        var row = input.closest('.server-power-cell');
-        var label = row && row.querySelector('.server-power-label');
-        if (label) {
-            label.textContent = makeActive ? 'В сети' : 'Отключён';
-            label.classList.toggle('is-off', !makeActive);
-        }
-        var hint = row && row.querySelector('.server-power-hint');
-        if (hint) hint.textContent = makeActive ? 'В подписках' : 'Не в ключах';
-        var card = input.closest('.admin-server-row') || input.closest('.server-card');
-        if (card) card.classList.toggle('server-card-muted', !makeActive);
-        var parts = [];
-        parts.push(makeActive ? 'Сервер включён' : 'Сервер выключен');
-        if (result.sync_stats) {
-            var s = result.sync_stats;
-            if (s.clients_created != null) parts.push('клиентов: +' + s.clients_created);
-            if (s.servers_added != null) parts.push('привязок: +' + s.servers_added);
-            if (s.servers_removed != null) parts.push('снято: ' + s.servers_removed);
-        }
-        if (result.sync_error) parts.push('Предупреждение: ' + result.sync_error);
-        showAdminToast(parts.join(' · '));
-    } catch (e) {
-        input.checked = revertTo;
-        await appShowAlert('Не удалось изменить: ' + (e.message || e), { title: 'Ошибка', variant: 'error' });
-    } finally {
-        input.disabled = false;
-        delete input.dataset.busy;
-    }
-}
-
-function sortAdminServersByClientOrder(servers) {
-    return servers.slice().sort(function (a, b) {
-        var ao = a.client_sort_order != null ? Number(a.client_sort_order) : a.id;
-        var bo = b.client_sort_order != null ? Number(b.client_sort_order) : b.id;
-        if (ao !== bo) return ao - bo;
-        return a.id - b.id;
-    });
-}
-
-async function refreshAdminServersInGroup() {
-    if (currentSelectedGroupId == null) return;
-    try {
-        const response = await apiFetch('/api/admin/servers-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list', group_id: currentSelectedGroupId })
-        });
-        const result = await response.json();
-        if (result.success) {
-            currentAdminServers = result.servers;
-            renderServersInGroup(result.servers);
-        }
-    } catch (err) {
-        console.error('refreshAdminServersInGroup:', err);
-    }
-}
-
-async function nudgeServerOrder(serverId, delta) {
-    if (!currentSelectedGroupId) return;
-    var sorted = sortAdminServersByClientOrder(currentAdminServers.slice());
-    var idx = sorted.findIndex(function (s) { return s.id === serverId; });
-    if (idx < 0) return;
-    var j = idx + delta;
-    if (j < 0 || j >= sorted.length) return;
-    var tmp = sorted[idx];
-    sorted[idx] = sorted[j];
-    sorted[j] = tmp;
-    var ids = sorted.map(function (s) { return s.id; });
-    try {
-        var response = await apiFetch('/api/admin/servers-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'reorder',
-                group_id: currentSelectedGroupId,
-                server_ids: ids
-            })
-        });
-        var result = await response.json();
-        if (!result.success) throw new Error(result.error || 'Ошибка');
-        currentAdminServers = sorted;
-        sorted.forEach(function (s, i) { s.client_sort_order = i; });
-        renderServersInGroup(sorted);
-        showAdminToast('Порядок сохранён');
-    } catch (e) {
-        await appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
-        await refreshAdminServersInGroup();
-    }
-}
-
 window.nudgeServerOrder = nudgeServerOrder;
-
-// Отрисовка списка серверов (экран admin-server-group)
-function renderServersInGroup(servers) {
-    const listEl = document.getElementById('admin-servers-in-group-list');
-    if (!listEl) return;
-
-    if (!servers || servers.length === 0) {
-        listEl.innerHTML = '<div class="admin-sm-empty admin-sm-empty--compact"><p class="admin-sm-empty-title">В группе нет серверов</p><p class="admin-sm-empty-hint">Добавьте ноду кнопкой «+ Сервер».</p></div>';
-        return;
-    }
-
-    const sorted = sortAdminServersByClientOrder(servers);
-    const n = sorted.length;
-    const reorder = !!adminServerReorderMode;
-
-    const cards = sorted.map(function (server, i) {
-        const on = server.is_active === 1 || server.is_active === true;
-        const safeTitle = escapeHtml(server.display_name || server.name);
-        const safeHost = escapeHtml(server.host || '');
-        const safeName = escapeHtml(server.name || '');
-        const upDisabled = i === 0 ? ' disabled' : '';
-        const downDisabled = i === n - 1 ? ' disabled' : '';
-        const orderCol = reorder
-            ? `<div class="admin-server-order-col">
-                <span class="server-order-badge" aria-hidden="true">${i + 1}</span>
-                <div class="server-reorder-nudge server-reorder-nudge--large" role="group" aria-label="Сдвиг в списке">
-                    <button type="button" class="server-reorder-nudge-btn server-reorder-nudge-btn--large"${upDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, -1)" aria-label="Выше">↑</button>
-                    <button type="button" class="server-reorder-nudge-btn server-reorder-nudge-btn--large"${downDisabled} onclick="event.stopPropagation(); nudgeServerOrder(${server.id}, 1)" aria-label="Ниже">↓</button>
-                </div>
-            </div>`
-            : '';
-        const menuCol = !reorder
-            ? `<details class="admin-server-row-menu" onclick="event.stopPropagation()">
-                <summary class="admin-server-row-menu-summary" aria-label="Действия">⋯</summary>
-                <div class="admin-server-row-menu-panel">
-                    <button type="button" class="admin-server-row-menu-item" onclick="event.stopPropagation(); this.closest('details').removeAttribute('open'); editServerConfig(${server.id})">Изменить</button>
-                    <button type="button" class="admin-server-row-menu-item admin-server-row-menu-item--danger" onclick="event.stopPropagation(); this.closest('details').removeAttribute('open'); deleteServerConfig(${server.id})">Удалить</button>
-                </div>
-            </details>`
-            : '';
-        return `
-        <div class="admin-server-row admin-user-card server-card-reorderable${on ? '' : ' server-card-muted'}" data-server-id="${server.id}">
-            ${orderCol}
-            <div class="admin-server-row__main">
-                <div class="admin-server-row__text">
-                    <div class="admin-server-row__title">${safeTitle}</div>
-                    <div class="admin-server-row__meta">${safeHost} · ${safeName}</div>
-                </div>
-                <div class="admin-server-row__power server-power-cell" onclick="event.stopPropagation()">
-                    <div class="admin-server-power-toggle">
-                        <span class="server-power-label${on ? '' : ' is-off'}">${on ? 'В сети' : 'Отключён'}</span>
-                        <label class="ui-switch ui-switch--compact" title="${on ? 'Выключить ноду' : 'Включить ноду'}">
-                            <input type="checkbox" data-server-toggle="${server.id}" ${on ? 'checked' : ''}
-                                onchange="toggleServerActive(${server.id}, this.checked)"
-                                aria-label="Сервер в работе">
-                            <span class="ui-switch-slider" aria-hidden="true"></span>
-                        </label>
-                    </div>
-                    <span class="server-power-hint">${on ? 'В подписках' : 'Не в ключах'}</span>
-                </div>
-                ${menuCol}
-            </div>
-        </div>`;
-    }).join('');
-
-    listEl.innerHTML = '<div class="server-reorder-stack admin-server-rows">' + cards + '</div>';
-}
-
-var SERVER_CLIENT_FLOW_VALUE = 'xtls-rprx-vision';
-
-function setServerClientFlowFormState(serverFlowRaw) {
-    var enable = document.getElementById('server-client-flow-enable');
-    var legacyWarn = document.getElementById('server-flow-legacy-warning');
-    if (!enable) return;
-    if (legacyWarn) legacyWarn.style.display = 'none';
-    var v = (serverFlowRaw || '').trim();
-    if (!v) {
-        enable.checked = false;
-        return;
-    }
-    enable.checked = true;
-    if (v !== SERVER_CLIENT_FLOW_VALUE && legacyWarn) {
-        legacyWarn.style.display = 'block';
-    }
-}
-
-function getServerClientFlowPayload() {
-    var enable = document.getElementById('server-client-flow-enable');
-    if (!enable) return null;
-    return enable.checked ? SERVER_CLIENT_FLOW_VALUE : null;
-}
-
-// Показать модалку добавления сервера
-function showAddServerConfigModal() {
-    if (currentSelectedGroupId == null) {
-        void appShowAlert('Сначала откройте группу серверов.', { title: 'Группа не выбрана', variant: 'error' });
-        return;
-    }
-    document.getElementById('server-config-modal-title').innerText = 'Добавить сервер';
-    document.getElementById('server-id-input').value = '';
-    document.getElementById('server-name-input').value = '';
-    document.getElementById('server-display-input').value = '';
-    document.getElementById('server-host-input').value = '';
-    document.getElementById('server-login-input').value = '';
-    document.getElementById('server-pass-input').value = '';
-    document.getElementById('server-vpnhost-input').value = '';
-    // Поле server-subscription-port-input убрано из формы (порт в URL подписки / хосте); дефолт 2096 — на бэкенде.
-    var subPortEl = document.getElementById('server-subscription-port-input');
-    if (subPortEl) subPortEl.value = '2096';
-    document.getElementById('server-subscription-url-input').value = '';
-    setServerClientFlowFormState('');
-    document.getElementById('server-map-label-input').value = '';
-    document.getElementById('server-lat-input').value = '';
-    document.getElementById('server-lng-input').value = '';
-    document.getElementById('server-location-input').value = '';
-    document.getElementById('server-max-concurrent-input').value = '50';
-    var activeEl = document.getElementById('server-is-active-input');
-    if (activeEl) activeEl.checked = true;
-    showModal('server-config-modal');
-}
-
-// Показать модалку редактирования сервера
-function editServerConfig(serverId) {
-    const server = currentAdminServers.find(s => s.id === serverId);
-    if (!server) return;
-
-    document.getElementById('server-config-modal-title').innerText = 'Редактировать сервер';
-    document.getElementById('server-id-input').value = server.id;
-    document.getElementById('server-name-input').value = server.name;
-    document.getElementById('server-display-input').value = server.display_name || '';
-    document.getElementById('server-host-input').value = server.host;
-    document.getElementById('server-login-input').value = server.login;
-    document.getElementById('server-pass-input').value = server.password;
-    document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
-    document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
-    setServerClientFlowFormState(server.client_flow || '');
-    document.getElementById('server-map-label-input').value = server.map_label || '';
-    document.getElementById('server-lat-input').value = server.lat || '';
-    document.getElementById('server-lng-input').value = server.lng || '';
-    document.getElementById('server-location-input').value = server.location || '';
-    document.getElementById('server-max-concurrent-input').value = server.max_concurrent_clients != null ? String(server.max_concurrent_clients) : '50';
-    var activeEl = document.getElementById('server-is-active-input');
-    if (activeEl) activeEl.checked = (server.is_active === 1 || server.is_active === true);
-    showModal('server-config-modal');
-}
-
-// Сохранение сервера
-async function saveServerConfig(event) {
-    event.preventDefault();
-    const id = document.getElementById('server-id-input').value;
-    const body = {
-        group_id: currentSelectedGroupId,
-        name: document.getElementById('server-name-input').value,
-        display_name: document.getElementById('server-display-input').value,
-        host: document.getElementById('server-host-input').value,
-        login: document.getElementById('server-login-input').value,
-        password: document.getElementById('server-pass-input').value,
-        vpn_host: document.getElementById('server-vpnhost-input').value || null,
-        subscription_url: document.getElementById('server-subscription-url-input').value || null,
-        client_flow: getServerClientFlowPayload(),
-        map_label: document.getElementById('server-map-label-input').value?.trim() || null,
-        lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
-        lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
-        location: document.getElementById('server-location-input').value?.trim() || null,
-        max_concurrent_clients: (() => { const v = document.getElementById('server-max-concurrent-input').value; const n = parseInt(v, 10); return (v !== '' && !isNaN(n) && n >= 1) ? n : null; })(),
-        is_active: document.getElementById('server-is-active-input') ? document.getElementById('server-is-active-input').checked : true,
-        id: id || undefined,
-        action: id ? undefined : 'add'
-    };
-
-    try {
-        const url = id ? '/api/admin/server-config/update' : '/api/admin/servers-config';
-        const response = await apiFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const result = await response.json();
-        if (result.success) {
-            closeModal('server-config-modal');
-            await refreshAdminServersInGroup();
-            if (result.flow_sync_started && result.server_id) {
-                await appShowAlert(
-                    'Синхронизация flow для всех клиентов на этой ноде запущена в фоне. При необходимости повторите вручную через API или дождитесь завершения (см. логи бота).',
-                    { title: 'Flow', variant: 'success' }
-                );
-            }
-            if (result.sync_stats || result.sync_error) {
-                await appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
-            }
-        } else {
-            await appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
-        }
-    } catch (err) {
-        console.error('Ошибка сохранения сервера:', err);
-        await appShowAlert('Ошибка при сохранении', { variant: 'error' });
-    }
-}
-
-/** Текст алерта по результату sync_servers_with_config (добавление / изменение / удаление сервера). */
-function adminSyncSubscriptionsAlertMessage(result) {
-    var parts = [];
-    if (result.sync_stats) {
-        var s = result.sync_stats;
-        if (s.clients_created != null) parts.push('клиентов создано: ' + s.clients_created);
-        if (s.servers_added != null) parts.push('серверов добавлено: ' + s.servers_added);
-        if (s.servers_removed != null) parts.push('серверов снято: ' + s.servers_removed);
-        if (s.errors && s.errors.length) parts.push('ошибки: ' + s.errors.slice(0, 5).join('; '));
-    }
-    var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');
-    if (result.sync_error) msg += '\nПредупреждение: ' + result.sync_error;
-    return msg;
-}
-
-// Удаление сервера
-async function deleteServerConfig(serverId) {
-    var okDel = await appShowConfirm(
-        'Удалить конфигурацию сервера? На панели этой ноды клиенты не удаляются. Бот перестанет использовать сервер и обновит привязки подписок в базе (снятие связей без очистки панели удалённой ноды).',
-        { title: 'Удаление сервера', confirmText: 'Удалить' }
-    );
-    if (!okDel) return;
-
-    try {
-        const response = await apiFetch('/api/admin/server-config/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: serverId })
-        });
-        const result = await response.json();
-        if (result.success) {
-            await refreshAdminServersInGroup();
-            if (result.sync_stats || result.sync_error) {
-                await appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
-            }
-        } else {
-            await appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
-        }
-    } catch (err) {
-        console.error('Ошибка удаления сервера:', err);
-        await appShowAlert('Ошибка при удалении', { variant: 'error' });
-    }
-}
-
-// Синхронизация всех серверов
-async function syncAllServers() {
-    var ok = await appShowConfirm('Выполнить полную синхронизацию всех подписок с серверами? Это может занять некоторое время.', { title: 'Синхронизация' });
-    if (!ok) return;
-    runSyncAllServers();
-}
-async function runSyncAllServers() {
-    var btns = [
-        document.getElementById('admin-sync-all-panels-btn'),
-        document.getElementById('admin-sync-all-panels-group-btn')
-    ].filter(Boolean);
-    btns.forEach(function (b) { b.disabled = true; });
-
-    platform.mainButton.show('СИНХРОНИЗАЦИЯ...', function () {});
-    platform.mainButton.disable();
-    try {
-        var response = await apiFetch('/api/admin/sync-all', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        var result = await response.json();
-        if (result.success) {
-            var st = result.stats || {};
-            var parts = [
-                'Подписок проверено: ' + (st.subscriptions_checked != null ? st.subscriptions_checked : '—'),
-                'Узлов (ensure): ' + (st.total_servers_synced != null ? st.total_servers_synced : '—'),
-                'Клиентов создано: ' + (st.total_clients_created != null ? st.total_clients_created : '—'),
-                'Сирот удалено: ' + (st.orphaned_clients_deleted != null ? st.orphaned_clients_deleted : 0)
-            ];
-            var errN = st.total_errors;
-            if (errN == null && st.errors && st.errors.length) errN = st.errors.length;
-            if (errN) parts.push('Замечаний в логе sync: ' + errN);
-            platform.showAlert('Синхронизация завершена.\n\n' + parts.join('\n'));
-            loadServerGroups();
-        } else {
-            platform.showAlert('Ошибка: ' + (result.error || 'Неизвестно'));
-        }
-    } catch (err) {
-        console.error('Ошибка синхронизации:', err);
-        platform.showAlert('Ошибка при выполнении синхронизации: ' + (err.message || String(err)));
-    } finally {
-        platform.mainButton.hide();
-        btns.forEach(function (b) { b.disabled = false; });
-    }
-}

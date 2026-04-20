@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import aiosqlite
+import time
 
+from bot.app_context import get_ctx
 from bot.db import is_known_user, register_simple_user
 from bot.db.subscriptions_db import (
     create_subscription,
@@ -21,6 +23,7 @@ from bot.db.users_db import (
     reconcile_users_telegram_id_with_link,
 )
 from bot.services.user_account_service import create_telegram_binding
+from bot.prices_config import get_default_device_limit_async
 
 
 async def resolve_or_create_user_from_telegram(telegram_id: str):
@@ -92,3 +95,112 @@ async def try_create_trial_subscription(user_id: str, trial_device_limit: int, e
 async def subscription_group(subscription_id: int):
     sub = await get_subscription_by_id_only(subscription_id)
     return sub.get("group_id") if sub else None
+
+
+async def register_user_with_trial(user_id: str | None, tg_user_id: str | None, logger):
+    if not user_id and tg_user_id:
+        user_id = None
+    if not user_id and not tg_user_id:
+        raise ValueError("Invalid authentication")
+
+    just_created_tg_user = False
+    if not user_id and tg_user_id:
+        user_id, just_created_tg_user = await resolve_or_create_user_from_telegram_safe(str(tg_user_id))
+        if just_created_tg_user:
+            logger.info(
+                "Регистрация нового TG-first пользователя: user_id=%s, telegram_id=%s",
+                user_id,
+                tg_user_id,
+            )
+        else:
+            logger.info(
+                "TG-first регистрация разрешена после гонки/существующей связи: telegram_id=%s, user_id=%s",
+                tg_user_id,
+                user_id,
+            )
+    if not user_id:
+        raise ValueError("Invalid authentication")
+
+    is_web, was_known_user = await user_profile_flags(
+        user_id,
+        str(tg_user_id) if tg_user_id else None,
+        just_created_tg_user,
+    )
+    await touch_known_user(
+        user_id,
+        str(tg_user_id) if tg_user_id else None,
+        just_created_tg_user,
+    )
+
+    trial_created = False
+    subscription_id = None
+    if not was_known_user and not is_web:
+        try:
+            now = int(time.time())
+            trial_dl = await get_default_device_limit_async()
+            logger.info("Создание пробной подписки для нового пользователя: %s", user_id)
+            expires_at = now + (5 * 24 * 60 * 60)
+            subscription_id, token = await try_create_trial_subscription(
+                user_id=user_id,
+                trial_device_limit=trial_dl,
+                expires_at=expires_at,
+            )
+            if subscription_id:
+                trial_created = True
+                logger.info("Пробная подписка создана: subscription_id=%s", subscription_id)
+                ctx = get_ctx()
+                subscription_manager = ctx.subscription_manager
+                server_manager = ctx.server_manager
+                if subscription_manager and server_manager:
+                    group_id = await subscription_group(subscription_id)
+                    servers_for_group = server_manager.get_servers_by_group(group_id)
+                    unique_email = f"{user_id}_{subscription_id}"
+                    all_configured_servers = [s["name"] for s in servers_for_group if s.get("x3") is not None]
+                    if all_configured_servers:
+                        for server_name in all_configured_servers:
+                            try:
+                                await subscription_manager.attach_server_to_subscription(
+                                    subscription_id=subscription_id,
+                                    server_name=server_name,
+                                    client_email=unique_email,
+                                    client_id=None,
+                                )
+                            except Exception as attach_e:
+                                if "UNIQUE constraint" not in str(attach_e) and "already exists" not in str(
+                                    attach_e
+                                ).lower():
+                                    logger.error(
+                                        "Ошибка привязки сервера %s: %s",
+                                        server_name,
+                                        attach_e,
+                                    )
+                        successful_servers = []
+                        for server_name in all_configured_servers:
+                            try:
+                                client_exists, _ = await subscription_manager.ensure_client_on_server(
+                                    subscription_id=subscription_id,
+                                    server_name=server_name,
+                                    client_email=unique_email,
+                                    user_id=user_id,
+                                    expires_at=expires_at,
+                                    token=token,
+                                    device_limit=trial_dl,
+                                )
+                                if client_exists:
+                                    successful_servers.append(server_name)
+                            except Exception as e:
+                                logger.error("Ошибка создания клиента на %s: %s", server_name, e)
+                        logger.info(
+                            "Пробная подписка: создано на %s/%s серверах",
+                            len(successful_servers),
+                            len(all_configured_servers),
+                        )
+        except Exception as e:
+            logger.error("Ошибка создания пробной подписки: %s", e, exc_info=True)
+
+    return {
+        "success": True,
+        "was_new_user": not was_known_user,
+        "trial_created": trial_created,
+        "subscription_id": subscription_id,
+    }

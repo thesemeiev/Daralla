@@ -6,3 +6,8 @@ This repository keeps a single runtime, but separates frontend/backend ownership
 - `apps/frontend` — frontend ownership zone (SPA/Mini App source and static assets).
 
 During transition, runtime paths stay backward-compatible (`bot/` and `webapp/` remain active).
+
+Architecture model is modular monolith (single runtime, explicit boundaries).
+See:
+- `docs/architecture/ADR_0001_MODULAR_MONOLITH_BOUNDARIES.md`
+- `docs/architecture/ARCHITECTURE_RULES.md`

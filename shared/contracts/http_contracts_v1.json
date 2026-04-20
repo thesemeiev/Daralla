@@ -6,18 +6,109 @@
       "path": "/api/auth/login",
       "method": "POST",
       "response_success_keys": ["success", "token", "user_id"],
-      "response_error_keys": ["error"]
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "token": "string", "user_id": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/auth.login.success.json",
+      "error_example": "examples/auth.login.error.json"
     },
     {
       "path": "/api/auth/register",
       "method": "POST",
       "response_success_keys": ["success", "token", "user_id"],
-      "response_error_keys": ["error"]
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "token": "string", "user_id": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/auth.register.success.json",
+      "error_example": "examples/auth.register.error.json"
+    },
+    {
+      "path": "/api/auth/verify",
+      "method": "POST",
+      "response_success_keys": ["success", "user_id", "username"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "user_id": "string", "username": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/auth.verify.success.json",
+      "error_example": "examples/auth.verify.error.json"
+    },
+    {
+      "path": "/api/user/register",
+      "method": "POST",
+      "response_success_keys": ["success", "was_new_user", "trial_created", "subscription_id"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "was_new_user": "boolean", "trial_created": "boolean", "subscription_id": "number_or_null"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_register.success.json",
+      "error_example": "examples/user_register.error.json"
+    },
+    {
+      "path": "/api/subscriptions",
+      "method": "GET",
+      "response_success_keys": ["success", "subscriptions", "total", "active"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "subscriptions": "array", "total": "number", "active": "number"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_subscriptions.get.success.json",
+      "error_example": "examples/user_subscriptions.get.error.json"
+    },
+    {
+      "path": "/api/user/payment/create",
+      "method": "POST",
+      "response_success_keys": ["success", "payment_id", "payment_url", "amount", "period"],
+      "response_optional_success_keys": ["gateway", "cryptocurrency", "crypto", "h2h_available"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "payment_id": "string", "payment_url": "string", "amount": "string", "period": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_payment_create.success.json",
+      "error_example": "examples/user_payment_create.error.json"
+    },
+    {
+      "path": "/api/user/payment/status/{payment_id}",
+      "method": "GET",
+      "response_success_keys": ["success", "payment_id", "status", "activated"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "payment_id": "string", "status": "string", "activated": "boolean"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_payment_status.get.success.json",
+      "error_example": "examples/user_payment_status.get.error.json"
+    },
+    {
+      "path": "/api/user/change-password",
+      "method": "POST",
+      "response_success_keys": ["success", "message"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "message": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_change_password.post.success.json",
+      "error_example": "examples/user_change_password.post.error.json"
+    },
+    {
+      "path": "/api/user/change-login",
+      "method": "POST",
+      "response_success_keys": ["success", "message", "username"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "message": "string", "username": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_change_login.post.success.json",
+      "error_example": "examples/user_change_login.post.error.json"
+    },
+    {
+      "path": "/api/user/unlink-telegram",
+      "method": "POST",
+      "response_success_keys": ["success", "message"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "message": "string"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/user_unlink_telegram.post.success.json",
+      "error_example": "examples/user_unlink_telegram.post.error.json"
     },
     {
       "path": "/api/admin/commerce",
       "method": "GET",
-      "response_success_keys": ["success", "price_month", "price_3month", "default_device_limit"]
+      "response_success_keys": ["success", "price_month", "price_3month", "default_device_limit"],
+      "response_success_types": {"success": "boolean", "price_month": "number", "price_3month": "number", "default_device_limit": "number"},
+      "success_example": "examples/admin_commerce.get.success.json"
     },
     {
       "path": "/api/admin/commerce",
@@ -38,10 +129,27 @@
       "response_error_keys": ["error"]
     },
     {
+      "path": "/api/admin/users",
+      "method": "POST",
+      "response_success_keys": ["success", "users", "total", "page", "limit", "pages"],
+      "response_error_keys": ["error"],
+      "response_success_types": {"success": "boolean", "users": "array", "total": "number", "page": "number", "limit": "number", "pages": "number"},
+      "response_error_types": {"error": "string"},
+      "success_example": "examples/admin_users.post.success.json",
+      "error_example": "examples/admin_users.post.error.json"
+    },
+    {
+      "path": "/api/admin/user/{user_id}",
+      "method": "POST",
+      "response_success_keys": ["success", "user", "subscriptions", "payments"],
+      "response_error_keys": ["error"]
+    },
+    {
       "path": "/sub/{token}",
       "method": "GET",
       "response_success_headers": ["subscription-userinfo", "profile-title"],
-      "response_error_plain_text": ["Subscription not found", "Service unavailable", "No servers available"]
+      "response_error_plain_text": ["Subscription not found", "Service unavailable", "No servers available"],
+      "success_headers_example": "examples/subscription.success.headers.json"
     },
     {
       "path": "/webhook/yookassa",

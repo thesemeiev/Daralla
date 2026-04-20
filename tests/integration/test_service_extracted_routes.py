@@ -298,3 +298,91 @@ async def test_subscription_positive_contract_with_mocked_dependencies(
     assert "vless://uuid@example.com:443?encryption=none#Daralla-Test" in decoded
     assert response.headers.get("subscription-userinfo")
     assert response.headers.get("profile-title")
+
+
+@pytest.mark.asyncio
+async def test_user_web_access_setup_uses_service_contract(quart_app_with_routes: Quart, db):
+    set_ctx(AppContext())
+    client = quart_app_with_routes.test_client()
+    async def _service(*args, **kwargs):
+        return {"username": "webtester", "user_id": "1"}
+    with patch("bot.web.routes.api_user_account.setup_web_access_for_telegram_user", side_effect=_service):
+        response = await client.post(
+            "/api/user/web-access/setup",
+            json={"initData": "mocked", "username": "webtester", "password": "password123"},
+        )
+    assert response.status_code == 200
+    data = await response.get_json()
+    assert data.get("success") is True
+    assert data.get("username") == "webtester"
+
+
+@pytest.mark.asyncio
+async def test_user_avatar_route_uses_service_loader(quart_app_with_routes: Quart, db):
+    set_ctx(AppContext())
+    client = quart_app_with_routes.test_client()
+    async def _auth_user(*args, **kwargs):
+        return "1", None
+    async def _load_avatar(*args, **kwargs):
+        return b"jpeg-bytes"
+    with patch("bot.web.routes.api_user_account.require_user_id", side_effect=_auth_user), patch(
+        "bot.web.routes.api_user_account.load_user_avatar_bytes", side_effect=_load_avatar
+    ):
+        response = await client.get("/api/user/avatar")
+    assert response.status_code == 200
+    assert response.content_type == "image/jpeg"
+    assert await response.get_data() == b"jpeg-bytes"
+
+
+@pytest.mark.asyncio
+async def test_events_public_payload_service_cache_contract():
+    from bot.services import events_route_service
+
+    async def _active():
+        return [{"id": 1}]
+
+    async def _upcoming():
+        return [{"id": 2}]
+
+    async def _ended():
+        return [{"id": 3}]
+
+    events_route_service.invalidate_public_events_cache()
+    with patch("bot.services.events_route_service.event_service.list_active", side_effect=_active), patch(
+        "bot.services.events_route_service.event_service.list_upcoming", side_effect=_upcoming
+    ), patch(
+        "bot.services.events_route_service.event_service.list_ended", side_effect=_ended
+    ):
+        first = await events_route_service.get_public_events_payload()
+        second = await events_route_service.get_public_events_payload()
+
+    assert first["events"] == [{"id": 1}, {"id": 2}, {"id": 3}]
+    assert second == first
+    events_route_service.invalidate_public_events_cache()
+
+
+@pytest.mark.asyncio
+async def test_cryptocloud_route_uses_resolved_target_contract(quart_app_with_routes: Quart, db):
+    set_ctx(AppContext())
+    client = quart_app_with_routes.test_client()
+    async def _parse_postback():
+        return {"status": "success", "invoice_info": {"uuid": "INV-1"}}
+    async def _resolve_target(*args, **kwargs):
+        return {
+            "status": "success",
+            "raw_id": "INV-1",
+            "payment_id": "INV-1",
+            "payment_found": True,
+            "mapped_status": "succeeded",
+        }
+    def _fake_create_task(coro):
+        coro.close()
+        return object()
+    with patch("bot.web.routes.payment._cryptocloud_parse_postback_body", side_effect=_parse_postback), patch(
+        "bot.web.routes.payment.resolve_cryptocloud_postback_target", side_effect=_resolve_target
+    ), patch("bot.web.routes.payment.asyncio.create_task", side_effect=_fake_create_task) as create_task_mock:
+        response = await client.post("/webhook/cryptocloud", json={"any": "payload"})
+    assert response.status_code == 200
+    data = await response.get_json()
+    assert data.get("status") == "ok"
+    create_task_mock.assert_called_once()

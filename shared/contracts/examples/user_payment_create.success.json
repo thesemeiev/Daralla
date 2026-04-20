@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "payment_id": "INV-00000000-0000-0000-0000-000000000000",
+  "payment_url": "https://pay.example.test/checkout/INV-00000000-0000-0000-0000-000000000000",
+  "amount": "150.00",
+  "period": "month",
+  "gateway": "yookassa"
+}

@@ -3,20 +3,19 @@ Quart Blueprint: /api/events — health, список событий, рефер
 Async implementation — без asyncio.new_event_loop / run_until_complete.
 """
 import logging
-import time
 
 from quart import Blueprint, request, jsonify
 
+from bot.services.events_route_service import (
+    get_public_events_payload,
+    invalidate_public_events_cache,
+    require_admin_user,
+)
 from bot.web.routes.admin_common import CORS_HEADERS
 
 logger = logging.getLogger(__name__)
 
 _CORS = CORS_HEADERS
-
-# Кеш для GET /api/events/ (TTL 60 сек)
-_events_cache = None
-_events_cache_ts = 0
-_EVENTS_CACHE_TTL = 60
 
 
 def create_blueprint():
@@ -31,38 +30,19 @@ def create_blueprint():
     @bp.route("", methods=["GET"])
     async def public_list():
         """GET /api/events — активные и предстоящие события (кеш 60 сек)."""
-        global _events_cache, _events_cache_ts
         try:
-            if _events_cache is not None and (time.time() - _events_cache_ts) < _EVENTS_CACHE_TTL:
-                return jsonify(_events_cache), 200, _CORS
-            from bot.events.services.event_service import list_active, list_upcoming, list_ended
-            active = await list_active()
-            upcoming = await list_upcoming()
-            ended = await list_ended()
-            data = {"events": active + upcoming + ended, "active": active, "upcoming": upcoming, "ended": ended}
-            _events_cache = data
-            _events_cache_ts = time.time()
-            return jsonify(data), 200, _CORS
+            payload = await get_public_events_payload()
+            return jsonify(payload), 200, _CORS
         except Exception as e:
             logger.warning("events public list: %s", e)
             return jsonify({"events": [], "active": [], "upcoming": [], "ended": []}), 200, _CORS
-
-    async def _admin_check():
-        from bot.handlers.api_support.webhook_auth import authenticate_request_async, check_admin_access_async
-        body = await request.get_json(silent=True) or {}
-        args = request.args if request.args else {}
-        user_id = await authenticate_request_async(request.headers, args, body, request.cookies)
-        if not user_id:
-            return None, 401
-        if not await check_admin_access_async(user_id):
-            return None, 403
-        return user_id, None
 
     @bp.route("/admin/list", methods=["GET", "OPTIONS"])
     async def admin_list():
         if request.method == "OPTIONS":
             return "", 200, _CORS
-        user_id, err = await _admin_check()
+        body = await request.get_json(silent=True) or {}
+        user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
@@ -77,11 +57,12 @@ def create_blueprint():
     async def admin_create():
         if request.method == "OPTIONS":
             return "", 200, _CORS
-        user_id, err = await _admin_check()
+        body = await request.get_json(silent=True) or {}
+        user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
-            data = await request.get_json(silent=True) or {}
+            data = body
             name = (data.get("name") or "").strip()
             description = (data.get("description") or "").strip()
             start_at = (data.get("start_at") or "").strip()
@@ -93,7 +74,7 @@ def create_blueprint():
                 return jsonify({"error": "name, start_at, end_at required"}), 400
             from bot.events.services.event_service import create_event
             event_id = await create_event(name, description, start_at, end_at, rewards=rewards, status="active")
-            globals()["_events_cache"] = None
+            invalidate_public_events_cache()
             return jsonify({"success": True, "id": event_id}), 200, _CORS
         except ValueError as ve:
             return jsonify({"error": str(ve)}), 400
@@ -105,11 +86,11 @@ def create_blueprint():
     async def admin_update(event_id):
         if request.method == "OPTIONS":
             return "", 200, _CORS
-        user_id, err = await _admin_check()
+        data = await request.get_json(silent=True) or {}
+        user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, data, request.cookies)
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
-            data = await request.get_json(silent=True) or {}
             name = (data.get("name") or "").strip() or None
             description = (data.get("description") or "").strip() if "description" in data else None
             start_at = (data.get("start_at") or "").strip() or None
@@ -120,7 +101,7 @@ def create_blueprint():
             from bot.events.services.event_service import update_event
             await update_event(event_id, name=name, description=description,
                               start_at=start_at, end_at=end_at, rewards=rewards)
-            globals()["_events_cache"] = None
+            invalidate_public_events_cache()
             return jsonify({"success": True}), 200, _CORS
         except ValueError as ve:
             return jsonify({"error": str(ve)}), 400
@@ -132,14 +113,15 @@ def create_blueprint():
     async def admin_delete(event_id):
         if request.method == "OPTIONS":
             return "", 200, _CORS
-        user_id, err = await _admin_check()
+        body = await request.get_json(silent=True) or {}
+        user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
             return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
         try:
             from bot.events.services.event_service import delete_event
             ok = await delete_event(event_id)
             if ok:
-                globals()["_events_cache"] = None
+                invalidate_public_events_cache()
             return jsonify({"success": True, "deleted": ok}), 200, _CORS
         except Exception as e:
             logger.warning("events admin delete: %s", e)

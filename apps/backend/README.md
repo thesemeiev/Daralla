@@ -10,3 +10,8 @@ Scope:
 
 Runtime entrypoints are unchanged:
 - `python -m bot`
+
+Boundary reminder:
+- route layer stays transport-only
+- business logic belongs to `bot/services/*`
+- persistence stays in `bot/db/*`
