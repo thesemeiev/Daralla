@@ -10,11 +10,11 @@ from urllib.parse import urlencode
 import aiosqlite
 import httpx
 
-from bot.db import DB_PATH, add_payment, get_payment_by_id
-from bot.db.subscriptions_db import get_subscription_by_id
-from bot.cryptocloud_config import CRYPTOCLOUD_AVAILABLE_CURRENCIES
-from bot.prices_config import PRICES, get_default_device_limit_async
-from bot.web.routes.api_user_helpers import cryptocloud_extract_address
+from daralla_backend.db import DB_PATH, add_payment, get_payment_by_id
+from daralla_backend.db.subscriptions_db import get_subscription_by_id
+from daralla_backend.cryptocloud_config import CRYPTOCLOUD_AVAILABLE_CURRENCIES
+from daralla_backend.prices_config import PRICES, get_default_device_limit_async
+from daralla_backend.web.routes.api_user_helpers import cryptocloud_extract_address
 
 
 class UserPaymentServiceError(Exception):
@@ -64,7 +64,7 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
     referrer_user_id = None
     if referrer_code:
         try:
-            from bot.events.db.queries import get_user_id_by_code
+            from daralla_backend.events.db.queries import get_user_id_by_code
 
             referrer_user_id = await get_user_id_by_code(referrer_code)
             if referrer_user_id and referrer_user_id == user_id:

@@ -2,14 +2,14 @@
 
 from quart import jsonify, request
 
-from bot.services.user_subscriptions_service import (
+from daralla_backend.services.user_subscriptions_service import (
     rename_subscription_for_user,
     server_usage_payload,
     subscriptions_overview_payload,
 )
-from bot.web.routes.admin_common import _cors_headers
-from bot.web.routes.api_user_common import options_response_or_none, require_user_id
-from bot.web.routes.api_user_helpers import normalize_map_lat_lng
+from daralla_backend.web.routes.admin_common import _cors_headers
+from daralla_backend.web.routes.api_user_common import options_response_or_none, require_user_id
+from daralla_backend.web.routes.api_user_helpers import normalize_map_lat_lng
 
 
 async def handle_api_subscriptions(_auth, logger):
@@ -69,7 +69,7 @@ async def handle_api_user_server_usage(_auth, logger):
         user_id, err = await require_user_id(_auth)
         if err:
             return jsonify(err[0]), err[1]
-        from bot.app_context import get_ctx
+        from daralla_backend.app_context import get_ctx
 
         server_manager = get_ctx().server_manager
         payload = await server_usage_payload(user_id, server_manager, normalize_map_lat_lng)

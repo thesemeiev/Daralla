@@ -6,7 +6,7 @@ import logging
 
 from quart import Blueprint, request, jsonify
 
-from bot.services.events_route_service import (
+from daralla_backend.services.events_route_service import (
     get_public_events_payload,
     get_event_leaderboard,
     get_event_my_place,
@@ -15,8 +15,8 @@ from bot.services.events_route_service import (
     require_authenticated_user,
     require_admin_user,
 )
-from bot.web.routes.admin_common import CORS_HEADERS
-from bot.web.routes.transport import auth_error_payload, error_response
+from daralla_backend.web.routes.admin_common import CORS_HEADERS
+from daralla_backend.web.routes.transport import auth_error_payload, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def create_blueprint():
         if err:
             return auth_error_payload(err)
         try:
-            from bot.events.services.event_service import list_all
+            from daralla_backend.events.services.event_service import list_all
             events = await list_all()
             return jsonify({"events": events}), 200, _CORS
         except Exception as e:
@@ -77,7 +77,7 @@ def create_blueprint():
                 rewards = []
             if not name or not start_at or not end_at:
                 return jsonify({"error": "name, start_at, end_at required"}), 400
-            from bot.events.services.event_service import create_event
+            from daralla_backend.events.services.event_service import create_event
             event_id = await create_event(name, description, start_at, end_at, rewards=rewards, status="active")
             invalidate_public_events_cache()
             return jsonify({"success": True, "id": event_id}), 200, _CORS
@@ -103,7 +103,7 @@ def create_blueprint():
             rewards = data.get("rewards") if "rewards" in data else None
             if not isinstance(rewards, list):
                 rewards = None
-            from bot.events.services.event_service import update_event
+            from daralla_backend.events.services.event_service import update_event
             await update_event(event_id, name=name, description=description,
                               start_at=start_at, end_at=end_at, rewards=rewards)
             invalidate_public_events_cache()
@@ -123,7 +123,7 @@ def create_blueprint():
         if err:
             return auth_error_payload(err)
         try:
-            from bot.events.services.event_service import delete_event
+            from daralla_backend.events.services.event_service import delete_event
             ok = await delete_event(event_id)
             if ok:
                 invalidate_public_events_cache()
@@ -148,8 +148,8 @@ def create_blueprint():
     @bp.route("/<int:event_id>", methods=["GET"])
     async def public_event_detail(event_id):
         try:
-            from bot.events.services.event_service import get_event
-            from bot.events.config import EVENTS_SUPPORT_URL
+            from daralla_backend.events.services.event_service import get_event
+            from daralla_backend.events.config import EVENTS_SUPPORT_URL
             ev = await get_event(event_id)
             if not ev:
                 return jsonify({"error": "Not found"}), 404

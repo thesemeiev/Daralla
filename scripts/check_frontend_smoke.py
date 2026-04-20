@@ -9,9 +9,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INDEX_HTML = ROOT / "webapp" / "index.html"
-APP_JS = ROOT / "webapp" / "app.js"
-STYLE_CSS = ROOT / "webapp" / "style.css"
+INDEX_HTML = ROOT / "apps" / "frontend" / "webapp" / "index.html"
+APP_JS = ROOT / "apps" / "frontend" / "webapp" / "app.js"
+STYLE_CSS = ROOT / "apps" / "frontend" / "webapp" / "style.css"
 
 
 def main() -> int:

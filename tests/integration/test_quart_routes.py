@@ -3,8 +3,8 @@ import pytest
 from unittest.mock import patch
 from quart import Quart
 
-from bot.web.app_quart import create_quart_app
-from bot.web.routes.payment import parse_yookassa_webhook_payload
+from daralla_backend.web.app_quart import create_quart_app
+from daralla_backend.web.routes.payment import parse_yookassa_webhook_payload
 
 
 @pytest.fixture
@@ -152,8 +152,8 @@ async def test_post_api_admin_check_with_admin_token_returns_200_and_is_admin(qu
     # Patch async admin check where used: admin_common and admin_check
     async def mock_admin_async(*args, **kwargs):
         return True
-    with patch("bot.web.routes.admin_common.check_admin_access_async", side_effect=mock_admin_async), patch(
-        "bot.web.routes.admin_check.check_admin_access_async", side_effect=mock_admin_async
+    with patch("daralla_backend.web.routes.admin_common.check_admin_access_async", side_effect=mock_admin_async), patch(
+        "daralla_backend.web.routes.admin_check.check_admin_access_async", side_effect=mock_admin_async
     ):
         response = await client.post(
             "/api/admin/check",

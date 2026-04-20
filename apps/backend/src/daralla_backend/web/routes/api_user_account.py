@@ -4,7 +4,7 @@ import os
 
 from quart import Response, jsonify, request
 
-from bot.services.user_account_service import (
+from daralla_backend.services.user_account_service import (
     UserAccountServiceError,
     UserAvatarServiceError,
     change_login_for_user,
@@ -15,9 +15,9 @@ from bot.services.user_account_service import (
     setup_web_access_for_telegram_user,
     unlink_telegram_for_user,
 )
-from bot.web.auth_validation import validate_password_format, validate_username_format
-from bot.web.routes.api_user_common import options_response_or_none, require_user_id
-from bot.web.routes.transport import error_response, service_error_response
+from daralla_backend.web.auth_validation import validate_password_format, validate_username_format
+from daralla_backend.web.routes.api_user_common import options_response_or_none, require_user_id
+from daralla_backend.web.routes.transport import error_response, service_error_response
 
 
 async def handle_api_user_web_access_setup(logger):

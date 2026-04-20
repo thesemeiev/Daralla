@@ -5,7 +5,7 @@ import logging
 import aiosqlite
 
 # Используем ту же БД, что и основное приложение
-from bot.db import DB_PATH
+from daralla_backend.db import DB_PATH
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
-"""Integration tests for bot.db.subscriptions_db."""
+"""Integration tests for daralla_backend.db.subscriptions_db."""
 import time
 import uuid
 
 import pytest
 
-from bot.db import (
+from daralla_backend.db import (
     add_server_config,
     add_server_group,
     create_subscription,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import aiosqlite
 
-from bot.db import DB_PATH
+from daralla_backend.db import DB_PATH
 
 
 async def get_user_id_from_subscriber_id(subscriber_id: int):

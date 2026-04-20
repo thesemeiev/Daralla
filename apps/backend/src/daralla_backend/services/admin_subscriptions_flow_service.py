@@ -6,8 +6,8 @@ import asyncio
 import datetime
 import logging
 
-from bot.db.notifications_db import clear_subscription_notifications
-from bot.db.subscriptions_db import (
+from daralla_backend.db.notifications_db import clear_subscription_notifications
+from daralla_backend.db.subscriptions_db import (
     get_subscription_by_id_only,
     get_subscription_servers,
     get_subscriptions_page,
@@ -17,8 +17,8 @@ from bot.db.subscriptions_db import (
     update_subscription_name,
     update_subscription_status,
 )
-from bot.handlers.api_support.payment_processors import get_globals
-from bot.services.admin_subscriptions_service import (
+from daralla_backend.handlers.api_support.payment_processors import get_globals
+from daralla_backend.services.admin_subscriptions_service import (
     delete_subscription_record,
     get_user_id_from_subscriber_id,
     get_user_id_from_subscription_id,
@@ -279,7 +279,7 @@ async def manual_sync_payload(sub_id: int, logger: logging.Logger):
     if not sub:
         return None, {"error": "Subscription not found"}, 404
     servers = await get_subscription_servers(sub_id)
-    from bot.app_context import get_ctx
+    from daralla_backend.app_context import get_ctx
 
     subscription_manager = get_ctx().subscription_manager
     if not subscription_manager:
@@ -323,7 +323,7 @@ async def delete_subscription_payload(sub_id: int):
     if not sub:
         return None, {"error": "Subscription not found"}, 404
     servers = await get_subscription_servers(sub_id)
-    from bot.app_context import get_ctx
+    from daralla_backend.app_context import get_ctx
 
     server_manager = get_ctx().server_manager
 

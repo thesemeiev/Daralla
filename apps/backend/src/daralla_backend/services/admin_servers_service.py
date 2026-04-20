@@ -6,9 +6,9 @@ import asyncio
 import logging
 import sqlite3
 
-from bot.app_context import get_ctx
-from bot.client_flow import normalize_client_flow_for_storage
-from bot.db.servers_db import (
+from daralla_backend.app_context import get_ctx
+from daralla_backend.client_flow import normalize_client_flow_for_storage
+from daralla_backend.db.servers_db import (
     add_server_config,
     add_server_group,
     delete_server_config,
@@ -20,9 +20,9 @@ from bot.db.servers_db import (
     update_server_config,
     update_server_group,
 )
-from bot.db.subscriptions_db import sync_subscription_statuses
-from bot.services.server_provider import ServerProvider
-from bot.services.xui_service import X3
+from daralla_backend.db.subscriptions_db import sync_subscription_statuses
+from daralla_backend.services.server_provider import ServerProvider
+from daralla_backend.services.xui_service import X3
 
 logger = logging.getLogger(__name__)
 _SERVER_CONFIG_OP_LOCK = asyncio.Lock()

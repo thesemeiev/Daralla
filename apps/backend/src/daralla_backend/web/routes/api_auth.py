@@ -10,13 +10,13 @@ import os
 from quart import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash
 
-from bot.services.auth_service import (
+from daralla_backend.services.auth_service import (
     AuthServiceError,
     login_user_and_issue_token,
     register_user_and_issue_token,
     verify_auth_token,
 )
-from bot.web.auth_validation import validate_username_format, validate_password_format
+from daralla_backend.web.auth_validation import validate_username_format, validate_password_format
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import time
 
-from bot.events.services import event_service
-from bot.handlers.api_support.webhook_auth import authenticate_request_async, check_admin_access_async
+from daralla_backend.events.services import event_service
+from daralla_backend.handlers.api_support.webhook_auth import authenticate_request_async, check_admin_access_async
 
 _events_cache = None
 _events_cache_ts = 0
@@ -49,18 +49,18 @@ async def require_authenticated_user(headers, args, body, cookies):
 
 
 async def get_user_referral_code(user_id: str):
-    from bot.events.db.queries import get_or_create_referral_code
+    from daralla_backend.events.db.queries import get_or_create_referral_code
 
     return await get_or_create_referral_code(user_id)
 
 
 async def get_event_leaderboard(event_id: int, limit: int):
-    from bot.events.db.queries import get_leaderboard
+    from daralla_backend.events.db.queries import get_leaderboard
 
     return await get_leaderboard(event_id, limit=limit)
 
 
 async def get_event_my_place(event_id: int, user_id: str):
-    from bot.events.db.queries import get_my_place
+    from daralla_backend.events.db.queries import get_my_place
 
     return await get_my_place(event_id, user_id)

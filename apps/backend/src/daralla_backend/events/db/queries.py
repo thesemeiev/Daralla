@@ -8,7 +8,7 @@ import string
 from datetime import datetime, timezone
 import aiosqlite
 
-from bot.db import DB_PATH
+from daralla_backend.db import DB_PATH
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from quart import request
 
-from bot.handlers.api_support.webhook_auth import authenticate_request_async
-from bot.web.routes.admin_common import CORS_HEADERS
+from daralla_backend.handlers.api_support.webhook_auth import authenticate_request_async
+from daralla_backend.web.routes.admin_common import CORS_HEADERS
 
 
 def options_response_or_none():

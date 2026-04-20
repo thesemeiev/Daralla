@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.db import (
+from daralla_backend.db import (
     add_payment,
     add_server_config,
     add_server_group,
@@ -13,9 +13,9 @@ from bot.db import (
     get_or_create_subscriber,
     get_payment_by_id,
 )
-from bot.handlers.api_support.payment_processors import process_payment_webhook
-from bot.services.server_manager import MultiServerManager
-from bot.services.subscription_manager import SubscriptionManager
+from daralla_backend.handlers.api_support.payment_processors import process_payment_webhook
+from daralla_backend.services.server_manager import MultiServerManager
+from daralla_backend.services.subscription_manager import SubscriptionManager
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ async def test_process_payment_webhook_idempotent(mock_managers):
     await add_payment(payment_id, user_id, "succeeded", meta=meta)
 
     with patch(
-        "bot.handlers.api_support.payment_processors.get_globals",
+        "daralla_backend.handlers.api_support.payment_processors.get_globals",
         return_value=mock_managers,
     ):
         await process_payment_webhook(payment_id, "succeeded")
@@ -86,7 +86,7 @@ async def test_process_payment_webhook_new_purchase_creates_subscription(mock_ma
     await add_payment(payment_id, user_id, "succeeded", meta=meta)
 
     with patch(
-        "bot.handlers.api_support.payment_processors.get_globals",
+        "daralla_backend.handlers.api_support.payment_processors.get_globals",
         return_value=mock_managers,
     ):
         await process_payment_webhook(payment_id, "succeeded")

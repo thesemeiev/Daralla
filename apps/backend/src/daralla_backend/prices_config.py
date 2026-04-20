@@ -40,7 +40,7 @@ def _parse_price(raw: str | None, fallback: int) -> int:
 async def refresh_prices_from_db() -> None:
     """Обновляет PRICE_MONTH, PRICE_3MONTH и словарь PRICES из БД (или env по умолчанию)."""
     global PRICE_MONTH, PRICE_3MONTH
-    from bot.db.config_db import get_config
+    from daralla_backend.db.config_db import get_config
 
     pm = await get_config(CONFIG_KEY_PRICE_MONTH, None)
     p3 = await get_config(CONFIG_KEY_PRICE_3MONTH, None)
@@ -53,7 +53,7 @@ async def refresh_prices_from_db() -> None:
 
 async def get_default_device_limit_async() -> int:
     """Лимит устройств (limitIp) для новых оплат и пробной подписки по умолчанию."""
-    from bot.db.config_db import get_config
+    from daralla_backend.db.config_db import get_config
 
     raw = await get_config(CONFIG_KEY_DEFAULT_DEVICE_LIMIT, "1")
     try:

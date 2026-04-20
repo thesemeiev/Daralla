@@ -6,7 +6,7 @@ import logging
 import telegram
 from quart import Blueprint, request, jsonify
 
-from bot.services.admin_notifications_service import (
+from daralla_backend.services.admin_notifications_service import (
     create_rule,
     delete_rule,
     list_rules,
@@ -15,7 +15,7 @@ from bot.services.admin_notifications_service import (
     update_rule,
     validate_event_type,
 )
-from bot.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
 
 logger = logging.getLogger(__name__)
 

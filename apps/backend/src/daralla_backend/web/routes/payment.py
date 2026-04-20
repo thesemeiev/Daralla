@@ -13,13 +13,13 @@ import os
 import jwt
 from quart import Blueprint, request, jsonify
 
-from bot.handlers.api_support.payment_processors import process_payment_webhook
-from bot.services.payment_webhook_service import (
+from daralla_backend.handlers.api_support.payment_processors import process_payment_webhook
+from daralla_backend.services.payment_webhook_service import (
     normalize_cryptocloud_payload,
     parse_yookassa_webhook_payload,
     resolve_cryptocloud_postback_target,
 )
-from bot.web.observability import inc_metric
+from daralla_backend.web.observability import inc_metric
 
 logger = logging.getLogger(__name__)
 

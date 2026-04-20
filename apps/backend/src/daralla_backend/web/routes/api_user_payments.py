@@ -2,13 +2,13 @@
 
 from quart import jsonify, request
 
-from bot.services.user_payments_service import (
+from daralla_backend.services.user_payments_service import (
     UserPaymentServiceError,
     create_user_payment,
     user_payment_status_payload,
 )
-from bot.web.routes.admin_common import CORS_HEADERS, _cors_headers
-from bot.web.routes.api_user_common import options_response_or_none, require_user_id
+from daralla_backend.web.routes.admin_common import CORS_HEADERS, _cors_headers
+from daralla_backend.web.routes.api_user_common import options_response_or_none, require_user_id
 
 
 async def handle_api_user_payment_create(_auth, logger):

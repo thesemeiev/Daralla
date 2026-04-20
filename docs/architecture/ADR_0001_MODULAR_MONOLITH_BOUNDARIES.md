@@ -10,13 +10,13 @@ Accepted
 
 ## Context
 
-Project runtime is intentionally single-service (`python -m bot`, one deploy unit), but code ownership spans:
+Project runtime is intentionally single-service (`python -m daralla_backend`, one deploy unit), but code ownership spans:
 
-- backend (`bot/`, transition marker `apps/backend`)
-- frontend (`webapp/`, transition marker `apps/frontend`)
+- backend (`apps/backend/src/daralla_backend/`, transition marker `apps/backend`)
+- frontend (`apps/frontend/webapp/`, transition marker `apps/frontend`)
 - FE/BE contracts (`shared/contracts`)
 
-The main source of coupling is not deployment, but unclear module boundaries in large hotspot files (`webapp/app.js`, route/service hotspots).
+The main source of coupling is not deployment, but unclear module boundaries in large hotspot files (`apps/frontend/webapp/app.js`, route/service hotspots).
 
 ## Decision
 
@@ -46,7 +46,7 @@ We keep a **modular monolith** model with explicit boundaries:
 
 ## Guardrails
 
-- No direct `bot.db*` imports in route layer.
+- No direct `daralla_backend.db*` imports in route layer.
 - Route handlers stay transport-only (request parsing, service invocation, response mapping).
 - Business rules live in service modules.
 - Contract changes must update `shared/contracts` artifacts.

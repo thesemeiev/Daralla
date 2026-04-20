@@ -16,12 +16,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 HOTSPOT_FILES = [
-    "webapp/app.js",
-    "webapp/index.html",
-    "webapp/style.css",
-    "bot/web/routes/api_user.py",
-    "bot/services/xui_service.py",
-    "bot/services/subscription_manager.py",
+    "apps/frontend/webapp/app.js",
+    "apps/frontend/webapp/index.html",
+    "apps/frontend/webapp/style.css",
+    "apps/backend/src/daralla_backend/web/routes/api_user.py",
+    "apps/backend/src/daralla_backend/services/xui_service.py",
+    "apps/backend/src/daralla_backend/services/subscription_manager.py",
 ]
 
 
@@ -52,17 +52,17 @@ def main() -> None:
         "generated_at": "manual-run",
         "hotspot_lines": file_lines,
         "function_counts": {
-            "webapp/app.js:function": _count_matches(
-                ROOT / "webapp/app.js", r"^\s*function\s+[A-Za-z0-9_]+\s*\("
+            "apps/frontend/webapp/app.js:function": _count_matches(
+                ROOT / "apps/frontend/webapp/app.js", r"^\s*function\s+[A-Za-z0-9_]+\s*\("
             ),
-            "bot/web/routes/api_user.py:def": _count_matches(
-                ROOT / "bot/web/routes/api_user.py", r"^\s*(async\s+def|def)\s+[A-Za-z0-9_]+\s*\("
+            "apps/backend/src/daralla_backend/web/routes/api_user.py:def": _count_matches(
+                ROOT / "apps/backend/src/daralla_backend/web/routes/api_user.py", r"^\s*(async\s+def|def)\s+[A-Za-z0-9_]+\s*\("
             ),
-            "bot/services/xui_service.py:def": _count_matches(
-                ROOT / "bot/services/xui_service.py", r"^\s*(async\s+def|def)\s+[A-Za-z0-9_]+\s*\("
+            "apps/backend/src/daralla_backend/services/xui_service.py:def": _count_matches(
+                ROOT / "apps/backend/src/daralla_backend/services/xui_service.py", r"^\s*(async\s+def|def)\s+[A-Za-z0-9_]+\s*\("
             ),
-            "bot/services/subscription_manager.py:def": _count_matches(
-                ROOT / "bot/services/subscription_manager.py",
+            "apps/backend/src/daralla_backend/services/subscription_manager.py:def": _count_matches(
+                ROOT / "apps/backend/src/daralla_backend/services/subscription_manager.py",
                 r"^\s*(async\s+def|def)\s+[A-Za-z0-9_]+\s*\(",
             ),
         },

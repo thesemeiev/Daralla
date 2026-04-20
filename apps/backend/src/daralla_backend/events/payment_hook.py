@@ -2,7 +2,7 @@
 Хук успешной оплаты: засчитываем оплату с кодом в рейтинг реферера по активным событиям.
 """
 import logging
-from bot.events.db.queries import list_events_active, add_counted_payment
+from daralla_backend.events.db.queries import list_events_active, add_counted_payment
 
 logger = logging.getLogger(__name__)
 

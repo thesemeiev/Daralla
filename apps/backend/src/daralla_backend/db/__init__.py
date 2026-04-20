@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 # Пути к единой базе данных
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-# В тестах задайте DARALLA_TEST_DB (например :memory: или путь к временному файлу) до импорта bot.db
+# В тестах задайте DARALLA_TEST_DB (например :memory: или путь к временному файлу) до импорта daralla_backend.db
 DB_PATH = os.environ.get('DARALLA_TEST_DB', os.path.join(DATA_DIR, 'daralla.db'))
 
 # Импортируем все функции из подмодулей

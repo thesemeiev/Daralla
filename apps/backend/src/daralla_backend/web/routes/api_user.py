@@ -4,7 +4,7 @@ Async implementation — no asyncio.new_event_loop / run_until_complete.
 """
 import logging
 from quart import Blueprint
-from bot.web.routes.api_user_account import (
+from daralla_backend.web.routes.api_user_account import (
     handle_api_user_avatar,
     handle_api_user_change_login,
     handle_api_user_change_password,
@@ -13,17 +13,17 @@ from bot.web.routes.api_user_account import (
     handle_api_user_unlink_telegram,
     handle_api_user_web_access_setup,
 )
-from bot.web.routes.api_user_payments import (
+from daralla_backend.web.routes.api_user_payments import (
     handle_api_user_payment_create,
     handle_api_user_payment_status,
 )
-from bot.web.routes.api_user_registration import handle_api_user_register
-from bot.web.routes.api_user_subscriptions import (
+from daralla_backend.web.routes.api_user_registration import handle_api_user_register
+from daralla_backend.web.routes.api_user_subscriptions import (
     handle_api_subscriptions,
     handle_api_user_server_usage,
     handle_api_user_subscription_rename,
 )
-from bot.web.routes.api_user_common import auth_user_from_request
+from daralla_backend.web.routes.api_user_common import auth_user_from_request
 
 logger = logging.getLogger(__name__)
 

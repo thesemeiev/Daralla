@@ -3,8 +3,8 @@
 Simple architecture guardrails checker.
 
 Current rules:
-1) Route modules must not import bot.*.db* directly.
-2) webapp/app.js should stay a thin entrypoint (limited passthrough wrappers).
+1) Route modules must not import daralla_backend.*.db* directly.
+2) apps/frontend/webapp/app.js should stay a thin entrypoint (limited passthrough wrappers).
 """
 
 from __future__ import annotations
@@ -15,15 +15,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ROUTES_DIR = ROOT / "bot" / "web" / "routes"
-APP_JS = ROOT / "webapp" / "app.js"
+ROUTES_DIR = ROOT / "apps" / "backend" / "src" / "daralla_backend" / "web" / "routes"
+APP_JS = ROOT / "apps" / "frontend" / "webapp" / "app.js"
 
 ROUTE_DB_IMPORT = re.compile(
-    r"^\s*(from\s+bot\.db(?:\.[\w_]+)*\s+import|import\s+bot\.db(?:\.[\w_]+)*)",
+    r"^\s*(from\s+daralla_backend\.db(?:\.[\w_]+)*\s+import|import\s+daralla_backend\.db(?:\.[\w_]+)*)",
     re.MULTILINE,
 )
 ROUTE_ANY_DB_IMPORT = re.compile(
-    r"^\s*(from\s+bot\.[\w\.]*db(?:\.[\w_]+)*\s+import|import\s+bot\.[\w\.]*db(?:\.[\w_]+)*)",
+    r"^\s*(from\s+daralla_backend\.[\w\.]*db(?:\.[\w_]+)*\s+import|import\s+daralla_backend\.[\w\.]*db(?:\.[\w_]+)*)",
     re.MULTILINE,
 )
 APP_PASSTHROUGH_WRAPPER = re.compile(
@@ -49,7 +49,7 @@ def main() -> int:
                 violations.append(rel)
 
     if violations:
-        print("Architecture rule violation: new routes import bot.db in route layer.")
+        print("Architecture rule violation: new routes import daralla_backend.db in route layer.")
         for item in violations:
             print(f" - {item}")
         return 1

@@ -8,7 +8,7 @@ import urllib.parse
 
 import pytest
 
-from bot.handlers.api_support.webhook_auth import verify_telegram_init_data
+from daralla_backend.handlers.api_support.webhook_auth import verify_telegram_init_data
 
 
 def _build_valid_init_data(telegram_user_id: int, auth_date: int = None) -> str:

@@ -1,4 +1,4 @@
-from bot.web.routes.api_user_helpers import cryptocloud_extract_address, normalize_map_lat_lng
+from daralla_backend.web.routes.api_user_helpers import cryptocloud_extract_address, normalize_map_lat_lng
 
 
 def test_cryptocloud_extract_address_from_top_level():

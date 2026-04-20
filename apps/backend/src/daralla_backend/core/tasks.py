@@ -5,7 +5,7 @@ import asyncio
 import logging
 import os
 
-from bot.web.observability import inc_metric
+from daralla_backend.web.observability import inc_metric
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ import logging
 
 from quart import Blueprint, request, jsonify
 
-from bot.handlers.api_support.webhook_auth import authenticate_request_async
+from daralla_backend.handlers.api_support.webhook_auth import authenticate_request_async
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def create_blueprint(bot_app):
         if request.method == "OPTIONS":
             return "", 200, CORS_OPTIONS_HEADERS
         try:
-            from bot.prices_config import PRICES
+            from daralla_backend.prices_config import PRICES
             return jsonify({
                 "success": True, "prices": PRICES,
                 "month": PRICES.get("month", 150), "3month": PRICES.get("3month", 350),
@@ -72,7 +72,7 @@ def create_blueprint(bot_app):
             if not user_id:
                 return jsonify({"error": "Invalid authentication"}), 401, CORS_HEADERS
 
-            from bot.app_context import get_ctx
+            from daralla_backend.app_context import get_ctx
             server_manager = get_ctx().server_manager
             if not server_manager:
                 return jsonify({"error": "Server manager not available"}), 503, CORS_HEADERS
@@ -88,7 +88,7 @@ def create_blueprint(bot_app):
             logger.error("Ошибка в API /api/servers: %s", e, exc_info=True)
             server_manager = None
             try:
-                from bot.app_context import get_ctx
+                from daralla_backend.app_context import get_ctx
                 server_manager = get_ctx().server_manager
             except Exception:
                 pass

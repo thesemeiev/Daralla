@@ -6,15 +6,15 @@ import asyncio
 import logging
 import time
 
-from bot.app_context import get_ctx
-from bot.db.notifications_db import get_daily_notification_stats, get_notification_stats
-from bot.db.subscriptions_db import (
+from daralla_backend.app_context import get_ctx
+from daralla_backend.db.notifications_db import get_daily_notification_stats, get_notification_stats
+from daralla_backend.db.subscriptions_db import (
     get_conversion_data,
     get_subscription_conversion_data,
     get_subscription_dynamics_data,
     get_subscription_types_statistics,
 )
-from bot.db.users_db import get_user_growth_data
+from daralla_backend.db.users_db import get_user_growth_data
 
 
 logger = logging.getLogger(__name__)

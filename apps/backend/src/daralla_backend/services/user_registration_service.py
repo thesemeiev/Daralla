@@ -5,15 +5,15 @@ from __future__ import annotations
 import aiosqlite
 import time
 
-from bot.app_context import get_ctx
-from bot.db import is_known_user, register_simple_user
-from bot.db.subscriptions_db import (
+from daralla_backend.app_context import get_ctx
+from daralla_backend.db import is_known_user, register_simple_user
+from daralla_backend.db.subscriptions_db import (
     create_subscription,
     get_all_active_subscriptions_by_user,
     get_subscription_by_id_only,
     is_subscription_active,
 )
-from bot.db.users_db import (
+from daralla_backend.db.users_db import (
     generate_user_id,
     get_or_create_subscriber,
     get_user_by_id,
@@ -22,8 +22,8 @@ from bot.db.users_db import (
     mark_telegram_id_known,
     reconcile_users_telegram_id_with_link,
 )
-from bot.services.user_account_service import create_telegram_binding
-from bot.prices_config import get_default_device_limit_async
+from daralla_backend.services.user_account_service import create_telegram_binding
+from daralla_backend.prices_config import get_default_device_limit_async
 
 
 async def resolve_or_create_user_from_telegram(telegram_id: str):

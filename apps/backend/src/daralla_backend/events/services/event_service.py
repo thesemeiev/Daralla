@@ -4,7 +4,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from bot.events.db.queries import (
+from daralla_backend.events.db.queries import (
     create_event as db_create_event,
     get_event_by_id,
     list_events_active,

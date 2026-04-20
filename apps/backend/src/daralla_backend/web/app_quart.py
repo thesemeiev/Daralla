@@ -9,8 +9,8 @@ import sqlite3
 
 from quart import Quart, jsonify
 
-from bot.db import DB_PATH
-from bot.web.observability import get_metrics_snapshot, install_observability_hooks
+from daralla_backend.db import DB_PATH
+from daralla_backend.web.observability import get_metrics_snapshot, install_observability_hooks
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def create_quart_app(bot_app=None) -> Quart:
 
         if bot_app is not None:
             try:
-                from bot.app_context import get_ctx
+                from daralla_backend.app_context import get_ctx
 
                 ctx = get_ctx()
                 checks["context"] = (
@@ -64,27 +64,27 @@ def create_quart_app(bot_app=None) -> Quart:
     # so the async subscription blueprint (subscription) is used instead.
     if bot_app is not None:
         try:
-            from bot.web.routes import create_subscription_blueprint
-            from bot.web.routes.api_auth import create_blueprint as create_api_auth_blueprint
-            from bot.web.routes.api_user import create_blueprint as create_api_user_blueprint
-            from bot.web.routes.payment import create_blueprint as create_payment_blueprint
-            from bot.web.routes.api_public import create_blueprint as create_api_public_blueprint
-            from bot.web.routes.static import bp as static_bp
-            from bot.web.routes.admin_check import create_blueprint as create_admin_check_blueprint
-            from bot.web.routes.admin_users import create_blueprint as create_admin_users_blueprint
-            from bot.web.routes.admin_subscriptions import create_blueprint as create_admin_subscriptions_blueprint
-            from bot.web.routes.admin_stats import create_blueprint as create_admin_stats_blueprint
-            from bot.web.routes.admin_charts import create_blueprint as create_admin_charts_blueprint
-            from bot.web.routes.admin_broadcast import create_blueprint as create_admin_broadcast_blueprint
-            from bot.web.routes.admin_servers import create_blueprint as create_admin_servers_blueprint
-            from bot.web.routes.admin_notifications import create_blueprint as create_admin_notifications_blueprint
-            from bot.web.routes.admin_commerce import create_blueprint as create_admin_commerce_blueprint
+            from daralla_backend.web.routes import create_subscription_blueprint
+            from daralla_backend.web.routes.api_auth import create_blueprint as create_api_auth_blueprint
+            from daralla_backend.web.routes.api_user import create_blueprint as create_api_user_blueprint
+            from daralla_backend.web.routes.payment import create_blueprint as create_payment_blueprint
+            from daralla_backend.web.routes.api_public import create_blueprint as create_api_public_blueprint
+            from daralla_backend.web.routes.static import bp as static_bp
+            from daralla_backend.web.routes.admin_check import create_blueprint as create_admin_check_blueprint
+            from daralla_backend.web.routes.admin_users import create_blueprint as create_admin_users_blueprint
+            from daralla_backend.web.routes.admin_subscriptions import create_blueprint as create_admin_subscriptions_blueprint
+            from daralla_backend.web.routes.admin_stats import create_blueprint as create_admin_stats_blueprint
+            from daralla_backend.web.routes.admin_charts import create_blueprint as create_admin_charts_blueprint
+            from daralla_backend.web.routes.admin_broadcast import create_blueprint as create_admin_broadcast_blueprint
+            from daralla_backend.web.routes.admin_servers import create_blueprint as create_admin_servers_blueprint
+            from daralla_backend.web.routes.admin_notifications import create_blueprint as create_admin_notifications_blueprint
+            from daralla_backend.web.routes.admin_commerce import create_blueprint as create_admin_commerce_blueprint
 
             app.register_blueprint(create_payment_blueprint(bot_app))
             try:
-                from bot.events import EVENTS_MODULE_ENABLED
+                from daralla_backend.events import EVENTS_MODULE_ENABLED
                 if EVENTS_MODULE_ENABLED:
-                    from bot.web.routes.events import create_blueprint as create_events_blueprint
+                    from daralla_backend.web.routes.events import create_blueprint as create_events_blueprint
                     app.register_blueprint(create_events_blueprint())
             except ImportError:
                 pass
@@ -114,7 +114,7 @@ def create_quart_app(bot_app=None) -> Quart:
 
 if __name__ == "__main__":
     # Local development entrypoint:
-    #   python -m bot.web.app_quart
+    #   python -m daralla_backend.web.app_quart
     # This runs Quart with no `bot_app` integration (only /health and static routes
     # that do not depend on bot state). In production, prefer an ASGI server.
     logging.basicConfig(level=logging.INFO)

@@ -9,8 +9,8 @@ import os
 import re
 import time
 
-from bot.app_context import get_ctx
-from bot.db.subscriptions_db import (
+from daralla_backend.app_context import get_ctx
+from daralla_backend.db.subscriptions_db import (
     get_subscription_by_token,
     get_subscription_servers,
     is_subscription_active,

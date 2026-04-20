@@ -5,13 +5,13 @@ from __future__ import annotations
 import datetime
 import time
 
-from bot.db.subscriptions_db import (
+from daralla_backend.db.subscriptions_db import (
     get_all_subscriptions_by_user,
     get_subscription_by_id,
     is_subscription_active,
     update_subscription_name,
 )
-from bot.db.users_db import get_user_server_usage
+from daralla_backend.db.users_db import get_user_server_usage
 
 
 async def list_user_subscriptions(user_id: str):

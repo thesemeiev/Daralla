@@ -7,7 +7,7 @@ import secrets
 import aiosqlite
 from werkzeug.security import check_password_hash
 
-from bot.db.users_db import (
+from daralla_backend.db.users_db import (
     UsernameAlreadyExistsError,
     get_user_by_auth_token,
     get_user_by_username_or_id,

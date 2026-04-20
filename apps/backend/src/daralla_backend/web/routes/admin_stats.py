@@ -4,8 +4,8 @@ Quart Blueprint: POST /api/admin/stats (dashboard statistics).
 import logging
 from quart import Blueprint, request, jsonify
 
-from bot.web.routes.admin_common import _cors_headers, admin_route
-from bot.services.admin_stats_service import admin_stats_payload
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.services.admin_stats_service import admin_stats_payload
 
 logger = logging.getLogger(__name__)
 

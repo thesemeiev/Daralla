@@ -4,7 +4,7 @@ server-config/update, server-config/sync-flow, server-config/delete, sync-all.
 """
 from quart import Blueprint, jsonify, request
 
-from bot.services.admin_servers_service import (
+from daralla_backend.services.admin_servers_service import (
     handle_server_config_delete,
     handle_server_config_sync_flow,
     handle_server_config_update,
@@ -13,7 +13,7 @@ from bot.services.admin_servers_service import (
     handle_servers_config,
     handle_sync_all,
 )
-from bot.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
 
 
 def create_blueprint(bot_app):

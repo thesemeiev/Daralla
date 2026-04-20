@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def render_structured_template(raw: str, *, expires_at: int = None) -> str:
     """Render a message_template (JSON structured or legacy format-string) into final HTML."""
-    from bot.utils import calculate_time_remaining
+    from daralla_backend.utils import calculate_time_remaining
 
     try:
         obj = json.loads(raw)

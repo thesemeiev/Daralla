@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from bot.services.sync_manager import SyncManager
-from bot.services.subscription_manager import SubscriptionManager
-from bot.services.server_manager import MultiServerManager
+from daralla_backend.services.sync_manager import SyncManager
+from daralla_backend.services.subscription_manager import SubscriptionManager
+from daralla_backend.services.server_manager import MultiServerManager
 
 
 @pytest.fixture
@@ -49,8 +49,8 @@ async def test_cleanup_orphaned_clients_deleteClient_true_then_false(
     deleted_count is 1 and loop stops (no infinite loop).
     """
     with (
-        patch("bot.services.sync_manager.get_subscriptions_to_sync", new_callable=AsyncMock) as m_sync,
-        patch("bot.services.sync_manager.get_subscription_servers", new_callable=AsyncMock) as m_servers,
+        patch("daralla_backend.services.sync_manager.get_subscriptions_to_sync", new_callable=AsyncMock) as m_sync,
+        patch("daralla_backend.services.sync_manager.get_subscription_servers", new_callable=AsyncMock) as m_servers,
     ):
         m_sync.return_value = []  # no subscriptions in DB -> all clients are orphans
         m_servers.return_value = []

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from bot.db.config_db import set_config
-from bot.prices_config import (
+from daralla_backend.db.config_db import set_config
+from daralla_backend.prices_config import (
     CONFIG_KEY_DEFAULT_DEVICE_LIMIT,
     CONFIG_KEY_PRICE_3MONTH,
     CONFIG_KEY_PRICE_MONTH,

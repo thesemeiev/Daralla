@@ -4,8 +4,8 @@ Quart Blueprint: POST /api/admin/users, user/<id>, user/<id>/create-subscription
 import logging
 from quart import Blueprint, request, jsonify
 
-from bot.web.routes.admin_common import _cors_headers, admin_route
-from bot.services.admin_users_service import (
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.services.admin_users_service import (
     create_subscription_for_user,
     delete_user_and_clients,
     get_user_info_payload,

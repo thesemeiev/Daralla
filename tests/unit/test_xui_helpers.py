@@ -1,4 +1,4 @@
-from bot.services.xui_helpers import (
+from daralla_backend.services.xui_helpers import (
     client_to_api_dict,
     panel_client_settings_dict,
     panel_snapshot_matches_desired,

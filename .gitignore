@@ -27,7 +27,7 @@ MANIFEST
 .env
 .env.*
 !.env.example
-bot/.env
+apps/backend/src/daralla_backend/.env
 .venv
 env/
 venv/

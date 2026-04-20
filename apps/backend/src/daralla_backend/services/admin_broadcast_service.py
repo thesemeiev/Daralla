@@ -7,9 +7,9 @@ import logging
 
 import telegram
 
-from bot.app_context import get_ctx
-from bot.db import get_all_user_ids
-from bot.db.users_db import get_telegram_chat_id_for_notification
+from daralla_backend.app_context import get_ctx
+from daralla_backend.db import get_all_user_ids
+from daralla_backend.db.users_db import get_telegram_chat_id_for_notification
 
 logger = logging.getLogger(__name__)
 

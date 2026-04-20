@@ -239,7 +239,7 @@ async def process_extension_payment(payment_id, user_id, meta):
             await update_payment_activation(payment_id, 1)
 
             try:
-                from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
+                from daralla_backend.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
                 if EVENTS_MODULE_ENABLED:
                     await events_on_payment_success(user_id, payment_id, meta)
             except (ImportError, RuntimeError, ValueError) as events_e:
@@ -428,7 +428,7 @@ async def process_new_purchase_payment(payment_id, user_id, meta):
         await update_payment_activation(payment_id, 1)
 
         try:
-            from bot.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
+            from daralla_backend.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
             if EVENTS_MODULE_ENABLED:
                 await events_on_payment_success(user_id, payment_id, meta)
         except Exception as events_e:

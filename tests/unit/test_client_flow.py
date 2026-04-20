@@ -1,6 +1,6 @@
 import pytest
 
-from bot.client_flow import ALLOWED_CLIENT_FLOW_VALUES, normalize_client_flow_for_storage
+from daralla_backend.client_flow import ALLOWED_CLIENT_FLOW_VALUES, normalize_client_flow_for_storage
 
 
 def test_allowed_set():

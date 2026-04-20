@@ -6,9 +6,9 @@ import time
 
 import aiosqlite
 
-from bot.db import DB_PATH
-from bot.db.payments_db import get_daily_revenue, get_revenue_by_gateway
-from bot.db.subscriptions_db import get_subscription_statistics
+from daralla_backend.db import DB_PATH
+from daralla_backend.db.payments_db import get_daily_revenue, get_revenue_by_gateway
+from daralla_backend.db.subscriptions_db import get_subscription_statistics
 
 
 async def _get_user_stats():

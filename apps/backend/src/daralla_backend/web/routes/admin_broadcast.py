@@ -3,8 +3,8 @@ Quart Blueprint: POST /api/admin/broadcast (broadcast message to users).
 """
 from quart import Blueprint, request, jsonify
 
-from bot.services.admin_broadcast_service import resolve_broadcast_recipients, send_broadcast
-from bot.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.services.admin_broadcast_service import resolve_broadcast_recipients, send_broadcast
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
 
 
 def create_blueprint(bot_app):

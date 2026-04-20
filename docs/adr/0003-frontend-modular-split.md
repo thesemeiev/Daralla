@@ -5,14 +5,14 @@
 
 ## Context
 
-`webapp/app.js` is a large monolithic file with mixed concerns.
+`apps/frontend/webapp/app.js` is a large monolithic file with mixed concerns.
 
 ## Decision
 
 Split by responsibility without changing runtime behavior:
 
-- `webapp/js/api/*` for API client logic
-- `webapp/js/ui/*` for reusable UI messaging
+- `apps/frontend/webapp/js/api/*` for API client logic
+- `apps/frontend/webapp/js/ui/*` for reusable UI messaging
 - keep legacy global functions as wrappers while migrating
 
 ## Consequences

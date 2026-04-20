@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from bot.db.subscriptions_db import is_subscription_active
+from daralla_backend.db.subscriptions_db import is_subscription_active
 
 
 def test_is_subscription_active_true():

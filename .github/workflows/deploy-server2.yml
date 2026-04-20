@@ -29,13 +29,13 @@ jobs:
         pip install pytest pytest-asyncio pytest-cov
 
     - name: Run tests
-      run: pytest tests/ -v --cov=bot --cov-report=term-missing --cov-fail-under=20
+      run: pytest tests/ -v --cov=daralla_backend --cov-report=term-missing --cov-fail-under=20
 
     - name: Lint code
       run: |
         pip install flake8
-        flake8 bot/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 bot/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 apps/backend/src/daralla_backend/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 apps/backend/src/daralla_backend/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Architecture guardrails
       run: |
@@ -55,7 +55,7 @@ jobs:
 
     - name: Frontend syntax and smoke checks
       run: |
-        node --check webapp/app.js
+        node --check apps/frontend/webapp/app.js
         python scripts/check_frontend_smoke.py
 
   # Deploy to test server
@@ -360,7 +360,7 @@ jobs:
           # Verify code update
           echo "Verifying code update..."
           echo "Current commit: $(sudo git log --oneline -1)"
-          echo "Bot.py last modified: $(sudo stat -c %y bot/bot.py)"
+          echo "Bot.py last modified: $(sudo stat -c %y apps/backend/src/daralla_backend/bot.py)"
           
           # Clean up old logs and containers
           echo "Cleaning up old logs and containers..."

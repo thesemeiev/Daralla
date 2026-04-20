@@ -2,12 +2,12 @@
 
 from quart import jsonify, request
 
-from bot.handlers.api_support.webhook_auth import verify_telegram_init_data
-from bot.services.user_registration_service import (
+from daralla_backend.handlers.api_support.webhook_auth import verify_telegram_init_data
+from daralla_backend.services.user_registration_service import (
     register_user_with_trial,
 )
-from bot.web.routes.admin_common import _cors_headers
-from bot.web.routes.api_user_common import options_response_or_none, require_user_id
+from daralla_backend.web.routes.admin_common import _cors_headers
+from daralla_backend.web.routes.api_user_common import options_response_or_none, require_user_id
 
 
 async def handle_api_user_register(_auth, logger):

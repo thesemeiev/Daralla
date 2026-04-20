@@ -3,8 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from bot.db import get_or_create_subscriber
-from bot.events.db.queries import (
+from daralla_backend.db import get_or_create_subscriber
+from daralla_backend.events.db.queries import (
     add_counted_payment,
     create_event,
     get_leaderboard,

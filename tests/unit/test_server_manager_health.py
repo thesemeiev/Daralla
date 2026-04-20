@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.services.server_manager import MultiServerManager
+from daralla_backend.services.server_manager import MultiServerManager
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_check_server_health_recreates_x3_after_long_outage():
     new_x3 = MagicMock()
     new_x3.list_quick = AsyncMock(return_value={"obj": []})
 
-    with patch("bot.services.server_manager.X3", return_value=new_x3) as x3_cls:
+    with patch("daralla_backend.services.server_manager.X3", return_value=new_x3) as x3_cls:
         ok = await manager.check_server_health("node-a", force_check=False)
 
     assert ok is True

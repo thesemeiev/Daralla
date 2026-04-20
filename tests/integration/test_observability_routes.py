@@ -1,7 +1,7 @@
 import pytest
 from quart import Quart
 
-from bot.web.app_quart import create_quart_app
+from daralla_backend.web.app_quart import create_quart_app
 
 
 @pytest.fixture

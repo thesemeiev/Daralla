@@ -3,11 +3,11 @@ Quart Blueprint: GET/POST /api/admin/commerce — цены и лимит уст�
 """
 from quart import Blueprint, request, jsonify
 
-from bot.services.admin_commerce_service import (
+from daralla_backend.services.admin_commerce_service import (
     admin_commerce_get_payload,
     admin_commerce_update_payload,
 )
-from bot.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
 
 
 def create_blueprint(bot_app):

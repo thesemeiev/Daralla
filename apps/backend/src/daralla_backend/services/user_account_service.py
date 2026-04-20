@@ -5,8 +5,8 @@ from __future__ import annotations
 import requests as requests_lib
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from bot.handlers.api_support.webhook_auth import verify_telegram_init_data
-from bot.db.users_db import (
+from daralla_backend.handlers.api_support.webhook_auth import verify_telegram_init_data
+from daralla_backend.db.users_db import (
     create_telegram_link,
     delete_telegram_link,
     get_telegram_chat_id_for_notification,

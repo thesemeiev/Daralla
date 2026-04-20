@@ -9,7 +9,7 @@
 Проект — монолитное Python-приложение для продажи и обслуживания VPN-
 подписок: Telegram-бот (python-telegram-bot, long polling), HTTP-сервер
 (Quart + Hypercorn) для вебхуков платёжных систем, REST API для веб-клиента
-и Mini App, статика SPA из каталога webapp/. Состояние хранится в SQLite
+и Mini App, статика SPA из каталога apps/frontend/webapp/. Состояние хранится в SQLite
 (daralla.db); панели 3x-ui обслуживаются через py3xui.
 
 Доменная модель в целом последовательная: пользователи (users, привязка
@@ -22,7 +22,7 @@ Telegram), подписки (subscriptions + subscription_servers), платеж
 2. КАК ЗАПУСКАЕТСЯ И КАК СВЯЗАНЫ КОМПОНЕНТЫ
 --------------------------------------------------------------------------------
 
-Точка входа: python -m bot → bot/__main__.py → bot.bot.run().
+Точка входа: python -m daralla_backend → apps/backend/src/daralla_backend/__main__.py → bot.bot.run().
 
 Порядок инициализации в run():
   • Создаётся event loop, вызывается ensure_db_and_servers_ready(): миграции
@@ -77,7 +77,7 @@ subscription_manager) уже заполнены после ensure_db_and_servers
   • Публичная выдача конфигов: GET /sub/<token> — по токену подписки, без
     пользовательской сессии; это модель «ссылка = секрет».
 
-3.4. Клиент webapp/
+3.4. Клиент apps/frontend/webapp/
   • Один крупный app.js (тысячи строк): UI, вызовы API, разбор initData из hash
     при блокировке telegram.org — продуманный fallback для Mini App.
 
@@ -86,7 +86,7 @@ subscription_manager) уже заполнены после ensure_db_and_servers
 --------------------------------------------------------------------------------
 
   • Чёткое разделение: handlers (Telegram), web/routes (HTTP), db/*, services/*.
-  • Миграции через bot/db/migrations вместо ручного «разъехавшегося» init.
+  • Миграции через apps/backend/src/daralla_backend/db/migrations вместо ручного «разъехавшегося» init.
   • Тесты pytest (unit + integration): initData, парсинг YooKassa webhook,
     часть Quart и БД — база для регрессий.
   • Dockerfile с непривилегированным пользователем app.
@@ -154,7 +154,7 @@ subscription_manager) уже заполнены после ensure_db_and_servers
 6. НЕДОСТАТКИ И ТЕХНИЧЕСКИЙ ДОЛГ
 --------------------------------------------------------------------------------
 
-  • Огромный webapp/app.js — сложно сопровождать, ревьюить, тестировать;
+  • Огромный apps/frontend/webapp/app.js — сложно сопровождать, ревьюить, тестировать;
     отсутствие модульной сборки/TypeScript увеличивает риск регрессий.
 
   • Дублирование CORS_HEADERS в нескольких модулях (api_auth vs admin_common).
@@ -212,7 +212,7 @@ subscription_manager) уже заполнены после ensure_db_and_servers
   5) Декомпозиция webapp (модули, сборщик, минимум статический анализ JS).
 
   6) Ужесточить CI: хотя бы предупреждения flake8 без exit-zero для новых
-     файлов или подключить ruff/mypy для bot/.
+     файлов или подключить ruff/mypy для apps/backend/src/daralla_backend/.
 
 
 9. ЗАКЛЮЧЕНИЕ

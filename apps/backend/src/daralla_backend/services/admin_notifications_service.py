@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from bot.db.notifications_db import (
+from daralla_backend.db.notifications_db import (
     create_notification_rule,
     delete_notification_rule,
     get_all_notification_rules,
@@ -12,7 +12,7 @@ from bot.db.notifications_db import (
     render_structured_template,
     update_notification_rule,
 )
-from bot.db.users_db import get_telegram_chat_id_for_notification
+from daralla_backend.db.users_db import get_telegram_chat_id_for_notification
 
 VALID_EVENT_TYPES = {"expiry_warning", "no_subscription"}
 

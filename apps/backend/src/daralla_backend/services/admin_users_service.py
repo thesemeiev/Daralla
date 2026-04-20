@@ -9,16 +9,16 @@ import time
 
 import aiosqlite
 
-from bot.app_context import get_ctx
-from bot.db import DB_PATH
-from bot.db.payments_db import get_payments_by_user
-from bot.db.subscriptions_db import (
+from daralla_backend.app_context import get_ctx
+from daralla_backend.db import DB_PATH
+from daralla_backend.db.payments_db import get_payments_by_user
+from daralla_backend.db.subscriptions_db import (
     get_all_subscriptions_by_user,
     get_subscription_servers,
     is_subscription_active,
     update_subscription_expiry,
 )
-from bot.db.users_db import delete_user_completely, resolve_user_by_query
+from daralla_backend.db.users_db import delete_user_completely, resolve_user_by_query
 
 logger = logging.getLogger(__name__)
 

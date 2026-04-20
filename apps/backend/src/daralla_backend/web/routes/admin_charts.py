@@ -5,8 +5,8 @@ import logging
 
 from quart import Blueprint, request, jsonify
 
-from bot.web.routes.admin_common import _cors_headers, admin_route
-from bot.services.admin_charts_service import (
+from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
+from daralla_backend.services.admin_charts_service import (
     conversion_payload,
     notifications_payload,
     server_load_payload,

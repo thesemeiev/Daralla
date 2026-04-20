@@ -1,8 +1,8 @@
 """
 Quart Blueprint: /, /index.html, /<path:filename> (webapp and static files).
 """
-import os
 import logging
+from pathlib import Path
 
 from quart import Blueprint, Response
 
@@ -12,9 +12,9 @@ bp = Blueprint("static", __name__)
 
 
 def _webapp_base_dir():
-    """Project root: parent of bot/ (в Docker /app, локально — корень репозитория)."""
-    # __file__ = .../bot/web/routes/static_quart.py → 4 уровня вверх = корень (где лежат bot/ и webapp/)
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    """Project root (where apps/backend and apps/frontend live)."""
+    # __file__ = .../apps/backend/src/daralla_backend/web/routes/static.py
+    return Path(__file__).resolve().parents[6]
 
 
 @bp.route("/", methods=["GET"])
@@ -23,9 +23,9 @@ async def root_index():
     """Отдает HTML страницу веб-приложения с корня."""
     try:
         base_dir = _webapp_base_dir()
-        webapp_path = os.path.join(base_dir, "webapp", "index.html")
-        if os.path.exists(webapp_path):
-            with open(webapp_path, "rb") as f:
+        webapp_path = base_dir / "apps" / "frontend" / "webapp" / "index.html"
+        if webapp_path.exists():
+            with webapp_path.open("rb") as f:
                 body = f.read()
             return Response(
                 body,
@@ -41,15 +41,14 @@ async def root_index():
 
 def _read_webapp_file(relative_path: str):
     base_dir = _webapp_base_dir()
-    webapp_dir = os.path.join(base_dir, "webapp")
-    file_path = os.path.join(webapp_dir, relative_path)
-    webapp_dir_abs = os.path.abspath(webapp_dir)
-    file_path_abs = os.path.abspath(file_path)
-    if not file_path_abs.startswith(webapp_dir_abs):
+    webapp_dir = base_dir / "apps" / "frontend" / "webapp"
+    file_path = (webapp_dir / relative_path).resolve()
+    webapp_dir_abs = webapp_dir.resolve()
+    if webapp_dir_abs not in file_path.parents and file_path != webapp_dir_abs:
         return None, 403
-    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+    if not file_path.exists() or not file_path.is_file():
         return None, 404
-    with open(file_path, "rb") as f:
+    with file_path.open("rb") as f:
         return f.read(), 200
 
 

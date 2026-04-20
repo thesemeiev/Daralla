@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from bot.db import get_payment_by_id
+from daralla_backend.db import get_payment_by_id
 
 
 def parse_yookassa_webhook_payload(data):

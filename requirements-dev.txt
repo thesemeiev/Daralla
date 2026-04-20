@@ -1,7 +1,7 @@
 # Инструменты для поиска мёртвого кода (ставить в venv, не в прод):
 #   python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-#   .venv/bin/vulture bot/ tests/ --exclude bot/db/migrations --min-confidence 80
-# Для «мёртвого» прода чаще достаточно: vulture bot/ ... (без tests/).
+#   .venv/bin/vulture apps/backend/src/daralla_backend/ tests/ --exclude apps/backend/src/daralla_backend/db/migrations --min-confidence 80
+# Для «мёртвого» прода чаще достаточно: vulture apps/backend/src/daralla_backend/ ... (без tests/).
 #
 # Ниже 60% confidence даёт много шума (роуты Quart, публичные методы X3, row_factory).
 vulture>=2.14

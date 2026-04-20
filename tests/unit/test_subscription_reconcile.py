@@ -4,11 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.services.subscription_manager import (
+from daralla_backend.services.subscription_manager import (
     clients_by_email_from_xui_list_response,
     panel_entry_from_snapshot,
 )
-from bot.services.xui_service import (
+from daralla_backend.services.xui_service import (
     _panel_snapshot_matches_desired,
     _flow_matches_desired,
 )
@@ -81,9 +81,9 @@ def test_panel_snapshot_matches_requires_flow_for_trojan():
 @pytest.mark.asyncio
 async def test_reconcile_client_applies_flow_from_config_when_mismatch():
     """Reconcile обходит get_list: один inbound, update с inbound_id_override."""
-    with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("bot.services.xui_service.AsyncApi"):
-            from bot.services.xui_service import X3
+    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
+        with patch("daralla_backend.services.xui_service.AsyncApi"):
+            from daralla_backend.services.xui_service import X3
 
             x3 = X3.__new__(X3)
             x3._logged_in = True
@@ -123,9 +123,9 @@ async def test_reconcile_client_applies_flow_from_config_when_mismatch():
 @pytest.mark.asyncio
 async def test_reconcile_client_always_posts_even_when_api_looks_in_sync():
     """Каждый reconcile по списку inbound шлёт update + flow_override."""
-    with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("bot.services.xui_service.AsyncApi"):
-            from bot.services.xui_service import X3
+    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
+        with patch("daralla_backend.services.xui_service.AsyncApi"):
+            from daralla_backend.services.xui_service import X3
 
             x3 = X3.__new__(X3)
             x3._logged_in = True
@@ -162,9 +162,9 @@ async def test_reconcile_client_always_posts_even_when_api_looks_in_sync():
 @pytest.mark.asyncio
 async def test_reconcile_client_updates_same_email_in_every_inbound():
     """Один email в двух inbound — два updateClient с разным inbound_id_override."""
-    with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("bot.services.xui_service.AsyncApi"):
-            from bot.services.xui_service import X3
+    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
+        with patch("daralla_backend.services.xui_service.AsyncApi"):
+            from daralla_backend.services.xui_service import X3
 
             x3 = X3.__new__(X3)
             x3._logged_in = True
@@ -198,9 +198,9 @@ async def test_reconcile_client_updates_same_email_in_every_inbound():
 @pytest.mark.asyncio
 async def test_reconcile_client_fallback_get_by_email_when_not_in_list():
     """Пустой список inbound / нет email в clients — fallback на get_by_email."""
-    with patch("bot.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("bot.services.xui_service.AsyncApi"):
-            from bot.services.xui_service import X3
+    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
+        with patch("daralla_backend.services.xui_service.AsyncApi"):
+            from daralla_backend.services.xui_service import X3
 
             x3 = X3.__new__(X3)
             x3._logged_in = True

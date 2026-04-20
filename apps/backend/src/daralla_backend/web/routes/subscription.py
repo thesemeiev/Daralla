@@ -4,7 +4,7 @@ Async implementation — no asyncio.new_event_loop / run_until_complete.
 """
 from quart import Blueprint, request
 
-from bot.services.subscription_route_service import handle_subscription_request
+from daralla_backend.services.subscription_route_service import handle_subscription_request
 
 
 def create_subscription_blueprint(bot_app):

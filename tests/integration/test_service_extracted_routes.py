@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 from quart import Quart
 
-from bot.app_context import AppContext, set_ctx
-from bot.web.app_quart import create_quart_app
+from daralla_backend.app_context import AppContext, set_ctx
+from daralla_backend.web.app_quart import create_quart_app
 
 
 @pytest.fixture
@@ -26,8 +26,8 @@ async def _admin_ok(*args, **kwargs):
 
 
 async def _admin_post(client, path: str, payload: dict):
-    with patch("bot.web.routes.admin_common.authenticate_request_async", side_effect=_auth_ok), patch(
-        "bot.web.routes.admin_common.check_admin_access_async", side_effect=_admin_ok
+    with patch("daralla_backend.web.routes.admin_common.authenticate_request_async", side_effect=_auth_ok), patch(
+        "daralla_backend.web.routes.admin_common.check_admin_access_async", side_effect=_admin_ok
     ):
         return await client.post(path, json=payload)
 
@@ -282,13 +282,13 @@ async def test_subscription_positive_contract_with_mocked_dependencies(
     )
     client = quart_app_with_routes.test_client()
     with patch(
-        "bot.services.subscription_route_service.get_subscription_by_token",
+        "daralla_backend.services.subscription_route_service.get_subscription_by_token",
         return_value={"id": 101, "status": "active", "expires_at": 1893456000},
     ), patch(
-        "bot.services.subscription_route_service.get_subscription_servers",
+        "daralla_backend.services.subscription_route_service.get_subscription_servers",
         return_value=[{"server_name": "srv-1", "client_email": "u1@example.com"}],
     ), patch(
-        "bot.services.subscription_route_service.is_subscription_active",
+        "daralla_backend.services.subscription_route_service.is_subscription_active",
         return_value=True,
     ):
         response = await client.get("/sub/token-101")
@@ -306,7 +306,7 @@ async def test_user_web_access_setup_uses_service_contract(quart_app_with_routes
     client = quart_app_with_routes.test_client()
     async def _service(*args, **kwargs):
         return {"username": "webtester", "user_id": "1"}
-    with patch("bot.web.routes.api_user_account.setup_web_access_for_telegram_user", side_effect=_service):
+    with patch("daralla_backend.web.routes.api_user_account.setup_web_access_for_telegram_user", side_effect=_service):
         response = await client.post(
             "/api/user/web-access/setup",
             json={"initData": "mocked", "username": "webtester", "password": "password123"},
@@ -325,8 +325,8 @@ async def test_user_avatar_route_uses_service_loader(quart_app_with_routes: Quar
         return "1", None
     async def _load_avatar(*args, **kwargs):
         return b"jpeg-bytes"
-    with patch("bot.web.routes.api_user_account.require_user_id", side_effect=_auth_user), patch(
-        "bot.web.routes.api_user_account.load_user_avatar_bytes", side_effect=_load_avatar
+    with patch("daralla_backend.web.routes.api_user_account.require_user_id", side_effect=_auth_user), patch(
+        "daralla_backend.web.routes.api_user_account.load_user_avatar_bytes", side_effect=_load_avatar
     ):
         response = await client.get("/api/user/avatar")
     assert response.status_code == 200
@@ -336,7 +336,7 @@ async def test_user_avatar_route_uses_service_loader(quart_app_with_routes: Quar
 
 @pytest.mark.asyncio
 async def test_events_public_payload_service_cache_contract():
-    from bot.services import events_route_service
+    from daralla_backend.services import events_route_service
 
     async def _active():
         return [{"id": 1}]
@@ -348,10 +348,10 @@ async def test_events_public_payload_service_cache_contract():
         return [{"id": 3}]
 
     events_route_service.invalidate_public_events_cache()
-    with patch("bot.services.events_route_service.event_service.list_active", side_effect=_active), patch(
-        "bot.services.events_route_service.event_service.list_upcoming", side_effect=_upcoming
+    with patch("daralla_backend.services.events_route_service.event_service.list_active", side_effect=_active), patch(
+        "daralla_backend.services.events_route_service.event_service.list_upcoming", side_effect=_upcoming
     ), patch(
-        "bot.services.events_route_service.event_service.list_ended", side_effect=_ended
+        "daralla_backend.services.events_route_service.event_service.list_ended", side_effect=_ended
     ):
         first = await events_route_service.get_public_events_payload()
         second = await events_route_service.get_public_events_payload()
@@ -378,9 +378,9 @@ async def test_cryptocloud_route_uses_resolved_target_contract(quart_app_with_ro
     def _fake_create_task(coro):
         coro.close()
         return object()
-    with patch("bot.web.routes.payment._cryptocloud_parse_postback_body", side_effect=_parse_postback), patch(
-        "bot.web.routes.payment.resolve_cryptocloud_postback_target", side_effect=_resolve_target
-    ), patch("bot.web.routes.payment.asyncio.create_task", side_effect=_fake_create_task) as create_task_mock:
+    with patch("daralla_backend.web.routes.payment._cryptocloud_parse_postback_body", side_effect=_parse_postback), patch(
+        "daralla_backend.web.routes.payment.resolve_cryptocloud_postback_target", side_effect=_resolve_target
+    ), patch("daralla_backend.web.routes.payment.asyncio.create_task", side_effect=_fake_create_task) as create_task_mock:
         response = await client.post("/webhook/cryptocloud", json={"any": "payload"})
     assert response.status_code == 200
     data = await response.get_json()
