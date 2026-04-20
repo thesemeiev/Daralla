@@ -397,33 +397,7 @@ function removeAuthToken() {
 
 // Функция для выполнения защищенных запросов к API
 async function apiFetch(url, options = {}) {
-    if (!options.headers) options.headers = {};
-    var auth = platform.getAuth();
-    if (auth.type === 'tg' && auth.initData) {
-        var separator = url.includes('?') ? '&' : '?';
-        url = url + separator + 'initData=' + encodeURIComponent(auth.initData);
-    } else if (auth.type === 'web' && auth.token) {
-        options.headers['Authorization'] = 'Bearer ' + auth.token;
-    }
-    if ((options.method === 'POST' || options.method === 'PUT') && !options.body) {
-        options.body = JSON.stringify({});
-        if (!options.headers['Content-Type']) {
-            options.headers['Content-Type'] = 'application/json';
-        }
-    }
-    options.credentials = options.credentials || 'include';
-    console.log('[API] Запрос: ' + (options.method || 'GET') + ' ' + url, { mode: platform.isTelegram() ? 'Telegram' : 'Web', hasToken: !!(auth.token || auth.initData) });
-    try {
-        var response = await fetch(url, options);
-        if (response.status === 401 && !platform.isTelegram()) {
-            console.warn('[API] Ошибка 401: Токен недействителен или истек');
-            logout();
-        }
-        return response;
-    } catch (e) {
-        console.error('[API] Ошибка сетевого запроса (' + url + '):', e);
-        throw e;
-    }
+    return window.DarallaApiClient.apiFetch(url, options, { platform: platform, logout: logout });
 }
 
 async function logout() {
@@ -446,69 +420,19 @@ var FORM_MESSAGE_AUTO_HIDE_MS = 6000;
  * @param {string} text - текст сообщения
  */
 function showFormMessage(containerOrId, type, text) {
-    var el = typeof containerOrId === 'string' ? document.getElementById(containerOrId) : containerOrId;
-    if (!el) return;
-    var box = el.classList && el.classList.contains('form-message') ? el : el.querySelector('.form-message');
-    if (!box) {
-        box = document.createElement('div');
-        box.className = 'form-message';
-        box.setAttribute('role', 'alert');
-        box.setAttribute('aria-live', 'polite');
-        el.appendChild(box);
-    }
-    if (box._formMessageHideTimer) {
-        clearTimeout(box._formMessageHideTimer);
-        box._formMessageHideTimer = null;
-    }
-    box.textContent = text || '';
-    box.className = 'form-message form-message--' + (type === 'success' ? 'success' : 'error');
-    box.style.display = text ? 'block' : 'none';
-    if (text && FORM_MESSAGE_AUTO_HIDE_MS > 0) {
-        box._formMessageHideTimer = setTimeout(function () {
-            box._formMessageHideTimer = null;
-            box.textContent = '';
-            box.style.display = 'none';
-        }, FORM_MESSAGE_AUTO_HIDE_MS);
-    }
+    return window.DarallaUiMessages.showFormMessage(containerOrId, type, text, FORM_MESSAGE_AUTO_HIDE_MS);
 }
 
 /**
  * Скрывает сообщение формы (при открытии страницы логина/регистрации и т.д.)
  */
 function hideFormMessage(containerOrId) {
-    var el = typeof containerOrId === 'string' ? document.getElementById(containerOrId) : containerOrId;
-    if (!el) return;
-    var box = el.classList && el.classList.contains('form-message') ? el : el.querySelector('.form-message');
-    if (box) {
-        if (box._formMessageHideTimer) {
-            clearTimeout(box._formMessageHideTimer);
-            box._formMessageHideTimer = null;
-        }
-        box.textContent = '';
-        box.style.display = 'none';
-    }
+    return window.DarallaUiMessages.hideFormMessage(containerOrId);
 }
 
 /** Короткое уведомление внизу экрана (оплата, общий UX) */
 function showAppToast(message, duration, variant) {
-    duration = duration || 5000;
-    variant = variant || '';
-    var el = document.getElementById('app-toast');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'app-toast';
-        el.className = 'app-toast';
-        el.setAttribute('role', 'status');
-        document.body.appendChild(el);
-    }
-    el.textContent = message || '';
-    el.classList.remove('app-toast--success');
-    if (variant === 'success') el.classList.add('app-toast--success');
-    el.classList.add('app-toast--visible');
-    clearTimeout(showAppToast._timer);
-    showAppToast._timer = setTimeout(function () {
-        el.classList.remove('app-toast--visible');
-    }, duration);
+    return window.DarallaUiMessages.showToast(message, duration, variant);
 }
 
 function removePaymentResultSubline() {

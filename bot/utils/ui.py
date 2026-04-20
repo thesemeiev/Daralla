@@ -142,6 +142,17 @@ class UIMessages:
             pass
         
         if is_new_user:
-            header_text = f'Добро пожаловать в {vpn_brand_name}!'
+            header_text = f"Добро пожаловать в {vpn_brand_name}!"
+            description_text = (
+                "Управляйте подписками и получайте доступ к серверам через Mini App."
+            )
         else:
-            header_text = f'Рады снова видеть вас в {vpn_brand_name}!'
+            header_text = f"Рады снова видеть вас в {vpn_brand_name}!"
+            description_text = (
+                "Откройте Mini App, чтобы проверить статус подписки и управлять доступом."
+            )
+
+        return (
+            f"{UIStyles.header(header_text)}\n\n"
+            f"{UIStyles.description(description_text)}"
+        )

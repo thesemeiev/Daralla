@@ -27,16 +27,20 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-asyncio
+        pip install pytest pytest-asyncio pytest-cov
 
     - name: Run tests
-      run: pytest tests/ -v
+      run: pytest tests/ -v --cov=bot --cov-report=term-missing --cov-fail-under=20
 
     - name: Lint code
       run: |
         pip install flake8
         flake8 bot/ --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 bot/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Architecture guardrails
+      run: |
+        python scripts/check_arch_rules.py
 
   # Deploy to test server
   deploy:
@@ -388,6 +392,22 @@ jobs:
           else
             echo "WARNING: Cannot check status - Docker Compose not available"
           fi
+
+          # Readiness check after startup
+          echo "Running readiness probe..."
+          for i in {1..20}; do
+            if (command -v curl >/dev/null 2>&1 && curl -fsS --max-time 3 "http://127.0.0.1:5000/ready" >/dev/null) \
+              || (command -v wget >/dev/null 2>&1 && wget -q -T 3 -O - "http://127.0.0.1:5000/ready" >/dev/null)
+            then
+              echo "Readiness probe passed"
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              echo "ERROR: Readiness probe failed after retries"
+              exit 1
+            fi
+            sleep 3
+          done
           
           # Final verification of data
           echo "Final data verification..."

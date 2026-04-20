@@ -4,9 +4,7 @@
 """
 
 import asyncio
-import base64
 import datetime
-import json
 import logging
 import os
 import time
@@ -27,88 +25,14 @@ from ..db.subscriptions_db import (
     update_subscription_name,
 )
 from .server_manager import MultiServerManager
-from .xui_service import _panel_snapshot_matches_desired
+from .xui_helpers import panel_snapshot_matches_desired
+from .subscription_helpers import (
+    clients_by_email_from_xui_list_response,
+    panel_entry_from_snapshot,
+    normalize_subscription_link,
+)
 
 logger = logging.getLogger(__name__)
-
-_PROTOCOL_PREFIXES = ('vless://', 'trojan://', 'vmess://', 'ss://', 'socks://')
-
-
-def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dict[str, Any]]:
-    """
-    Снимок клиентов с панели из ответа xui.list() (поле obj).
-    email -> {expiry_sec, limit_ip, flow, protocol}; при дубликате email последний inbound перезаписывает (в лог — warning).
-    """
-    out: Dict[str, Dict[str, Any]] = {}
-    for inbound in list_payload.get("obj") or []:
-        protocol = (inbound.get("protocol") or "vless").lower()
-        try:
-            settings = json.loads(inbound.get("settings") or "{}")
-        except (json.JSONDecodeError, TypeError):
-            continue
-        for client in settings.get("clients") or []:
-            email = client.get("email")
-            if not email:
-                continue
-            email = str(email)
-            if email in out:
-                logger.warning(
-                    "X-UI list snapshot: email %s встречается в нескольких inbound — используется последняя запись (protocol=%s)",
-                    email,
-                    protocol,
-                )
-            expiry_ms = client.get("expiryTime") or 0
-            if not expiry_ms or int(expiry_ms) <= 0:
-                expiry_sec = None
-            else:
-                expiry_sec = int(expiry_ms) // 1000
-            flow_raw = client.get("flow")
-            if flow_raw is None:
-                flow_raw = client.get("Flow")
-            flow_s = (str(flow_raw).strip() if flow_raw is not None else "") or ""
-            out[email] = {
-                "expiry_sec": expiry_sec,
-                "limit_ip": client.get("limitIp"),
-                "flow": flow_s,
-                "protocol": protocol,
-            }
-    return out
-
-
-def panel_entry_from_snapshot(email_map: Optional[Dict[str, Dict[str, Any]]], client_email: str) -> Optional[dict]:
-    """None — нет снимка, ходим в API как раньше. Иначе запись для ensure_client_on_server."""
-    if email_map is None:
-        return None
-    row = email_map.get(client_email)
-    if row is None:
-        return {"on_panel": False}
-    return {
-        "on_panel": True,
-        "expiry_sec": row["expiry_sec"],
-        "limit_ip": row.get("limit_ip"),
-        "flow": row.get("flow"),
-        "protocol": row.get("protocol") or "vless",
-    }
-
-
-def _normalize_subscription_link(link: str) -> str:
-    """
-    Если ссылка пришла в base64 (часто от X-UI) — декодирует и возвращает plain vless:// или trojan://.
-    Иначе возвращает ссылку как есть.
-    """
-    if not link or not link.strip():
-        return link
-    s = link.strip()
-    if s.startswith(_PROTOCOL_PREFIXES):
-        return s
-    try:
-        raw = base64.b64decode(s)
-        decoded = raw.decode('utf-8')
-        if decoded.startswith(_PROTOCOL_PREFIXES):
-            return decoded
-    except (ValueError, TypeError):
-        pass
-    return s
 
 
 class SubscriptionManager:
@@ -290,7 +214,7 @@ class SubscriptionManager:
                 on_panel = await xui.client_exists(client_email)
 
             if on_panel:
-                if panel_entry is not None and _panel_snapshot_matches_desired(
+                if panel_entry is not None and panel_snapshot_matches_desired(
                     panel_entry, expires_at, device_limit, client_flow
                 ):
                     logger.debug(
@@ -495,7 +419,7 @@ class SubscriptionManager:
                     if xui_links:
                         # Дедупликация: добавляем только уникальные ссылки (по части без tag)
                         for link in xui_links:
-                            plain = _normalize_subscription_link(link)
+                            plain = normalize_subscription_link(link)
                             link_without_tag = plain.split('#')[0] if '#' in plain else plain
                             if link_without_tag not in seen_links:
                                 seen_links.add(link_without_tag)
@@ -516,7 +440,7 @@ class SubscriptionManager:
                         )
                         vless_link = await xui.link(client_email, server_name=display_name)
                         if vless_link and vless_link != 'Клиент не найден.':
-                            plain = _normalize_subscription_link(vless_link)
+                            plain = normalize_subscription_link(vless_link)
                             link_without_tag = plain.split('#')[0] if '#' in plain else plain
                             if link_without_tag not in seen_links:
                                 seen_links.add(link_without_tag)

@@ -5,6 +5,8 @@ import asyncio
 import logging
 import os
 
+from bot.web.observability import inc_metric
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,10 +61,12 @@ async def sync_task_loop(sync_manager):
     while True:
         try:
             await sync_manager.run_sync()
+            inc_metric("background_task_success_total", task="full_sync")
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error("Ошибка в цикле синхронизации: %s", e, exc_info=True)
+            inc_metric("background_task_error_total", task="full_sync")
 
         await asyncio.sleep(interval)
 
@@ -79,10 +83,12 @@ async def client_catchup_loop(sync_manager):
     while True:
         try:
             await sync_manager.sync_clients_from_db_only()
+            inc_metric("background_task_success_total", task="client_catchup")
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error("Ошибка в цикле догона клиентов: %s", e, exc_info=True)
+            inc_metric("background_task_error_total", task="client_catchup")
         await asyncio.sleep(interval)
 
 async def notifications_task_loop(notification_manager):
@@ -91,10 +97,12 @@ async def notifications_task_loop(notification_manager):
         try:
             # Метод внутри сам проверяет, кому пора слать
             await notification_manager._check_expiring_subscriptions()
+            inc_metric("background_task_success_total", task="notifications")
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error(f"Ошибка в цикле уведомлений: {e}")
+            inc_metric("background_task_error_total", task="notifications")
             
         # Раз в 30 минут
         await asyncio.sleep(1800)
@@ -106,6 +114,7 @@ async def payments_cleanup_loop():
     while True:
         try:
             count = await cleanup_expired_pending_payments(minutes_old=60)
+            inc_metric("background_task_success_total", task="payments_cleanup")
             if count > 0:
                 logger.info(f"Очищено {count} просроченных платежей")
             # Раз в 24 часа удаляем старые не-pending платежи (старше 30 дней)
@@ -119,6 +128,7 @@ async def payments_cleanup_loop():
             raise
         except Exception as e:
             logger.error(f"Ошибка в очистке платежей: {e}")
+            inc_metric("background_task_error_total", task="payments_cleanup")
             
         # Раз в час
         await asyncio.sleep(3600)
@@ -175,12 +185,14 @@ async def server_load_snapshot_loop(server_manager):
                     )
                     
                     servers_saved += 1
+                    inc_metric("background_task_success_total", task="server_load_snapshot")
                     logger.debug(f"Сохранен снимок нагрузки для {server_name}: онлайн={online_count}, активных={total_active}")
                     
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
                     servers_failed += 1
+                    inc_metric("background_task_error_total", task="server_load_snapshot")
                     logger.warning(f"Ошибка сохранения снимка нагрузки для {server_name}: {e}")
             
             if servers_saved > 0:

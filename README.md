@@ -153,6 +153,11 @@ python -m bot
 - Telegram-бот (polling)
 - Quart/Hypercorn на порту `WEBHOOK_PORT` (вебхуки + веб-приложение)
 
+Служебные endpoints:
+- `GET /health` — liveness
+- `GET /ready` — readiness (БД и runtime-контекст)
+- `GET /metrics` — базовые счетчики API/webhook/background-задач
+
 ---
 
 ## Docker
@@ -207,6 +212,12 @@ pytest
 ```
 
 Unit- и integration-тесты для БД, Quart-маршрутов и платежей (`pytest` + `pytest-asyncio`).
+
+Архитектурные проверки:
+
+```bash
+python scripts/check_arch_rules.py
+```
 
 ---
 

@@ -16,7 +16,19 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_fixed
 
+from .xui_helpers import (
+    client_to_api_dict,
+    flow_matches_desired,
+    inbound_to_dict,
+    panel_client_settings_dict,
+    panel_snapshot_matches_desired,
+)
+
 logger = logging.getLogger(__name__)
+
+# Backward-compatibility aliases for existing tests/imports.
+_flow_matches_desired = flow_matches_desired
+_panel_snapshot_matches_desired = panel_snapshot_matches_desired
 
 try:
     _XUI_LIST_DB_LOCK_RETRIES = max(2, min(int(os.getenv("XUI_LIST_DB_LOCK_RETRIES", "6")), 15))
@@ -108,149 +120,6 @@ def _apply_py3xui_request_timeout() -> None:
     _py3xui_timeout_patch_applied = True
 
 
-def _client_to_api_dict(c: Any) -> dict:
-    """Преобразует клиента py3xui (или dict) в формат 3x-ui API (camelCase)."""
-    if hasattr(c, "model_dump"):
-        d = c.model_dump()
-    elif isinstance(c, dict):
-        d = dict(c)
-    else:
-        d = {}
-    key_map = {
-        "expiry_time": "expiryTime",
-        "limit_ip": "limitIp",
-        "sub_id": "subId",
-        "tg_id": "tgId",
-        "total_gb": "totalGB",
-    }
-    out = {}
-    for k, v in d.items():
-        out[key_map.get(k, k)] = v
-    # model_dump() иногда опускает или алиасит flow — подмешиваем с объекта, иначе list() даёт неверный снимок для reconcile fast path
-    if not isinstance(c, dict) and hasattr(c, "flow"):
-        raw = getattr(c, "flow", None)
-        out["flow"] = "" if raw is None else str(raw).strip()
-    return out
-
-
-def _normalize_client_flow_value(v: Any) -> str:
-    if v is None:
-        return ""
-    return str(v).strip()
-
-
-def _dedupe_flow_json_key(d: Dict[str, Any]) -> None:
-    """Оставляем один ключ ``flow`` (нижний регистр). Иначе model_dump мог оставить ``Flow`` и панель читает не то."""
-    for k in list(d.keys()):
-        if isinstance(k, str) and k != "flow" and k.lower() == "flow":
-            d.pop(k, None)
-
-
-def _panel_client_settings_dict(
-    c: Any, flow_override: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Тело clients[] для addClient/updateClient в 3x-ui.
-
-    exclude_defaults=False: неполный JSON (только поля «не по умолчанию») на части версий 3x-ui
-    даёт merge, при котором flow на панели не меняется или остаётся рассинхрон.
-
-    В конце всегда один ключ ``flow`` (пустая строка — явный сброс). flow_override задаёт значение
-    из конфига сервера поверх дампа модели.
-    """
-    if hasattr(c, "model_dump"):
-        d = c.model_dump(by_alias=True, mode="json", exclude_defaults=False)
-    else:
-        d = {}
-    _dedupe_flow_json_key(d)
-    if flow_override is not None:
-        d["flow"] = (str(flow_override).strip() if str(flow_override).strip() else "")
-    else:
-        fv = getattr(c, "flow", None)
-        d["flow"] = "" if fv is None else str(fv).strip()
-    return d
-
-
-def _expiry_sec_matches_panel(panel_sec: Optional[int], db_sec: int, tolerance_sec: int = 300) -> bool:
-    if panel_sec is None:
-        return False
-    return abs(int(panel_sec) - int(db_sec)) <= tolerance_sec
-
-
-def _limit_ip_matches_panel(panel_limit: Any, device_limit: int) -> bool:
-    if panel_limit is None or panel_limit == 0:
-        return False
-    try:
-        return int(panel_limit) == int(device_limit)
-    except (TypeError, ValueError):
-        return False
-
-
-def _flow_matches_desired(panel_flow: Any, flow_from_config: Optional[str]) -> bool:
-    desired = (flow_from_config or "").strip()
-    panel = _normalize_client_flow_value(panel_flow)
-    return desired == panel
-
-
-def _panel_snapshot_matches_desired(
-    panel_snapshot: dict,
-    expiry_sec: int,
-    limit_ip: int,
-    flow_from_config: Optional[str],
-) -> bool:
-    """True если снимок list() совпадает с желаемым состоянием — можно не вызывать get_by_email/update."""
-    if not panel_snapshot.get("on_panel"):
-        return False
-    se = panel_snapshot.get("expiry_sec")
-    if not _expiry_sec_matches_panel(se, expiry_sec):
-        return False
-    if not _limit_ip_matches_panel(panel_snapshot.get("limit_ip"), limit_ip):
-        return False
-    if not _flow_matches_desired(panel_snapshot.get("flow"), flow_from_config):
-        return False
-    return True
-
-
-def _inbound_to_dict(inv: Any) -> dict:
-    """Преобразует Inbound py3xui в элемент списка obj (формат ответа list())."""
-    settings = getattr(inv, "settings", None)
-    clients = []
-    if settings is not None:
-        raw_clients = getattr(settings, "clients", None) or []
-        for c in raw_clients:
-            clients.append(_client_to_api_dict(c))
-    settings_str = json.dumps({"clients": clients})
-
-    stream = getattr(inv, "stream_settings", None)
-    if stream is not None and hasattr(stream, "model_dump"):
-        stream_dict = stream.model_dump()
-    elif isinstance(stream, dict):
-        stream_dict = stream
-    else:
-        stream_dict = {}
-
-    client_stats = getattr(inv, "client_stats", None) or []
-    client_stats_list = []
-    for s in client_stats:
-        if hasattr(s, "model_dump"):
-            client_stats_list.append(s.model_dump())
-        elif isinstance(s, dict):
-            client_stats_list.append(s)
-        else:
-            client_stats_list.append(_client_to_api_dict(s))
-
-    return {
-        "id": getattr(inv, "id", None),
-        "protocol": getattr(inv, "protocol", "vless"),
-        "port": getattr(inv, "port", 443),
-        "settings": settings_str,
-        "streamSettings": stream_dict,
-        "clientStats": client_stats_list if client_stats_list else [],
-        "enable": getattr(inv, "enable", True),
-        "remark": getattr(inv, "remark", ""),
-    }
-
-
 class X3:
     """
     Обёртка над py3xui.AsyncApi с тем же публичным интерфейсом, что и прежний X3.
@@ -323,7 +192,7 @@ class X3:
         """Возвращает {success: True, obj: [inbound_dict, ...]} в формате 3x-ui API."""
         await self._ensure_login()
         inbounds = await self._api.inbound.get_list()
-        obj = [_inbound_to_dict(inv) for inv in inbounds]
+        obj = [inbound_to_dict(inv) for inv in inbounds]
         return {"success": True, "obj": obj}
 
     async def list_quick(self, timeout: int = 10) -> dict:
@@ -379,7 +248,7 @@ class X3:
             except Exception:
                 pass
         return {
-            "client": _client_to_api_dict(c),
+            "client": client_to_api_dict(c),
             "inbound_id": inbound_id,
             "protocol": protocol.lower(),
         }
@@ -483,10 +352,10 @@ class X3:
         return c
 
     async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
-        """addClient: как py3xui, но flow всегда в JSON (см. _panel_client_settings_dict)."""
+        """addClient: как py3xui, но flow всегда в JSON (см. panel_client_settings_dict)."""
         await self._ensure_login()
         api = self._api.client
-        settings = {"clients": [_panel_client_settings_dict(c) for c in clients]}
+        settings = {"clients": [panel_client_settings_dict(c) for c in clients]}
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url("panel/api/inbounds/addClient")
         await api._post(url, {"Accept": "application/json"}, data)
@@ -516,7 +385,7 @@ class X3:
         api = self._api.client
         uuid_for_url = c.id
         endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
-        settings = {"clients": [_panel_client_settings_dict(c, flow_override=flow_override)]}
+        settings = {"clients": [panel_client_settings_dict(c, flow_override=flow_override)]}
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url(endpoint)
         await api._post(url, {"Accept": "application/json"}, data)

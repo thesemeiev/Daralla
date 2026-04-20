@@ -16,10 +16,18 @@ os.environ.setdefault("TELEGRAM_TOKEN", "test_token")
 
 @pytest.fixture
 def event_loop():
-    """Create an instance of the default event loop for each test case."""
+    """Create and gracefully close event loop per test case."""
     import asyncio
+
     loop = asyncio.new_event_loop()
     yield loop
+    # Let aiosqlite/async generators finish close callbacks before shutdown.
+    loop.run_until_complete(asyncio.sleep(0))
+    pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
     loop.close()
 
 
@@ -35,3 +43,5 @@ async def db():
         pass
     yield
     # Temp file is left for next run; optional: os.unlink(_test_db_path) in a finalizer
+
+

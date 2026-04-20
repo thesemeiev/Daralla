@@ -1,0 +1,361 @@
+"""Business flow service for admin subscriptions routes."""
+
+from __future__ import annotations
+
+import asyncio
+import datetime
+import logging
+
+from bot.db.notifications_db import clear_subscription_notifications
+from bot.db.subscriptions_db import (
+    get_subscription_by_id_only,
+    get_subscription_servers,
+    get_subscriptions_page,
+    remove_subscription_server,
+    update_subscription_device_limit,
+    update_subscription_expiry,
+    update_subscription_name,
+    update_subscription_status,
+)
+from bot.handlers.api_support.payment_processors import get_globals
+from bot.services.admin_subscriptions_service import (
+    delete_subscription_record,
+    get_user_id_from_subscriber_id,
+    get_user_id_from_subscription_id,
+)
+
+
+def serialize_subscription(sub: dict) -> dict:
+    return {
+        "id": sub["id"],
+        "name": (sub.get("name") or "").strip() or f"Подписка {sub['id']}",
+        "status": sub["status"],
+        "period": sub["period"],
+        "device_limit": sub["device_limit"],
+        "created_at": sub["created_at"],
+        "created_at_formatted": datetime.datetime.fromtimestamp(sub["created_at"]).strftime("%d.%m.%Y %H:%M"),
+        "expires_at": sub["expires_at"],
+        "expires_at_formatted": datetime.datetime.fromtimestamp(sub["expires_at"]).strftime("%d.%m.%Y %H:%M"),
+        "price": sub["price"],
+        "token": sub["subscription_token"],
+    }
+
+
+async def list_subscriptions_payload(page: int, limit: int, status: str | None, owner_query: str | None, long_only: bool):
+    result = await get_subscriptions_page(
+        page=page,
+        limit=limit,
+        status=status,
+        owner_query=owner_query,
+        long_only=long_only,
+    )
+    total = result.get("total", 0)
+    items = result.get("items") or []
+    subscriptions = []
+    for sub in items:
+        created_at = sub.get("created_at") or 0
+        expires_at = sub.get("expires_at") or 0
+        created_at_formatted = datetime.datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M") if created_at else ""
+        expires_at_formatted = datetime.datetime.fromtimestamp(expires_at).strftime("%d.%m.%Y %H:%M") if expires_at else ""
+        name = (sub.get("name") or "").strip() or f"Подписка {sub.get('id')}"
+        subscriptions.append(
+            {
+                "id": sub.get("id"),
+                "name": name,
+                "status": sub.get("status"),
+                "period": sub.get("period"),
+                "device_limit": sub.get("device_limit"),
+                "created_at": created_at,
+                "created_at_formatted": created_at_formatted,
+                "expires_at": expires_at,
+                "expires_at_formatted": expires_at_formatted,
+                "price": sub.get("price"),
+                "token": sub.get("subscription_token"),
+                "user_id": sub.get("user_id"),
+                "username": sub.get("username"),
+            }
+        )
+    pages = (total + limit - 1) // limit if limit > 0 else 0
+    return {
+        "success": True,
+        "subscriptions": subscriptions,
+        "total": total,
+        "page": result.get("page", page),
+        "limit": result.get("limit", limit),
+        "pages": pages,
+        "filters": {
+            "status": status,
+            "owner_query": owner_query,
+            "long_only": long_only,
+        },
+    }
+
+
+async def subscription_info_payload(sub_id: int):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None
+    servers = await get_subscription_servers(sub_id)
+    return {
+        "success": True,
+        "subscription": serialize_subscription(sub),
+        "servers": servers,
+    }
+
+
+def _validate_status_transition(old_status: str, new_status: str):
+    if old_status in ("active", "expired") and new_status in ("active", "expired") and old_status != new_status:
+        return (
+            "Нельзя вручную менять статус между \"active\" и \"expired\". "
+            "Статус обновляется автоматически при изменении даты истечения (expires_at)."
+        )
+    if new_status != "deleted" and old_status == "deleted":
+        return f"Нельзя изменить статус \"{old_status}\" на \"{new_status}\". Статус \"deleted\" является финальным."
+    return None
+
+
+async def _sync_after_update(
+    sub_id: int,
+    updated_sub: dict,
+    old_status: str,
+    old_expires_at: int,
+    old_device_limit: int,
+    updates: dict,
+    logger: logging.Logger,
+) -> None:
+    managers = get_globals()
+    server_manager = managers.get("server_manager")
+    subscription_manager = managers.get("subscription_manager")
+
+    if not server_manager or not subscription_manager:
+        logger.warning("server_manager или subscription_manager не доступны для синхронизации")
+        return
+
+    servers = await get_subscription_servers(sub_id)
+    if not servers:
+        logger.info("Подписка %s не имеет привязанных серверов, синхронизация не требуется", sub_id)
+        return
+
+    subscriber_id = updated_sub.get("subscriber_id")
+    if not subscriber_id:
+        logger.warning("Подписка %s не имеет subscriber_id, синхронизация невозможна", sub_id)
+        return
+
+    user_id = await get_user_id_from_subscriber_id(subscriber_id)
+    if not user_id:
+        logger.warning("Не найден user_id для subscriber_id=%s", subscriber_id)
+        return
+
+    new_status = updated_sub["status"]
+    new_expires_at = updated_sub["expires_at"]
+    new_device_limit = updated_sub["device_limit"]
+    token = updated_sub["subscription_token"]
+
+    if new_status in ["expired", "deleted"] and old_status != new_status:
+        logger.info("Статус подписки %s изменился на %s, удаляем клиентов с серверов", sub_id, new_status)
+
+        async def delete_clients_with_timeout():
+            deleted_count = 0
+            failed_count = 0
+            for server_info in servers:
+                server_name = server_info["server_name"]
+                client_email = server_info["client_email"]
+                try:
+                    xui, _ = server_manager.get_server_by_name(server_name)
+                    if xui:
+                        try:
+                            await asyncio.wait_for(xui.deleteClient(client_email, 5), timeout=8.0)
+                            deleted_count += 1
+                        except asyncio.TimeoutError:
+                            failed_count += 1
+                        except Exception:
+                            failed_count += 1
+                    else:
+                        failed_count += 1
+                except Exception as e:
+                    logger.error("Ошибка при удалении клиента %s с сервера %s: %s", client_email, server_name, e)
+                    failed_count += 1
+            return deleted_count, failed_count
+
+        try:
+            deleted_count, failed_count = await asyncio.wait_for(delete_clients_with_timeout(), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.error("Таймаут при удалении клиентов для подписки %s", sub_id)
+            deleted_count = 0
+            failed_count = len(servers)
+        except Exception as e:
+            logger.error("Ошибка при удалении клиентов для подписки %s: %s", sub_id, e)
+            deleted_count = 0
+            failed_count = len(servers)
+
+        if deleted_count > 0 or failed_count < len(servers):
+            for server_info in servers:
+                server_name = server_info["server_name"]
+                try:
+                    await remove_subscription_server(sub_id, server_name)
+                except Exception as e:
+                    logger.error("Ошибка удаления связи подписки %s с сервером %s: %s", sub_id, server_name, e)
+
+    elif new_status == "active" and old_status != "active" and old_status != "deleted":
+        logger.info("Статус подписки %s изменился на active, создаем/восстанавливаем клиентов", sub_id)
+        for server_info in servers:
+            server_name = server_info["server_name"]
+            client_email = server_info["client_email"]
+            try:
+                await subscription_manager.ensure_client_on_server(
+                    subscription_id=sub_id,
+                    server_name=server_name,
+                    client_email=client_email,
+                    user_id=user_id,
+                    expires_at=new_expires_at,
+                    token=token,
+                    device_limit=new_device_limit,
+                )
+            except Exception as e:
+                logger.error("Ошибка создания/обновления клиента %s на сервере %s: %s", client_email, server_name, e)
+
+    if ("expires_at" in updates or "device_limit" in updates) and new_status == "active":
+        if old_status == "active" or (old_status == "expired" and "expires_at" in updates):
+            for server_info in servers:
+                server_name = server_info["server_name"]
+                client_email = server_info["client_email"]
+                try:
+                    await subscription_manager.ensure_client_on_server(
+                        subscription_id=sub_id,
+                        server_name=server_name,
+                        client_email=client_email,
+                        user_id=user_id,
+                        expires_at=new_expires_at,
+                        token=token,
+                        device_limit=new_device_limit,
+                    )
+                except Exception as e:
+                    logger.error("Ошибка синхронизации клиента %s на сервере %s: %s", client_email, server_name, e)
+
+
+async def update_subscription_payload(sub_id: int, updates: dict, logger: logging.Logger):
+    if not updates:
+        return None, {"error": "No fields to update"}, 400
+
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+
+    old_status = sub["status"]
+    old_expires_at = sub["expires_at"]
+    old_device_limit = sub["device_limit"]
+
+    if "status" in updates:
+        err = _validate_status_transition(old_status, updates["status"])
+        if err:
+            return None, {"error": err}, 400
+
+    if "name" in updates:
+        await update_subscription_name(sub_id, updates["name"])
+    if "expires_at" in updates:
+        await update_subscription_expiry(sub_id, updates["expires_at"])
+    if "device_limit" in updates:
+        await update_subscription_device_limit(sub_id, updates["device_limit"])
+    if "status" in updates and updates["status"] == "deleted":
+        await update_subscription_status(sub_id, updates["status"])
+        await clear_subscription_notifications(sub_id)
+
+    updated_sub = await get_subscription_by_id_only(sub_id)
+    try:
+        await asyncio.wait_for(
+            _sync_after_update(sub_id, updated_sub, old_status, old_expires_at, old_device_limit, updates, logger),
+            timeout=60.0,
+        )
+    except asyncio.TimeoutError:
+        logger.error("Таймаут при синхронизации подписки %s", sub_id)
+    except Exception as sync_e:
+        logger.error("Ошибка при синхронизации подписки %s: %s", sub_id, sync_e, exc_info=True)
+
+    return {"success": True, "subscription": serialize_subscription(updated_sub)}, None, None
+
+
+async def manual_sync_payload(sub_id: int, logger: logging.Logger):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    servers = await get_subscription_servers(sub_id)
+    from bot.app_context import get_ctx
+
+    subscription_manager = get_ctx().subscription_manager
+    if not subscription_manager:
+        return None, {"error": "Subscription manager not available"}, 503
+
+    user_id = await get_user_id_from_subscription_id(sub_id)
+    sync_results = []
+    for server_info in servers:
+        server_name = server_info["server_name"]
+        client_email = server_info["client_email"]
+        try:
+            await subscription_manager.ensure_client_on_server(
+                subscription_id=sub_id,
+                server_name=server_name,
+                client_email=client_email,
+                user_id=user_id,
+                expires_at=sub["expires_at"],
+                token=sub["subscription_token"],
+                device_limit=sub["device_limit"],
+            )
+            subscription_name = (sub.get("name") or "").strip() or sub["subscription_token"]
+            xui, _ = subscription_manager.server_manager.get_server_by_name(server_name)
+            if xui:
+                try:
+                    client_info = await xui.get_client_info(client_email)
+                    if client_info:
+                        current_sub_id = client_info["client"].get("subId", "")
+                        if current_sub_id != subscription_name:
+                            await xui.updateClientName(client_email, subscription_name)
+                except Exception as name_sync_e:
+                    logger.warning("Ошибка синхронизации имени подписки на сервере %s: %s", server_name, name_sync_e)
+            sync_results.append({"server": server_name, "status": "success"})
+        except Exception as e:
+            logger.error("Ошибка синхронизации с сервером %s: %s", server_name, e)
+            sync_results.append({"server": server_name, "status": "error", "error": str(e)})
+    return {"success": True, "sync_results": sync_results}, None, None
+
+
+async def delete_subscription_payload(sub_id: int):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    servers = await get_subscription_servers(sub_id)
+    from bot.app_context import get_ctx
+
+    server_manager = get_ctx().server_manager
+
+    deleted = []
+    failed = []
+    if server_manager and servers:
+        for server_info in servers:
+            server_name = server_info["server_name"]
+            client_email = server_info["client_email"]
+            try:
+                xui, _ = server_manager.get_server_by_name(server_name)
+                if xui:
+                    deleted_ok = await xui.deleteClient(client_email, timeout=30)
+                    if deleted_ok:
+                        deleted.append(server_name)
+                    else:
+                        failed.append(server_name)
+                else:
+                    failed.append(server_name)
+            except Exception:
+                failed.append(server_name)
+
+    for server_info in servers:
+        try:
+            await remove_subscription_server(sub_id, server_info["server_name"])
+        except Exception:
+            pass
+
+    await delete_subscription_record(sub_id)
+    return {
+        "success": True,
+        "message": "Подписка удалена",
+        "deleted_servers": deleted,
+        "failed_servers": failed,
+    }, None, None

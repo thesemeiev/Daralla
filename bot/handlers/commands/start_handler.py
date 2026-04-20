@@ -268,6 +268,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Формируем приветственное сообщение (передаем информацию о том, новый ли пользователь)
     welcome_text = UIMessages.welcome_message(is_new_user=not was_known_user)
+    if not isinstance(welcome_text, str):
+        logger.warning(
+            "UIMessages.welcome_message вернул %s вместо str; используем fallback",
+            type(welcome_text).__name__,
+        )
+        welcome_text = (
+            f"{UIStyles.header('Добро пожаловать!')}\n\n"
+            f"{UIStyles.description('Откройте Mini App для управления подпиской.')}"
+        )
     
     # Если создана пробная подписка - добавляем информацию о ней
     if trial_created:

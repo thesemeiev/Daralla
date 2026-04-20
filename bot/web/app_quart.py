@@ -5,8 +5,12 @@ Quart application for HTTP API and webhooks (заменяет прежнее Fla
 
 import logging
 import os
+import sqlite3
 
 from quart import Quart, jsonify
+
+from bot.db import DB_PATH
+from bot.web.observability import get_metrics_snapshot, install_observability_hooks
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +18,47 @@ logger = logging.getLogger(__name__)
 def create_quart_app(bot_app=None) -> Quart:
     """Создаёт Quart-приложение для HTTP API и webhook'ов (payment, subscription, api, admin, events, static)."""
     app = Quart(__name__)
+    install_observability_hooks(app, logger)
 
     @app.route("/health", methods=["GET"])
     async def health() -> tuple[dict, int]:
         """Simple health-check endpoint for load balancers / monitors."""
         return {"status": "ok"}, 200
+
+    @app.route("/ready", methods=["GET"])
+    async def ready() -> tuple[dict, int]:
+        """Readiness probe: verify DB accessibility and optional bot context."""
+        checks = {
+            "db": "unknown",
+            "context": "not_required" if bot_app is None else "unknown",
+        }
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("SELECT 1")
+            checks["db"] = "ok"
+        except Exception:
+            checks["db"] = "error"
+
+        if bot_app is not None:
+            try:
+                from bot.app_context import get_ctx
+
+                ctx = get_ctx()
+                checks["context"] = (
+                    "ok"
+                    if ctx.server_manager and ctx.subscription_manager and ctx.sync_manager
+                    else "degraded"
+                )
+            except Exception:
+                checks["context"] = "error"
+
+        is_ready = checks["db"] == "ok" and checks["context"] in ("ok", "not_required", "degraded")
+        return {"status": "ok" if is_ready else "error", "checks": checks}, (200 if is_ready else 503)
+
+    @app.route("/metrics", methods=["GET"])
+    async def metrics() -> tuple[dict, int]:
+        """JSON metrics endpoint for lightweight monitoring."""
+        return {"metrics": get_metrics_snapshot()}, 200
 
     # Optionally register all existing blueprints. Use skip_subscription=True
     # so the async subscription blueprint (subscription) is used instead.
