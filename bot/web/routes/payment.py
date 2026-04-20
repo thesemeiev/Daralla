@@ -14,8 +14,8 @@ import os
 import jwt
 from quart import Blueprint, request, jsonify
 
-from bot.db import get_payment_by_id
 from bot.handlers.api_support.payment_processors import process_payment_webhook
+from bot.services.payment_webhook_service import resolve_payment_for_cryptocloud_raw_id
 from bot.web.observability import inc_metric
 
 logger = logging.getLogger(__name__)
@@ -113,14 +113,8 @@ def create_blueprint(bot_app):
                 logger.warning("CryptoCloud postback: CRYPTOCLOUD_WEBHOOK_SECRET not set")
             # В create сохраняем payment_id = result["uuid"] (INV-XXXXXXXX). В постбеке приходит
             # invoice_info.uuid (INV-xxx) или invoice_id (короткий). Ищем в БД; при коротком id пробуем INV- + id.
-            payment_id = raw_id
-            info = await get_payment_by_id(raw_id)
-            if not info and not str(raw_id).strip().upper().startswith("INV-"):
-                payment_id = "INV-" + str(raw_id).strip()
-                info = await get_payment_by_id(payment_id)
-            if info:
-                payment_id = info["payment_id"]
-            else:
+            payment_id, info = await resolve_payment_for_cryptocloud_raw_id(raw_id)
+            if not info:
                 logger.warning("CryptoCloud postback: payment not found for raw_id=%s", raw_id)
             logger.info("CryptoCloud postback: status=%s, raw_id=%s, payment_id=%s, found=%s", status, raw_id, payment_id, bool(info))
             if status == "success":

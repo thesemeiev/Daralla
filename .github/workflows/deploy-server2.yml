@@ -11,8 +11,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Testing and code validation
-  test:
+  backend_checks:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -42,9 +41,25 @@ jobs:
       run: |
         python scripts/check_arch_rules.py
 
+  frontend_checks:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: "20"
+
+    - name: Frontend syntax and smoke checks
+      run: |
+        node --check webapp/app.js
+        python scripts/check_frontend_smoke.py
+
   # Deploy to test server
   deploy:
-    needs: [test]
+    needs: [backend_checks, frontend_checks]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/test' && github.event_name == 'push'  # Тестовая ветка
     

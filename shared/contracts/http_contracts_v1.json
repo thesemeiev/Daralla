@@ -1,0 +1,59 @@
+{
+  "version": "v1",
+  "compatibility": "non-breaking envelope keys only",
+  "endpoints": [
+    {
+      "path": "/api/auth/login",
+      "method": "POST",
+      "response_success_keys": ["success", "token", "user_id"],
+      "response_error_keys": ["error"]
+    },
+    {
+      "path": "/api/auth/register",
+      "method": "POST",
+      "response_success_keys": ["success", "token", "user_id"],
+      "response_error_keys": ["error"]
+    },
+    {
+      "path": "/api/admin/commerce",
+      "method": "GET",
+      "response_success_keys": ["success", "price_month", "price_3month", "default_device_limit"]
+    },
+    {
+      "path": "/api/admin/commerce",
+      "method": "POST",
+      "response_success_keys": ["success", "price_month", "price_3month", "default_device_limit"],
+      "response_error_keys": ["success", "error"]
+    },
+    {
+      "path": "/api/admin/server-groups",
+      "method": "POST",
+      "response_success_keys": ["success"],
+      "response_error_keys": ["error"]
+    },
+    {
+      "path": "/api/admin/servers-config",
+      "method": "POST",
+      "response_success_keys": ["success"],
+      "response_error_keys": ["error"]
+    },
+    {
+      "path": "/sub/{token}",
+      "method": "GET",
+      "response_success_headers": ["subscription-userinfo", "profile-title"],
+      "response_error_plain_text": ["Subscription not found", "Service unavailable", "No servers available"]
+    },
+    {
+      "path": "/webhook/yookassa",
+      "method": "POST",
+      "response_success_keys": ["status"],
+      "response_error_keys": ["status"]
+    },
+    {
+      "path": "/webhook/cryptocloud",
+      "method": "POST",
+      "response_success_keys": ["status"],
+      "response_error_keys": ["status"]
+    }
+  ]
+}

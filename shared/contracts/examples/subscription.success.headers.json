@@ -1,0 +1,8 @@
+{
+  "required_headers": [
+    "subscription-userinfo",
+    "profile-title"
+  ],
+  "content_type": "text/plain; charset=utf-8",
+  "body_encoding": "base64"
+}

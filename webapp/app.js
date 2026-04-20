@@ -1,5 +1,5 @@
 // Парсим initData из URL hash (Telegram передаёт tgWebAppData в hash при открытии Mini App).
-// Работает без скрипта telegram.org — когда он заблокирован.
+// Работает без скрипта telegram.org, если внешний ресурс недоступен.
 function parseInitDataFromHash() {
     var hash = (window.location.hash || '').replace(/^#/, '');
     if (!hash || hash.indexOf('tgWebAppData') === -1) return null;
@@ -35,7 +35,7 @@ function parseInitDataFromHash() {
     return { initData: raw, initDataUnsafe: unsafe };
 }
 
-// Telegram Web App API — заглушка, если скрипт не загрузился (например, telegram.org заблокирован)
+// Telegram Web App API — заглушка, если скрипт не загрузился (например, ресурс временно недоступен)
 var TG_STUB = {
     initData: '',
     initDataUnsafe: { user: {} },
@@ -291,108 +291,16 @@ var platform = (function () {
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : TG_STUB;
 
 // Глобальные переменные для веб-авторизации
-let webAuthToken = null;
-try {
-    webAuthToken = localStorage.getItem('web_token');
-} catch (e) {
-    console.warn('LocalStorage access blocked by browser');
-}
+let webAuthToken = window.DarallaAuthSession.getInitialToken();
 let currentUserId = null;
 let isWebMode = !tg.initData;
 
-// IndexedDB для веб-токена (надёжнее в PWA standalone, чем только localStorage)
-var AuthStorage = {
-    DB_NAME: 'daralla_auth',
-    DB_VERSION: 1,
-    STORE: 'keyval',
-    KEY: 'web_token',
-    get: function () {
-        var self = this;
-        return new Promise(function (resolve) {
-            try {
-                if (!window.indexedDB) { resolve(null); return; }
-                var req = indexedDB.open(self.DB_NAME, self.DB_VERSION);
-                req.onupgradeneeded = function (e) {
-                    if (!e.target.result.objectStoreNames.contains(self.STORE)) {
-                        e.target.result.createObjectStore(self.STORE);
-                    }
-                };
-                req.onsuccess = function (e) {
-                    var db = e.target.result;
-                    var tx = db.transaction(self.STORE, 'readonly');
-                    var store = tx.objectStore(self.STORE);
-                    var getReq = store.get(self.KEY);
-                    getReq.onsuccess = function () { resolve(getReq.result || null); };
-                    getReq.onerror = function () { resolve(null); };
-                    tx.onerror = function () { resolve(null); };
-                };
-                req.onerror = function () { resolve(null); };
-            } catch (err) {
-                resolve(null);
-            }
-        });
-    },
-    set: function (value) {
-        var self = this;
-        return new Promise(function (resolve) {
-            try {
-                if (!window.indexedDB) { resolve(); return; }
-                var req = indexedDB.open(self.DB_NAME, self.DB_VERSION);
-                req.onupgradeneeded = function (e) {
-                    if (!e.target.result.objectStoreNames.contains(self.STORE)) {
-                        e.target.result.createObjectStore(self.STORE);
-                    }
-                };
-                req.onsuccess = function (e) {
-                    var db = e.target.result;
-                    var tx = db.transaction(self.STORE, 'readwrite');
-                    var store = tx.objectStore(self.STORE);
-                    store.put(value, self.KEY);
-                    tx.oncomplete = function () { resolve(); };
-                    tx.onerror = function () { resolve(); };
-                };
-                req.onerror = function () { resolve(); };
-            } catch (err) {
-                resolve();
-            }
-        });
-    },
-    remove: function () {
-        var self = this;
-        return new Promise(function (resolve) {
-            try {
-                if (!window.indexedDB) { resolve(); return; }
-                var req = indexedDB.open(self.DB_NAME, self.DB_VERSION);
-                req.onsuccess = function (e) {
-                    var db = e.target.result;
-                    var tx = db.transaction(self.STORE, 'readwrite');
-                    var store = tx.objectStore(self.STORE);
-                    store.delete(self.KEY);
-                    tx.oncomplete = function () { resolve(); };
-                    tx.onerror = function () { resolve(); };
-                };
-                req.onerror = function () { resolve(); };
-            } catch (err) {
-                resolve();
-            }
-        });
-    }
-};
-
 function setAuthToken(token) {
-    webAuthToken = token;
-    try {
-        localStorage.setItem('web_token', token);
-    } catch (e) {}
-    AuthStorage.set(token);
+    webAuthToken = window.DarallaAuthSession.setAuthToken(token);
 }
 
 function removeAuthToken() {
-    webAuthToken = null;
-    try {
-        localStorage.removeItem('web_token');
-    } catch (e) {}
-    AuthStorage.remove();
+    webAuthToken = window.DarallaAuthSession.removeAuthToken();
 }
 
 // Функция для выполнения защищенных запросов к API
@@ -5513,11 +5421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!platform.isTelegram()) {
-        var idbToken = await AuthStorage.get();
-        if (idbToken && !webAuthToken) {
-            webAuthToken = idbToken;
-            try { localStorage.setItem('web_token', idbToken); } catch (e) {}
-        }
+        webAuthToken = await window.DarallaAuthSession.hydrateTokenFromIndexedDb(webAuthToken);
     }
 
     loadPrices();

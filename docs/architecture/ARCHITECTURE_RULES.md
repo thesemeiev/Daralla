@@ -13,7 +13,15 @@
 
 - `routes -> services`
 - `services -> db`
-- `routes -X-> db` (direct import is transitional and must be reduced)
+- `routes -X-> db` (direct import is forbidden; enforced by `scripts/check_arch_rules.py`)
+
+## Repo Zones (Monorepo, Single Runtime)
+
+- Backend ownership zone: `apps/backend` (runtime source currently mapped to `bot/`).
+- Frontend ownership zone: `apps/frontend` (runtime source currently mapped to `webapp/`).
+- Shared FE/BE contracts: `shared/contracts`.
+
+Runtime remains single-service during this stage. Structural split must not break existing entrypoints/deploy.
 
 ## API Compatibility
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import aiosqlite
+
 from bot.db import is_known_user, register_simple_user
 from bot.db.subscriptions_db import (
     create_subscription,
@@ -30,6 +32,19 @@ async def resolve_or_create_user_from_telegram(telegram_id: str):
     await register_simple_user(user_id)
     await create_telegram_binding(telegram_id, user_id)
     return user_id, True
+
+
+async def resolve_or_create_user_from_telegram_safe(telegram_id: str):
+    """
+    Resolve/create TG-first user with race-safe recovery.
+    """
+    try:
+        return await resolve_or_create_user_from_telegram(telegram_id)
+    except aiosqlite.IntegrityError:
+        recovered = await recover_user_after_integrity_conflict(telegram_id)
+        if not recovered:
+            raise
+        return recovered, False
 
 
 async def recover_user_after_integrity_conflict(telegram_id: str):

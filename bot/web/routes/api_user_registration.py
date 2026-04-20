@@ -2,14 +2,12 @@
 
 import time
 
-import aiosqlite
 from quart import jsonify, request
 
 from bot.handlers.api_support.webhook_auth import verify_telegram_init_data
 from bot.prices_config import get_default_device_limit_async
 from bot.services.user_registration_service import (
-    recover_user_after_integrity_conflict,
-    resolve_or_create_user_from_telegram,
+    resolve_or_create_user_from_telegram_safe,
     subscription_group,
     touch_known_user,
     try_create_trial_subscription,
@@ -36,24 +34,19 @@ async def handle_api_user_register(_auth, logger):
         just_created_tg_user = False
         if not user_id and tg_user_id:
             _tg_str = str(tg_user_id)
-            try:
-                user_id, just_created_tg_user = await resolve_or_create_user_from_telegram(_tg_str)
-                if just_created_tg_user:
-                    logger.info(
-                        "Регистрация нового TG-first пользователя: user_id=%s, telegram_id=%s",
-                        user_id,
-                        _tg_str,
-                    )
-            except aiosqlite.IntegrityError:
-                logger.warning(
-                    "Гонка TG-first регистрации (IntegrityError), telegram_id=%s — сверка с telegram_links",
+            user_id, just_created_tg_user = await resolve_or_create_user_from_telegram_safe(_tg_str)
+            if just_created_tg_user:
+                logger.info(
+                    "Регистрация нового TG-first пользователя: user_id=%s, telegram_id=%s",
+                    user_id,
                     _tg_str,
                 )
-                recovered = await recover_user_after_integrity_conflict(_tg_str)
-                if not recovered:
-                    raise
-                user_id = recovered
-                just_created_tg_user = False
+            else:
+                logger.info(
+                    "TG-first регистрация разрешена после гонки/существующей связи: telegram_id=%s, user_id=%s",
+                    _tg_str,
+                    user_id,
+                )
         if not user_id:
             return jsonify({"error": "Invalid authentication"}), 401
         is_web, was_known_user = await user_profile_flags(

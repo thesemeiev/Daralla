@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="/style.css?v=34">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-    <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы при блокировке telegram.org страница открывалась -->
+    <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы страница открывалась даже при недоступности внешнего CDN -->
 </head>
 <body>
     <div class="container">
@@ -33,14 +33,14 @@
                 <section class="landing-section" id="landing-vpn">
                     <div class="landing-section-content">
                         <h2 class="landing-h2">Что такое VPN</h2>
-                        <p class="landing-text">VPN поднимает зашифрованный туннель между клиентом и удалённой нодой выхода. Трафик инкапсулируется и передаётся по TLS-защищённому каналу, что снижает риск MITM в недоверенных сетях, маскирует исходный IP и стабилизирует сессии при деградации локального маршрута.</p>
+                        <p class="landing-text">VPN направляет трафик через удалённую ноду выхода и помогает стабильнее работать в разных сетевых условиях. Сервис упрощает подключение, смену серверов и управление доступом из одного приложения.</p>
                     </div>
                 </section>
                 <section class="landing-section" id="landing-features">
                     <div class="landing-section-content">
                         <h2 class="landing-h2">Почему мы</h2>
                         <ul class="landing-features-list">
-                            <li>End-to-end шифрование канала клиент ↔ узел выхода</li>
+                            <li>Стабильное соединение клиент ↔ узел выхода</li>
                             <li>Несколько транспортных профилей для разных сетевых условий</li>
                             <li>Минимизация телеметрии: без хранения истории посещённых ресурсов</li>
                             <li>Единая подписка на пул серверных нод без ручной миграции ключей</li>
@@ -1249,7 +1249,7 @@
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                             <div>
                                 <span style="font-weight:500;">xtls-rprx-vision</span>
-                                <p style="margin:4px 0 0;font-size:0.85em;color:var(--text-muted, #888);">Flow для VLESS + REALITY / TLS</p>
+                                <p style="margin:4px 0 0;font-size:0.85em;color:var(--text-muted, #888);">Flow для совместимого подключения клиентов</p>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="server-client-flow-enable">
@@ -1503,6 +1503,7 @@
 
     <script src="/js/api/client.js?v=1"></script>
     <script src="/js/ui/messages.js?v=1"></script>
-    <script src="/app.js?v=34"></script>
+    <script src="/js/auth/session.js?v=1"></script>
+    <script src="/app.js?v=35"></script>
 </body>
 </html>
