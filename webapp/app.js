@@ -119,33 +119,55 @@ var aboutSceneFeature = window.DarallaAboutSceneFeature.create({
     getTheme: function () { return getTheme(); }
 });
 
-// Глобальные переменные для веб-авторизации
-let webAuthToken = window.DarallaAuthSession.getInitialToken();
-let currentUserId = null;
-let isWebMode = !tg.initData;
-let currentSubscriptionDetail = null;
-
-var authFeature = window.DarallaAuthFeature.create({
-    onRemoveAuthToken: function (token) { webAuthToken = token; },
-    setCurrentUserId: function (userId) { currentUserId = userId; },
-    showPage: function (pageName, params) { showPage(pageName, params); },
-    getPlatform: function () { return platform; },
-    apiFetch: function (url, options) { return apiFetch(url, options); }
+// Централизованный runtime state (источник значений по умолчанию для app.js)
+var appState = window.DarallaAppState.create({
+    webAuthToken: window.DarallaAuthSession.getInitialToken(),
+    isWebMode: !tg.initData
 });
 
-var authFormsFeature = window.DarallaAuthFormsFeature.create({
+// Глобальные переменные состояния (собраны в одном месте)
+let webAuthToken = appState.webAuthToken;
+let currentUserId = appState.currentUserId;
+let isWebMode = appState.isWebMode;
+let currentSubscriptionDetail = appState.currentSubscriptionDetail;
+let currentPage = appState.currentPage;
+let serverLoadChartInterval = appState.serverLoadChartInterval;
+let notifRuleEditingId = appState.notifRuleEditingId;
+let notifSelectedTriggerHours = appState.notifSelectedTriggerHours;
+let currentExtendSubscriptionId = appState.currentExtendSubscriptionId;
+let currentPaymentData = appState.currentPaymentData;
+let currentPaymentPeriod = appState.currentPaymentPeriod;
+let isAdmin = appState.isAdmin;
+let currentAdminUserPage = appState.currentAdminUserPage;
+let currentAdminUserSearch = appState.currentAdminUserSearch;
+let currentAdminUserDetailUserId = appState.currentAdminUserDetailUserId;
+let currentEditingSubscriptionId = appState.currentEditingSubscriptionId;
+let previousAdminPage = appState.previousAdminPage;
+let currentCreatingSubscriptionUserId = appState.currentCreatingSubscriptionUserId;
+let currentAdminSubscriptionsPage = appState.currentAdminSubscriptionsPage;
+let currentAdminSubscriptionsStatus = appState.currentAdminSubscriptionsStatus;
+let currentAdminSubscriptionsOwnerQuery = appState.currentAdminSubscriptionsOwnerQuery;
+let adminSubscriptionsSearchTimeout = appState.adminSubscriptionsSearchTimeout;
+let originalSubscriptionData = appState.originalSubscriptionData;
+let currentSubscriptionServers = appState.currentSubscriptionServers;
+let dashRevenueChart = appState.dashRevenueChart;
+let currentAdminGroups = appState.currentAdminGroups;
+let currentAdminServers = appState.currentAdminServers;
+let currentSelectedGroupId = appState.currentSelectedGroupId;
+let adminServerReorderMode = appState.adminServerReorderMode;
+
+var appFeatures = window.DarallaAppComposition.create({
+    onRemoveAuthToken: function (token) { webAuthToken = token; },
+    setCurrentUserId: function (value) { currentUserId = value; },
+    showPage: function (pageName, params) { return showPage(pageName, params); },
+    getPlatform: function () { return platform; },
+    apiFetch: function (url, options) { return apiFetch(url, options); },
     setAuthToken: function (token) { return setAuthToken(token); },
     setWebAuthToken: function (token) { webAuthToken = token; },
-    setCurrentUserId: function (userId) { currentUserId = userId; },
-    showPage: function (pageName, params) { return showPage(pageName, params); },
     checkAdminAccess: function () { return checkAdminAccess(); },
-    showFormMessage: function (container, type, text) { return showFormMessage(container, type, text); }
-});
-
-var authAccountFeature = window.DarallaAuthAccountFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
     showFormMessage: function (container, type, text) { return showFormMessage(container, type, text); },
+    appShowAlert: function (message, options) { return appShowAlert(message, options); },
+    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
     showModal: function (modalId) { return showModal(modalId); },
     closeModal: function (modalId) { return closeModal(modalId); },
     platform: platform,
@@ -153,61 +175,29 @@ var authAccountFeature = window.DarallaAuthAccountFeature.create({
     getWebAuthToken: function () { return webAuthToken; },
     updateProfileCard: function (userId, username) { return updateProfileCard(userId, username); },
     setProfileAvatarFromInitData: function () { return setProfileAvatarFromInitData(); },
-    loadProfileAvatar: function () { return loadProfileAvatar(); }
-});
-
-var subscriptionsFeature = window.DarallaSubscriptionsFeature.create({
+    loadProfileAvatar: function () { return loadProfileAvatar(); },
     escapeHtml: escapeHtml,
     formatTimeRemaining: formatTimeRemaining,
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    platform: platform,
     initTelegramFlow: function () { return initTelegramFlow(); },
-    showPage: function (pageName, params) { showPage(pageName, params); },
-    setCurrentSubscriptionDetail: function (sub) { currentSubscriptionDetail = sub; },
+    setCurrentSubscriptionDetail: function (value) { currentSubscriptionDetail = value; },
     onBuySubscription: function () {
         currentPaymentPeriod = 'month';
         currentExtendSubscriptionId = null;
         resetCheckoutPaymentState();
         showPage('choose-payment-method');
-    }
-});
-
-var adminUsersFeature = window.DarallaAdminUsersFeature.create({
+    },
     setCurrentCreatingSubscriptionUserId: function (value) { currentCreatingSubscriptionUserId = value; },
     getCurrentCreatingSubscriptionUserId: function () { return currentCreatingSubscriptionUserId; },
     setPreviousAdminPage: function (value) { previousAdminPage = value; },
     getPreviousAdminPage: function () { return previousAdminPage; },
-    showPage: function (pageName, params) { showPage(pageName, params); },
-    showAdminUserDetail: function (userId) { showAdminUserDetail(userId); }
-});
-
-var adminUsersListFeature = window.DarallaAdminUsersListFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
+    showAdminUserDetail: function (userId) { return showAdminUserDetail(userId); },
     buildHash: buildHash,
-    escapeHtml: escapeHtml,
     showError: function (elementId, message) { return showError(elementId, message); },
-    showPage: function (pageName, params) { return showPage(pageName, params); },
-    setPreviousAdminPage: function (value) { previousAdminPage = value; },
     setCurrentAdminUserDetailUserId: function (value) { currentAdminUserDetailUserId = value; },
     getCurrentAdminUserSearch: function () { return currentAdminUserSearch; },
     setCurrentAdminUserPage: function (value) { currentAdminUserPage = value; },
-    setCurrentAdminUserSearch: function (value) { currentAdminUserSearch = value; }
-});
-
-var adminUsersActionsFeature = window.DarallaAdminUsersActionsFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    platform: platform,
-    showPage: function (pageName, params) { return showPage(pageName, params); },
-    loadAdminUsers: function (page, search) { return loadAdminUsers(page, search); }
-});
-
-var adminSubscriptionEditFeature = window.DarallaAdminSubscriptionEditFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
-    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
-    showPage: function (pageName, params) { return showPage(pageName, params); },
-    showModal: function (modalId) { return showModal(modalId); },
-    escapeHtml: escapeHtml,
+    setCurrentAdminUserSearch: function (value) { currentAdminUserSearch = value; },
+    loadAdminUsers: function (page, search) { return loadAdminUsers(page, search); },
     copyTextToClipboard: function (text) { return copyTextToClipboard(text); },
     getCurrentPage: function () { return currentPage; },
     getCurrentEditingSubscriptionId: function () { return currentEditingSubscriptionId; },
@@ -216,65 +206,24 @@ var adminSubscriptionEditFeature = window.DarallaAdminSubscriptionEditFeature.cr
     setOriginalSubscriptionData: function (value) { originalSubscriptionData = value; },
     getCurrentSubscriptionServers: function () { return currentSubscriptionServers; },
     setCurrentSubscriptionServers: function (value) { currentSubscriptionServers = value; },
-    getPreviousAdminPage: function () { return previousAdminPage; },
-    setPreviousAdminPage: function (value) { previousAdminPage = value; },
     getCurrentAdminSubscriptionsPage: function () { return currentAdminSubscriptionsPage; },
     getCurrentAdminSubscriptionsStatus: function () { return currentAdminSubscriptionsStatus; },
     getCurrentAdminSubscriptionsOwnerQuery: function () { return currentAdminSubscriptionsOwnerQuery; },
     getCurrentAdminUserDetailUserId: function () { return currentAdminUserDetailUserId; },
-    showAdminUserDetail: function (userId) { return showAdminUserDetail(userId); }
-});
-
-var adminSubscriptionCreateFeature = window.DarallaAdminSubscriptionCreateFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
-    getCurrentCreatingSubscriptionUserId: function () { return currentCreatingSubscriptionUserId; },
-    goBackFromCreateSubscription: function () { return goBackFromCreateSubscription(); }
-});
-
-var adminStatsDashboardFeature = window.DarallaAdminStatsDashboardFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    escapeHtml: escapeHtml,
-    getCurrentPage: function () { return currentPage; },
+    goBackFromCreateSubscription: function () { return goBackFromCreateSubscription(); },
     getServerLoadChartInterval: function () { return serverLoadChartInterval; },
     setServerLoadChartInterval: function (value) { serverLoadChartInterval = value; },
     getDashRevenueChart: function () { return dashRevenueChart; },
-    setDashRevenueChart: function (value) { dashRevenueChart = value; }
-});
-
-var adminBroadcastFeature = window.DarallaAdminBroadcastFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
-    platform: platform,
-    escapeHtml: escapeHtml
-});
-
-var serversFeature = window.DarallaServersFeature.createList({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
+    setDashRevenueChart: function (value) { dashRevenueChart = value; },
     loadServerMap: function () { return loadServerMap(); },
-    escapeHtml: escapeHtml
-});
-
-var eventsFeature = window.DarallaEventsFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
     renderEventCard: function (ev, isLive, isEnded) { return renderEventCard(ev, isLive, isEnded); },
     moveNavIndicator: function (index) { return moveNavIndicator(index); },
     getEventDetailLeaderboardTimer: function () { return eventDetailLeaderboardTimer; },
     setEventDetailLeaderboardTimer: function (value) { eventDetailLeaderboardTimer = value; },
-    showPage: function (pageName, params) { return showPage(pageName, params); },
     isEventLive: function (ev) { return isEventLive(ev); },
     getEventDaysText: function (ev, isLive, isEnded) { return getEventDaysText(ev, isLive, isEnded); },
     getEventIcons: function () { return { live: EVENT_ICON_LIVE, clock: EVENT_ICON_CLOCK }; },
-    escapeHtml: escapeHtml,
     buildLeaderboardHtml: function (leaderboard, myPlace) { return buildLeaderboardHtml(leaderboard, myPlace); },
-    copyTextToClipboard: function (text) { return copyTextToClipboard(text); },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
-    showModal: function (modalId) { return showModal(modalId); }
-});
-
-var notificationsFeature = window.DarallaNotificationsFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    escapeHtml: escapeHtml,
     notifCardPreviewText: function (rule) { return notifCardPreviewText(rule); },
     notifTriggerLabel: function (rule) { return notifTriggerLabel(rule); },
     notifFormatHours: function (hours) { return notifFormatHours(hours); },
@@ -284,7 +233,6 @@ var notificationsFeature = window.DarallaNotificationsFeature.create({
     setNotifTriggerFromHours: function (hours, eventType) { return setNotifTriggerFromHours(hours, eventType); },
     onNotifRuleEventTypeChange: function () { return onNotifRuleEventTypeChange(); },
     updateNotifPreview: function () { return updateNotifPreview(); },
-    showModal: function (modalId) { return showModal(modalId); },
     setNotifRuleEditingId: function (value) { notifRuleEditingId = value; },
     getNotifRuleEditingId: function () { return notifRuleEditingId; },
     setNotifSelectedTriggerHours: function (value) { notifSelectedTriggerHours = value; },
@@ -292,30 +240,49 @@ var notificationsFeature = window.DarallaNotificationsFeature.create({
     getRepeatData: function () { return getRepeatData(); },
     buildNotifTemplate: function () { return buildNotifTemplate(); },
     closeNotificationRuleForm: function () { return closeNotificationRuleForm(); },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
-    appShowConfirm: function (message, options) { return appShowConfirm(message, options); }
-});
-
-var paymentsFeature = window.DarallaPaymentsFeature.create({
     setCurrentPaymentData: function (value) { currentPaymentData = value; },
     getCurrentPaymentData: function () { return currentPaymentData; },
     setCurrentExtendSubscriptionId: function (value) { currentExtendSubscriptionId = value; },
     getCurrentExtendSubscriptionId: function () { return currentExtendSubscriptionId; },
     setCurrentPaymentPeriod: function (value) { currentPaymentPeriod = value; },
     getCurrentPaymentPeriod: function () { return currentPaymentPeriod; },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
-    showPage: function (pageName, params) { return showPage(pageName, params); },
-    apiFetch: function (url, options) { return apiFetch(url, options); },
     isHttpUrl: function (value) { return isHttpUrl(value); },
     getReferralCodeFromCurrentPage: function () { return getReferralCodeFromCurrentPage(); },
-    showFormMessage: function (container, type, text) { return showFormMessage(container, type, text); },
     hideFormMessage: function (container) { return hideFormMessage(container); },
     removePaymentResultSubline: function () { return removePaymentResultSubline(); },
     ensurePaymentResultSubline: function (page) { return ensurePaymentResultSubline(page); },
     showAppToast: function (message, duration, variant) { return showAppToast(message, duration, variant); },
     loadSubscriptions: function () { return loadSubscriptions(); },
-    openPaymentUrl: function () { return openPaymentUrl(); }
+    openPaymentUrl: function () { return openPaymentUrl(); },
+    loadPrices: function () { return loadPrices(); },
+    getCurrentAdminGroups: function () { return currentAdminGroups; },
+    setCurrentAdminGroups: function (value) { currentAdminGroups = value; },
+    getCurrentAdminServers: function () { return currentAdminServers; },
+    setCurrentAdminServers: function (value) { currentAdminServers = value; },
+    getCurrentSelectedGroupId: function () { return currentSelectedGroupId; },
+    setCurrentSelectedGroupId: function (value) { currentSelectedGroupId = value; },
+    getAdminServerReorderMode: function () { return adminServerReorderMode; },
+    setAdminServerReorderMode: function (value) { adminServerReorderMode = value; }
 });
+
+var authFeature = appFeatures.authFeature;
+var authFormsFeature = appFeatures.authFormsFeature;
+var authAccountFeature = appFeatures.authAccountFeature;
+var subscriptionsFeature = appFeatures.subscriptionsFeature;
+var adminUsersFeature = appFeatures.adminUsersFeature;
+var adminUsersListFeature = appFeatures.adminUsersListFeature;
+var adminUsersActionsFeature = appFeatures.adminUsersActionsFeature;
+var adminSubscriptionEditFeature = appFeatures.adminSubscriptionEditFeature;
+var adminSubscriptionCreateFeature = appFeatures.adminSubscriptionCreateFeature;
+var adminStatsDashboardFeature = appFeatures.adminStatsDashboardFeature;
+var adminBroadcastFeature = appFeatures.adminBroadcastFeature;
+var serversFeature = appFeatures.serversFeature;
+var eventsFeature = appFeatures.eventsFeature;
+var notificationsFeature = appFeatures.notificationsFeature;
+var paymentsFeature = appFeatures.paymentsFeature;
+var adminCommerceFeature = appFeatures.adminCommerceFeature;
+var adminServersFeature = appFeatures.adminServersFeature;
+var appActions = window.DarallaAppActions.create();
 
 function setAuthToken(token) {
     webAuthToken = authFeature.setAuthToken(token);
@@ -330,9 +297,7 @@ async function apiFetch(url, options = {}) {
     return window.DarallaApiClient.apiFetch(url, options, { platform: platform, logout: logout });
 }
 
-async function logout() {
-    return authFeature.logout();
-}
+var logout = authFeature.logout.bind(authFeature);
 
 /** Таймаут автоскрытия сообщения формы (мс). 0 = не скрывать автоматически. */
 var FORM_MESSAGE_AUTO_HIDE_MS = 6000;
@@ -383,8 +348,7 @@ function ensurePaymentResultSubline(page) {
 
 // Инициализация tg.ready/expand/цветов выполняется в DOMContentLoaded после waitForTelegram
 
-// Текущая страница
-let currentPage = 'subscriptions';
+// Текущая страница хранится в централизованном state-блоке выше.
 
 function applyRoute(route, isAuthenticated, isAdmin) {
     if (!route) return false;
@@ -455,8 +419,7 @@ function applyRoute(route, isAuthenticated, isAdmin) {
     return true;
 }
 
-// Интервалы для автоматического обновления
-let serverLoadChartInterval = null;
+// Интервалы для автоматического обновления хранятся в централизованном state-блоке выше.
 
 // Функция переключения страниц (params — необязательный объект для hash)
 function showPage(pageName, params) {
@@ -671,19 +634,7 @@ function showPage(pageName, params) {
         try { location.hash = buildHash(pageName, params || {}); } catch (e) {}
     }
 }
-
-function updateProfileCard(userId, username) {
-    return authFeature.updateProfileCard(userId, username);
-}
-
-function setProfileAvatarFromInitData() {
-    return authFeature.setProfileAvatarFromInitData();
-}
-
-async function loadProfileAvatar() {
-    return authFeature.loadProfileAvatar();
-}
-
+var updateProfileCard = authFeature.updateProfileCard.bind(authFeature);var setProfileAvatarFromInitData = authFeature.setProfileAvatarFromInitData.bind(authFeature);var loadProfileAvatar = authFeature.loadProfileAvatar.bind(authFeature);
 function initLandingObserver() {
     var scrollEl = document.getElementById('landing-scroll');
     var sections = document.querySelectorAll('#page-landing .landing-section');
@@ -730,9 +681,8 @@ function initLandingWheelAndHint() {
 }
 
 // --- Страница «О нас»: 3D-сеть узлов + рёбра, фон тёмный → белый при скролле ---
-function initAboutPage() { return aboutSceneFeature.initAboutPage(); }
-function aboutPageDispose() { return aboutSceneFeature.aboutPageDispose(); }
-
+var initAboutPage = aboutSceneFeature.initAboutPage.bind(aboutSceneFeature);
+var aboutPageDispose = aboutSceneFeature.aboutPageDispose.bind(aboutSceneFeature);
 // Функция показа модального окна
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
@@ -920,29 +870,16 @@ function appShowPrompt(labelText, defaultValue, opts) {
 }
 
 // Функция показа детальной информации о подписке
-function showSubscriptionDetail(sub) {
-    return subscriptionsFeature.showSubscriptionDetail(sub);
-}
-
+var showSubscriptionDetail = subscriptionsFeature.showSubscriptionDetail.bind(subscriptionsFeature);
 // Функция загрузки подписок
-async function loadSubscriptions() {
-    return subscriptionsFeature.loadSubscriptions();
-}
+var loadSubscriptions = subscriptionsFeature.loadSubscriptions.bind(subscriptionsFeature);
 
 // Функция отображения подписок
-function renderSubscriptions(subscriptions) {
-    return subscriptionsFeature.renderSubscriptions(subscriptions);
-}
-
+var renderSubscriptions = subscriptionsFeature.renderSubscriptions.bind(subscriptionsFeature);
 // Функция создания карточки подписки
-function createSubscriptionCard(sub) {
-    return subscriptionsFeature.createSubscriptionCard(sub);
-}
-
+var createSubscriptionCard = subscriptionsFeature.createSubscriptionCard.bind(subscriptionsFeature);
 // Функция загрузки серверов
-async function loadServers() {
-    return serversFeature.loadServers();
-}
+var loadServers = serversFeature.loadServers.bind(serversFeature);
 
 // Иконки для событий (inline SVG, без смайликов)
 var EVENT_ICON_LIVE = '<svg class="event-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>';
@@ -975,16 +912,9 @@ function renderEventCard(ev, isLive, isEnded) {
 }
 
 // Загрузка списка событий (модуль событий)
-async function loadEvents() {
-    return eventsFeature.loadEvents();
-}
-
+var loadEvents = eventsFeature.loadEvents.bind(eventsFeature);
 var eventDetailLeaderboardTimer = null;
-
-function showEventDetail(eventId) {
-    return eventsFeature.showEventDetail(eventId);
-}
-
+var showEventDetail = eventsFeature.showEventDetail.bind(eventsFeature);
 function isEventLive(ev) {
     if (!ev || !ev.start_at || !ev.end_at) return false;
     var now = new Date().toISOString();
@@ -1043,14 +973,8 @@ function buildLeaderboardHtml(leaderboard, myPlace) {
     html += '</div>';
     return html;
 }
-
-function loadEventDetail(eventId) {
-    return eventsFeature.loadEventDetail(eventId);
-}
-async function copyEventReferralCode(code) {
-    return eventsFeature.copyEventReferralCode(code);
-}
-
+var loadEventDetail = eventsFeature.loadEventDetail.bind(eventsFeature);
+var copyEventReferralCode = eventsFeature.copyEventReferralCode.bind(eventsFeature);
 var adminEventEditingId = null;
 async function loadAdminEventsPage() {
     var loadingEl = document.getElementById('admin-events-loading');
@@ -1177,9 +1101,6 @@ async function deleteAdminEvent(eventId) {
 }
 
 // ── Notification Rules ──
-
-var notifRuleEditingId = null;
-var notifSelectedTriggerHours = null;
 
 var NOTIF_EVENT_LABELS = {
     'expiry_warning': 'Истекает подписка',
@@ -1321,14 +1242,8 @@ function updateNotifPreview() {
     var bubble = document.getElementById('notif-preview-bubble');
     bubble.innerHTML = html || '<span style="opacity:0.4">Начните вводить текст…</span>';
 }
-
-async function loadNotificationRules() {
-    return notificationsFeature.loadNotificationRules();
-}
-
-async function showNotificationRuleForm(ruleId) {
-    return notificationsFeature.showNotificationRuleForm(ruleId);
-}
+var loadNotificationRules = notificationsFeature.loadNotificationRules.bind(notificationsFeature);
+var showNotificationRuleForm = notificationsFeature.showNotificationRuleForm.bind(notificationsFeature);
 
 function closeNotificationRuleForm() {
     closeModal('admin-notification-form-modal');
@@ -1382,21 +1297,9 @@ function buildNotifTemplate() {
     });
 }
 
-async function saveNotificationRule(e) {
-    return notificationsFeature.saveNotificationRule(e);
-}
-
-async function deleteNotificationRule(ruleId) {
-    return notificationsFeature.deleteNotificationRule(ruleId);
-}
-
-async function toggleNotificationRule(ruleId, isActive) {
-    return notificationsFeature.toggleNotificationRule(ruleId, isActive);
-}
-
-async function testSendNotificationRule() {
-    return notificationsFeature.testSendNotificationRule();
-}
+var saveNotificationRule = notificationsFeature.saveNotificationRule.bind(notificationsFeature);
+var deleteNotificationRule = notificationsFeature.deleteNotificationRule.bind(notificationsFeature);var toggleNotificationRule = notificationsFeature.toggleNotificationRule.bind(notificationsFeature);
+var testSendNotificationRule = notificationsFeature.testSendNotificationRule.bind(notificationsFeature);
 
 // Функция отображения серверов
 // Переменная для хранения экземпляра глобуса
@@ -2195,11 +2098,7 @@ async function loadServerMap() {
         }
     }
 }
-
-function renderServers(servers) {
-    return serversFeature.renderServers(servers);
-}
-
+var renderServers = serversFeature.renderServers.bind(serversFeature);
 // Функция копирования ссылки подписки
 // Функция показа модального окна переименования подписки
 async function showRenameSubscriptionModal() {
@@ -2223,11 +2122,7 @@ async function showRenameSubscriptionModal() {
     renameSubscription(currentSubscriptionDetail.id, trimmedName);
 }
 
-// Глобальная переменная для хранения ID подписки при продлении
-let currentExtendSubscriptionId = null;
-let currentPaymentData = null;
-// Выбранный период при переходе на страницу выбора способа оплаты (month / 3month)
-let currentPaymentPeriod = null;
+// Состояние оплаты хранится в централизованном state-блоке выше.
 
 /** Ссылка на оплату (https/http), без учёта регистра схемы */
 function isHttpUrl(s) {
@@ -2237,35 +2132,19 @@ function isHttpUrl(s) {
     var low = t.toLowerCase();
     return low.indexOf('http://') === 0 || low.indexOf('https://') === 0;
 }
-
-function extractPaymentUrlFromCreateResponse(data) {
-    return paymentsFeature.extractPaymentUrlFromCreateResponse(data);
-}
-
+var extractPaymentUrlFromCreateResponse = paymentsFeature.extractPaymentUrlFromCreateResponse.bind(paymentsFeature);
 /** Сброс состояния незавершённого платежа перед новым оформлением (не трогает sessionStorage продления). */
-function resetCheckoutPaymentState() {
-    return paymentsFeature.resetCheckoutPaymentState();
-}
-
+var resetCheckoutPaymentState = paymentsFeature.resetCheckoutPaymentState.bind(paymentsFeature);
 // Функция показа страницы продления подписки (сразу на оформление с карточками)
-async function showExtendSubscriptionModal(subscriptionId) {
-    return paymentsFeature.showExtendSubscriptionModal(subscriptionId);
-}
-
+var showExtendSubscriptionModal = paymentsFeature.showExtendSubscriptionModal.bind(paymentsFeature);
 // Переход на страницу оформления (покупка — с подписок)
-function goToChoosePaymentMethod(period, subscriptionId) {
-    return paymentsFeature.goToChoosePaymentMethod(period, subscriptionId);
-}
+var goToChoosePaymentMethod = paymentsFeature.goToChoosePaymentMethod.bind(paymentsFeature);
 
 // Функция возврата со страницы оформления
-function goBackFromChoosePayment() {
-    return paymentsFeature.goBackFromChoosePayment();
-}
+var goBackFromChoosePayment = paymentsFeature.goBackFromChoosePayment.bind(paymentsFeature);
 
 // Функция возврата с страницы оплаты (на страницу оформления)
-function goBackFromPayment() {
-    return paymentsFeature.goBackFromPayment();
-}
+var goBackFromPayment = paymentsFeature.goBackFromPayment.bind(paymentsFeature);
 
 /** После редиректа с сайта ЮKassa: payment_return=1; payment_id в query или в sessionStorage */
 function handlePaymentReturnFromQuery() {
@@ -2454,37 +2333,18 @@ function bindChoosePaymentSubmit() {
 }
 
 // Функция создания платежа (вызывается со страницы оформления)
-async function createPayment(period, subscriptionId, gateway) {
-    return paymentsFeature.createPayment(period, subscriptionId, gateway);
-}
-
+var createPayment = paymentsFeature.createPayment.bind(paymentsFeature);
 // Функция показа страницы оплаты
-function showPaymentPage() {
-    return paymentsFeature.showPaymentPage();
-}
-
+var showPaymentPage = paymentsFeature.showPaymentPage.bind(paymentsFeature);
 // Показать на странице оплаты состояние «Оплата прошла» (обновить карточку, кнопка «К подпискам»)
-function showPaymentSuccessState() {
-    return paymentsFeature.showPaymentSuccessState();
-}
-
+var showPaymentSuccessState = paymentsFeature.showPaymentSuccessState.bind(paymentsFeature);
 // Показать на странице оплаты состояние отмены/ошибки (красный статус, кнопка «Попробовать снова»)
-function showPaymentErrorState(message) {
-    return paymentsFeature.showPaymentErrorState(message);
-}
-
+var showPaymentErrorState = paymentsFeature.showPaymentErrorState.bind(paymentsFeature);
 // Функция проверки статуса платежа
 // Примечание: основная обработка платежа идет через вебхук от YooKassa (/webhook/yookassa)
 // Polling здесь нужен только для UX - чтобы пользователь видел обновление в мини-приложении
 // Вебхук обрабатывает платеж на сервере и обновляет БД, polling просто проверяет статус в БД
-function clearPaymentStatusPolling() {
-    return paymentsFeature.clearPaymentStatusPolling();
-}
-
-async function checkPaymentStatus(paymentId, subscriptionId = null) {
-    return paymentsFeature.checkPaymentStatus(paymentId, subscriptionId);
-}
-
+var clearPaymentStatusPolling = paymentsFeature.clearPaymentStatusPolling.bind(paymentsFeature);var checkPaymentStatus = paymentsFeature.checkPaymentStatus.bind(paymentsFeature);
 // Функция переименования подписки
 async function renameSubscription(subId, newName) {
     try {
@@ -2570,18 +2430,9 @@ function formatTimeRemaining(expiresAt) {
 
 // ==================== АДМИН-ПАНЕЛЬ ====================
 
-let isAdmin = false;
-let currentAdminUserPage = 1;
-let currentAdminUserSearch = '';
-let currentAdminUserDetailUserId = null;
-let currentEditingSubscriptionId = null;
-let previousAdminPage = 'admin-users';
+// Состояние админ-панели хранится в централизованном state-блоке выше.
 
-// Состояние страницы подписок в админке
-let currentAdminSubscriptionsPage = 1;
-let currentAdminSubscriptionsStatus = '';
-let currentAdminSubscriptionsOwnerQuery = '';
-let adminSubscriptionsSearchTimeout;
+// Состояние страницы подписок в админке хранится в централизованном state-блоке выше.
 
 // Проверка прав админа
 // Функция проверки прав админа
@@ -2817,119 +2668,59 @@ function updateAdminUI() {
 }
 
 // Загрузка списка пользователей
-async function loadAdminUsers(page = 1, search = '') {
-    return adminUsersListFeature.loadAdminUsers(page, search);
-}
+var loadAdminUsers = adminUsersListFeature.loadAdminUsers.bind(adminUsersListFeature);
 
 // Поиск пользователей
-function handleAdminUserSearch() {
-    return adminUsersListFeature.handleAdminUserSearch();
-}
-
+var handleAdminUserSearch = adminUsersListFeature.handleAdminUserSearch.bind(adminUsersListFeature);
 // Пагинация
-function showAdminPagination(currentPage, totalPages) {
-    return adminUsersListFeature.showAdminPagination(currentPage, totalPages);
-}
-
+var showAdminPagination = adminUsersListFeature.showAdminPagination.bind(adminUsersListFeature);
 // Показать детальную информацию о пользователе
-async function showAdminUserDetail(userId) {
-    return adminUsersListFeature.showAdminUserDetail(userId);
-}
-
+var showAdminUserDetail = adminUsersListFeature.showAdminUserDetail.bind(adminUsersListFeature);
 // Показать форму редактирования подписки
-// Глобальная переменная для хранения исходных значений подписки
-let originalSubscriptionData = null;
-let currentSubscriptionServers = [];
-
-async function showAdminSubscriptionEdit(subId) {
-    return adminSubscriptionEditFeature.showAdminSubscriptionEdit(subId);
-}
-
+var showAdminSubscriptionEdit = adminSubscriptionEditFeature.showAdminSubscriptionEdit.bind(adminSubscriptionEditFeature);
 // Сохранение изменений подписки
-async function saveSubscriptionChanges(event) {
-    return adminSubscriptionEditFeature.saveSubscriptionChanges(event);
-}
+var saveSubscriptionChanges = adminSubscriptionEditFeature.saveSubscriptionChanges.bind(adminSubscriptionEditFeature);
 
 // Закрытие модального окна
-function closeSubscriptionConfirmModal() {
-    return adminSubscriptionEditFeature.closeSubscriptionConfirmModal();
-}
+var closeSubscriptionConfirmModal = adminSubscriptionEditFeature.closeSubscriptionConfirmModal.bind(adminSubscriptionEditFeature);
 
 // Подтверждение и сохранение изменений
-async function confirmSaveSubscriptionChanges() {
-    return adminSubscriptionEditFeature.confirmSaveSubscriptionChanges();
-}
+var confirmSaveSubscriptionChanges = adminSubscriptionEditFeature.confirmSaveSubscriptionChanges.bind(adminSubscriptionEditFeature);
 
 // Синхронизация подписки
-async function syncSubscription() {
-    return adminSubscriptionEditFeature.syncSubscription();
-}
-
+var syncSubscription = adminSubscriptionEditFeature.syncSubscription.bind(adminSubscriptionEditFeature);
 // Переключение между вкладками редактирования подписки
-function switchSubscriptionTab(tabName) {
-    return adminSubscriptionEditFeature.switchSubscriptionTab(tabName);
-}
+var switchSubscriptionTab = adminSubscriptionEditFeature.switchSubscriptionTab.bind(adminSubscriptionEditFeature);
 
 // Загрузка и отображение ключей подписки
-function loadSubscriptionKeys(servers) {
-    return adminSubscriptionEditFeature.loadSubscriptionKeys(servers);
-}
-
+var loadSubscriptionKeys = adminSubscriptionEditFeature.loadSubscriptionKeys.bind(adminSubscriptionEditFeature);
 // Функция копирования в буфер обмена (админка)
-async function copyToClipboard(text, button) {
-    return adminSubscriptionEditFeature.copyToClipboard(text, button);
-}
-
+var copyToClipboard = adminSubscriptionEditFeature.copyToClipboard.bind(adminSubscriptionEditFeature);
 // Возврат назад из редактирования подписки
-function goBackFromSubscriptionEdit() {
-    return adminSubscriptionEditFeature.goBackFromSubscriptionEdit();
-}
+var goBackFromSubscriptionEdit = adminSubscriptionEditFeature.goBackFromSubscriptionEdit.bind(adminSubscriptionEditFeature);
 
 // Показать форму создания подписки
-function showCreateSubscriptionForm(userId) {
-    return adminUsersFeature.showCreateSubscriptionForm(userId);
-}
-
+var showCreateSubscriptionForm = adminUsersFeature.showCreateSubscriptionForm.bind(adminUsersFeature);
 // Возврат назад из создания подписки
-function goBackFromCreateSubscription() {
-    return adminUsersFeature.goBackFromCreateSubscription();
-}
+var goBackFromCreateSubscription = adminUsersFeature.goBackFromCreateSubscription.bind(adminUsersFeature);
 
 // Возврат назад из детальной информации о пользователе
-function goBackFromUserDetail() {
-    return adminUsersActionsFeature.goBackFromUserDetail();
-}
+var goBackFromUserDetail = adminUsersActionsFeature.goBackFromUserDetail.bind(adminUsersActionsFeature);
 
 // Показать модальное окно подтверждения удаления пользователя
-function showDeleteUserConfirm(userId) {
-    return adminUsersActionsFeature.showDeleteUserConfirm(userId);
-}
-
+var showDeleteUserConfirm = adminUsersActionsFeature.showDeleteUserConfirm.bind(adminUsersActionsFeature);
 // Закрыть модальное окно удаления пользователя
-function closeDeleteUserModal() {
-    return adminUsersActionsFeature.closeDeleteUserModal();
-}
-
+var closeDeleteUserModal = adminUsersActionsFeature.closeDeleteUserModal.bind(adminUsersActionsFeature);
 // Подтвердить удаление пользователя
-async function confirmDeleteUser(userId) {
-    return adminUsersActionsFeature.confirmDeleteUser(userId);
-}
-
+var confirmDeleteUser = adminUsersActionsFeature.confirmDeleteUser.bind(adminUsersActionsFeature);
 // Создание подписки
-async function createSubscription(event) {
-    return adminSubscriptionCreateFeature.createSubscription(event);
-}
+var createSubscription = adminSubscriptionCreateFeature.createSubscription.bind(adminSubscriptionCreateFeature);
 
 // Подтверждение удаления подписки
-async function confirmDeleteSubscription() {
-    return adminSubscriptionEditFeature.confirmDeleteSubscription();
-}
+var confirmDeleteSubscription = adminSubscriptionEditFeature.confirmDeleteSubscription.bind(adminSubscriptionEditFeature);
 
 // Удаление подписки
-async function deleteSubscription() {
-    return adminSubscriptionEditFeature.deleteSubscription();
-}
-
+var deleteSubscription = adminSubscriptionEditFeature.deleteSubscription.bind(adminSubscriptionEditFeature);
 // Вспомогательная функция для отображения ошибок
 function showError(elementId, message) {
     const errorEl = document.getElementById(elementId);
@@ -2940,33 +2731,9 @@ function showError(elementId, message) {
 }
 
 // Главный экран админ-панели (две карточки «Аналитика» и «Управление») — данных не грузим
-let dashRevenueChart = null;
-
-async function loadAdminStats() {
-    return adminStatsDashboardFeature.loadAdminStats();
-}
-
-function formatRub(v) {
-    return adminStatsDashboardFeature.formatRub(v);
-}
-
-function renderRevenueChart(data) {
-    return adminStatsDashboardFeature.renderRevenueChart(data);
-}
-
-function renderGatewaySplit(gw) {
-    return adminStatsDashboardFeature.renderGatewaySplit(gw);
-}
-
-async function loadDashboardServers() {
-    return adminStatsDashboardFeature.loadDashboardServers();
-}
-
+var loadAdminStats = adminStatsDashboardFeature.loadAdminStats.bind(adminStatsDashboardFeature);var formatRub = adminStatsDashboardFeature.formatRub.bind(adminStatsDashboardFeature);var renderRevenueChart = adminStatsDashboardFeature.renderRevenueChart.bind(adminStatsDashboardFeature);var renderGatewaySplit = adminStatsDashboardFeature.renderGatewaySplit.bind(adminStatsDashboardFeature);var loadDashboardServers = adminStatsDashboardFeature.loadDashboardServers.bind(adminStatsDashboardFeature);
 // Предотвращаем закрытие приложения при скролле вверх
-function preventCloseOnScroll() {
-    return uiGuardsFeature.preventCloseOnScroll();
-}
-
+var preventCloseOnScroll = uiGuardsFeature.preventCloseOnScroll.bind(uiGuardsFeature);
 // [Удалено: loadNotificationStats, loadNotificationDeliveryChart и др. графики уведомлений — оставлена только аналитика серверов]
 
 // Убираем мигающую каретку при фокусе на нередактируемых элементах
@@ -3097,6 +2864,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initNavIndicator();
     initThemeToggle();
+    if (window.DarallaDomBindings && typeof window.DarallaDomBindings.init === 'function') {
+        window.DarallaDomBindings.init({
+            showPage: showPage,
+            logout: logout,
+            handleWebLogin: handleWebLogin,
+            handleWebRegister: handleWebRegister,
+            handleWebAccessSetup: handleWebAccessSetup,
+            handleLinkTelegram: handleLinkTelegram,
+            handleChangeLogin: handleChangeLogin,
+            handleChangePassword: handleChangePassword,
+            handleUnlinkTelegram: handleUnlinkTelegram,
+            saveNotificationRule: saveNotificationRule,
+            onNotifRuleEventTypeChange: onNotifRuleEventTypeChange,
+            updateNotifPreview: updateNotifPreview,
+            toggleRepeatFields: toggleRepeatFields,
+            reloadAdminSubscriptionsWithFilters: reloadAdminSubscriptionsWithFilters,
+            getCurrentSelectedGroupId: function () { return currentSelectedGroupId; },
+            editServerGroup: editServerGroup,
+            submitAdminEventForm: submitAdminEventForm,
+            createSubscription: createSubscription,
+            saveSubscriptionChanges: saveSubscriptionChanges,
+            saveAdminCommerce: saveAdminCommerce,
+            saveServerGroup: saveServerGroup,
+            saveServerConfig: saveServerConfig
+        });
+    }
     window.addEventListener('hashchange', function () {
         var route = parseHashRoute();
         if (!route || route.pageName === currentPage) return;
@@ -3183,125 +2976,180 @@ async function initTelegramFlow() {
 }
 
 // Обработчики веб-авторизации
-async function handleWebLogin(event) {
-    return authFormsFeature.handleWebLogin(event);
-}
+var handleWebLogin = authFormsFeature.handleWebLogin.bind(authFormsFeature);
 
-async function handleWebRegister(event) {
-    return authFormsFeature.handleWebRegister(event);
-}
+var handleWebRegister = authFormsFeature.handleWebRegister.bind(authFormsFeature);
 
 // === НАСТРОЙКА ВЕБ-ДОСТУПА (ИЗ ТГ) ===
 
-function showWebAccessModal() {
-    return authAccountFeature.showWebAccessModal();
-}
+var showWebAccessModal = authAccountFeature.showWebAccessModal.bind(authAccountFeature);
 
-async function handleWebAccessSetup(event) {
-    return authAccountFeature.handleWebAccessSetup(event);
-}
+var handleWebAccessSetup = authAccountFeature.handleWebAccessSetup.bind(authAccountFeature);
+var refreshAboutAccount = authAccountFeature.refreshAboutAccount.bind(authAccountFeature);
+var handleLinkTelegram = authAccountFeature.handleLinkTelegram.bind(authAccountFeature);
 
-async function refreshAboutAccount() {
-    return authAccountFeature.refreshAboutAccount();
-}
+var handleChangeLogin = authAccountFeature.handleChangeLogin.bind(authAccountFeature);
 
-async function handleLinkTelegram(event) {
-    return authAccountFeature.handleLinkTelegram(event);
-}
+var handleChangePassword = authAccountFeature.handleChangePassword.bind(authAccountFeature);
 
-async function handleChangeLogin(event) {
-    return authAccountFeature.handleChangeLogin(event);
-}
-
-async function handleChangePassword(event) {
-    return authAccountFeature.handleChangePassword(event);
-}
-
-async function handleUnlinkTelegram(event) {
-    return authAccountFeature.handleUnlinkTelegram(event);
-}
+var handleUnlinkTelegram = authAccountFeature.handleUnlinkTelegram.bind(authAccountFeature);
 
 // Загрузка статистики подписок
 
 // Страница рассылки (админ)
-async function loadBroadcastPage() { return adminBroadcastFeature.loadBroadcastPage(); }
-function setBroadcastMode(mode) { return adminBroadcastFeature.setBroadcastMode(mode); }
-function renderBroadcastUserResults() { return adminBroadcastFeature.renderBroadcastUserResults(); }
-async function searchUsersForBroadcast() { return adminBroadcastFeature.searchUsersForBroadcast(); }
-function toggleUserForBroadcast(userId) { return adminBroadcastFeature.toggleUserForBroadcast(userId); }
-function clearUserSelection() { return adminBroadcastFeature.clearUserSelection(); }
-function updateSelectedCount() { return adminBroadcastFeature.updateSelectedCount(); }
-function updateBroadcastRecipientsCount() { return adminBroadcastFeature.updateBroadcastRecipientsCount(); }
-function updateSendButtonState() { return adminBroadcastFeature.updateSendButtonState(); }
-function updateSelectedChips() { return adminBroadcastFeature.updateSelectedChips(); }
-function removeUserFromSelection(userId) { return adminBroadcastFeature.removeUserFromSelection(userId); }
-function selectAllBroadcastResults() { return adminBroadcastFeature.selectAllBroadcastResults(); }
-function highlightMatchRaw(text, queryLower) { return adminBroadcastFeature.highlightMatchRaw(text, queryLower); }
-async function sendBroadcast() { return adminBroadcastFeature.sendBroadcast(); }
+var broadcastActions = appActions.bindFeature(adminBroadcastFeature, [
+    'loadBroadcastPage',
+    'setBroadcastMode',
+    'renderBroadcastUserResults',
+    'searchUsersForBroadcast',
+    'toggleUserForBroadcast',
+    'clearUserSelection',
+    'updateSelectedCount',
+    'updateBroadcastRecipientsCount',
+    'updateSendButtonState',
+    'updateSelectedChips',
+    'removeUserFromSelection',
+    'selectAllBroadcastResults',
+    'highlightMatchRaw',
+    'sendBroadcast'
+]);
+var loadBroadcastPage = broadcastActions.loadBroadcastPage;
+var setBroadcastMode = broadcastActions.setBroadcastMode;
+var renderBroadcastUserResults = broadcastActions.renderBroadcastUserResults;
+var searchUsersForBroadcast = broadcastActions.searchUsersForBroadcast;
+var toggleUserForBroadcast = broadcastActions.toggleUserForBroadcast;
+var clearUserSelection = broadcastActions.clearUserSelection;
+var updateSelectedCount = broadcastActions.updateSelectedCount;
+var updateBroadcastRecipientsCount = broadcastActions.updateBroadcastRecipientsCount;
+var updateSendButtonState = broadcastActions.updateSendButtonState;
+var updateSelectedChips = broadcastActions.updateSelectedChips;
+var removeUserFromSelection = broadcastActions.removeUserFromSelection;
+var selectAllBroadcastResults = broadcastActions.selectAllBroadcastResults;
+var highlightMatchRaw = broadcastActions.highlightMatchRaw;
+var sendBroadcast = broadcastActions.sendBroadcast;
 
 // Блок инструкций вынесен в features/instructions/setup.js
 
 // --- Нижняя навигация: индикатор с CSS-переходами и перетаскиванием (одинаково на всех ширинах) ---
-function moveNavIndicator(index) { return navIndicatorFeature.moveNavIndicator(index); }
-function initNavIndicator() { return navIndicatorFeature.initNavIndicator(); }
-
+var moveNavIndicator = navIndicatorFeature.moveNavIndicator.bind(navIndicatorFeature);
+var initNavIndicator = navIndicatorFeature.initNavIndicator.bind(navIndicatorFeature);
 // === ЦЕНЫ И ЛИМИТ УСТРОЙСТВ (АДМИН) ===
 
-var adminCommerceFeature = window.DarallaAdminCommerceFeature.create({
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    loadPrices: function () { return loadPrices(); }
-});
-
-async function loadAdminCommercePage() { return adminCommerceFeature.loadAdminCommercePage(); }
-async function saveAdminCommerce(event) { return adminCommerceFeature.saveAdminCommerce(event); }
+var adminCommerceActions = appActions.bindFeature(adminCommerceFeature, [
+    'loadAdminCommercePage',
+    'saveAdminCommerce'
+]);
+var loadAdminCommercePage = adminCommerceActions.loadAdminCommercePage;
+var saveAdminCommerce = adminCommerceActions.saveAdminCommerce;
 
 // === УПРАВЛЕНИЕ СЕРВЕРАМИ И ГРУППАМИ (АДМИН) ===
 
-let currentAdminGroups = [];
-let currentAdminServers = [];
-let currentSelectedGroupId = null;
-/** Режим только перестановки на экране admin-server-group */
-let adminServerReorderMode = false;
-var adminServersFeature = window.DarallaAdminServersFeature.create({
-    getCurrentAdminGroups: function () { return currentAdminGroups; },
-    setCurrentAdminGroups: function (value) { currentAdminGroups = value; },
-    getCurrentAdminServers: function () { return currentAdminServers; },
-    setCurrentAdminServers: function (value) { currentAdminServers = value; },
-    getCurrentSelectedGroupId: function () { return currentSelectedGroupId; },
-    setCurrentSelectedGroupId: function (value) { currentSelectedGroupId = value; },
-    getAdminServerReorderMode: function () { return adminServerReorderMode; },
-    setAdminServerReorderMode: function (value) { adminServerReorderMode = value; },
-    apiFetch: function (url, options) { return apiFetch(url, options); },
-    appShowAlert: function (message, options) { return appShowAlert(message, options); },
-    appShowConfirm: function (message, options) { return appShowConfirm(message, options); },
-    showModal: function (modalId) { return showModal(modalId); },
-    closeModal: function (modalId) { return closeModal(modalId); },
-    showPage: function (pageName, params) { return showPage(pageName, params); },
-    escapeHtml: escapeHtml,
-    platform: platform
+var adminServerActions = appActions.bindFeature(adminServersFeature, [
+    'loadServerManagement',
+    'loadServerGroups',
+    'renderServerGroups',
+    'showAddServerGroupModal',
+    'editServerGroup',
+    'saveServerGroup',
+    'loadAdminServerGroupPage',
+    'toggleAdminServerReorderMode',
+    'toggleServerActive',
+    'sortAdminServersByClientOrder',
+    'refreshAdminServersInGroup',
+    'nudgeServerOrder',
+    'renderServersInGroup',
+    'setServerClientFlowFormState',
+    'getServerClientFlowPayload',
+    'showAddServerConfigModal',
+    'editServerConfig',
+    'saveServerConfig',
+    'deleteServerConfig',
+    'syncAllServers',
+    'runSyncAllServers'
+]);
+var loadServerManagement = adminServerActions.loadServerManagement;
+var loadServerGroups = adminServerActions.loadServerGroups;
+var renderServerGroups = adminServerActions.renderServerGroups;
+var showAddServerGroupModal = adminServerActions.showAddServerGroupModal;
+var editServerGroup = adminServerActions.editServerGroup;
+var saveServerGroup = adminServerActions.saveServerGroup;
+var loadAdminServerGroupPage = adminServerActions.loadAdminServerGroupPage;
+var toggleAdminServerReorderMode = adminServerActions.toggleAdminServerReorderMode;
+var toggleServerActive = adminServerActions.toggleServerActive;
+var sortAdminServersByClientOrder = adminServerActions.sortAdminServersByClientOrder;
+var refreshAdminServersInGroup = adminServerActions.refreshAdminServersInGroup;
+var nudgeServerOrder = adminServerActions.nudgeServerOrder;
+var renderServersInGroup = adminServerActions.renderServersInGroup;
+var setServerClientFlowFormState = adminServerActions.setServerClientFlowFormState;
+var getServerClientFlowPayload = adminServerActions.getServerClientFlowPayload;
+var showAddServerConfigModal = adminServerActions.showAddServerConfigModal;
+var editServerConfig = adminServerActions.editServerConfig;
+var saveServerConfig = adminServerActions.saveServerConfig;
+var deleteServerConfig = adminServerActions.deleteServerConfig;
+var syncAllServers = adminServerActions.syncAllServers;
+var runSyncAllServers = adminServerActions.runSyncAllServers;
+
+// Public UI API: whitelisted globals used by inline handlers in index.html
+var PUBLIC_UI_API_NAMES = [
+    'clearUserSelection',
+    'closeAdminEventForm',
+    'closeInstructionModal',
+    'closeModal',
+    'closeNotificationRuleForm',
+    'closeSubscriptionConfirmModal',
+    'confirmDeleteSubscription',
+    'confirmSaveSubscriptionChanges',
+    'createSubscription',
+    'editServerGroup',
+    'goBackFromChoosePayment',
+    'goBackFromCreateSubscription',
+    'goBackFromPayment',
+    'goBackFromSubscriptionEdit',
+    'goBackFromUserDetail',
+    'goToChoosePaymentMethod',
+    'handleChangeLogin',
+    'handleChangePassword',
+    'handleLinkTelegram',
+    'handleUnlinkTelegram',
+    'handleWebAccessSetup',
+    'handleWebLogin',
+    'handleWebRegister',
+    'loadAdminSubscriptions',
+    'loadAdminUsers',
+    'loadBroadcastPage',
+    'loadServers',
+    'loadSubscriptions',
+    'logout',
+    'nextInstructionStep',
+    'onNotifRuleEventTypeChange',
+    'prevInstructionStep',
+    'reloadAdminSubscriptionsWithFilters',
+    'saveAdminCommerce',
+    'saveNotificationRule',
+    'saveServerConfig',
+    'saveServerGroup',
+    'saveSubscriptionChanges',
+    'selectAllBroadcastResults',
+    'sendBroadcast',
+    'showAddServerConfigModal',
+    'showAddServerGroupModal',
+    'showAdminEventForm',
+    'showInstructionModal',
+    'showModal',
+    'showNotificationRuleForm',
+    'showPage',
+    'showWebAccessModal',
+    'submitAdminEventForm',
+    'switchSubscriptionTab',
+    'syncAllServers',
+    'testSendNotificationRule',
+    'toggleAdminServerReorderMode',
+    'toggleRepeatFields',
+    'updateNotifPreview'
+];
+
+PUBLIC_UI_API_NAMES.forEach(function (name) {
+    if (typeof globalThis[name] === 'function') {
+        window[name] = globalThis[name];
+    }
 });
-
-async function loadServerManagement() { return adminServersFeature.loadServerManagement(); }
-async function loadServerGroups() { return adminServersFeature.loadServerGroups(); }
-function renderServerGroups(groups, stats) { return adminServersFeature.renderServerGroups(groups, stats); }
-function showAddServerGroupModal() { return adminServersFeature.showAddServerGroupModal(); }
-function editServerGroup(groupId) { return adminServersFeature.editServerGroup(groupId); }
-async function saveServerGroup(event) { return adminServersFeature.saveServerGroup(event); }
-async function loadAdminServerGroupPage(groupId) { return adminServersFeature.loadAdminServerGroupPage(groupId); }
-function toggleAdminServerReorderMode() { return adminServersFeature.toggleAdminServerReorderMode(); }
-async function toggleServerActive(serverId, makeActive) { return adminServersFeature.toggleServerActive(serverId, makeActive); }
-function sortAdminServersByClientOrder(servers) { return adminServersFeature.sortAdminServersByClientOrder(servers); }
-async function refreshAdminServersInGroup() { return adminServersFeature.refreshAdminServersInGroup(); }
-async function nudgeServerOrder(serverId, delta) { return adminServersFeature.nudgeServerOrder(serverId, delta); }
-function renderServersInGroup(servers) { return adminServersFeature.renderServersInGroup(servers); }
-function setServerClientFlowFormState(serverFlowRaw) { return adminServersFeature.setServerClientFlowFormState(serverFlowRaw); }
-function getServerClientFlowPayload() { return adminServersFeature.getServerClientFlowPayload(); }
-function showAddServerConfigModal() { return adminServersFeature.showAddServerConfigModal(); }
-function editServerConfig(serverId) { return adminServersFeature.editServerConfig(serverId); }
-async function saveServerConfig(event) { return adminServersFeature.saveServerConfig(event); }
-async function deleteServerConfig(serverId) { return adminServersFeature.deleteServerConfig(serverId); }
-async function syncAllServers() { return adminServersFeature.syncAllServers(); }
-async function runSyncAllServers() { return adminServersFeature.runSyncAllServers(); }
-
-window.toggleAdminServerReorderMode = toggleAdminServerReorderMode;
-window.nudgeServerOrder = nudgeServerOrder;

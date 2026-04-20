@@ -8,10 +8,15 @@ from quart import Blueprint, request, jsonify
 
 from bot.services.events_route_service import (
     get_public_events_payload,
+    get_event_leaderboard,
+    get_event_my_place,
+    get_user_referral_code,
     invalidate_public_events_cache,
+    require_authenticated_user,
     require_admin_user,
 )
 from bot.web.routes.admin_common import CORS_HEADERS
+from bot.web.routes.transport import auth_error_payload, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +49,7 @@ def create_blueprint():
         body = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
-            return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
+            return auth_error_payload(err)
         try:
             from bot.events.services.event_service import list_all
             events = await list_all()
@@ -60,7 +65,7 @@ def create_blueprint():
         body = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
-            return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
+            return auth_error_payload(err)
         try:
             data = body
             name = (data.get("name") or "").strip()
@@ -89,7 +94,7 @@ def create_blueprint():
         data = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, data, request.cookies)
         if err:
-            return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
+            return auth_error_payload(err)
         try:
             name = (data.get("name") or "").strip() or None
             description = (data.get("description") or "").strip() if "description" in data else None
@@ -116,7 +121,7 @@ def create_blueprint():
         body = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
-            return jsonify({"error": "Unauthorized" if err == 401 else "Access denied"}), err
+            return auth_error_payload(err)
         try:
             from bot.events.services.event_service import delete_event
             ok = await delete_event(event_id)
@@ -129,14 +134,12 @@ def create_blueprint():
 
     @bp.route("/my-code", methods=["GET"])
     async def public_my_code():
-        from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
-        user_id = await authenticate_request_async(request.headers, request.args or {}, body, request.cookies)
+        user_id = await require_authenticated_user(request.headers, request.args or {}, body, request.cookies)
         if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+            return error_response("Unauthorized", 401)
         try:
-            from bot.events.db.queries import get_or_create_referral_code
-            code = await get_or_create_referral_code(user_id)
+            code = await get_user_referral_code(user_id)
             return jsonify({"code": code}), 200, _CORS
         except Exception as e:
             logger.warning("events my-code: %s", e)
@@ -164,8 +167,7 @@ def create_blueprint():
         except (TypeError, ValueError):
             limit = 10
         try:
-            from bot.events.db.queries import get_leaderboard
-            rows = await get_leaderboard(event_id, limit=limit)
+            rows = await get_event_leaderboard(event_id, limit=limit)
             return jsonify({"leaderboard": rows}), 200, _CORS
         except Exception as e:
             logger.warning("events leaderboard: %s", e)
@@ -173,14 +175,12 @@ def create_blueprint():
 
     @bp.route("/<int:event_id>/my-place", methods=["GET"])
     async def public_my_place(event_id):
-        from bot.handlers.api_support.webhook_auth import authenticate_request_async
         body = await request.get_json(silent=True) or {}
-        user_id = await authenticate_request_async(request.headers, request.args or {}, body, request.cookies)
+        user_id = await require_authenticated_user(request.headers, request.args or {}, body, request.cookies)
         if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+            return error_response("Unauthorized", 401)
         try:
-            from bot.events.db.queries import get_my_place
-            result = await get_my_place(event_id, user_id)
+            result = await get_event_my_place(event_id, user_id)
             return jsonify({"place": result}), 200, _CORS
         except Exception as e:
             logger.warning("events my-place: %s", e)

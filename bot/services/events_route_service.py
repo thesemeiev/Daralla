@@ -39,3 +39,28 @@ async def require_admin_user(headers, args, body, cookies):
     if not await check_admin_access_async(user_id):
         return None, 403
     return user_id, None
+
+
+async def require_authenticated_user(headers, args, body, cookies):
+    user_id = await authenticate_request_async(headers, args, body, cookies)
+    if not user_id:
+        return None
+    return user_id
+
+
+async def get_user_referral_code(user_id: str):
+    from bot.events.db.queries import get_or_create_referral_code
+
+    return await get_or_create_referral_code(user_id)
+
+
+async def get_event_leaderboard(event_id: int, limit: int):
+    from bot.events.db.queries import get_leaderboard
+
+    return await get_leaderboard(event_id, limit=limit)
+
+
+async def get_event_my_place(event_id: int, user_id: str):
+    from bot.events.db.queries import get_my_place
+
+    return await get_my_place(event_id, user_id)

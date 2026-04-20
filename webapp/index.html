@@ -53,8 +53,8 @@
                         <h2 class="landing-h2">Начните пользоваться</h2>
                         <p class="landing-cta-sub">Подключитесь за минуту</p>
                         <div class="landing-cta-buttons">
-                            <button type="button" class="landing-btn landing-btn-primary" onclick="showPage('login')">Войти</button>
-                            <button type="button" class="landing-btn landing-btn-secondary" onclick="showPage('register')">Создать аккаунт</button>
+                            <button type="button" class="landing-btn landing-btn-primary" data-action="showPage" data-arg="login">Войти</button>
+                            <button type="button" class="landing-btn landing-btn-secondary" data-action="showPage" data-arg="register">Создать аккаунт</button>
                         </div>
                         <div class="legal-inline legal-inline--landing" aria-label="Юридические документы">
                             <a href="/terms">Пользовательское соглашение</a>
@@ -78,7 +78,7 @@
             </header>
             <div class="buy-subscription-content auth-page-content" style="padding: 20px;">
                 <div id="login-success-msg" class="auth-success-msg" style="display: none;" aria-hidden="true">Проходи!</div>
-                <form id="login-form" onsubmit="handleWebLogin(event)">
+                <form id="login-form">
                     <div class="form-group">
                         <label>Логин</label>
                         <input type="text" id="login-username" required placeholder="Логин" autocomplete="username">
@@ -87,15 +87,15 @@
                         <label>Пароль</label>
                         <input type="password" id="login-password" required placeholder="Пароль — только между нами" autocomplete="current-password">
                     </div>
-                    <div class="checkbox-group checkbox-group-login" onclick="document.getElementById('login-remember').click()">
-                        <input type="checkbox" id="login-remember" checked onclick="event.stopPropagation()">
+                    <div id="login-remember-wrap" class="checkbox-group checkbox-group-login">
+                        <input type="checkbox" id="login-remember" checked>
                         <label for="login-remember">Запомнить меня</label>
                     </div>
                     <div id="login-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Войти</button>
-                        <button type="button" class="btn-secondary" onclick="showPage('register')">Создать аккаунт</button>
-                        <button type="button" class="landing-back-link" onclick="showPage('landing')">О сервисе</button>
+                        <button type="button" class="btn-secondary" data-action="showPage" data-arg="register">Создать аккаунт</button>
+                        <button type="button" class="landing-back-link" data-action="showPage" data-arg="landing">О сервисе</button>
                     </div>
                     <p class="legal-inline legal-inline--auth">
                         Продолжая использование сервиса, вы соглашаетесь с
@@ -114,7 +114,7 @@
             </header>
             <div class="buy-subscription-content auth-page-content" style="padding: 20px;">
                 <div id="register-success-msg" class="auth-success-msg" style="display: none;" aria-hidden="true">Вы в клубе</div>
-                <form id="register-form" onsubmit="handleWebRegister(event)">
+                <form id="register-form">
                     <div class="form-group">
                         <label>Придумайте логин</label>
                         <input type="text" id="register-username" required placeholder="Только латиница, цифры и _ (3–30 символов)" minlength="3" maxlength="30" autocomplete="username">
@@ -130,8 +130,8 @@
                     <div id="register-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
                     <div class="form-actions" style="flex-direction: column;">
                         <button type="submit" class="btn-primary">Зарегистрироваться</button>
-                        <button type="button" class="btn-secondary" onclick="showPage('login')">Уже есть аккаунт?</button>
-                        <button type="button" class="landing-back-link" onclick="showPage('landing')">О сервисе</button>
+                        <button type="button" class="btn-secondary" data-action="showPage" data-arg="login">Уже есть аккаунт?</button>
+                        <button type="button" class="landing-back-link" data-action="showPage" data-arg="landing">О сервисе</button>
                     </div>
                 </form>
                 <p class="legal-inline legal-inline--auth">
@@ -152,7 +152,7 @@
                 <p class="page-subscriptions-block-label">Аккаунт</p>
             </header>
             
-            <button type="button" id="profile-card" class="profile-card" onclick="showPage('account')" aria-label="Мой аккаунт">
+            <button type="button" id="profile-card" class="profile-card" aria-label="Мой аккаунт">
                 <span class="profile-card-aurora" aria-hidden="true"></span>
                 <span class="profile-card-icon" aria-hidden="true">
                     <img class="profile-card-avatar" id="profile-card-avatar" alt="">
@@ -175,13 +175,13 @@
             
             <div id="error" class="error" style="display: none;">
                 <p>Ошибка загрузки данных</p>
-                <button onclick="loadSubscriptions()">Повторить</button>
+                <button data-action="loadSubscriptions">Повторить</button>
             </div>
             
             <div id="empty" class="empty" style="display: none;">
                 <p>У вас пока нет подписок</p>
                 <p class="hint">Купите подписку, чтобы начать пользоваться VPN</p>
-                <button class="btn-primary" onclick="goToChoosePaymentMethod('month')" style="width: 100%; margin-top: 16px;">
+                <button class="btn-primary" data-action="goToChoosePaymentMethod" data-arg="month" style="width: 100%; margin-top: 16px;">
                     Купить подписку
                 </button>
             </div>
@@ -196,7 +196,7 @@
         <!-- Раздел Детальная информация о подписке -->
         <div id="page-subscription-detail" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="subscriptions">← Назад</button>
             </header>
             <div id="subscription-detail-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
             <div id="subscription-detail-content"></div>
@@ -205,7 +205,7 @@
         <!-- Раздел Оформление (период + способ оплаты карточками) -->
         <div id="page-choose-payment-method" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="goBackFromChoosePayment()">← Назад</button>
+                <button class="back-button" data-action="goBackFromChoosePayment">← Назад</button>
             </header>
             <div class="buy-subscription-content choose-payment-content" style="padding: 20px;">
                 <p class="choose-section-label">Период</p>
@@ -251,7 +251,7 @@
         <!-- Раздел Оплата -->
         <div id="page-payment" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="goBackFromPayment()">← Назад</button>
+                <button class="back-button" data-action="goBackFromPayment">← Назад</button>
             </header>
             
             <div id="payment-content" style="padding: 24px;">
@@ -306,7 +306,7 @@
             
             <div id="servers-error" class="error" style="display: none;">
                 <p>Ошибка загрузки данных</p>
-                <button onclick="loadServers()">Повторить</button>
+                <button data-action="loadServers">Повторить</button>
             </div>
             
             <div id="servers-content" style="display: none; position: relative; z-index: 10;">
@@ -335,7 +335,7 @@
         <!-- Детали события (заполняется в Stage 7) -->
         <div id="page-event-detail" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('events')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="events">← Назад</button>
             </header>
             <div id="event-detail-content"></div>
         </div>
@@ -350,25 +350,25 @@
                 <div class="instructions-menu" id="instructions-menu">
                     <h2 style="margin-bottom: 16px;">Выберите вашу платформу:</h2>
                     <div class="instructions-grid">
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('android')">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="android">
                             <span>Android</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('ios')">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="ios">
                             <span>iOS</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('windows')">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="windows">
                             <span>Windows</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('macos')">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="macos">
                             <span>macOS</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('linux')">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="linux">
                             <span>Linux</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('tv')">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="tv">
                             <span>Android TV</span>
                         </button>
-                        <button class="instruction-platform-btn" onclick="showInstructionModal('faq')" style="grid-column: 1 / -1;">
+                        <button class="instruction-platform-btn" data-action="showInstructionModal" data-arg="faq" style="grid-column: 1 / -1;">
                             <span>FAQ</span>
                         </button>
                         <a href="https://t.me/DarallaSupport" class="instruction-platform-btn" style="grid-column: 1 / -1;" target="_blank" rel="noopener noreferrer">
@@ -431,7 +431,7 @@
         <!-- Раздел Аккаунт (отдельная страница, открывается по тапу на карточку профиля) -->
         <div id="page-account" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('subscriptions')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="subscriptions">← Назад</button>
             </header>
             <div class="about-content about-content-account">
                 <div id="account-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
@@ -478,7 +478,7 @@
                         <button
                             type="button"
                             class="btn-primary"
-                            onclick="showPage('admin-stats')"
+                            data-action="showPage" data-arg="admin-stats"
                             style="width: 100%; padding: 12px; border-radius: 10px;"
                         >
                             Открыть админ-панель
@@ -487,30 +487,30 @@
                     <div class="tg-only" style="margin-top: 12px;">
                         <div id="tg-web-access-setup">
                             <p class="hint" style="margin-bottom: 12px;">Настройте web-доступ, чтобы заходить на сайт без Telegram.</p>
-                            <button class="btn-secondary" onclick="showWebAccessModal()" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить web-доступ</button>
+                            <button class="btn-secondary" data-action="showWebAccessModal" style="width: 100%; padding: 10px; border-radius: 10px;">Настроить web-доступ</button>
                         </div>
                         <div id="tg-web-access-manage" style="display: none; margin-top: 12px;">
                             <p class="hint" style="margin-bottom: 12px;">Web-доступ настроен. Вы можете сменить логин или пароль.</p>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button type="button" class="btn-secondary" onclick="showModal('change-login-modal')" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить логин</button>
-                                <button type="button" class="btn-secondary" onclick="showModal('change-password-modal')" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить пароль</button>
+                                <button type="button" class="btn-secondary" data-action="showModal" data-arg="change-login-modal" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить логин</button>
+                                <button type="button" class="btn-secondary" data-action="showModal" data-arg="change-password-modal" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить пароль</button>
                             </div>
                         </div>
                     </div>
                     <div class="web-only" id="link-telegram-section" style="margin-top: 12px;">
                         <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-                            <button type="button" class="btn-secondary" onclick="showModal('change-login-modal')" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить логин</button>
-                            <button type="button" class="btn-secondary" onclick="showModal('change-password-modal')" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить пароль</button>
+                            <button type="button" class="btn-secondary" data-action="showModal" data-arg="change-login-modal" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить логин</button>
+                            <button type="button" class="btn-secondary" data-action="showModal" data-arg="change-password-modal" style="flex: 1; min-width: 140px; padding: 10px; border-radius: 10px;">Сменить пароль</button>
                         </div>
                         <div id="link-telegram-unlinked">
                             <p class="hint" style="margin-bottom: 12px;">Заходите в Mini App без пароля и получайте уведомления в боте.</p>
-                            <button type="button" class="btn-secondary" id="link-telegram-btn" onclick="handleLinkTelegram(event)" style="width: 100%; padding: 10px; border-radius: 10px;">Привязать Telegram</button>
+                            <button type="button" class="btn-secondary" id="link-telegram-btn" style="width: 100%; padding: 10px; border-radius: 10px;">Привязать Telegram</button>
                         </div>
                         <div id="link-telegram-linked" style="display: none;">
                             <p class="hint" style="margin-bottom: 12px;">Telegram привязан. Вход в Mini App и уведомления доступны.</p>
-                            <button type="button" class="btn-danger" onclick="showModal('unlink-telegram-modal')" style="width: 100%; padding: 10px; border-radius: 10px; margin-top: 8px;">Отвязать Telegram</button>
+                            <button type="button" class="btn-danger" data-action="showModal" data-arg="unlink-telegram-modal" style="width: 100%; padding: 10px; border-radius: 10px; margin-top: 8px;">Отвязать Telegram</button>
                         </div>
-                        <button class="btn-danger" onclick="logout()" style="width: 100%; padding: 12px; border-radius: 10px; margin-top: 16px;">Выйти из аккаунта</button>
+                        <button class="btn-danger" id="logout-account-btn" style="width: 100%; padding: 12px; border-radius: 10px; margin-top: 16px;">Выйти из аккаунта</button>
                     </div>
                 </div>
             </div>
@@ -519,7 +519,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Главный экран -->
         <div id="page-admin-stats" class="page" style="display: none;">
             <header class="header-with-back">
-                <button class="back-button" onclick="showPage('account')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="account">← Назад</button>
             </header>
             
             <div id="admin-stats-content" class="admin-panel-content">
@@ -564,31 +564,31 @@
                 <section class="admin-panel-section admin-panel-section-management">
                     <h2 class="admin-panel-section-title">Управление</h2>
                     <div class="admin-panel-rows">
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-users')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-users">
                             <span class="admin-panel-row-label">Управление пользователями</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-subscriptions')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-subscriptions">
                             <span class="admin-panel-row-label">Управление подписками</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-server-management')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-server-management">
                             <span class="admin-panel-row-label">Управление серверами</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-commerce')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-commerce">
                             <span class="admin-panel-row-label">Цены и лимит устройств</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-events')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-events">
                             <span class="admin-panel-row-label">Управление событиями</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-broadcast')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-broadcast">
                             <span class="admin-panel-row-label">Управление рассылкой</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
-                        <button type="button" class="admin-panel-row" onclick="showPage('admin-notifications')">
+                        <button type="button" class="admin-panel-row" data-action="showPage" data-arg="admin-notifications">
                             <span class="admin-panel-row-label">Управление уведомлениями</span>
                             <span class="admin-panel-row-chevron">›</span>
                         </button>
@@ -600,10 +600,10 @@
         <!-- АДМИН-ПАНЕЛЬ: Уведомления -->
         <div id="page-admin-notifications" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
             </header>
             <div id="admin-notifications-content" class="admin-page-content">
-                <button type="button" class="btn-primary" style="width:100%; margin-bottom: 16px;" onclick="showNotificationRuleForm()">+ Добавить правило</button>
+                <button type="button" class="btn-primary" style="width:100%; margin-bottom: 16px;" data-action="showNotificationRuleForm">+ Добавить правило</button>
                 <div id="admin-notifications-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
                 <div id="admin-notifications-error" class="error" style="display: none;"></div>
                 <div id="admin-notifications-list" style="display: none;"></div>
@@ -612,10 +612,10 @@
         <div id="admin-notification-form-modal" class="modal" style="display: none;">
             <div class="modal-content" style="max-width: 560px;">
                 <h2 id="admin-notification-form-title">Создать правило</h2>
-                <form id="admin-notification-form" onsubmit="saveNotificationRule(event)">
+                <form id="admin-notification-form">
                     <div class="form-group">
                         <label for="notif-rule-event-type">Тип события</label>
-                        <select id="notif-rule-event-type" required onchange="onNotifRuleEventTypeChange()">
+                        <select id="notif-rule-event-type" required>
                             <option value="expiry_warning">Истекает подписка</option>
                             <option value="no_subscription">Нет подписки</option>
                         </select>
@@ -647,11 +647,11 @@
                     <div class="form-group">
                         <label style="margin-bottom: 8px;">Дополнительные блоки</label>
                         <label class="notif-check-row">
-                            <input type="checkbox" id="notif-rule-show-time" checked onchange="updateNotifPreview()">
+                            <input type="checkbox" id="notif-rule-show-time" checked>
                             <span>Показать оставшееся время</span>
                         </label>
                         <label class="notif-check-row">
-                            <input type="checkbox" id="notif-rule-show-expiry" checked onchange="updateNotifPreview()">
+                            <input type="checkbox" id="notif-rule-show-expiry" checked>
                             <span>Показать дату истечения</span>
                         </label>
                     </div>
@@ -668,7 +668,7 @@
                     </div>
                     <div class="form-group">
                         <label class="notif-check-row">
-                            <input type="checkbox" id="notif-rule-repeat" onchange="toggleRepeatFields()">
+                            <input type="checkbox" id="notif-rule-repeat">
                             <span>Повторять уведомление</span>
                         </label>
                         <div id="notif-repeat-fields" style="display: none; margin-top: 10px;">
@@ -690,9 +690,9 @@
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-                        <button type="button" class="btn-outline" onclick="testSendNotificationRule()">Отправить тест мне</button>
+                        <button type="button" class="btn-outline" data-action="testSendNotificationRule">Отправить тест мне</button>
                         <div style="display: flex; gap: 12px;">
-                            <button type="button" class="btn-secondary" onclick="closeNotificationRuleForm()">Отмена</button>
+                            <button type="button" class="btn-secondary" data-action="closeNotificationRuleForm">Отмена</button>
                             <button type="submit" class="btn-primary" style="flex:1;">Сохранить</button>
                         </div>
                     </div>
@@ -703,11 +703,11 @@
         <!-- АДМИН-ПАНЕЛЬ: События -->
         <div id="page-admin-events" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
             </header>
             <div id="admin-events-content" class="admin-page-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <button type="button" class="btn-primary" onclick="showAdminEventForm()">Создать</button>
+                    <button type="button" class="btn-primary" data-action="showAdminEventForm">Создать</button>
                 </div>
                 <div id="admin-events-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
                 <div id="admin-events-list-wrap" style="display: none;">
@@ -718,7 +718,7 @@
         <div id="admin-event-form-modal" class="modal" style="display: none;">
             <div class="modal-content" style="max-width: 520px;">
                 <h2 id="admin-event-form-title">Создать событие</h2>
-                <form id="admin-event-form" onsubmit="submitAdminEventForm(event)">
+                <form id="admin-event-form">
                     <div class="form-group">
                         <label for="admin-event-name">Название</label>
                         <input type="text" id="admin-event-name" required placeholder="Название события">
@@ -752,7 +752,7 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 12px; margin-top: 20px;">
-                        <button type="button" class="btn-secondary" onclick="closeAdminEventForm()">Отмена</button>
+                        <button type="button" class="btn-secondary" data-action="closeAdminEventForm">Отмена</button>
                         <button type="submit" class="btn-primary">Сохранить</button>
                     </div>
                 </form>
@@ -763,7 +763,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Список подписок -->
         <div id="page-admin-subscriptions" class="page" style="display: none;">
             <header class="header-with-back">
-                <button type="button" class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button type="button" class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
                 <h1 class="page-section-title">Подписки</h1>
             </header>
 
@@ -772,7 +772,7 @@
                     <input type="text" id="admin-subscriptions-owner-search" placeholder="Поиск (ID, логин)..." oninput="handleAdminSubscriptionsSearch()">
                 </div>
                 <div class="admin-filter-item">
-                    <select id="admin-subscriptions-status" onchange="reloadAdminSubscriptionsWithFilters()" class="admin-select-styled">
+                    <select id="admin-subscriptions-status" class="admin-select-styled">
                         <option value="">Все статусы</option>
                         <option value="active">Активные</option>
                         <option value="expired">Истёкшие</option>
@@ -788,7 +788,7 @@
 
             <div id="admin-subscriptions-error" class="error" style="display: none;">
                 <p>Ошибка загрузки данных</p>
-                <button onclick="loadAdminSubscriptions()">Повторить</button>
+                <button data-action="loadAdminSubscriptions">Повторить</button>
             </div>
 
             <div id="admin-subscriptions-content" class="admin-page-content" style="display: none;">
@@ -808,7 +808,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Список пользователей -->
         <div id="page-admin-users" class="page" style="display: none;">
             <header class="header-with-back">
-                <button type="button" class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button type="button" class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
                 <h1 class="page-section-title">Пользователи</h1>
             </header>
 
@@ -825,7 +825,7 @@
             
             <div id="admin-users-error" class="error" style="display: none;">
                 <p>Ошибка загрузки данных</p>
-                <button onclick="loadAdminUsers()">Повторить</button>
+                <button data-action="loadAdminUsers">Повторить</button>
             </div>
             
             <div id="admin-users-content" class="admin-page-content" style="display: none;">
@@ -845,7 +845,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Рассылка -->
         <div id="page-admin-broadcast" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
             </header>
             
             <div id="admin-broadcast-loading" class="loading" style="display: none;">
@@ -855,7 +855,7 @@
             
             <div id="admin-broadcast-error" class="error" style="display: none;">
                 <p id="broadcast-error-text">Ошибка</p>
-                <button onclick="loadBroadcastPage()">Повторить</button>
+                <button data-action="loadBroadcastPage">Повторить</button>
             </div>
             
             <div id="admin-broadcast-content" class="admin-page-content">
@@ -892,14 +892,14 @@
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button 
-                                onclick="selectAllBroadcastResults()" 
+                                data-action="selectAllBroadcastResults" 
                                 class="btn-secondary"
                                 style="padding: 8px 12px; font-size: 14px;"
                             >
                                 Выбрать все в выдаче
                             </button>
                             <button 
-                                onclick="clearUserSelection()" 
+                                data-action="clearUserSelection" 
                                 class="btn-secondary"
                                 style="padding: 8px 12px; font-size: 14px;"
                             >
@@ -933,7 +933,7 @@
                 <button 
                     id="broadcast-send-btn" 
                     class="btn-primary" 
-                    onclick="sendBroadcast()" 
+                    data-action="sendBroadcast" 
                     style="width: 100%; padding: 12px; font-size: 16px; font-weight: 500;"
                 >
                     Отправить рассылку
@@ -953,7 +953,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Детальная информация о пользователе -->
         <div id="page-admin-user-detail" class="page" style="display: none;">
             <header class="header-with-back">
-                <button type="button" class="back-button" onclick="goBackFromUserDetail()">← Назад</button>
+                <button type="button" class="back-button" data-action="goBackFromUserDetail">← Назад</button>
                 <h1 class="page-section-title">Клиент</h1>
             </header>
             
@@ -968,12 +968,12 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Создание подписки -->
         <div id="page-admin-create-subscription" class="page" style="display: none;">
             <header class="header-with-back">
-                <button type="button" class="back-button" onclick="goBackFromCreateSubscription()">← Назад</button>
+                <button type="button" class="back-button" data-action="goBackFromCreateSubscription">← Назад</button>
                 <h1 class="page-section-title">Новая подписка</h1>
             </header>
             
             <div id="admin-create-subscription-content" class="admin-page-content">
-                <form id="admin-create-subscription-form" onsubmit="createSubscription(event)">
+                <form id="admin-create-subscription-form">
                     <div class="form-group">
                         <label for="create-sub-period">Период</label>
                         <select id="create-sub-period" name="period" required>
@@ -999,7 +999,7 @@
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn-secondary" onclick="goBackFromCreateSubscription()">Отмена</button>
+                        <button type="button" class="btn-secondary" data-action="goBackFromCreateSubscription">Отмена</button>
                         <button type="submit" class="btn-primary">Создать</button>
                     </div>
                 </form>
@@ -1009,7 +1009,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Раздел Редактирование подписки -->
         <div id="page-admin-subscription-edit" class="page" style="display: none;">
             <header class="header-with-back">
-                <button type="button" class="back-button" onclick="goBackFromSubscriptionEdit()">← Назад</button>
+                <button type="button" class="back-button" data-action="goBackFromSubscriptionEdit">← Назад</button>
                 <h1 class="page-section-title">Подписка</h1>
             </header>
             
@@ -1021,13 +1021,13 @@
             <div id="admin-subscription-edit-content" class="admin-page-content" style="display: none;">
                 <!-- Вкладки -->
                 <div class="tabs">
-                    <button class="tab-button active" onclick="switchSubscriptionTab('params')">Параметры</button>
-                    <button class="tab-button" onclick="switchSubscriptionTab('keys')">Ключи</button>
+                    <button class="tab-button active" data-action="switchSubscriptionTab" data-arg="params">Параметры</button>
+                    <button class="tab-button" data-action="switchSubscriptionTab" data-arg="keys">Ключи</button>
                 </div>
                 
                 <!-- Вкладка: Параметры -->
                 <div id="subscription-tab-params" class="tab-content active">
-                    <form id="admin-subscription-edit-form" onsubmit="saveSubscriptionChanges(event)">
+                    <form id="admin-subscription-edit-form">
                         <div class="form-group">
                             <label for="sub-name">Название подписки</label>
                             <input type="text" id="sub-name" name="name" required>
@@ -1050,7 +1050,7 @@
                         </div>
                         
                         <div class="form-actions">
-                            <button type="button" class="btn-secondary" onclick="goBackFromSubscriptionEdit()">Отмена</button>
+                            <button type="button" class="btn-secondary" data-action="goBackFromSubscriptionEdit">Отмена</button>
                             <button type="submit" class="btn-primary">Сохранить</button>
                         </div>
                     </form>
@@ -1069,7 +1069,7 @@
                             <strong>Внимание! Это действие необратимо.</strong><br>
                             Подписка будет полностью удалена из базы данных, а все клиенты удалены со всех X-UI серверов.
                         </p>
-                        <button class="btn-danger" onclick="confirmDeleteSubscription()">Удалить подписку</button>
+                        <button class="btn-danger" data-action="confirmDeleteSubscription">Удалить подписку</button>
                     </div>
                 </div>
                 
@@ -1088,7 +1088,7 @@
         <!-- АДМИН-ПАНЕЛЬ: Управление серверами -->
         <div id="page-admin-server-management" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
             </header>
             
             <div id="admin-server-management-loading" class="loading" style="display: none;">
@@ -1104,8 +1104,8 @@
                             <p class="admin-sm-lead">Выберите группу для списка нод и порядка в подписке. Кнопка «Синхронизация с панелями» догоняет клиентов на 3x-ui по базе.</p>
                         </div>
                         <div class="admin-sm-toolbar-actions">
-                            <button type="button" class="btn-primary admin-sm-btn-primary" onclick="showAddServerGroupModal()">+ Группа</button>
-                            <button type="button" class="btn-secondary admin-sm-btn-sync admin-toolbar-sync-wide" id="admin-sync-all-panels-btn" onclick="syncAllServers()" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация с панелями</button>
+                            <button type="button" class="btn-primary admin-sm-btn-primary" data-action="showAddServerGroupModal">+ Группа</button>
+                            <button type="button" class="btn-secondary admin-sm-btn-sync admin-toolbar-sync-wide" id="admin-sync-all-panels-btn" data-action="syncAllServers" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация с панелями</button>
                         </div>
                     </div>
                     <div id="admin-server-groups-list"></div>
@@ -1116,17 +1116,17 @@
         <!-- АДМИН: серверы выбранной группы -->
         <div id="page-admin-server-group" class="page" style="display: none;">
             <header class="header-with-back">
-                <button type="button" class="back-button" onclick="showPage('admin-server-management')">← Назад</button>
+                <button type="button" class="back-button" data-action="showPage" data-arg="admin-server-management">← Назад</button>
                 <h1 class="admin-server-group-header-title" id="admin-server-group-page-title">Серверы</h1>
             </header>
             <div class="admin-page-content admin-server-group-page" id="admin-server-group-page-root">
                 <div class="admin-server-group-toolbar">
                     <div class="admin-server-group-toolbar__row">
-                        <button type="button" class="btn-primary admin-server-group-toolbar-btn" onclick="showAddServerConfigModal()">+ Сервер</button>
-                        <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-reorder-toggle-btn" onclick="toggleAdminServerReorderMode()">Порядок</button>
-                        <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-group-edit-btn" onclick="editServerGroup(currentSelectedGroupId)" title="Редактировать группу">⋯</button>
+                        <button type="button" class="btn-primary admin-server-group-toolbar-btn" data-action="showAddServerConfigModal">+ Сервер</button>
+                        <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-reorder-toggle-btn" data-action="toggleAdminServerReorderMode">Порядок</button>
+                        <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-group-edit-btn" title="Редактировать группу">⋯</button>
                     </div>
-                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn admin-server-group-toolbar-sync" id="admin-sync-all-panels-group-btn" onclick="syncAllServers()" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация с панелями</button>
+                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn admin-server-group-toolbar-sync" id="admin-sync-all-panels-group-btn" data-action="syncAllServers" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация с панелями</button>
                 </div>
                 <details class="group-detail-hint-details admin-server-group-hint">
                     <summary class="group-detail-hint-summary">Про порядок в подписке</summary>
@@ -1139,7 +1139,7 @@
         <!-- АДМИН: цены и лимит устройств -->
         <div id="page-admin-commerce" class="page" style="display: none;">
             <header>
-                <button class="back-button" onclick="showPage('admin-stats')">← Назад</button>
+                <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
             </header>
             <div class="admin-page-content admin-commerce-page">
                 <div id="admin-commerce-loading" class="loading" style="display: none;">
@@ -1147,7 +1147,7 @@
                     <p>Загрузка...</p>
                 </div>
                 <p id="admin-commerce-error" class="error-text" style="display: none; margin-bottom: 12px;"></p>
-                <form id="admin-commerce-form" style="display: none;" onsubmit="saveAdminCommerce(event)">
+                <form id="admin-commerce-form" style="display: none;">
                     <p class="admin-commerce-lead">Цены подтягиваются в приложение и на экран оплаты. Лимит устройств задаётся для новых покупок и пробного периода (как limitIp в панели).</p>
                     <div class="admin-commerce-grid">
                         <div class="form-group admin-commerce-field">
@@ -1174,7 +1174,7 @@
         <div id="server-group-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h2 id="server-group-modal-title">Группа серверов</h2>
-                <form id="server-group-form" onsubmit="saveServerGroup(event)" style="margin-top: 16px;">
+                <form id="server-group-form" style="margin-top: 16px;">
                     <input type="hidden" id="group-id-input">
                     <div class="form-group">
                         <label for="group-name-input">Название группы</label>
@@ -1184,12 +1184,12 @@
                         <label for="group-desc-input">Описание (видят только админы)</label>
                         <textarea id="group-desc-input" placeholder="Краткое описание группы для вашего удобства..."></textarea>
                     </div>
-                    <div class="checkbox-group" onclick="document.getElementById('group-default-input').click()">
-                        <input type="checkbox" id="group-default-input" onclick="event.stopPropagation()">
+                    <div id="group-default-wrap" class="checkbox-group">
+                        <input type="checkbox" id="group-default-input">
                         <label for="group-default-input">Сделать группой по умолчанию</label>
                     </div>
                     <div class="form-actions">
-                        <button type="button" class="btn-secondary" onclick="closeModal('server-group-modal')">Отмена</button>
+                        <button type="button" class="btn-secondary" data-action="closeModal" data-arg="server-group-modal">Отмена</button>
                         <button type="submit" class="btn-primary">Сохранить группу</button>
                     </div>
                 </form>
@@ -1200,7 +1200,7 @@
         <div id="server-config-modal" class="modal" style="display: none;">
             <div class="modal-content" style="max-width: 500px;">
                 <h2 id="server-config-modal-title">Конфигурация сервера</h2>
-                <form id="server-config-form" onsubmit="saveServerConfig(event)" style="margin-top: 16px; max-height: 70vh; overflow-y: auto; padding-right: 4px;">
+                <form id="server-config-form" style="margin-top: 16px; max-height: 70vh; overflow-y: auto; padding-right: 4px;">
                     <input type="hidden" id="server-id-input">
                     <div class="form-group">
                         <label for="server-name-input">Идентификатор (уникальный ID)</label>
@@ -1280,7 +1280,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="button" class="btn-secondary" onclick="closeModal('server-config-modal')">Отмена</button>
+                        <button type="button" class="btn-secondary" data-action="closeModal" data-arg="server-config-modal">Отмена</button>
                         <button type="submit" class="btn-primary">Сохранить сервер</button>
                     </div>
                 </form>
@@ -1291,31 +1291,31 @@
     <!-- Нижняя навигация (иконки в одном стиле: обводка 2px, скругления — как Feather/Lucide) -->
     <nav class="bottom-nav" style="display: none;" aria-label="Основные разделы">
         <div class="nav-glass-indicator nav-indicator-mobile"></div>
-        <button type="button" class="nav-item active" data-page="subscriptions" onclick="showPage('subscriptions')" aria-label="Подписки" title="Подписки">
+        <button type="button" class="nav-item active" data-page="subscriptions" aria-label="Подписки" title="Подписки">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
         </button>
-        <button type="button" class="nav-item" data-page="servers" onclick="showPage('servers')" aria-label="Серверы" title="Серверы">
+        <button type="button" class="nav-item" data-page="servers" aria-label="Серверы" title="Серверы">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                 <path d="M2 12h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
         </button>
-        <button type="button" class="nav-item" data-page="events" onclick="showPage('events')" aria-label="События" title="События">
+        <button type="button" class="nav-item" data-page="events" aria-label="События" title="События">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
                 <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
         </button>
-        <button type="button" class="nav-item" data-page="instructions" onclick="showPage('instructions')" aria-label="Инструкции" title="Инструкции">
+        <button type="button" class="nav-item" data-page="instructions" aria-label="Инструкции" title="Инструкции">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
         </button>
-        <button type="button" class="nav-item" data-page="about" onclick="showPage('about')" aria-label="О сервисе" title="О сервисе">
+        <button type="button" class="nav-item" data-page="about" aria-label="О сервисе" title="О сервисе">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                 <path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1333,8 +1333,8 @@
             </div>
             <p class="modal-warning">Это действие изменит настройки на всех серверах. Продолжить?</p>
             <div style="display: flex; gap: 12px; margin-top: 24px;">
-                <button type="button" class="btn-secondary" onclick="closeSubscriptionConfirmModal()" style="flex: 1;">Отмена</button>
-                <button type="button" class="btn-primary" onclick="confirmSaveSubscriptionChanges()" style="flex: 1;">Подтвердить и сохранить</button>
+                <button type="button" class="btn-secondary" data-action="closeSubscriptionConfirmModal" style="flex: 1;">Отмена</button>
+                <button type="button" class="btn-primary" data-action="confirmSaveSubscriptionChanges" style="flex: 1;">Подтвердить и сохранить</button>
             </div>
         </div>
     </div>
@@ -1344,7 +1344,7 @@
         <div class="modal-content instruction-modal-content" style="max-width: 600px; display: flex; flex-direction: column;">
             <div class="instruction-modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 id="instruction-modal-title" style="margin: 0; font-size: 18px;">Инструкция</h2>
-                <button onclick="closeInstructionModal()" class="modal-close-btn" style="background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">&times;</button>
+                <button data-action="closeInstructionModal" class="modal-close-btn" style="background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">&times;</button>
             </div>
             
             <div id="instruction-steps-container">
@@ -1352,9 +1352,9 @@
             </div>
             
             <div class="instruction-modal-footer" style="display: flex; gap: 10px;">
-                <button type="button" class="btn-secondary" onclick="prevInstructionStep()" id="instruction-prev-btn" style="flex: 1; display: none;">Назад</button>
-                <button type="button" class="btn-primary" onclick="nextInstructionStep()" id="instruction-next-btn" style="flex: 1;">Далее</button>
-                <button type="button" class="btn-primary" onclick="closeInstructionModal()" id="instruction-close-btn" style="flex: 1; display: none;">Закрыть</button>
+                <button type="button" class="btn-secondary" data-action="prevInstructionStep" id="instruction-prev-btn" style="flex: 1; display: none;">Назад</button>
+                <button type="button" class="btn-primary" data-action="nextInstructionStep" id="instruction-next-btn" style="flex: 1;">Далее</button>
+                <button type="button" class="btn-primary" data-action="closeInstructionModal" id="instruction-close-btn" style="flex: 1; display: none;">Закрыть</button>
             </div>
             
             <div class="instruction-step-indicator" style="text-align: center;">
@@ -1368,7 +1368,7 @@
         <div class="modal-content">
             <h2>Настроить web-доступ</h2>
             <p class="hint" style="margin-bottom: 16px;">Укажите логин и пароль для входа на сайт.</p>
-            <form id="web-access-form" onsubmit="handleWebAccessSetup(event)">
+            <form id="web-access-form">
                 <div class="form-group">
                     <label>Логин</label>
                     <input type="text" id="web-access-username" required placeholder="Минимум 3 символа" minlength="3" autocomplete="username">
@@ -1383,7 +1383,7 @@
                 </div>
                 <div class="form-actions" style="flex-direction: column;">
                     <button type="submit" class="btn-primary">Сохранить</button>
-                    <button type="button" class="btn-secondary" onclick="closeModal('web-access-modal')">Отмена</button>
+                    <button type="button" class="btn-secondary" data-action="closeModal" data-arg="web-access-modal">Отмена</button>
                 </div>
             </form>
         </div>
@@ -1393,7 +1393,7 @@
     <div id="change-login-modal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 400px;">
             <h2>Сменить логин</h2>
-            <form id="form-change-login" onsubmit="handleChangeLogin(event)" style="margin-top: 16px;">
+            <form id="form-change-login"  style="margin-top: 16px;">
                 <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
                 <div class="form-group">
                     <label>Текущий пароль</label>
@@ -1404,7 +1404,7 @@
                     <input type="text" id="change-login-new" required placeholder="Минимум 3 символа" autocomplete="username" minlength="3" />
                 </div>
                 <div class="form-actions" style="flex-direction: row; gap: 8px;">
-                    <button type="button" class="btn-secondary" onclick="closeModal('change-login-modal')" style="flex: 1;">Отмена</button>
+                    <button type="button" class="btn-secondary" data-action="closeModal" data-arg="change-login-modal" style="flex: 1;">Отмена</button>
                     <button type="submit" class="btn-primary" style="flex: 1;">Сменить логин</button>
                 </div>
             </form>
@@ -1415,7 +1415,7 @@
     <div id="change-password-modal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 400px;">
             <h2>Сменить пароль</h2>
-            <form id="form-change-password" onsubmit="handleChangePassword(event)" style="margin-top: 16px;">
+            <form id="form-change-password"  style="margin-top: 16px;">
                 <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
                 <div class="form-group">
                     <label>Текущий пароль</label>
@@ -1430,7 +1430,7 @@
                     <input type="password" id="change-pw-confirm" required placeholder="Повторите новый пароль" autocomplete="new-password" minlength="8" />
                 </div>
                 <div class="form-actions" style="flex-direction: row; gap: 8px;">
-                    <button type="button" class="btn-secondary" onclick="closeModal('change-password-modal')" style="flex: 1;">Отмена</button>
+                    <button type="button" class="btn-secondary" data-action="closeModal" data-arg="change-password-modal" style="flex: 1;">Отмена</button>
                     <button type="submit" class="btn-primary" style="flex: 1;">Сменить пароль</button>
                 </div>
             </form>
@@ -1458,7 +1458,7 @@
         <div class="modal-content" style="max-width: 400px;">
             <h2>Ссылка скопирована</h2>
             <p class="hint" style="margin-top: 10px; line-height: 1.5;">Вставьте её в ваше VPN-приложение (v2rayNG, Hiddify, Streisand и др.) в поле подписки или импорта по URL.</p>
-            <button type="button" class="btn-primary" style="width: 100%; margin-top: 18px;" onclick="closeModal('subscription-copy-success-modal')">Понятно</button>
+            <button type="button" class="btn-primary" style="width: 100%; margin-top: 18px;" data-action="closeModal" data-arg="subscription-copy-success-modal">Понятно</button>
         </div>
     </div>
 
@@ -1469,9 +1469,9 @@
             <p class="hint" style="margin-top: 10px; line-height: 1.5;">Скопируйте ссылку вручную: выделите текст в поле ниже и используйте «Копировать» в меню браузера. Если не получается — обратитесь в поддержку через раздел «О приложении».</p>
             <div class="form-group" style="margin-top: 12px;">
                 <label for="subscription-copy-manual-url">Ссылка подписки</label>
-                <input type="text" id="subscription-copy-manual-url" readonly class="app-copy-manual-field" onclick="this.select();" />
+                <input type="text" id="subscription-copy-manual-url" readonly class="app-copy-manual-field" />
             </div>
-            <button type="button" class="btn-primary" style="width: 100%; margin-top: 16px;" onclick="closeModal('subscription-copy-manual-modal')">Закрыть</button>
+            <button type="button" class="btn-primary" style="width: 100%; margin-top: 16px;" data-action="closeModal" data-arg="subscription-copy-manual-modal">Закрыть</button>
         </div>
     </div>
 
@@ -1482,9 +1482,9 @@
             <p class="hint" style="margin-top: 8px;">Выделите текст в поле ниже и скопируйте через меню браузера.</p>
             <div class="form-group" style="margin-top: 12px;">
                 <label for="generic-copy-manual-url">Текст</label>
-                <input type="text" id="generic-copy-manual-url" readonly class="app-copy-manual-field" onclick="this.select();" />
+                <input type="text" id="generic-copy-manual-url" readonly class="app-copy-manual-field" />
             </div>
-            <button type="button" class="btn-primary" style="width: 100%; margin-top: 16px;" onclick="closeModal('generic-copy-manual-modal')">Закрыть</button>
+            <button type="button" class="btn-primary" style="width: 100%; margin-top: 16px;" data-action="closeModal" data-arg="generic-copy-manual-modal">Закрыть</button>
         </div>
     </div>
 
@@ -1493,14 +1493,14 @@
         <div class="modal-content" style="max-width: 400px;">
             <h2>Отвязать Telegram</h2>
             <p class="hint" style="margin-top: 8px; margin-bottom: 16px;">После отвязки вы не сможете заходить в Mini App без пароля. Все подписки и данные останутся в веб-аккаунте.</p>
-            <form id="form-unlink-telegram" onsubmit="handleUnlinkTelegram(event)" style="margin-top: 16px;">
+            <form id="form-unlink-telegram"  style="margin-top: 16px;">
                 <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
                 <div class="form-group">
                     <label>Текущий пароль</label>
                     <input type="password" id="unlink-telegram-password" required placeholder="Текущий пароль" autocomplete="current-password" />
                 </div>
                 <div class="form-actions unlink-telegram-modal-actions">
-                    <button type="button" class="btn-secondary unlink-telegram-btn-cancel" onclick="closeModal('unlink-telegram-modal')">Отмена</button>
+                    <button type="button" class="btn-secondary unlink-telegram-btn-cancel" data-action="closeModal" data-arg="unlink-telegram-modal">Отмена</button>
                     <button type="submit" class="btn-danger unlink-telegram-btn-submit">Отвязать</button>
                 </div>
             </form>
@@ -1535,6 +1535,10 @@
     <script src="/js/features/instructions/setup.js?v=1"></script>
     <script src="/js/features/navigation/indicator.js?v=1"></script>
     <script src="/js/features/about/scene.js?v=1"></script>
+    <script src="/js/app/state.js?v=1"></script>
+    <script src="/js/app/actions.js?v=1"></script>
+    <script src="/js/app/composition.js?v=1"></script>
+    <script src="/js/app/dom-bindings.js?v=1"></script>
     <script src="/app.js?v=38"></script>
 </body>
 </html>

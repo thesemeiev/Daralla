@@ -52,6 +52,10 @@ def main() -> int:
         "/js/features/instructions/setup.js",
         "/js/features/navigation/indicator.js",
         "/js/features/about/scene.js",
+        "/js/app/state.js",
+        "/js/app/actions.js",
+        "/js/app/composition.js",
+        "/js/app/dom-bindings.js",
         "/app.js",
     ]
     for script_path in required_script_paths:

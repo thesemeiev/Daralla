@@ -195,7 +195,8 @@ Daralla/
 │   └── utils.py            # Утилиты и хелперы
 ├── webapp/
 │   ├── index.html          # SPA — Mini App и веб-клиент
-│   ├── app.js              # Клиентская логика
+│   ├── app.js              # Thin-entry: bootstrap и init
+│   ├── js/app/             # Composition layer (state/actions/composition)
 │   └── style.css           # Стили
 ├── shared/
 │   └── contracts/          # API-контракты и примеры payload для FE/BE
@@ -213,6 +214,8 @@ Daralla/
 Архитектурная модель на текущем этапе — **modular monolith**: единый деплой, но явные модульные границы по слоям и фичам. Детали и правила:
 - `docs/architecture/ADR_0001_MODULAR_MONOLITH_BOUNDARIES.md`
 - `docs/architecture/ARCHITECTURE_RULES.md`
+
+После завершения architecture refactor действует freeze-политика: структурные изменения выполняются только через ADR; без ADR допускаются только feature/fix изменения в существующих границах.
 
 ---
 

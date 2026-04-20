@@ -14,3 +14,8 @@ Target decomposition during transition:
 - `webapp/js/platform/*` for Telegram/Web runtime differences
 - `webapp/js/features/*` for business feature flows
 - `webapp/js/shared/*` for reusable helpers/state/api glue
+- `webapp/js/app/*` for composition root (`state.js`, `composition.js`, `actions.js`)
+
+Thin-entry target:
+- `webapp/app.js` keeps bootstrap and init only
+- feature instantiation is centralized in `webapp/js/app/composition.js`

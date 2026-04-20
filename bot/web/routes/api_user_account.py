@@ -17,6 +17,7 @@ from bot.services.user_account_service import (
 )
 from bot.web.auth_validation import validate_password_format, validate_username_format
 from bot.web.routes.api_user_common import options_response_or_none, require_user_id
+from bot.web.routes.transport import error_response, service_error_response
 
 
 async def handle_api_user_web_access_setup(logger):
@@ -27,7 +28,7 @@ async def handle_api_user_web_access_setup(logger):
         data = await request.get_json(silent=True) or {}
         init_data = data.get("initData")
         if not init_data:
-            return jsonify({"error": "Telegram data required"}), 400
+            return error_response("Telegram data required", 400)
         username = (data.get("username") or "").strip().lower()
         password = (data.get("password") or "").strip()
         ok, err = validate_username_format(username)
@@ -45,7 +46,7 @@ async def handle_api_user_web_access_setup(logger):
             }
         )
     except UserAccountServiceError as e:
-        return jsonify({"error": e.message}), e.status_code
+        return service_error_response(e)
     except Exception as e:
         logger.error("Ошибка web-access/setup: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -151,7 +152,7 @@ async def handle_api_user_change_password(_auth, logger):
         await change_password_for_user(user_id, current, new_pw)
         return jsonify({"success": True, "message": "Пароль изменён"})
     except UserAccountServiceError as e:
-        return jsonify({"error": e.message}), e.status_code
+        return service_error_response(e)
     except Exception as e:
         logger.error("Ошибка change-password: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -176,7 +177,7 @@ async def handle_api_user_change_login(_auth, logger):
         await change_login_for_user(user_id, current, new_login)
         return jsonify({"success": True, "message": "Логин изменён", "username": new_login})
     except UserAccountServiceError as e:
-        return jsonify({"error": e.message}), e.status_code
+        return service_error_response(e)
     except Exception as e:
         logger.error("Ошибка change-login: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -207,7 +208,7 @@ async def handle_api_user_unlink_telegram(_auth, logger):
             }
         )
     except UserAccountServiceError as e:
-        return jsonify({"error": e.message}), e.status_code
+        return service_error_response(e)
     except Exception as e:
         logger.error("Ошибка unlink-telegram: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
