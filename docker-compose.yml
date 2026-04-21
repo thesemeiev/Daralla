@@ -19,7 +19,11 @@ services:
       # Опциональные переменные (могут быть пустыми)
       - NGROK_AUTH_TOKEN=${NGROK_AUTH_TOKEN:-}
       - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBAPP_URL=${WEBAPP_URL:-}
       - WEBSITE_URL=${WEBSITE_URL:-}
+      - CRYPTOCLOUD_API_TOKEN=${CRYPTOCLOUD_API_TOKEN:-}
+      - CRYPTOCLOUD_SHOP_ID=${CRYPTOCLOUD_SHOP_ID:-}
+      - CRYPTOCLOUD_WEBHOOK_SECRET=${CRYPTOCLOUD_WEBHOOK_SECRET:-}
 
 
     ports:
@@ -27,7 +31,7 @@ services:
       - "5000:5000"
     volumes:
       # Монтируем папку для баз данных
-      - ./data:/app/data:rw
+      - ./data:/app/apps/backend/src/data:rw
       # Монтируем .env файл если он есть
       - ./.env:/app/.env:ro
     networks:
