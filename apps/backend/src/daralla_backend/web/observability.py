@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import logging
 import threading
 import time
 import uuid
@@ -10,6 +10,8 @@ from collections import Counter
 from typing import Dict
 
 from quart import g, request
+
+from daralla_backend.utils.logging_helpers import log_event
 
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -55,17 +57,14 @@ def install_observability_hooks(app, logger) -> None:
         response.headers[REQUEST_ID_HEADER] = request_id
         status = response.status_code
         inc_metric("http_responses_total", method=request.method, path=request.path, status=str(status))
-        logger.info(
-            json.dumps(
-                {
-                    "event": "http_request",
-                    "method": request.method,
-                    "path": request.path,
-                    "status": status,
-                    "elapsed_ms": elapsed_ms,
-                    "request_id": request_id,
-                },
-                ensure_ascii=False,
-            )
+        log_event(
+            logger,
+            logging.INFO,
+            "http_request",
+            method=request.method,
+            path=request.path,
+            status=status,
+            elapsed_ms=elapsed_ms,
+            request_id=request_id,
         )
         return response

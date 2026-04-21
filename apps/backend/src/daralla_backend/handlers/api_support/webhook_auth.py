@@ -4,6 +4,8 @@
 """
 import logging
 
+from ...utils.logging_helpers import log_event, mask_secret
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,9 +30,19 @@ async def authenticate_request_async(headers, args, body, cookies=None):
     if token:
         user = await get_user_by_auth_token(token)
         if user:
-            logger.info("Успешная веб-аутентификация для user_id=%s", user["user_id"])
+            log_event(
+                logger,
+                logging.INFO,
+                "web_auth_success",
+                user_id=user["user_id"],
+            )
             return user["user_id"]
-        logger.warning("Веб-токен не найден в БД: %s...", (token[:10] if len(token) >= 10 else token))
+        log_event(
+            logger,
+            logging.WARNING,
+            "web_auth_token_not_found",
+            token=mask_secret(token),
+        )
 
     init_data = (args.get("initData") if args else None) or (body.get("initData") if body else None)
     if init_data:
@@ -62,25 +74,31 @@ def verify_telegram_init_data(init_data: str):
 
         TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
         if not TELEGRAM_TOKEN:
-            logger.error("TELEGRAM_TOKEN не найден")
+            log_event(logger, logging.ERROR, "telegram_initdata_missing_token")
             return None
 
         parsed_data = urllib.parse.parse_qs(init_data)
 
         if 'hash' not in parsed_data or not parsed_data['hash']:
-            logger.warning("Hash не найден в initData")
+            log_event(logger, logging.WARNING, "telegram_initdata_missing_hash")
             return None
 
         received_hash = parsed_data['hash'][0]
 
         if 'auth_date' not in parsed_data or not parsed_data['auth_date']:
-            logger.warning("auth_date не найден в initData")
+            log_event(logger, logging.WARNING, "telegram_initdata_missing_auth_date")
             return None
 
         auth_date = int(parsed_data['auth_date'][0])
         current_time = int(time.time())
         if current_time - auth_date > 24 * 60 * 60:
-            logger.warning(f"initData устарел: auth_date={auth_date}, current={current_time}")
+            log_event(
+                logger,
+                logging.WARNING,
+                "telegram_initdata_expired",
+                auth_date=auth_date,
+                current_time=current_time,
+            )
             return None
 
         secret_key = hmac.new(
@@ -102,25 +120,36 @@ def verify_telegram_init_data(init_data: str):
         ).hexdigest()
 
         if calculated_hash != received_hash:
-            logger.warning("Неверный hash в initData")
+            log_event(logger, logging.WARNING, "telegram_initdata_invalid_hash")
             return None
 
         if 'user' not in parsed_data or not parsed_data['user']:
-            logger.warning("user не найден в initData")
+            log_event(logger, logging.WARNING, "telegram_initdata_missing_user")
             return None
 
         user_data = json.loads(parsed_data['user'][0])
         user_id = str(user_data.get('id'))
 
         if not user_id:
-            logger.warning("user_id не найден в user данных")
+            log_event(logger, logging.WARNING, "telegram_initdata_missing_user_id")
             return None
 
-        logger.info(f"Успешная проверка initData для user_id={user_id}")
+        log_event(
+            logger,
+            logging.INFO,
+            "telegram_initdata_verified",
+            user_id=user_id,
+        )
         return user_id
 
     except Exception as e:
-        logger.error(f"Ошибка при проверке initData: {e}", exc_info=True)
+        log_event(
+            logger,
+            logging.ERROR,
+            "telegram_initdata_verification_failed",
+            error=str(e),
+        )
+        logger.debug("telegram_initdata_verification_failed_traceback", exc_info=True)
         return None
 
 
@@ -137,20 +166,33 @@ async def check_admin_access_async(user_id: str) -> bool:
 
         user_id_str = str(user_id)
         if user_id_str in admin_set:
-            logger.info("Пользователь %s является админом (по user_id)", user_id)
+            log_event(logger, logging.INFO, "admin_access_granted_by_user_id", user_id=user_id)
             return True
 
         user = await get_user_by_id(user_id)
         if user:
             tid = user.get("telegram_id")
             if tid and str(tid) in admin_set:
-                logger.info("Пользователь %s является админом (по telegram_id=%s)", user_id, tid)
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "admin_access_granted_by_telegram_id",
+                    user_id=user_id,
+                    telegram_id=tid,
+                )
                 return True
 
-        logger.info("Пользователь %s НЕ является админом", user_id)
+        log_event(logger, logging.INFO, "admin_access_denied", user_id=user_id)
         return False
     except Exception as e:
-        logger.error("Ошибка при проверке прав админа: %s", e, exc_info=True)
+        log_event(
+            logger,
+            logging.ERROR,
+            "admin_access_check_failed",
+            user_id=user_id,
+            error=str(e),
+        )
+        logger.debug("admin_access_check_failed_traceback", exc_info=True)
         return False
 
 

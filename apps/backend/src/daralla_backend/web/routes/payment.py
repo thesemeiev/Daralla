@@ -19,6 +19,7 @@ from daralla_backend.services.payment_webhook_service import (
     parse_yookassa_webhook_payload,
     resolve_cryptocloud_postback_target,
 )
+from daralla_backend.utils.logging_helpers import log_event, sanitize_headers
 from daralla_backend.web.observability import inc_metric
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,12 @@ def create_blueprint(bot_app):
             status = (data.get("status") or "").strip().lower()
             target = await resolve_cryptocloud_postback_target(data)
             if not target:
-                logger.warning("CryptoCloud postback: missing invoice uuid/invoice_id")
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "cryptocloud_postback_missing_target",
+                    path=request.path,
+                )
                 return jsonify({"status": "ok"}), 200
             # Верификация JWT до обработки (документация: token подписан секретом проекта).
             secret = os.getenv("CRYPTOCLOUD_WEBHOOK_SECRET")
@@ -53,30 +59,61 @@ def create_blueprint(bot_app):
                 try:
                     jwt.decode(token_str, secret, algorithms=["HS256"])
                 except jwt.InvalidTokenError:
-                    logger.warning("CryptoCloud postback: invalid JWT for raw_id=%s", target["raw_id"])
+                    log_event(
+                        logger,
+                        logging.WARNING,
+                        "cryptocloud_postback_invalid_jwt",
+                        raw_id=target["raw_id"],
+                    )
                     inc_metric("webhook_failed_total", provider="cryptocloud", reason="invalid_jwt")
                     return jsonify({"status": "error"}), 401
             elif not secret:
-                logger.warning("CryptoCloud postback: CRYPTOCLOUD_WEBHOOK_SECRET not set")
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "cryptocloud_webhook_secret_missing",
+                )
             if not target["payment_found"]:
-                logger.warning("CryptoCloud postback: payment not found for raw_id=%s", target["raw_id"])
-            logger.info(
-                "CryptoCloud postback: status=%s, raw_id=%s, payment_id=%s, found=%s",
-                target["status"],
-                target["raw_id"],
-                target["payment_id"],
-                target["payment_found"],
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "cryptocloud_postback_payment_not_found",
+                    raw_id=target["raw_id"],
+                )
+            log_event(
+                logger,
+                logging.INFO,
+                "cryptocloud_postback_received",
+                provider="cryptocloud",
+                status=target["status"],
+                raw_id=target["raw_id"],
+                payment_id=target["payment_id"],
+                payment_found=target["payment_found"],
+                path=request.path,
             )
             if target["payment_found"]:
                 asyncio.create_task(_process_webhook(target["payment_id"], target["mapped_status"]))
                 inc_metric("webhook_processed_total", provider="cryptocloud", status=target["mapped_status"])
             return jsonify({"status": "ok"}), 200
         except (TypeError, ValueError) as e:
-            logger.warning("CryptoCloud webhook invalid payload: %s", e)
+            log_event(
+                logger,
+                logging.WARNING,
+                "cryptocloud_webhook_invalid_payload",
+                error=str(e),
+                path=request.path,
+            )
             inc_metric("webhook_failed_total", provider="cryptocloud", reason="invalid_payload")
             return jsonify({"status": "error"}), 400
         except Exception as e:
-            logger.error("CryptoCloud webhook error: %s", e, exc_info=True)
+            log_event(
+                logger,
+                logging.ERROR,
+                "cryptocloud_webhook_internal_error",
+                error=str(e),
+                path=request.path,
+            )
+            logger.debug("cryptocloud_webhook_internal_error_traceback", exc_info=True)
             inc_metric("webhook_failed_total", provider="cryptocloud", reason="internal_error")
             return jsonify({"status": "error"}), 500
 
@@ -94,53 +131,78 @@ def create_blueprint(bot_app):
         inc_metric("webhook_received_total", provider="yookassa")
         try:
             data = await request.get_json(silent=True)
-            logger.info("WEBHOOK: Получен webhook от YooKassa")
-            logger.info("WEBHOOK: Данные: %s", data)
-            logger.info("WEBHOOK: Заголовки: %s", dict(request.headers))
+            event_name_raw = ((data or {}).get("event") or "").strip()
+            object_payload = (data or {}).get("object") or {}
+            log_event(
+                logger,
+                logging.INFO,
+                "yookassa_webhook_received",
+                provider="yookassa",
+                provider_event=event_name_raw or "unknown",
+                object_id=object_payload.get("id"),
+                object_status=object_payload.get("status"),
+                path=request.path,
+                headers=sanitize_headers(dict(request.headers)),
+            )
 
             try:
                 resolved = parse_yookassa_webhook_payload(data)
             except ValueError as e:
-                logger.error("Неверный формат webhook от YooKassa: %s", e)
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "yookassa_webhook_invalid_payload",
+                    error=str(e),
+                    provider_event=event_name_raw or "unknown",
+                )
                 inc_metric("webhook_failed_total", provider="yookassa", reason="invalid_payload")
                 return jsonify({"status": "error"}), 400
 
             if resolved is None:
-                logger.info(
-                    "WEBHOOK: событие %s — без обновления платежа",
-                    (data.get("event") or "").strip(),
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "yookassa_webhook_ignored_event",
+                    provider_event=event_name_raw or "unknown",
                 )
                 inc_metric("webhook_processed_total", provider="yookassa", status="ignored")
                 return jsonify({"status": "ok"})
 
             payment_id, status = resolved
-            event_name = (data.get("event") or "").strip()
+            event_name = event_name_raw
 
-            logger.info(
-                "WEBHOOK: Обработка webhook: event=%s, payment_id=%s, status=%s",
-                event_name or "(legacy)",
-                payment_id,
-                status,
+            log_event(
+                logger,
+                logging.INFO,
+                "yookassa_webhook_processed",
+                provider_event=event_name or "legacy",
+                payment_id=payment_id,
+                status=status,
             )
-            if status == "succeeded":
-                logger.info("WEBHOOK: Платеж успешен - активируем ключ")
-            elif status == "canceled":
-                logger.info("WEBHOOK: Платеж отменен - показываем ошибку")
-            elif status == "refunded":
-                logger.info("WEBHOOK: Платеж возвращен - показываем ошибку")
-            else:
-                logger.info("WEBHOOK: Неизвестный статус: %s", status)
 
             asyncio.create_task(_process_webhook(payment_id, status))
             inc_metric("webhook_processed_total", provider="yookassa", status=status)
 
             return jsonify({"status": "ok"})
         except (TypeError, ValueError) as e:
-            logger.warning("YooKassa webhook invalid payload: %s", e)
+            log_event(
+                logger,
+                logging.WARNING,
+                "yookassa_webhook_invalid_payload",
+                error=str(e),
+                path=request.path,
+            )
             inc_metric("webhook_failed_total", provider="yookassa", reason="invalid_payload")
             return jsonify({"status": "error"}), 400
         except Exception as e:
-            logger.error("Ошибка в webhook: %s", e, exc_info=True)
+            log_event(
+                logger,
+                logging.ERROR,
+                "yookassa_webhook_internal_error",
+                error=str(e),
+                path=request.path,
+            )
+            logger.debug("yookassa_webhook_internal_error_traceback", exc_info=True)
             inc_metric("webhook_failed_total", provider="yookassa", reason="internal_error")
             return jsonify({"status": "error"}), 500
 
@@ -154,4 +216,12 @@ async def _process_webhook(payment_id, status):
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        logger.error("Ошибка обработки платежа в webhook: %s", e, exc_info=True)
+        log_event(
+            logger,
+            logging.ERROR,
+            "payment_webhook_processing_failed",
+            payment_id=payment_id,
+            status=status,
+            error=str(e),
+        )
+        logger.debug("payment_webhook_processing_failed_traceback", exc_info=True)

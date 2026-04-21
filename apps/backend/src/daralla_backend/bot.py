@@ -10,6 +10,7 @@ from .utils import UIButtons, check_private_chat, set_image_paths
 # === ИМПОРТ СЕРВИСОВ ===
 from .services import X3, MultiServerManager, NotificationManager, SubscriptionManager
 from .services.sync_manager import SyncManager
+from .utils.logging_helpers import log_event
 
 # === ИМПОРТ ОБРАБОТЧИКОВ ===
 from .handlers.commands import start
@@ -76,7 +77,10 @@ if not TELEGRAM_TOKEN:
     )
 
 if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
-    print("ВНИМАНИЕ: YOOKASSA_SHOP_ID или YOOKASSA_SECRET_KEY не найдены!")
+    # Логируем предупреждение единообразно, без print в stdout.
+    logging.getLogger(__name__).warning(
+        "YOOKASSA credentials are missing: YOOKASSA_SHOP_ID/YOOKASSA_SECRET_KEY"
+    )
 
 # Главное название бренда для VPN клиента
 # Это название будет использоваться для всех серверов в подписке
@@ -90,7 +94,9 @@ os.makedirs(logs_dir, exist_ok=True)
 app_log_path = os.path.join(logs_dir, 'bot.log')
 
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+_log_level_name = (os.getenv("DARALLA_LOG_LEVEL", "INFO") or "INFO").upper()
+_log_level = getattr(logging, _log_level_name, logging.INFO)
+console_handler.setLevel(_log_level)
 
 file_handler = RotatingFileHandler(
     app_log_path,
@@ -100,15 +106,22 @@ file_handler = RotatingFileHandler(
     delay=True
 )
 # Пишем в файл также INFO-сообщения, чтобы лучше видеть историю продакшена.
-file_handler.setLevel(logging.INFO)
+file_handler.setLevel(_log_level)
 
 # Базовый формат логов с именем логгера — проще отлаживать и искать по модулям.
 logging.basicConfig(
-    level=logging.INFO,
+    level=_log_level,
     format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
     handlers=[console_handler, file_handler]
 )
 logger = logging.getLogger(__name__)
+log_event(
+    logger,
+    logging.INFO,
+    "logging_initialized",
+    level=logging.getLevelName(_log_level),
+    log_file=app_log_path,
+)
 
 # Урезаем шум от httpx/httpcore до WARNING, чтобы логи не забивались
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -159,7 +172,13 @@ async def init_server_managers():
         sm.init_from_config(config)
         logger.info("Менеджер серверов успешно инициализирован из БД")
     except Exception as e:
-        logger.error(f"Ошибка инициализации менеджеров серверов: {e}")
+        log_event(
+            logger,
+            logging.ERROR,
+            "init_server_managers_failed",
+            error=str(e),
+        )
+        logger.debug("init_server_managers_failed_traceback", exc_info=True)
 
 from .web.app_quart import create_quart_app
 
