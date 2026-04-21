@@ -119,7 +119,7 @@ log_event(
     logger,
     logging.INFO,
     "logging_initialized",
-    level=logging.getLevelName(_log_level),
+    log_level=logging.getLevelName(_log_level),
     log_file=app_log_path,
 )
 
