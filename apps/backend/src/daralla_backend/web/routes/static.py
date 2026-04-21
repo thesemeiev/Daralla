@@ -2,9 +2,10 @@
 Quart Blueprint: /, /index.html, /<path:filename> (webapp and static files).
 """
 import logging
+import os
 from pathlib import Path
 
-from quart import Blueprint, Response
+from quart import Blueprint, Response, redirect
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,15 @@ async def terms_page():
     if status != 200:
         return ("File not found", 404) if status == 404 else ("Forbidden", status)
     return Response(body, status=200, content_type="text/html; charset=utf-8")
+
+
+@bp.route("/support", methods=["GET"])
+async def support_redirect():
+    """Единая точка входа в поддержку из веба/Mini App."""
+    support_url = (os.getenv("SUPPORT_URL") or "https://t.me/DarallaSupport").strip()
+    if not support_url:
+        support_url = "https://t.me/DarallaSupport"
+    return redirect(support_url, code=302)
 
 
 @bp.route("/<path:filename>", methods=["GET"])

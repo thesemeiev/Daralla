@@ -356,7 +356,7 @@
                     title: 'Нужна помощь?',
                     content: `
                     <p>Если у вас возникли проблемы или вопросы, обратитесь в поддержку через Telegram.</p>
-                    <p style="margin-top: 14px;"><a href="https://t.me/DarallaSupport" target="_blank" rel="noopener noreferrer" class="instruction-link">Написать в поддержку @DarallaSupport</a></p>
+                    <p style="margin-top: 14px;"><a href="/support" target="_blank" rel="noopener noreferrer" class="instruction-link">Написать в поддержку @DarallaSupport</a></p>
                 `
                 }
             ]
