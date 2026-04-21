@@ -422,43 +422,45 @@ jobs:
           # Clean up build cache
           timeout 30 sudo docker builder prune -f || echo "Builder prune timed out, continuing..."
           
+          # Resolve compose command once (plugin preferred, standalone fallback)
+          if docker compose version &> /dev/null 2>&1; then
+            COMPOSE_CMD="sudo docker compose"
+          elif command -v docker-compose &> /dev/null; then
+            COMPOSE_CMD="sudo docker-compose"
+          else
+            echo "ERROR: Docker Compose not available!"
+            exit 1
+          fi
+
+          show_compose_diagnostics() {
+            echo "=== Docker Compose status ==="
+            ${COMPOSE_CMD} ps || true
+            echo "=== Last 200 container log lines ==="
+            ${COMPOSE_CMD} logs --tail=200 || true
+          }
+
           # Start bot
           echo "Starting bot..."
           # Build containers on server
-          if docker compose version &> /dev/null 2>&1; then
-            sudo docker compose build --no-cache
-          elif command -v docker-compose &> /dev/null; then
-            sudo docker-compose build --no-cache
-          else
-            echo "ERROR: Docker Compose not available!"
-            exit 1
-          fi
+          ${COMPOSE_CMD} build --no-cache
           
           # Start with environment variables
           echo "Starting bot with environment variables..."
-          if docker compose version &> /dev/null 2>&1; then
-            sudo docker compose up -d
-          elif command -v docker-compose &> /dev/null; then
-            sudo docker-compose up -d
-          else
-            echo "ERROR: Docker Compose not available!"
-            exit 1
-          fi
+          ${COMPOSE_CMD} up -d
           
           # Check status
           echo "Checking status..."
           sleep 5
-          if docker compose version &> /dev/null 2>&1; then
-            sudo docker compose ps
-          elif command -v docker-compose &> /dev/null; then
-            sudo docker-compose ps
-          else
-            echo "WARNING: Cannot check status - Docker Compose not available"
-          fi
+          ${COMPOSE_CMD} ps || echo "WARNING: Cannot check status"
 
           # Readiness check after startup
           echo "Running readiness probe..."
           for i in {1..20}; do
+            if ${COMPOSE_CMD} ps | grep -E "Restarting|Exit|Exited" >/dev/null 2>&1; then
+              echo "ERROR: Container is not stable (restarting/exited)"
+              show_compose_diagnostics
+              exit 1
+            fi
             if (command -v curl >/dev/null 2>&1 && curl -fsS --max-time 3 "http://127.0.0.1:5000/ready" >/dev/null) \
               || (command -v wget >/dev/null 2>&1 && wget -q -T 3 -O - "http://127.0.0.1:5000/ready" >/dev/null)
             then
@@ -467,6 +469,7 @@ jobs:
             fi
             if [ "$i" -eq 20 ]; then
               echo "ERROR: Readiness probe failed after retries"
+              show_compose_diagnostics
               exit 1
             fi
             sleep 3
