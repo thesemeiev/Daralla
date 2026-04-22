@@ -34,7 +34,8 @@ async def test_add_counted_payment_and_leaderboard():
     """add_counted_payment adds record; get_leaderboard returns referrer with count."""
     active = await list_events_active()
     assert len(active) >= 1
-    event_id = active[0]["id"]
+    # DB is shared across tests, so pick the newest active event created by this fixture run.
+    event_id = max(active, key=lambda e: e["id"])["id"]
 
     referrer_user_id = "usr_referrer001"
     payment_id = "pay_test_001"
@@ -57,7 +58,8 @@ async def test_add_counted_payment_idempotent():
     """Same payment_id + event_id is idempotent (INSERT OR IGNORE)."""
     active = await list_events_active()
     assert len(active) >= 1
-    event_id = active[0]["id"]
+    # DB is shared across tests, so pick the newest active event created by this fixture run.
+    event_id = max(active, key=lambda e: e["id"])["id"]
     referrer_user_id = "usr_referrer001"
     payment_id = "pay_idem_001"
 

@@ -6,7 +6,6 @@ import datetime
 import asyncio
 
 from ..db import init_all_db
-from ..services import NotificationManager
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +193,9 @@ async def on_startup(app):
         server_manager = ctx.server_manager
         sync_manager = ctx.sync_manager
         subscription_manager = ctx.subscription_manager
+
+        # Локальный импорт убирает циклическую зависимость services -> core -> services
+        from ..services.notification_manager import NotificationManager
 
         # 2. Инициализация и запуск менеджера уведомлений
         notification_manager = NotificationManager(app.bot, server_manager, admin_ids)
