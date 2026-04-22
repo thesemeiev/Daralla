@@ -131,7 +131,17 @@ async def get_all_active_subscriptions_by_user(user_id: str):
 
 async def update_subscription_status(subscription_id: int, status: str):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE subscriptions SET status = ? WHERE id = ?", (status, subscription_id))
+        if status == "deleted":
+            now = int(time.time())
+            await db.execute(
+                "UPDATE subscriptions SET status = ?, deleted_at = COALESCE(deleted_at, ?) WHERE id = ?",
+                (status, now, subscription_id),
+            )
+        else:
+            await db.execute(
+                "UPDATE subscriptions SET status = ?, deleted_at = NULL WHERE id = ?",
+                (status, subscription_id),
+            )
         await db.commit()
 
 
@@ -833,3 +843,125 @@ async def get_subscription_conversion_data(days: int = 30):
             'conversion_rate': round(conversion_rate, 2),
             'daily': daily
         }
+
+
+async def upsert_agg_subscriptions_daily() -> int:
+    """
+    Обновляет агрегаты по подпискам:
+    - created_total/paid/trial: по дате created_at
+    - active_total/expired_total/deleted_total: snapshot на текущий день
+    """
+    now = int(time.time())
+    today = datetime.datetime.utcfromtimestamp(now).strftime("%Y-%m-%d")
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT DATE(created_at, 'unixepoch') AS day,
+                   COUNT(*) AS created_total,
+                   SUM(CASE WHEN price > 0 THEN 1 ELSE 0 END) AS created_paid,
+                   SUM(CASE WHEN price <= 0 OR status = 'trial' THEN 1 ELSE 0 END) AS created_trial
+            FROM subscriptions
+            GROUP BY day
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+
+        updated = 0
+        for row in rows:
+            day = row["day"]
+            if not day:
+                continue
+            await db.execute(
+                """
+                INSERT INTO agg_subscriptions_daily
+                    (date, created_total, created_paid, created_trial, deleted_total, active_total, expired_total, updated_at)
+                VALUES (?, ?, ?, ?, 0, 0, 0, ?)
+                ON CONFLICT(date) DO UPDATE SET
+                    created_total = excluded.created_total,
+                    created_paid = excluded.created_paid,
+                    created_trial = excluded.created_trial,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    day,
+                    int(row["created_total"] or 0),
+                    int(row["created_paid"] or 0),
+                    int(row["created_trial"] or 0),
+                    now,
+                ),
+            )
+            updated += 1
+
+        async with db.execute(
+            """
+            SELECT
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_total,
+                SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired_total,
+                SUM(CASE WHEN status = 'deleted' THEN 1 ELSE 0 END) AS deleted_total
+            FROM subscriptions
+            """
+        ) as cur:
+            snapshot = await cur.fetchone()
+        await db.execute(
+            """
+            INSERT INTO agg_subscriptions_daily
+                (date, created_total, created_paid, created_trial, deleted_total, active_total, expired_total, updated_at)
+            VALUES (?, 0, 0, 0, ?, ?, ?, ?)
+            ON CONFLICT(date) DO UPDATE SET
+                deleted_total = excluded.deleted_total,
+                active_total = excluded.active_total,
+                expired_total = excluded.expired_total,
+                updated_at = excluded.updated_at
+            """,
+            (
+                today,
+                int((snapshot["deleted_total"] if snapshot else 0) or 0),
+                int((snapshot["active_total"] if snapshot else 0) or 0),
+                int((snapshot["expired_total"] if snapshot else 0) or 0),
+                now,
+            ),
+        )
+        await db.commit()
+        return updated + 1
+
+
+async def cleanup_deleted_subscriptions(days: int = 365, *, dry_run: bool = False) -> int:
+    cutoff = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT id
+            FROM subscriptions
+            WHERE status = 'deleted'
+              AND (
+                    (deleted_at IS NOT NULL AND deleted_at < ?)
+                 OR (deleted_at IS NULL AND expires_at < ?)
+              )
+            """,
+            (cutoff, cutoff),
+        ) as cur:
+            rows = await cur.fetchall()
+        candidate_ids = [int(r["id"]) for r in rows]
+        if not candidate_ids:
+            return 0
+        if dry_run:
+            logger.info(
+                "SUBSCRIPTIONS_CLEANUP_DRY_RUN: would hard-delete %s deleted subscriptions older than %s days",
+                len(candidate_ids),
+                days,
+            )
+            return len(candidate_ids)
+
+        placeholders = ",".join("?" for _ in candidate_ids)
+        await db.execute(f"DELETE FROM subscription_servers WHERE subscription_id IN ({placeholders})", candidate_ids)
+        await db.execute(f"DELETE FROM sent_notifications WHERE subscription_id IN ({placeholders})", candidate_ids)
+        await db.execute(f"DELETE FROM subscriptions WHERE id IN ({placeholders})", candidate_ids)
+        await db.commit()
+        logger.info(
+            "SUBSCRIPTIONS_CLEANUP: hard-deleted %s subscriptions older than %s days in deleted status",
+            len(candidate_ids),
+            days,
+        )
+        return len(candidate_ids)

@@ -17,6 +17,7 @@ from ..db import (
     DB_PATH,
     record_notification_metrics,
     cleanup_old_notifications,
+    cleanup_old_notification_metrics,
     get_notification_stats,
     get_notification_settings,
     set_notification_setting,
@@ -25,6 +26,7 @@ from ..db import (
     get_notification_send_count,
     get_last_notification_send_time,
 )
+from ..core.retention_policy import get_retention_policy
 from ..utils import calculate_time_remaining
 from ..db.notifications_db import render_structured_template
 
@@ -95,14 +97,25 @@ class NotificationManager:
     
     async def _cleanup_task(self):
         """Задача для очистки старых записей"""
+        policy = get_retention_policy()
         while self.is_running:
             try:
-                settings = await get_notification_settings()
-                days_to_keep = int(settings.get('days_to_keep', '30'))
-                
-                deleted_count = await cleanup_old_notifications(days_to_keep)
-                if deleted_count > 0:
-                    logger.info(f"Очищено {deleted_count} старых записей уведомлений")
+                deleted_count = await cleanup_old_notifications(
+                    policy.notifications_sent_retention_days,
+                    dry_run=policy.dry_run,
+                )
+                metrics_deleted = await cleanup_old_notification_metrics(
+                    policy.notification_metrics_retention_days,
+                    dry_run=policy.dry_run,
+                )
+                if deleted_count > 0 or metrics_deleted > 0:
+                    mode = "dry-run candidates" if policy.dry_run else "deleted"
+                    logger.info(
+                        "Notification retention cleanup: sent=%s, metrics=%s (%s)",
+                        deleted_count,
+                        metrics_deleted,
+                        mode,
+                    )
                 
                 await asyncio.sleep(86400)
                 

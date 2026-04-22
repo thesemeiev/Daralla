@@ -25,8 +25,6 @@ async def init_events_tables():
                 created_at TEXT NOT NULL
             )
         """)
-        await db.execute("DROP TABLE IF EXISTS event_referrals")
-        await db.execute("DROP TABLE IF EXISTS event_counted_payments")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS event_counted_payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,10 +32,21 @@ async def init_events_tables():
                 referrer_user_id TEXT NOT NULL,
                 payment_id TEXT NOT NULL,
                 paid_at TEXT NOT NULL,
-                UNIQUE(event_id, payment_id),
                 FOREIGN KEY (event_id) REFERENCES events(id)
             )
         """)
+        await db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_event_counted_payments_event_payment
+            ON event_counted_payments(event_id, payment_id)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_event_counted_payments_event_referrer
+            ON event_counted_payments(event_id, referrer_user_id)
+            """
+        )
         await db.execute("""
             CREATE TABLE IF NOT EXISTS event_rewards_granted (
                 event_id INTEGER PRIMARY KEY,
@@ -53,4 +62,7 @@ async def init_events_tables():
             )
         """)
         await db.commit()
-    logger.info("Таблицы модуля событий инициализированы: events, event_counted_payments, event_rewards_granted, user_referral_codes")
+    logger.info(
+        "Таблицы модуля событий инициализированы: "
+        "events, event_counted_payments, event_rewards_granted, user_referral_codes"
+    )

@@ -147,13 +147,86 @@ async def cleanup_old_server_load_history(days: int = 7):
 
     async with aiosqlite.connect(DB_PATH) as db:
         try:
-            async with db.execute("DELETE FROM server_load_history WHERE recorded_at < ?", (cutoff_timestamp,)) as cur:
+            async with db.execute(
+                """
+                SELECT
+                    DATE(recorded_at, 'unixepoch') AS day,
+                    server_name,
+                    AVG(online_clients) AS avg_online,
+                    MAX(online_clients) AS max_online,
+                    AVG(total_active) AS avg_total,
+                    MAX(total_active) AS max_total,
+                    COUNT(*) AS samples
+                FROM server_load_history
+                WHERE recorded_at < ?
+                GROUP BY day, server_name
+                """,
+                (cutoff_timestamp,),
+            ) as cur:
+                rows = await cur.fetchall()
+
+            now = int(datetime.datetime.now().timestamp())
+            for row in rows:
+                await db.execute(
+                    """
+                    INSERT INTO agg_server_load_daily
+                        (date, server_name, avg_online, max_online, avg_total, max_total, samples, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(date, server_name) DO UPDATE SET
+                        avg_online = excluded.avg_online,
+                        max_online = excluded.max_online,
+                        avg_total = excluded.avg_total,
+                        max_total = excluded.max_total,
+                        samples = excluded.samples,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        row[0],
+                        row[1],
+                        round(row[2] or 0, 2),
+                        int(row[3] or 0),
+                        round(row[4] or 0, 2),
+                        int(row[5] or 0),
+                        int(row[6] or 0),
+                        now,
+                    ),
+                )
+
+            async with db.execute(
+                "DELETE FROM server_load_history WHERE recorded_at < ?",
+                (cutoff_timestamp,),
+            ) as cur:
                 deleted = cur.rowcount
             await db.commit()
             if deleted > 0:
                 logger.info(f"Удалено {deleted} старых записей истории нагрузки (старше {days} дней)")
         except Exception as e:
             logger.error(f"Ошибка очистки истории нагрузки: {e}")
+
+
+async def cleanup_old_server_load_history_with_policy(days: int = 7, *, dry_run: bool = False) -> int:
+    now = int(datetime.datetime.now().timestamp())
+    cutoff_timestamp = now - (days * 24 * 3600)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM server_load_history WHERE recorded_at < ?",
+            (cutoff_timestamp,),
+        ) as cur:
+            row = await cur.fetchone()
+            candidate_count = row[0] if row else 0
+
+    if candidate_count <= 0:
+        return 0
+    if dry_run:
+        logger.info(
+            "SERVER_LOAD_CLEANUP_DRY_RUN: would aggregate+delete %s rows older than %s days",
+            candidate_count,
+            days,
+        )
+        return candidate_count
+
+    await cleanup_old_server_load_history(days=days)
+    return candidate_count
 
 
 # ==================== ГРУППЫ СЕРВЕРОВ И КОНФИГУРАЦИЯ ====================

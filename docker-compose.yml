@@ -12,6 +12,7 @@ services:
       # Переменные окружения загружаются из .env файла
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - ADMIN_IDS=${ADMIN_ID}
+      - ADMIN_ID=${ADMIN_ID}
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
       - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY}
       # Порт веб-сервера Quart/Hypercorn (должен совпадать с ports: и nginx)

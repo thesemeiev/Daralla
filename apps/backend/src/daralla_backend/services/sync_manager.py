@@ -13,9 +13,12 @@ from ..db.subscriptions_db import (
     get_subscription_servers,
     update_subscription_status,
     remove_subscription_server,
-    sync_subscription_statuses
+    sync_subscription_statuses,
+    upsert_agg_subscriptions_daily,
+    cleanup_deleted_subscriptions,
 )
 from ..db.notifications_db import clear_subscription_notifications
+from ..core.retention_policy import get_retention_policy
 from .subscription_manager import SubscriptionManager
 
 logger = logging.getLogger(__name__)
@@ -174,6 +177,7 @@ class SyncManager:
         """
         logger.info("🌀 Запуск полной синхронизации БД с серверами X-UI...")
         logger.info("📋 Принцип: БД - источник истины, серверы синхронизируются с БД")
+        policy = get_retention_policy()
         if self._sync_lock.locked():
             logger.info("run_sync ожидает завершения другого цикла синхронизации")
         async with self._sync_lock:
@@ -183,12 +187,30 @@ class SyncManager:
             logger.info("📊 Шаг 1: Синхронизация статусов подписок в БД...")
             await sync_subscription_statuses()
             logger.info("✅ Шаг 1 завершен: статусы подписок синхронизированы")
+            try:
+                agg_rows = await upsert_agg_subscriptions_daily()
+                if agg_rows > 0:
+                    logger.info("📈 Обновлены агрегаты подписок: %s дневных срезов", agg_rows)
+            except Exception as e:
+                logger.warning("Не удалось обновить агрегаты подписок: %s", e)
         
             # Шаг 2: Удаление старых подписок (истекли более 3 дней назад)
             # Удаляет подписки со статусом deleted и их клиентов с серверов
             logger.info("🗑️ Шаг 2: Удаление старых подписок (истекли > 3 дней)...")
             await self.cleanup_expired_subscriptions(days_limit=3)
             logger.info("✅ Шаг 2 завершен: старые подписки удалены")
+
+            logger.info(
+                "🧾 Шаг 2b: Retention hard-delete для deleted подписок (>%s дней)...",
+                policy.deleted_subscriptions_retention_days,
+            )
+            deleted_count = await cleanup_deleted_subscriptions(
+                days=policy.deleted_subscriptions_retention_days,
+                dry_run=policy.dry_run,
+            )
+            if deleted_count > 0:
+                mode = "кандидатов (dry-run)" if policy.dry_run else "физически удалено"
+                logger.info("✅ Шаг 2b завершён: %s %s подписок", mode, deleted_count)
         
             # Шаг 3: Синхронизация БД → Серверы
             # Для каждой подписки (active или expired, но не deleted):
@@ -211,6 +233,7 @@ class SyncManager:
 
     async def cleanup_expired_subscriptions(self, days_limit: int = 3):
         """Удаляет подписки, которые истекли более N дней назад"""
+        policy = get_retention_policy()
         now = int(time.time())
         cutoff = now - (days_limit * 24 * 60 * 60)
         
@@ -282,9 +305,10 @@ class SyncManager:
             # 2. Удаляем из БД (полное удаление)
             # По вашей просьбе — удаляем совсем
             await update_subscription_status(sub_id, 'deleted')
-            # В реальной БД лучше просто скрыть, но мы удаляем связи
-            for s_info in servers:
-                await remove_subscription_server(sub_id, s_info['server_name'])
+            # Связи subscription_servers удаляем сразу либо откладываем до retention job (по policy).
+            if policy.subscriptions_servers_on_delete == "immediate":
+                for s_info in servers:
+                    await remove_subscription_server(sub_id, s_info['server_name'])
             await clear_subscription_notifications(sub_id)
             
             logger.info(f"Подписка {sub_id} полностью удалена")

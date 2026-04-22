@@ -363,3 +363,47 @@ async def add_counted_payment(event_id: int, referrer_user_id: str, payment_id: 
         except Exception:
             await db.rollback()
             raise
+
+
+async def cleanup_old_event_raw(days: int = 365, *, dry_run: bool = False) -> int:
+    """
+    Очищает детализацию event_counted_payments для завершенных событий старше days.
+    """
+    cutoff_iso = datetime.now(timezone.utc).timestamp() - (days * 24 * 60 * 60)
+    cutoff_dt = datetime.fromtimestamp(cutoff_iso, timezone.utc).isoformat().replace("+00:00", "Z")
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT COUNT(*)
+            FROM event_counted_payments ecp
+            JOIN events e ON e.id = ecp.event_id
+            WHERE e.end_at < ? AND ecp.paid_at < ?
+            """,
+            (cutoff_dt, cutoff_dt),
+        ) as cur:
+            row = await cur.fetchone()
+            candidate_count = row[0] if row else 0
+        if candidate_count <= 0:
+            return 0
+        if dry_run:
+            logger.info(
+                "EVENTS_RAW_CLEANUP_DRY_RUN: would delete %s event_counted_payments rows older than %s days",
+                candidate_count,
+                days,
+            )
+            return candidate_count
+        cursor = await db.execute(
+            """
+            DELETE FROM event_counted_payments
+            WHERE id IN (
+                SELECT ecp.id
+                FROM event_counted_payments ecp
+                JOIN events e ON e.id = ecp.event_id
+                WHERE e.end_at < ? AND ecp.paid_at < ?
+            )
+            """,
+            (cutoff_dt, cutoff_dt),
+        )
+        deleted_count = cursor.rowcount
+        await db.commit()
+        return deleted_count

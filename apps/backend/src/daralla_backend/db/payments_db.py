@@ -9,6 +9,29 @@ from . import DB_PATH
 
 logger = logging.getLogger(__name__)
 
+
+def _date_key_utc(unix_ts: int) -> str:
+    return datetime.datetime.utcfromtimestamp(int(unix_ts)).strftime("%Y-%m-%d")
+
+
+def _extract_amount_and_gateway(meta_raw) -> tuple[float, str]:
+    meta = {}
+    if isinstance(meta_raw, dict):
+        meta = meta_raw
+    elif isinstance(meta_raw, str):
+        try:
+            meta = json.loads(meta_raw)
+        except (TypeError, json.JSONDecodeError):
+            meta = {}
+
+    amount_raw = meta.get("price", 0)
+    try:
+        amount = float(amount_raw)
+    except (TypeError, ValueError):
+        amount = 0.0
+    gateway = str(meta.get("gateway", "yookassa") or "yookassa").strip().lower()
+    return amount, gateway
+
 async def init_payments_db():
     """Инициализирует таблицу платежей в единой БД"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -131,14 +154,108 @@ async def get_pending_payment(user_id: str, period: str = None) -> dict:
         logger.error(f"GET_PENDING_PAYMENT error: {e}")
         return None
 
-async def cleanup_old_payments(days: int = 30) -> int:
+async def upsert_agg_payments_daily_before(cutoff_ts: int) -> int:
+    """
+    Пересчитывает и upsert-ит дневные агрегаты платежей для записей старше cutoff_ts.
+    Возвращает количество затронутых дневных срезов.
+    """
+    daily = {}
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT created_at, meta
+                FROM payments
+                WHERE status = 'succeeded' AND activated = 1 AND created_at < ?
+                """,
+                (cutoff_ts,),
+            ) as cur:
+                rows = await cur.fetchall()
+
+            for row in rows:
+                day = _date_key_utc(row["created_at"])
+                amount, gateway = _extract_amount_and_gateway(row["meta"])
+                if amount <= 0:
+                    continue
+                bucket = daily.setdefault(
+                    day,
+                    {
+                        "count": 0,
+                        "revenue": 0.0,
+                        "yookassa": 0.0,
+                        "cryptocloud": 0.0,
+                    },
+                )
+                bucket["count"] += 1
+                bucket["revenue"] += amount
+                if gateway == "cryptocloud":
+                    bucket["cryptocloud"] += amount
+                else:
+                    bucket["yookassa"] += amount
+
+            if not daily:
+                return 0
+
+            now = int(datetime.datetime.now().timestamp())
+            for day, values in daily.items():
+                await db.execute(
+                    """
+                    INSERT INTO agg_payments_daily
+                        (date, succeeded_count, succeeded_revenue, yookassa_revenue, cryptocloud_revenue, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(date) DO UPDATE SET
+                        succeeded_count = excluded.succeeded_count,
+                        succeeded_revenue = excluded.succeeded_revenue,
+                        yookassa_revenue = excluded.yookassa_revenue,
+                        cryptocloud_revenue = excluded.cryptocloud_revenue,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        day,
+                        values["count"],
+                        round(values["revenue"], 2),
+                        round(values["yookassa"], 2),
+                        round(values["cryptocloud"], 2),
+                        now,
+                    ),
+                )
+            await db.commit()
+        return len(daily)
+    except aiosqlite.Error as e:
+        logger.warning("PAYMENTS_AGG_UPSERT skipped: %s", e)
+        return 0
+
+
+async def cleanup_old_payments(days: int = 30, *, dry_run: bool = False) -> int:
     try:
         cutoff = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
         async with aiosqlite.connect(DB_PATH) as db:
-            cursor = await db.execute("DELETE FROM payments WHERE created_at < ? AND status != 'pending'", (cutoff,))
-            count = cursor.rowcount
-            await db.commit()
+            async with db.execute(
+                "SELECT COUNT(*) FROM payments WHERE created_at < ? AND status != 'pending'",
+                (cutoff,),
+            ) as cur:
+                row = await cur.fetchone()
+                count = row[0] if row else 0
+        if count <= 0:
+            return 0
+
+        agg_days = await upsert_agg_payments_daily_before(cutoff)
+        if agg_days > 0:
+            logger.info("PAYMENTS_AGG_UPSERT: updated %s daily slices before cleanup", agg_days)
+
+        if dry_run:
+            logger.info("PAYMENTS_CLEANUP_DRY_RUN: would delete %s rows older than %s days", count, days)
             return count
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                "DELETE FROM payments WHERE created_at < ? AND status != 'pending'",
+                (cutoff,),
+            )
+            deleted = cursor.rowcount
+            await db.commit()
+            return deleted
     except aiosqlite.Error as e:
         logger.error(f"CLEANUP_OLD_PAYMENTS error: {e}")
         return 0

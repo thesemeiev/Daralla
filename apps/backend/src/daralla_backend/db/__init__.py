@@ -34,7 +34,7 @@ from .users_db import (
     is_known_telegram_id, mark_telegram_id_known, update_user_telegram_id,
     get_telegram_chat_id_for_notification, merge_user_into_target,
     link_telegram_to_account, reconcile_users_telegram_id_with_link,
-    rename_user_id, delete_user_completely,
+    rename_user_id, delete_user_completely, cleanup_inactive_users,
 )
 from .servers_db import (
     init_servers_db,
@@ -49,6 +49,7 @@ from .servers_db import (
     save_server_load_snapshot,
     get_server_load_averages,
     cleanup_old_server_load_history,
+    cleanup_old_server_load_history_with_policy,
     get_group_load_statistics,
     add_server_group,
     add_server_config,
@@ -83,9 +84,12 @@ from .subscriptions_db import (
     get_subscription_dynamics_data,
     get_subscription_conversion_data,
     get_conversion_data,
+    upsert_agg_subscriptions_daily,
+    cleanup_deleted_subscriptions,
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
+    cleanup_old_notification_metrics,
     get_notification_stats, get_daily_notification_stats,
     get_notification_settings, set_notification_setting,
     is_subscription_notification_sent, mark_subscription_notification_sent,
@@ -96,6 +100,7 @@ from .notifications_db import (
     get_notification_send_count, get_last_notification_send_time,
     render_structured_template,
 )
+from .aggregates_db import get_table_row_counts, cleanup_old_daily_aggregates
 async def init_all_db():
     """Инициализирует схему БД через систему миграций."""
     import aiosqlite
@@ -130,7 +135,7 @@ __all__ = [
     'get_all_pending_payments', 'get_pending_payment', 'cleanup_old_payments', 'cleanup_expired_pending_payments',
     'get_payments_by_user', 'get_revenue_by_gateway', 'get_daily_revenue',
     'get_all_user_ids', 'register_simple_user', 'is_known_user', 'get_config', 'set_config', 'get_all_config',
-    'record_notification_metrics', 'cleanup_old_notifications', 'get_notification_stats',
+    'record_notification_metrics', 'cleanup_old_notifications', 'cleanup_old_notification_metrics', 'get_notification_stats',
     'get_daily_notification_stats', 'get_notification_settings',
     'set_notification_setting', 'is_subscription_notification_sent', 'mark_subscription_notification_sent',
     'clear_subscription_notifications',
@@ -148,7 +153,7 @@ __all__ = [
     'is_known_telegram_id', 'mark_telegram_id_known', 'update_user_telegram_id',
     'get_telegram_chat_id_for_notification', 'merge_user_into_target', 'link_telegram_to_account',
     'reconcile_users_telegram_id_with_link',
-    'rename_user_id', 'delete_user_completely',
+    'rename_user_id', 'delete_user_completely', 'cleanup_inactive_users',
     'create_subscription', 'get_all_active_subscriptions', 'get_subscriptions_to_sync',
     'get_all_active_subscriptions_by_user', 'get_all_subscriptions_by_user',
     'update_subscription_status', 'update_subscription_name', 'update_subscription_expiry',
@@ -159,12 +164,14 @@ __all__ = [
     'add_subscription_server', 'remove_subscription_server',
     'get_subscription_statistics', 'get_subscription_types_statistics',
     'get_subscription_dynamics_data', 'get_subscription_conversion_data',
-    'get_conversion_data',
+    'get_conversion_data', 'upsert_agg_subscriptions_daily', 'cleanup_deleted_subscriptions',
     'init_servers_db', 'get_servers_config', 'get_server_by_id', 'get_server_groups',
     'get_least_loaded_group_id', 'check_and_run_initial_migration',
     'save_server_load_snapshot', 'get_server_load_averages', 'cleanup_old_server_load_history',
+    'cleanup_old_server_load_history_with_policy',
     'get_group_load_statistics',
     'get_default_group_id', 'resolve_group_id',
     'add_server_group', 'add_server_config', 'update_server_group', 'update_server_config',
     'delete_server_config', 'SERVER_CONFIG_UPDATE_KEYS',
+    'get_table_row_counts', 'cleanup_old_daily_aggregates',
 ]

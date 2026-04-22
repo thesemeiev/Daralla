@@ -700,6 +700,12 @@ async def delete_user_completely(user_id: str) -> dict:
             'subscriptions_deleted': 0,
             'subscription_servers_deleted': 0,
             'payments_deleted': 0,
+            'sent_notifications_deleted': 0,
+            'telegram_links_deleted': 0,
+            'link_states_deleted': 0,
+            'known_telegram_ids_deleted': 0,
+            'event_ref_codes_deleted': 0,
+            'event_counted_payments_deleted': 0,
             'user_deleted': False,
             'user_internal_id': None
         }
@@ -738,6 +744,60 @@ async def delete_user_completely(user_id: str) -> dict:
                     stats['payments_deleted'] = cur.rowcount
 
                 async with db.execute(
+                    "DELETE FROM sent_notifications WHERE user_id = ?",
+                    (user_id,),
+                ) as cur:
+                    stats['sent_notifications_deleted'] = cur.rowcount
+
+                async with db.execute(
+                    "DELETE FROM link_telegram_states WHERE user_id = ?",
+                    (user_id,),
+                ) as cur:
+                    stats['link_states_deleted'] = cur.rowcount
+
+                # Читаем telegram_id до удаления user row
+                async with db.execute(
+                    "SELECT telegram_id FROM users WHERE id = ?",
+                    (user_internal_id,),
+                ) as cur:
+                    user_row = await cur.fetchone()
+                    telegram_id = user_row[0] if user_row else None
+
+                async with db.execute(
+                    "DELETE FROM telegram_links WHERE user_id = ?",
+                    (user_id,),
+                ) as cur:
+                    stats['telegram_links_deleted'] = cur.rowcount
+
+                if telegram_id:
+                    async with db.execute(
+                        "DELETE FROM known_telegram_ids WHERE telegram_id = ?",
+                        (telegram_id,),
+                    ) as cur:
+                        stats['known_telegram_ids_deleted'] = cur.rowcount
+
+                # Events module tables (если включены/существуют)
+                async with db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_referral_codes'"
+                ) as cur:
+                    if await cur.fetchone():
+                        async with db.execute(
+                            "DELETE FROM user_referral_codes WHERE user_id = ?",
+                            (user_id,),
+                        ) as del_cur:
+                            stats['event_ref_codes_deleted'] = del_cur.rowcount
+
+                async with db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_counted_payments'"
+                ) as cur:
+                    if await cur.fetchone():
+                        async with db.execute(
+                            "DELETE FROM event_counted_payments WHERE referrer_user_id = ?",
+                            (user_id,),
+                        ) as del_cur:
+                            stats['event_counted_payments_deleted'] = del_cur.rowcount
+
+                async with db.execute(
                     "DELETE FROM users WHERE id = ?",
                     (user_internal_id,)
                 ) as cur:
@@ -749,10 +809,56 @@ async def delete_user_completely(user_id: str) -> dict:
                     f"Пользователь {user_id} полностью удален: "
                     f"{stats['subscriptions_deleted']} подписок, "
                     f"{stats['subscription_servers_deleted']} связей с серверами, "
-                    f"{stats['payments_deleted']} платежей"
+                    f"{stats['payments_deleted']} платежей, "
+                    f"{stats['sent_notifications_deleted']} уведомлений, "
+                    f"{stats['telegram_links_deleted']} telegram_links"
                 )
         except Exception as e:
             logger.error(f"Ошибка удаления пользователя {user_id}: {e}", exc_info=True)
             await db.rollback()
             raise
         return stats
+
+
+async def cleanup_inactive_users(days: int = 365, *, dry_run: bool = False) -> int:
+    """
+    Удаляет пользователей без активности старше days, у которых нет активных подписок.
+    """
+    cutoff = int(time.time()) - (days * 24 * 60 * 60)
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT u.user_id
+            FROM users u
+            WHERE u.last_seen < ?
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM subscriptions s
+                    WHERE s.subscriber_id = u.id
+                      AND s.status = 'active'
+                      AND s.expires_at > strftime('%s', 'now')
+                )
+            """,
+            (cutoff,),
+        ) as cur:
+            rows = await cur.fetchall()
+    candidates = [r["user_id"] for r in rows]
+    if not candidates:
+        return 0
+    if dry_run:
+        logger.info(
+            "INACTIVE_USERS_CLEANUP_DRY_RUN: would delete %s users inactive > %s days",
+            len(candidates),
+            days,
+        )
+        return len(candidates)
+    deleted = 0
+    for user_id in candidates:
+        try:
+            stats = await delete_user_completely(user_id)
+            if stats.get("user_deleted"):
+                deleted += 1
+        except Exception as e:
+            logger.warning("Ошибка удаления неактивного пользователя %s: %s", user_id, e)
+    return deleted

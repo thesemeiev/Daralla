@@ -152,12 +152,54 @@ async def record_notification_metrics(notification_type: str, success: bool = Tr
               1 if success else 0, 0 if success else 1, 1 if is_blocked else 0))
         await db.commit()
 
-async def cleanup_old_notifications(days: int = 30):
+async def cleanup_old_notifications(days: int = 30, *, dry_run: bool = False):
     cutoff = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "DELETE FROM sent_notifications WHERE sent_at < ? AND notification_type NOT LIKE 'rule_%'",
+        async with db.execute(
+            "SELECT COUNT(*) FROM sent_notifications WHERE sent_at < ?",
             (cutoff,),
+        ) as cur:
+            row = await cur.fetchone()
+            candidate_count = row[0] if row else 0
+        if candidate_count <= 0:
+            return 0
+        if dry_run:
+            logger.info(
+                "NOTIFICATIONS_CLEANUP_DRY_RUN: would delete %s rows older than %s days",
+                candidate_count,
+                days,
+            )
+            return candidate_count
+        cursor = await db.execute(
+            "DELETE FROM sent_notifications WHERE sent_at < ?",
+            (cutoff,),
+        )
+        deleted_count = cursor.rowcount
+        await db.commit()
+        return deleted_count
+
+
+async def cleanup_old_notification_metrics(days: int = 730, *, dry_run: bool = False) -> int:
+    cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM notification_metrics WHERE date < ?",
+            (cutoff_date,),
+        ) as cur:
+            row = await cur.fetchone()
+            candidate_count = row[0] if row else 0
+        if candidate_count <= 0:
+            return 0
+        if dry_run:
+            logger.info(
+                "NOTIFICATION_METRICS_CLEANUP_DRY_RUN: would delete %s rows before %s",
+                candidate_count,
+                cutoff_date,
+            )
+            return candidate_count
+        cursor = await db.execute(
+            "DELETE FROM notification_metrics WHERE date < ?",
+            (cutoff_date,),
         )
         deleted_count = cursor.rowcount
         await db.commit()

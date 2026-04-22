@@ -5,6 +5,8 @@ import asyncio
 import logging
 import os
 
+from daralla_backend.core.retention_policy import get_retention_policy
+from daralla_backend.utils.logging_helpers import log_event
 from daralla_backend.web.observability import inc_metric
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,9 @@ async def start_background_tasks(sync_manager, subscription_manager, notificatio
     # 4. Задача сохранения снимков нагрузки на серверы (каждые 10 минут)
     if server_manager:
         asyncio.create_task(server_load_snapshot_loop(server_manager))
+
+    # 5. Суточный maintenance: retention sweep + рост таблиц
+    asyncio.create_task(retention_maintenance_loop())
 
 async def sync_task_loop(sync_manager):
     """Полный sync: статусы, cleanup просроченных, клиенты на панелях, сироты."""
@@ -110,6 +115,7 @@ async def notifications_task_loop(notification_manager):
 async def payments_cleanup_loop():
     """Очистка просроченных платежей (pending → expired) и старых записей (раз в сутки)"""
     from ..db import cleanup_expired_pending_payments, cleanup_old_payments
+    policy = get_retention_policy()
     iteration = 0
     while True:
         try:
@@ -121,9 +127,18 @@ async def payments_cleanup_loop():
             iteration += 1
             if iteration >= 24:
                 iteration = 0
-                deleted = await cleanup_old_payments(days=30)
+                deleted = await cleanup_old_payments(
+                    days=policy.payments_retention_days,
+                    dry_run=policy.dry_run,
+                )
                 if deleted > 0:
-                    logger.info(f"Удалено {deleted} старых записей платежей (старше 30 дней)")
+                    mode = "dry-run candidates" if policy.dry_run else "deleted"
+                    logger.info(
+                        "Payments retention cleanup: %s %s rows (older than %s days)",
+                        mode,
+                        deleted,
+                        policy.payments_retention_days,
+                    )
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -135,7 +150,11 @@ async def payments_cleanup_loop():
 
 async def server_load_snapshot_loop(server_manager):
     """Периодическое сохранение снимков нагрузки на серверы для расчета средних значений"""
-    from ..db.servers_db import save_server_load_snapshot, cleanup_old_server_load_history
+    from ..db.servers_db import (
+        save_server_load_snapshot,
+        cleanup_old_server_load_history_with_policy,
+    )
+    policy = get_retention_policy()
     
     # Ждем 30 секунд после запуска бота, чтобы все инициализировалось
     await asyncio.sleep(30)
@@ -144,7 +163,10 @@ async def server_load_snapshot_loop(server_manager):
     
     # Очищаем старую историю при запуске (старше 7 дней)
     try:
-        await cleanup_old_server_load_history(days=7)
+        await cleanup_old_server_load_history_with_policy(
+            days=policy.server_load_retention_days,
+            dry_run=policy.dry_run,
+        )
     except asyncio.CancelledError:
         raise
     except Exception as e:
@@ -203,9 +225,19 @@ async def server_load_snapshot_loop(server_manager):
             current_time = time.time()
             if current_time - last_cleanup >= cleanup_interval:
                 try:
-                    await cleanup_old_server_load_history(days=7)
+                    cleaned = await cleanup_old_server_load_history_with_policy(
+                        days=policy.server_load_retention_days,
+                        dry_run=policy.dry_run,
+                    )
                     last_cleanup = current_time
-                    logger.info("Очищена старая история нагрузки на серверы (старше 7 дней)")
+                    mode = "dry-run candidates" if policy.dry_run else "cleaned"
+                    if cleaned > 0:
+                        logger.info(
+                            "Server load retention: %s %s rows older than %s days",
+                            mode,
+                            cleaned,
+                            policy.server_load_retention_days,
+                        )
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
@@ -218,3 +250,69 @@ async def server_load_snapshot_loop(server_manager):
         
         # Раз в 10 минут
         await asyncio.sleep(snapshot_interval)
+
+
+async def retention_maintenance_loop():
+    """
+    Суточная задача:
+    - cleanup deleted subscriptions / inactive users / old event raw / old daily aggregates;
+    - лог размеров ключевых таблиц для контроля роста БД.
+    """
+    from ..db import (
+        cleanup_deleted_subscriptions,
+        cleanup_inactive_users,
+        cleanup_old_daily_aggregates,
+        get_table_row_counts,
+    )
+    from ..events.db.queries import cleanup_old_event_raw
+
+    # Даем приложению и миграциям закончить старт
+    await asyncio.sleep(120)
+    while True:
+        policy = get_retention_policy()
+        try:
+            sub_deleted = await cleanup_deleted_subscriptions(
+                days=policy.deleted_subscriptions_retention_days,
+                dry_run=policy.dry_run,
+            )
+            users_deleted = await cleanup_inactive_users(
+                days=policy.auto_delete_inactive_users_days,
+                dry_run=policy.dry_run,
+            )
+            events_deleted = await cleanup_old_event_raw(
+                days=policy.events_raw_retention_days,
+                dry_run=policy.dry_run,
+            )
+            agg_deleted = await cleanup_old_daily_aggregates(
+                days=policy.daily_agg_retention_days,
+                dry_run=policy.dry_run,
+            )
+
+            mode = "dry_run" if policy.dry_run else "apply"
+            log_event(
+                logger,
+                logging.INFO,
+                "retention_maintenance_completed",
+                mode=mode,
+                subscriptions=sub_deleted,
+                users=users_deleted,
+                events_raw=events_deleted,
+                daily_aggregates=agg_deleted,
+            )
+
+            table_counts = await get_table_row_counts()
+            for table, rows in table_counts.items():
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "db_table_size",
+                    table=table,
+                    rows=rows,
+                )
+            inc_metric("background_task_success_total", task="retention_maintenance")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("Ошибка в retention maintenance loop: %s", e, exc_info=True)
+            inc_metric("background_task_error_total", task="retention_maintenance")
+        await asyncio.sleep(24 * 3600)
