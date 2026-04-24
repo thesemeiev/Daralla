@@ -28,7 +28,7 @@ from .xui_helpers import (
 logger = logging.getLogger(__name__)
 _URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 _SUPPORTED_PROTOCOLS = {"vless", "vmess", "trojan", "hysteria2", "tuic"}
-_PASSWORD_BASED_PROTOCOLS = {"trojan", "hysteria2", "tuic"}
+_PASSWORD_BASED_PROTOCOLS = {"trojan", "tuic"}
 
 # Backward-compatibility aliases for existing tests/imports.
 _flow_matches_desired = flow_matches_desired
@@ -125,6 +125,36 @@ def _apply_py3xui_request_timeout() -> None:
 
 
 class X3:
+    @staticmethod
+    def _extract_hysteria_version(inv: Any) -> Optional[int]:
+        settings = getattr(inv, "settings", None)
+        if settings is None:
+            return None
+        if isinstance(settings, dict):
+            raw = settings.get("version")
+            try:
+                return int(raw) if raw is not None else None
+            except (TypeError, ValueError):
+                return None
+        raw = getattr(settings, "version", None)
+        try:
+            return int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _normalize_protocol_name(cls, protocol: Optional[str], inv: Any = None) -> str:
+        p = (protocol or "vless").strip().lower()
+        if p in {"hy2", "hysteria2"}:
+            return "hysteria2"
+        if p == "hysteria":
+            if inv is None:
+                return "hysteria2"
+            version = cls._extract_hysteria_version(inv)
+            if version == 2:
+                return "hysteria2"
+        return p
+
     """
     Обёртка над py3xui.AsyncApi с тем же публичным интерфейсом, что и прежний X3.
     Поддерживает vpn_host, subscription_port, subscription_url для link/subscription.
@@ -297,7 +327,7 @@ class X3:
         limit_ip: int,
         flow: Optional[str],
     ) -> Dict[str, Any]:
-        protocol_norm = (protocol or "vless").strip().lower()
+        protocol_norm = X3._normalize_protocol_name(protocol, None)
         payload: Dict[str, Any] = {
             "email": str(user_email),
             "enable": True,
@@ -307,7 +337,9 @@ class X3:
             "subId": key_name or "",
             "protocol": protocol_norm,
         }
-        if protocol_norm in _PASSWORD_BASED_PROTOCOLS:
+        if protocol_norm == "hysteria2":
+            payload["auth"] = str(uuid.uuid4())[:16]
+        elif protocol_norm in _PASSWORD_BASED_PROTOCOLS:
             payload["password"] = str(uuid.uuid4())
         else:
             payload["id"] = str(uuid.uuid4())
@@ -317,7 +349,8 @@ class X3:
 
     @staticmethod
     def _extract_protocol(inv: Any) -> str:
-        return (getattr(inv, "protocol", "vless") or "vless").strip().lower()
+        raw = (getattr(inv, "protocol", "vless") or "vless").strip().lower()
+        return X3._normalize_protocol_name(raw, inv)
 
     async def _resolve_target_inbound(
         self,
@@ -336,6 +369,7 @@ class X3:
             return None, None, f"inbound_id={inbound_id} not found"
 
         preferred = (target_protocol or "").strip().lower()
+        preferred = self._normalize_protocol_name(preferred, None) if preferred else preferred
         if preferred:
             if preferred not in _SUPPORTED_PROTOCOLS:
                 return None, None, f"unsupported target_protocol={preferred}"
