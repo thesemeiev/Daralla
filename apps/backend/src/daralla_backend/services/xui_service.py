@@ -148,11 +148,10 @@ class X3:
         if p in {"hy2", "hysteria2"}:
             return "hysteria2"
         if p == "hysteria":
-            if inv is None:
-                return "hysteria2"
-            version = cls._extract_hysteria_version(inv)
-            if version == 2:
-                return "hysteria2"
+            # В 3x-ui/Xray для Hysteria2 protocol часто приходит как "hysteria"
+            # с version=2 в settings, а иногда без version в модели.
+            # Для совместимости считаем hysteria как hysteria2.
+            return "hysteria2"
         return p
 
     """
