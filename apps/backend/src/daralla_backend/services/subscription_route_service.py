@@ -94,9 +94,9 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
 
         logger.info("Подписка %s валидна, генерируем ссылки...", sub["id"])
 
-        links = await subscription_manager.build_vless_links_for_subscription(sub["id"])
+        links = await subscription_manager.build_links_for_subscription(sub["id"])
         servers = await get_subscription_servers(sub["id"])
-        logger.info("Сгенерировано %s VLESS ссылок для подписки %s", len(links), sub["id"])
+        logger.info("Сгенерировано %s ссылок для подписки %s", len(links), sub["id"])
 
         if not links:
             logger.warning("Серверов в подписке: %s", len(servers))
@@ -202,7 +202,7 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
                 logger.warning("В первой ссылке отсутствует tag!")
 
         logger.info(
-            "Возвращаем %s VLESS ссылок для подписки %s с названием группы: '%s'",
+            "Возвращаем %s ссылок для подписки %s с названием группы: '%s'",
             len(links),
             sub["id"],
             vpn_brand_name,

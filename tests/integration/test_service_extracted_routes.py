@@ -264,7 +264,7 @@ async def test_admin_commerce_update_success_contract(quart_app_with_routes: Qua
 
 
 class _FakeSubscriptionManager:
-    async def build_vless_links_for_subscription(self, sub_id):
+    async def build_links_for_subscription(self, sub_id):
         assert sub_id == 101
         return ["vless://uuid@example.com:443?encryption=none#Daralla-Test"]
 

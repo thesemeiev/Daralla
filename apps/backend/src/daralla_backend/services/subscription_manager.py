@@ -357,13 +357,14 @@ class SubscriptionManager:
             logger.error(f"Ошибка ensure_client_on_server для {server_name}: {e}")
             return False, False
 
-    async def build_vless_links_for_subscription(
+    async def build_links_for_subscription(
         self, subscription_id: int
     ) -> List[str]:
         """
-        Собирает набор VLESS-ссылок для подписки на основе subscription_servers и конфигурации серверов.
-        
-        Возвращает список VLESS ссылок для всех серверов, привязанных к подписке (без дубликатов).
+        Собирает набор ссылок подписки для всех серверов подписки.
+
+        Возвращает уникальные ссылки любых поддерживаемых панелью протоколов
+        (например, vless/vmess/trojan/hysteria2/tuic).
         """
         servers = await get_subscription_servers(subscription_id)
         # Токен подписки: при создании клиента через API панель 3x-ui может не сохранить subId (issue #3237),
@@ -447,7 +448,7 @@ class SubscriptionManager:
                                 seen_links.add(link_without_tag)
                                 links.append(plain)
                                 logger.debug(
-                                    "VLESS ссылка сгенерирована вручную: server=%s, email=%s",
+                                    "Ссылка сгенерирована вручную: server=%s, email=%s",
                                     resolved_name,
                                     client_email,
                                 )
@@ -455,7 +456,7 @@ class SubscriptionManager:
                                 logger.debug(f"Пропуск дубликата ссылки (ручная генерация) для {server_name}: {plain[:100]}...")
                         else:
                             logger.warning(
-                                "Не удалось сгенерировать VLESS ссылку для server=%s, email=%s",
+                                "Не удалось сгенерировать ссылку для server=%s, email=%s",
                                 resolved_name,
                                 client_email,
                             )
@@ -475,8 +476,12 @@ class SubscriptionManager:
                 )
                 continue
 
-        logger.info(f"Сгенерировано {len(links)} уникальных VLESS ссылок для подписки {subscription_id}")
+        logger.info(f"Сгенерировано {len(links)} уникальных ссылок для подписки {subscription_id}")
         return links
+
+    async def build_vless_links_for_subscription(self, subscription_id: int) -> List[str]:
+        """Backward-compatible alias for old call sites."""
+        return await self.build_links_for_subscription(subscription_id)
 
     async def sync_servers_with_config(self, auto_create_clients: bool = True) -> dict:
         """

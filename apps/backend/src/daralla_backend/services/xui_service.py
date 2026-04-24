@@ -8,6 +8,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -25,6 +26,7 @@ from .xui_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+_URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
 # Backward-compatibility aliases for existing tests/imports.
 _flow_matches_desired = flow_matches_desired
@@ -897,29 +899,30 @@ class X3:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                if "vless://" in line or "vmess://" in line or "trojan://" in line:
-                    if flow_override and "vless://" in line:
-                        try:
-                            parsed = urlparse(line)
-                            qs = parse_qs(parsed.query)
-                            qs["flow"] = [flow_override]
-                            new_query = urlencode(qs, doseq=True)
-                            line = urlunparse(
-                                (
-                                    parsed.scheme,
-                                    parsed.netloc,
-                                    parsed.path,
-                                    parsed.params,
-                                    new_query,
-                                    parsed.fragment,
-                                )
+                if not _URI_SCHEME_RE.match(line):
+                    continue
+                if flow_override and line.startswith("vless://"):
+                    try:
+                        parsed = urlparse(line)
+                        qs = parse_qs(parsed.query)
+                        qs["flow"] = [flow_override]
+                        new_query = urlencode(qs, doseq=True)
+                        line = urlunparse(
+                            (
+                                parsed.scheme,
+                                parsed.netloc,
+                                parsed.path,
+                                parsed.params,
+                                new_query,
+                                parsed.fragment,
                             )
-                        except Exception:
-                            pass
-                    if server_name and "#" in line:
-                        pre, _, frag = line.partition("#")
-                        line = f"{pre}#{quote(server_name, safe='')}"
-                    links.append(line)
+                        )
+                    except Exception:
+                        pass
+                if server_name and "#" in line:
+                    pre, _, frag = line.partition("#")
+                    line = f"{pre}#{quote(server_name, safe='')}"
+                links.append(line)
             if not links and raw:
                 logger.debug(
                     "Subscription endpoint вернул тело без vless/vmess/trojan: url=%s body_len=%s",
