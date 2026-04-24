@@ -27,6 +27,12 @@ def test_panel_client_settings_dict_sets_flow_override():
     assert out["flow"] == "xtls-rprx-vision"
 
 
+def test_panel_client_settings_dict_drops_flow_for_non_vless():
+    client = {"email": "u_1", "protocol": "hysteria2", "flow": "xtls-rprx-vision"}
+    out = panel_client_settings_dict(client, flow_override="xtls-rprx-vision")
+    assert "flow" not in out
+
+
 def test_panel_snapshot_matches_desired_true_on_equal_snapshot():
     snapshot = {"on_panel": True, "expiry_sec": 1000, "limit_ip": 3, "flow": "xtls-rprx-vision"}
     assert panel_snapshot_matches_desired(snapshot, 1000, 3, "xtls-rprx-vision") is True

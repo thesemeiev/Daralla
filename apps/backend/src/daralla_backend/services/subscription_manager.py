@@ -208,6 +208,23 @@ class SubscriptionManager:
             # Flow из конфига сервера — передаём при любом обновлении клиента, чтобы не слетал в X-UI
             server_config = self.server_manager.get_server_config(server_name)
             client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
+            protocol_aware_enabled = os.getenv("DARALLA_PROTOCOL_AWARE_SYNC", "1").strip() != "0"
+            target_protocol = (
+                (server_config.get("client_protocol") or server_config.get("protocol") or "").strip().lower()
+                if server_config
+                else ""
+            ) or None
+            target_inbound_id = None
+            if server_config:
+                raw_inbound_id = server_config.get("client_inbound_id")
+                if raw_inbound_id is not None and str(raw_inbound_id).strip():
+                    try:
+                        target_inbound_id = int(raw_inbound_id)
+                    except (TypeError, ValueError):
+                        target_inbound_id = None
+            if not protocol_aware_enabled:
+                target_protocol = None
+                target_inbound_id = None
             
             if panel_entry is not None:
                 on_panel = bool(panel_entry.get("on_panel"))
@@ -238,6 +255,8 @@ class SubscriptionManager:
                         expiry_sec=expires_at,
                         limit_ip=device_limit,
                         flow_from_config=client_flow,
+                        target_protocol=target_protocol,
+                        target_inbound_id=target_inbound_id,
                     )
                     if not ok:
                         logger.warning(
@@ -274,6 +293,8 @@ class SubscriptionManager:
                             expiry_sec=expires_at,
                             limit_ip=device_limit,
                             flow_from_config=client_flow,
+                            target_protocol=target_protocol,
+                            target_inbound_id=target_inbound_id,
                         )
                         if not ok:
                             return False, False
@@ -298,10 +319,25 @@ class SubscriptionManager:
                         timeout=15,
                         key_name=token,
                         limit_ip=device_limit,
-                        flow=client_flow
+                        flow=client_flow,
+                        target_protocol=target_protocol,
+                        inbound_id=target_inbound_id,
                     )
-                    
-                    if created:
+                    created_ok = bool(created.get("ok")) if isinstance(created, dict) else bool(created)
+                    if not created_ok and isinstance(created, dict):
+                        reason = created.get("reason", "unknown")
+                        logger.warning(
+                            "Создание клиента пропущено/неуспешно: server=%s email=%s protocol=%s inbound_id=%s reason=%s detail=%s",
+                            server_name,
+                            client_email,
+                            target_protocol or "auto",
+                            target_inbound_id,
+                            reason,
+                            created.get("detail"),
+                        )
+                        return False, False
+
+                    if created_ok:
                         logger.info(f"Клиент {client_email} успешно создан на сервере {server_name}")
 
                         # ВАЖНО: Устанавливаем точное время истечения из БД
@@ -322,6 +358,8 @@ class SubscriptionManager:
                                     expiry_sec=expires_at,
                                     limit_ip=device_limit,
                                     flow_from_config=client_flow,
+                                    target_protocol=target_protocol,
+                                    target_inbound_id=target_inbound_id,
                                 )
                                 if ok_rec:
                                     break
@@ -514,6 +552,8 @@ class SubscriptionManager:
             "servers_removed": 0,
             "clients_created": 0,
             "clients_restored": 0,
+            "ensure_skipped_unsupported": 0,
+            "ensure_failed_protocol": 0,
             "clients_deleted_strict": 0,
             "total_servers_checked": 0,
             "total_servers_synced": 0,
@@ -803,6 +843,11 @@ class SubscriptionManager:
                         stats["errors"].append(
                             f"Подписка {t['subscription_id']}, server {t['server_name']}: {outcome}"
                         )
+                        msg = str(outcome).lower()
+                        if "unsupported_protocol" in msg:
+                            stats["ensure_skipped_unsupported"] += 1
+                        if "protocol" in msg:
+                            stats["ensure_failed_protocol"] += 1
                         continue
                     client_exists, client_created = outcome
                     if not client_exists:
@@ -810,6 +855,7 @@ class SubscriptionManager:
                             f"Подписка {t['subscription_id']}, server {t['server_name']}: "
                             f"ensure_client_on_server вернул client_exists=False"
                         )
+                        stats["ensure_failed_protocol"] += 1
                         continue
                     if client_created:
                         stats["clients_created"] += 1
@@ -830,6 +876,8 @@ class SubscriptionManager:
             f"удалено {stats['servers_removed']} серверов, "
             f"создано {stats['clients_created']} клиентов, "
             f"восстановлено {stats['clients_restored']} клиентов, "
+            f"пропущено unsupported {stats['ensure_skipped_unsupported']}, "
+            f"ошибок протокола {stats['ensure_failed_protocol']}, "
             f"удалено лишних (strict) {stats['clients_deleted_strict']} клиентов, "
             f"серверов (ensure) {stats['total_servers_checked']}, "
             f"ошибок {len(stats['errors'])}"

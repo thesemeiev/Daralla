@@ -27,6 +27,8 @@ from .xui_helpers import (
 
 logger = logging.getLogger(__name__)
 _URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+_SUPPORTED_PROTOCOLS = {"vless", "vmess", "trojan", "hysteria2", "tuic"}
+_PASSWORD_BASED_PROTOCOLS = {"trojan", "hysteria2", "tuic"}
 
 # Backward-compatibility aliases for existing tests/imports.
 _flow_matches_desired = flow_matches_desired
@@ -284,6 +286,74 @@ class X3:
                     return getattr(inv, "id", None)
         return None
 
+    @staticmethod
+    def _build_protocol_client_payload(
+        *,
+        protocol: str,
+        user_email: str,
+        tg_id: str,
+        key_name: str,
+        expiry_ms: int,
+        limit_ip: int,
+        flow: Optional[str],
+    ) -> Dict[str, Any]:
+        protocol_norm = (protocol or "vless").strip().lower()
+        payload: Dict[str, Any] = {
+            "email": str(user_email),
+            "enable": True,
+            "limitIp": int(limit_ip),
+            "expiryTime": int(expiry_ms),
+            "tgId": str(tg_id),
+            "subId": key_name or "",
+            "protocol": protocol_norm,
+        }
+        if protocol_norm in _PASSWORD_BASED_PROTOCOLS:
+            payload["password"] = str(uuid.uuid4())
+        else:
+            payload["id"] = str(uuid.uuid4())
+        if protocol_norm == "vless":
+            payload["flow"] = (str(flow).strip() if flow and str(flow).strip() else "")
+        return payload
+
+    @staticmethod
+    def _extract_protocol(inv: Any) -> str:
+        return (getattr(inv, "protocol", "vless") or "vless").strip().lower()
+
+    async def _resolve_target_inbound(
+        self,
+        *,
+        inbounds: List[Any],
+        target_protocol: Optional[str],
+        inbound_id: Optional[int],
+    ) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+        if inbound_id is not None:
+            for inv in inbounds:
+                if getattr(inv, "id", None) == inbound_id:
+                    protocol = self._extract_protocol(inv)
+                    if protocol not in _SUPPORTED_PROTOCOLS:
+                        return None, None, f"unsupported protocol for inbound_id={inbound_id}: {protocol}"
+                    return int(inbound_id), protocol, None
+            return None, None, f"inbound_id={inbound_id} not found"
+
+        preferred = (target_protocol or "").strip().lower()
+        if preferred:
+            if preferred not in _SUPPORTED_PROTOCOLS:
+                return None, None, f"unsupported target_protocol={preferred}"
+            for inv in inbounds:
+                protocol = self._extract_protocol(inv)
+                if protocol == preferred:
+                    resolved_id = getattr(inv, "id", None)
+                    if resolved_id is not None:
+                        return int(resolved_id), protocol, None
+            return None, None, f"no inbound with protocol={preferred}"
+
+        for inv in inbounds:
+            protocol = self._extract_protocol(inv)
+            resolved_id = getattr(inv, "id", None)
+            if resolved_id is not None and protocol in _SUPPORTED_PROTOCOLS:
+                return int(resolved_id), protocol, None
+        return None, None, "no supported inbound found"
+
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def addClient(
         self,
@@ -296,54 +366,40 @@ class X3:
         inbound_id: Optional[int] = None,
         limit_ip: Optional[int] = None,
         flow: Optional[str] = None,
+        target_protocol: Optional[str] = None,
     ) -> Any:
         await self._ensure_login()
         inbounds = await self._api.inbound.get_list()
         if not inbounds:
-            raise Exception("Список inbounds пуст")
-        first = inbounds[0]
-        if inbound_id is None:
-            inbound_id = getattr(first, "id", None) or 1
-        protocol = "vless"
-        for inv in inbounds:
-            if getattr(inv, "id", None) == inbound_id:
-                protocol = (getattr(inv, "protocol", "vless") or "vless").lower()
-                break
+            return {"ok": False, "reason": "no_inbounds"}
+        inbound_id_resolved, protocol, resolve_error = await self._resolve_target_inbound(
+            inbounds=inbounds,
+            target_protocol=target_protocol,
+            inbound_id=inbound_id,
+        )
+        if inbound_id_resolved is None or protocol is None:
+            return {"ok": False, "reason": "unsupported_protocol", "detail": resolve_error}
 
         if hours is not None:
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (hours * 3600000)
         else:
             x_time = int(datetime.datetime.now().timestamp() * 1000) + (86400000 * day)
         limit_ip_value = limit_ip if limit_ip is not None else 1
-        client_uuid = str(uuid.uuid4())
-        flow_val = (str(flow).strip() if flow and str(flow).strip() else "")
-
-        if protocol == "trojan":
-            new_client = Py3xuiClient(
-                id=client_uuid,
-                email=str(user_email),
-                enable=True,
-                password=client_uuid,
-                limit_ip=limit_ip_value,
-                expiry_time=x_time,
-                tg_id=str(tg_id),
-                sub_id=key_name or "",
-                flow=flow_val,
-            )
-        else:
-            new_client = Py3xuiClient(
-                id=client_uuid,
-                email=str(user_email),
-                enable=True,
-                limit_ip=limit_ip_value,
-                expiry_time=x_time,
-                tg_id=str(tg_id),
-                sub_id=key_name or "",
-                flow=flow_val,
-            )
-        await self._post_inbound_add_clients(int(inbound_id), [new_client])
-        # Успех сигнализируется отсутствием исключения
-        return True
+        payload = self._build_protocol_client_payload(
+            protocol=protocol,
+            user_email=user_email,
+            tg_id=tg_id,
+            key_name=key_name,
+            expiry_ms=x_time,
+            limit_ip=limit_ip_value,
+            flow=flow,
+        )
+        await self._post_inbound_add_clients(int(inbound_id_resolved), [payload])
+        return {
+            "ok": True,
+            "protocol": protocol,
+            "inbound_id": int(inbound_id_resolved),
+        }
 
     @staticmethod
     def _ensure_client_id_for_update(c: Any) -> Any:
@@ -400,6 +456,8 @@ class X3:
         expiry_sec: int,
         limit_ip: int,
         flow_from_config: Optional[str],
+        target_protocol: Optional[str] = None,
+        target_inbound_id: Optional[int] = None,
     ) -> Tuple[bool, bool]:
         """
         Выставляет на панели целевые expiry, limit_ip и flow (как в конфиге сервера).
@@ -420,10 +478,16 @@ class X3:
         needle = str(user_email).strip()
 
         inbounds = await self._api.inbound.get_list()
+        wanted_protocol = (target_protocol or "").strip().lower()
         work_items: List[Tuple[int, Any]] = []
         for inv in inbounds:
             inv_id = getattr(inv, "id", None)
             if inv_id is None:
+                continue
+            inv_protocol = self._extract_protocol(inv)
+            if target_inbound_id is not None and int(inv_id) != int(target_inbound_id):
+                continue
+            if wanted_protocol and inv_protocol != wanted_protocol:
                 continue
             settings = getattr(inv, "settings", None)
             clients = getattr(settings, "clients", None) or []
@@ -456,9 +520,13 @@ class X3:
 
         c.expiry_time = exp_ms
         c.limit_ip = li
-        c.flow = want_flow
+        if not wanted_protocol or wanted_protocol == "vless":
+            c.flow = want_flow
         self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(c, flow_override=want_flow)
+        await self._post_inbound_update_client(
+            c,
+            flow_override=want_flow if (not wanted_protocol or wanted_protocol == "vless") else None,
+        )
         return True, True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))

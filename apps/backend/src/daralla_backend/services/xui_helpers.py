@@ -45,16 +45,24 @@ def dedupe_flow_json_key(d: Dict[str, Any]) -> None:
 
 def panel_client_settings_dict(c: Any, flow_override: Optional[str] = None) -> Dict[str, Any]:
     """Build clients[] payload for addClient/updateClient."""
-    if hasattr(c, "model_dump"):
+    if isinstance(c, dict):
+        d = dict(c)
+    elif hasattr(c, "model_dump"):
         d = c.model_dump(by_alias=True, mode="json", exclude_defaults=False)
     else:
         d = {}
     dedupe_flow_json_key(d)
-    if flow_override is not None:
+    # flow релевантен только для VLESS/XTLS сценариев; для прочих протоколов
+    # (например hysteria2/tuic) не добавляем лишние поля.
+    protocol = str(d.get("protocol", "") or "").strip().lower()
+    supports_flow = protocol in ("", "vless")
+    if flow_override is not None and supports_flow:
         d["flow"] = str(flow_override).strip() if str(flow_override).strip() else ""
-    else:
+    elif supports_flow:
         fv = getattr(c, "flow", None)
         d["flow"] = "" if fv is None else str(fv).strip()
+    else:
+        d.pop("flow", None)
     return d
 
 

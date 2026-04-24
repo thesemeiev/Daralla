@@ -124,3 +124,27 @@ async def test_ensure_client_on_server_creates_client_when_addClient_succeeds(
     )
     mock_xui_for_ensure.addClient.assert_awaited_once()
     assert mock_xui_for_ensure.reconcile_client.await_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_client_on_server_handles_protocol_unsupported_gracefully(
+    server_manager_for_ensure, mock_xui_for_ensure
+):
+    mock_xui_for_ensure.addClient = AsyncMock(
+        return_value={"ok": False, "reason": "unsupported_protocol", "detail": "no inbound with protocol=hysteria2"}
+    )
+    subscription_manager = SubscriptionManager(server_manager_for_ensure)
+    # Имитация policy в конфиге ноды: hy2-only, но без подходящего inbound.
+    server_manager_for_ensure.servers[0]["config"]["protocol"] = "hysteria2"
+
+    result = await subscription_manager.ensure_client_on_server(
+        subscription_id=1,
+        server_name="srv1",
+        client_email="user@test",
+        user_id="123",
+        expires_at=2000000000,
+        token="sub_token",
+        device_limit=1,
+    )
+
+    assert result == (False, False)
