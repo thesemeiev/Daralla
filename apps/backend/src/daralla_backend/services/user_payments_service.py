@@ -55,7 +55,15 @@ async def fetch_payment_by_id(payment_id: str):
     return await get_payment_by_id(payment_id)
 
 
-async def create_user_payment(user_id: str, period: str, subscription_id, referrer_code: str, gateway: str, logger):
+async def create_user_payment(
+    user_id: str,
+    period: str,
+    subscription_id,
+    referrer_code: str,
+    gateway: str,
+    gateway_method: str,
+    logger,
+):
     if not period or period not in ("month", "3month"):
         raise UserPaymentServiceError('Invalid period. Use "month" or "3month"', 400)
     if gateway not in ("yookassa", "cryptocloud", "platega"):
@@ -199,8 +207,17 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             raise UserPaymentServiceError("Platega redirect URLs are not configured", 503)
 
         amount_rub = float(PRICES[period])
+        normalized_method = (gateway_method or "").strip().lower()
+        platega_method = PLATEGA_PAYMENT_METHOD
+        platega_method_label = "custom"
+        if normalized_method == "sbp":
+            platega_method = 2
+            platega_method_label = "sbp"
+        elif normalized_method == "crypto":
+            platega_method = 13
+            platega_method_label = "crypto"
         payload = {
-            "paymentMethod": PLATEGA_PAYMENT_METHOD,
+            "paymentMethod": platega_method,
             "paymentDetails": {"amount": amount_rub, "currency": PLATEGA_CURRENCY},
             "description": f"VPN {period} для {user_id}",
             "return": return_url,
@@ -209,9 +226,10 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
         }
         target_url = f"{PLATEGA_BASE_URL}{PLATEGA_CREATE_PATH}"
         logger.info(
-            "Platega create transaction request: url=%s method=%s currency=%s",
+            "Platega create transaction request: url=%s method=%s method_label=%s currency=%s",
             target_url,
-            PLATEGA_PAYMENT_METHOD,
+            platega_method,
+            platega_method_label,
             PLATEGA_CURRENCY,
         )
 
@@ -263,6 +281,7 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             raise UserPaymentServiceError("Invalid Platega response", 502)
 
         payment_meta_base["gateway"] = "platega"
+        payment_meta_base["gateway_method"] = platega_method_label
         await create_pending_payment(
             payment_id=str(transaction_id).strip(),
             user_id=user_id,
@@ -275,6 +294,7 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             "amount": price,
             "period": period,
             "gateway": "platega",
+            "gateway_method": platega_method_label,
         }
 
     from yookassa import Payment

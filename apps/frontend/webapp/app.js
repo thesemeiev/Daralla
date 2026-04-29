@@ -138,6 +138,7 @@ let currentExtendSubscriptionId = appState.currentExtendSubscriptionId;
 let currentPaymentData = appState.currentPaymentData;
 let currentPaymentPeriod = appState.currentPaymentPeriod;
 let currentPaymentGateway = appState.currentPaymentGateway || 'yookassa';
+let currentPlategaPaymentMethod = appState.currentPlategaPaymentMethod || 'sbp';
 let isAdmin = appState.isAdmin;
 let currentAdminUserPage = appState.currentAdminUserPage;
 let currentAdminUserSearch = appState.currentAdminUserSearch;
@@ -184,6 +185,7 @@ var appFeatures = window.DarallaAppComposition.create({
     onBuySubscription: function () {
         currentPaymentPeriod = 'month';
         currentPaymentGateway = 'yookassa';
+        currentPlategaPaymentMethod = 'sbp';
         currentExtendSubscriptionId = null;
         resetCheckoutPaymentState();
         showPage('choose-payment-method');
@@ -250,6 +252,8 @@ var appFeatures = window.DarallaAppComposition.create({
     getCurrentPaymentPeriod: function () { return currentPaymentPeriod; },
     setCurrentPaymentGateway: function (value) { currentPaymentGateway = value; },
     getCurrentPaymentGateway: function () { return currentPaymentGateway; },
+    setCurrentPlategaPaymentMethod: function (value) { currentPlategaPaymentMethod = value; },
+    getCurrentPlategaPaymentMethod: function () { return currentPlategaPaymentMethod; },
     isHttpUrl: function (value) { return isHttpUrl(value); },
     getReferralCodeFromCurrentPage: function () { return getReferralCodeFromCurrentPage(); },
     hideFormMessage: function (container) { return hideFormMessage(container); },
@@ -388,6 +392,7 @@ function applyRoute(route, isAuthenticated, isAdmin) {
     if (route.pageName === 'buy-subscription') {
         currentPaymentPeriod = 'month';
         currentPaymentGateway = 'yookassa';
+        currentPlategaPaymentMethod = 'sbp';
         currentExtendSubscriptionId = null;
         resetCheckoutPaymentState();
         showPage('choose-payment-method');
@@ -2277,6 +2282,8 @@ function syncChooseOptionCards() {
     if (!container) return;
     var periodRow = container.querySelector('.choose-options-row[aria-label="Период подписки"]');
     var paymentRow = container.querySelector('.choose-options-row[aria-label="Способ оплаты"]');
+    var plategaMethodBlock = document.getElementById('choose-platega-method-block');
+    var plategaMethodRow = plategaMethodBlock && plategaMethodBlock.querySelector('.choose-options-row[aria-label="Метод оплаты Platega"]');
     var submitBtn = document.getElementById('choose-payment-submit');
     if (!periodRow || !paymentRow) return;
 
@@ -2308,6 +2315,18 @@ function syncChooseOptionCards() {
             card.classList.toggle('choose-option-card-selected', isSelected);
             card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
+        if (plategaMethodBlock) plategaMethodBlock.style.display = g === 'platega' ? '' : 'none';
+    }
+
+    function setPlategaMethod(method) {
+        var resolved = method === 'crypto' ? 'crypto' : 'sbp';
+        currentPlategaPaymentMethod = resolved;
+        if (!plategaMethodRow) return;
+        plategaMethodRow.querySelectorAll('.choose-option-card[data-platega-method]').forEach(function (card) {
+            var isSelected = card.getAttribute('data-platega-method') === resolved;
+            card.classList.toggle('choose-option-card-selected', isSelected);
+            card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
     }
 
     periodRow.querySelectorAll('.choose-option-card[data-period]').forEach(function (card) {
@@ -2320,9 +2339,17 @@ function syncChooseOptionCards() {
         card._gatewayClick = function () { setGateway(card.getAttribute('data-gateway')); };
         card.addEventListener('click', card._gatewayClick);
     });
+    if (plategaMethodRow) {
+        plategaMethodRow.querySelectorAll('.choose-option-card[data-platega-method]').forEach(function (card) {
+            card.removeEventListener('click', card._plategaMethodClick);
+            card._plategaMethodClick = function () { setPlategaMethod(card.getAttribute('data-platega-method')); };
+            card.addEventListener('click', card._plategaMethodClick);
+        });
+    }
 
     setPeriod(currentPaymentPeriod || 'month');
     setGateway(currentPaymentGateway || 'yookassa');
+    setPlategaMethod(currentPlategaPaymentMethod || 'sbp');
     updatePayButtonText();
 }
 
@@ -2343,8 +2370,14 @@ function bindChoosePaymentSubmit() {
             if (selectedGateway === 'cryptocloud') gateway = 'cryptocloud';
             if (selectedGateway === 'platega') gateway = 'platega';
         }
+        var gatewayMethod = null;
+        if (gateway === 'platega') {
+            var methodCard = container && container.querySelector('.choose-option-card[data-platega-method].choose-option-card-selected');
+            gatewayMethod = methodCard ? methodCard.getAttribute('data-platega-method') : (currentPlategaPaymentMethod || 'sbp');
+            currentPlategaPaymentMethod = gatewayMethod === 'crypto' ? 'crypto' : 'sbp';
+        }
         currentPaymentGateway = gateway;
-        createPayment(period, currentExtendSubscriptionId, gateway);
+        createPayment(period, currentExtendSubscriptionId, gateway, gatewayMethod);
     });
 }
 

@@ -234,8 +234,23 @@
                     <button type="button" class="choose-option-card" data-gateway="platega" aria-pressed="false">
                         <span class="choose-option-icon">P</span>
                         <span class="choose-option-title">Platega</span>
-                        <span class="choose-option-sub">СБП, карты</span>
+                        <span class="choose-option-sub">СБП, Крипта</span>
                     </button>
+                </div>
+                <div id="choose-platega-method-block" style="display: none;">
+                    <p class="choose-section-label" style="margin-top: 20px;">Метод в Platega</p>
+                    <div class="choose-options-row" role="group" aria-label="Метод оплаты Platega">
+                        <button type="button" class="choose-option-card choose-option-card-selected" data-platega-method="sbp" aria-pressed="true">
+                            <span class="choose-option-icon">₽</span>
+                            <span class="choose-option-title">СБП</span>
+                            <span class="choose-option-sub">QR и банковские приложения</span>
+                        </button>
+                        <button type="button" class="choose-option-card" data-platega-method="crypto" aria-pressed="false">
+                            <span class="choose-option-icon">₿</span>
+                            <span class="choose-option-title">Крипта</span>
+                            <span class="choose-option-sub">Через Platega</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="choose-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px;">
                     <label class="form-group" style="margin-bottom: 0;">

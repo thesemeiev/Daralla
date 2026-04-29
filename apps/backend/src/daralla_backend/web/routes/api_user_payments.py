@@ -24,23 +24,26 @@ async def handle_api_user_payment_create(_auth, logger):
         subscription_id = data.get("subscription_id")
         referrer_code = (data.get("referrer_code") or "").strip()
         gateway = (data.get("gateway") or "yookassa").strip().lower()
+        gateway_method = (data.get("gateway_method") or "").strip().lower()
         payload = await create_user_payment(
             user_id=user_id,
             period=period,
             subscription_id=subscription_id,
             referrer_code=referrer_code,
             gateway=gateway,
+            gateway_method=gateway_method,
             logger=logger,
         )
         return jsonify(payload), 200, _cors_headers()
     except UserPaymentServiceError as e:
         safe_data = data if isinstance(data, dict) else {}
         logger.warning(
-            "payment_create_failed: status=%s error=%s user_id=%s gateway=%s period=%s subscription_id=%s",
+            "payment_create_failed: status=%s error=%s user_id=%s gateway=%s gateway_method=%s period=%s subscription_id=%s",
             e.status_code,
             e.message,
             user_id if "user_id" in locals() else None,
             safe_data.get("gateway"),
+            safe_data.get("gateway_method"),
             safe_data.get("period"),
             safe_data.get("subscription_id"),
         )

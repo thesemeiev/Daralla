@@ -13,6 +13,7 @@
             currentPaymentData: null,
             currentPaymentPeriod: null,
             currentPaymentGateway: 'yookassa',
+            currentPlategaPaymentMethod: 'sbp',
             isAdmin: false,
             currentAdminUserPage: 1,
             currentAdminUserSearch: '',

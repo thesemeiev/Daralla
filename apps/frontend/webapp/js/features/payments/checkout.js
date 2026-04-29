@@ -53,12 +53,13 @@
             _deps.showPage('choose-payment-method');
         }
 
-        async function createPayment(period, subscriptionId, gateway) {
+        async function createPayment(period, subscriptionId, gateway, gatewayMethod) {
             if (subscriptionId === undefined) subscriptionId = null;
             if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud' && gateway !== 'platega')) gateway = 'yookassa';
             try {
                 var referrerCode = _deps.getReferralCodeFromCurrentPage();
                 var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
+                if (gateway === 'platega' && gatewayMethod) body.gateway_method = String(gatewayMethod);
                 if (referrerCode) body.referrer_code = referrerCode;
 
                 _deps.setCurrentPaymentData(null);
@@ -110,6 +111,7 @@
                     amount: data.amount,
                     period: data.period,
                     gateway: gateway,
+                    gateway_method: data.gateway_method || body.gateway_method || null,
                     extend_subscription_id: subscriptionId || null
                 });
                 showPaymentPage();
@@ -188,7 +190,12 @@
             if (hintEl) {
                 if (gw === 'yookassa') hintEl.textContent = 'Оплата откроется на сайте ЮKassa в браузере. После оплаты вы вернётесь в приложение — статус проверится автоматически.';
                 else if (gw === 'cryptocloud') hintEl.textContent = 'Оплата на странице CryptoCloud в браузере. Счёт действителен 15 минут; статус обновится после зачисления.';
-                else if (gw === 'platega') hintEl.textContent = 'Оплата откроется на странице Platega в браузере. После завершения статус обновится автоматически.';
+                else if (gw === 'platega') {
+                    var pgMethod = String(currentPaymentData.gateway_method || '').trim().toLowerCase();
+                    hintEl.textContent = pgMethod === 'crypto'
+                        ? 'Оплата криптой откроется на странице Platega в браузере. После завершения статус обновится автоматически.'
+                        : 'Оплата через СБП откроется на странице Platega в браузере. После завершения статус обновится автоматически.';
+                }
                 else hintEl.textContent = 'Ссылка действительна 15 минут';
             }
 
