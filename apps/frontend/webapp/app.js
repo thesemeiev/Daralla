@@ -139,6 +139,10 @@ let currentPaymentData = appState.currentPaymentData;
 let currentPaymentPeriod = appState.currentPaymentPeriod;
 let currentPaymentGateway = appState.currentPaymentGateway || 'yookassa';
 let currentPlategaPaymentMethod = appState.currentPlategaPaymentMethod || 'sbp';
+let paymentTariffs = [
+    { period: 'month', title: '1 месяц', days: 30, price: 150, badge: '' },
+    { period: '3month', title: '3 месяца', days: 90, price: 350, badge: 'best' }
+];
 let isAdmin = appState.isAdmin;
 let currentAdminUserPage = appState.currentAdminUserPage;
 let currentAdminUserSearch = appState.currentAdminUserSearch;
@@ -157,6 +161,11 @@ let currentAdminGroups = appState.currentAdminGroups;
 let currentAdminServers = appState.currentAdminServers;
 let currentSelectedGroupId = appState.currentSelectedGroupId;
 let adminServerReorderMode = appState.adminServerReorderMode;
+
+function getDefaultPaymentPeriod() {
+    var firstTariff = paymentTariffs && paymentTariffs.length ? paymentTariffs[0] : null;
+    return firstTariff && firstTariff.period ? String(firstTariff.period) : 'month';
+}
 
 var appFeatures = window.DarallaAppComposition.create({
     onRemoveAuthToken: function (token) { webAuthToken = token; },
@@ -183,7 +192,7 @@ var appFeatures = window.DarallaAppComposition.create({
     initTelegramFlow: function () { return initTelegramFlow(); },
     setCurrentSubscriptionDetail: function (value) { currentSubscriptionDetail = value; },
     onBuySubscription: function () {
-        currentPaymentPeriod = 'month';
+        currentPaymentPeriod = getDefaultPaymentPeriod();
         currentPaymentGateway = 'yookassa';
         currentPlategaPaymentMethod = 'sbp';
         currentExtendSubscriptionId = null;
@@ -390,7 +399,7 @@ function applyRoute(route, isAuthenticated, isAdmin) {
         return true;
     }
     if (route.pageName === 'buy-subscription') {
-        currentPaymentPeriod = 'month';
+        currentPaymentPeriod = getDefaultPaymentPeriod();
         currentPaymentGateway = 'yookassa';
         currentPlategaPaymentMethod = 'sbp';
         currentExtendSubscriptionId = null;
@@ -626,7 +635,7 @@ function showPage(pageName, params) {
     } else if (pageName === 'admin-notifications') {
         loadNotificationRules();
     } else if (pageName === 'choose-payment-method') {
-        currentPaymentPeriod = currentPaymentPeriod || 'month';
+        currentPaymentPeriod = currentPaymentPeriod || getDefaultPaymentPeriod();
         updateReferralCodeBlockVisibility();
         syncChooseOptionCards();
         bindChoosePaymentSubmit();
@@ -2300,10 +2309,10 @@ function syncChooseOptionCards() {
     }
 
     function updatePayButtonText() {
-        var period = currentPaymentPeriod === '3month' ? '3month' : 'month';
-        var periodPriceEl = periodRow.querySelector('.choose-option-card[data-period="' + period + '"] .choose-option-price');
+        var selectedPeriodCard = periodRow.querySelector('.choose-option-card[data-period].choose-option-card-selected');
+        var periodPriceEl = selectedPeriodCard && selectedPeriodCard.querySelector('.choose-option-price');
         var priceText = periodPriceEl ? String(periodPriceEl.textContent || '').trim() : '';
-        if (!priceText) priceText = period === '3month' ? '350₽' : '150₽';
+        if (!priceText) priceText = '—';
         if (submitBtn) submitBtn.textContent = 'Создать платёж ' + priceText;
         if (summaryPriceEl) summaryPriceEl.textContent = priceText;
     }
@@ -2317,8 +2326,9 @@ function syncChooseOptionCards() {
     }
 
     function updateSummary() {
-        var period = currentPaymentPeriod === '3month' ? '3month' : 'month';
-        if (summaryPeriodEl) summaryPeriodEl.textContent = period === '3month' ? '3 месяца' : '1 месяц';
+        var periodCard = periodRow.querySelector('.choose-option-card[data-period].choose-option-card-selected');
+        var periodTitleEl = periodCard && periodCard.querySelector('.choose-option-title');
+        if (summaryPeriodEl) summaryPeriodEl.textContent = periodTitleEl ? String(periodTitleEl.textContent || '').trim() : (currentPaymentPeriod || '—');
         if (summaryTypeEl) summaryTypeEl.textContent = getCurrentPaymentType() === 'crypto' ? 'Крипта' : 'Рубли';
         if (summaryProviderEl) summaryProviderEl.textContent = providerLabel(currentPaymentGateway || 'yookassa');
         if (plategaProviderSubEl) {
@@ -2334,7 +2344,14 @@ function syncChooseOptionCards() {
     }
 
     function setPeriod(period) {
-        currentPaymentPeriod = period === '3month' ? '3month' : 'month';
+        var availablePeriods = Array.from(periodRow.querySelectorAll('.choose-option-card[data-period]')).map(function (card) {
+            return String(card.getAttribute('data-period') || '').trim();
+        }).filter(Boolean);
+        var targetPeriod = String(period || '').trim().toLowerCase();
+        if (!targetPeriod || availablePeriods.indexOf(targetPeriod) === -1) {
+            targetPeriod = availablePeriods[0] || 'month';
+        }
+        currentPaymentPeriod = targetPeriod;
         periodRow.querySelectorAll('.choose-option-card[data-period]').forEach(function (card) {
             var isSelected = card.getAttribute('data-period') === currentPaymentPeriod;
             card.classList.toggle('choose-option-card-selected', isSelected);
@@ -2439,7 +2456,7 @@ function syncChooseOptionCards() {
         });
     }
 
-    setPeriod(currentPaymentPeriod || 'month');
+    setPeriod(currentPaymentPeriod || (paymentTariffs[0] && paymentTariffs[0].period) || 'month');
     setPaymentType(getCurrentPaymentType());
     setGateway(currentPaymentGateway || 'yookassa');
     setPlategaMethod(currentPlategaPaymentMethod || 'sbp');
@@ -2458,7 +2475,8 @@ function bindChoosePaymentSubmit() {
         var gatewayCard = container && container.querySelector('.choose-option-card[data-gateway].choose-option-card-selected');
         var paymentTypeCard = container && container.querySelector('.choose-option-card[data-payment-type].choose-option-card-selected');
         var paymentType = paymentTypeCard && paymentTypeCard.getAttribute('data-payment-type') === 'crypto' ? 'crypto' : 'fiat';
-        var period = periodCard ? (periodCard.getAttribute('data-period') === '3month' ? '3month' : 'month') : (currentPaymentPeriod || 'month');
+        var period = periodCard ? String(periodCard.getAttribute('data-period') || '').trim().toLowerCase() : String(currentPaymentPeriod || '').trim().toLowerCase();
+        if (!period) period = (paymentTariffs[0] && paymentTariffs[0].period) || 'month';
         var gateway = 'yookassa';
         if (gatewayCard) {
             var selectedGateway = gatewayCard.getAttribute('data-gateway');
@@ -2884,23 +2902,82 @@ var preventCloseOnScroll = uiGuardsFeature.preventCloseOnScroll.bind(uiGuardsFea
 // (listener инициализируется в platform/ui-guards.js).
 
 // Загружаем цены с сервера и обновляем отображение (публичный API, без авторизации)
-function applyLoadedPrices(prices) {
-    var m = prices && prices.month != null ? prices.month : 150;
-    var t = prices && prices['3month'] != null ? prices['3month'] : 350;
+function normalizeTariffsForUi(payload) {
+    var tariffs = [];
+    var rawTariffs = payload && Array.isArray(payload.tariffs) ? payload.tariffs : [];
+    if (rawTariffs.length) {
+        rawTariffs.forEach(function (t) {
+            if (!t || typeof t !== 'object') return;
+            var period = String(t.period || '').trim().toLowerCase();
+            if (!period) return;
+            var title = String(t.title || '').trim() || period;
+            var days = parseInt(t.days, 10);
+            var price = parseInt(t.price, 10);
+            var badge = String(t.badge || '').trim().toLowerCase();
+            if (badge !== 'best' && badge !== 'hit') badge = '';
+            if (isNaN(days) || days < 1) days = 30;
+            if (isNaN(price) || price < 1) price = 150;
+            tariffs.push({ period: period, title: title, days: days, price: price, badge: badge });
+        });
+    } else {
+        var prices = payload && payload.prices ? payload.prices : { month: 150, '3month': 350 };
+        tariffs = [
+            { period: 'month', title: '1 месяц', days: 30, price: prices.month != null ? prices.month : 150, badge: '' },
+            { period: '3month', title: '3 месяца', days: 90, price: prices['3month'] != null ? prices['3month'] : 350, badge: 'best' }
+        ];
+    }
+    tariffs.sort(function (a, b) { return a.days - b.days; });
+    return tariffs;
+}
+
+function renderChoosePaymentTariffCards(tariffs) {
+    var periodRow = document.querySelector('#page-choose-payment-method .choose-options-row[aria-label="Период подписки"]');
+    if (!periodRow) return;
+    var rowsHtml = tariffs.map(function (t, idx) {
+        var badgeText = t.badge === 'best' ? 'Выгодно' : (t.badge === 'hit' ? 'Хит' : '');
+        return [
+            '<button type="button" class="choose-option-card', idx === 0 ? ' choose-option-card-selected' : '',
+            '" data-period="', t.period, '" aria-pressed="', idx === 0 ? 'true' : 'false', '">',
+            badgeText ? '<span class="choose-option-sub">' + badgeText + '</span>' : '',
+            '<span class="choose-option-title">' + t.title + '</span>',
+            '<span class="choose-option-price">' + t.price + '₽</span>',
+            '</button>'
+        ].join('');
+    }).join('');
+    periodRow.innerHTML = rowsHtml;
+}
+
+function applyLoadedPrices(payload) {
+    paymentTariffs = normalizeTariffsForUi(payload);
+    var priceMap = {};
+    paymentTariffs.forEach(function (t) { priceMap[t.period] = t.price; });
+    var m = priceMap.month != null ? priceMap.month : 150;
+    var t = priceMap['3month'] != null ? priceMap['3month'] : 350;
     document.querySelectorAll('.plan-price[data-period="month"]').forEach(function (el) { el.textContent = m + '₽'; });
     document.querySelectorAll('.plan-price[data-period="3month"]').forEach(function (el) { el.textContent = t + '₽'; });
-    document.querySelectorAll('#page-choose-payment-method .choose-option-card[data-period="month"] .choose-option-price').forEach(function (el) { el.textContent = m + '₽'; });
-    document.querySelectorAll('#page-choose-payment-method .choose-option-card[data-period="3month"] .choose-option-price').forEach(function (el) { el.textContent = t + '₽'; });
+    renderChoosePaymentTariffCards(paymentTariffs);
+    if (!currentPaymentPeriod || !priceMap[currentPaymentPeriod]) {
+        currentPaymentPeriod = paymentTariffs[0] && paymentTariffs[0].period ? paymentTariffs[0].period : 'month';
+    }
+    if (document.getElementById('page-choose-payment-method') && document.getElementById('page-choose-payment-method').classList.contains('active')) {
+        syncChooseOptionCards();
+    }
 }
 
 async function loadPrices() {
     document.querySelectorAll('.plan-price').forEach(function (el) { el.textContent = '— ₽'; });
-    var fallback = { month: 150, '3month': 350 };
+    var fallback = {
+        prices: { month: 150, '3month': 350 },
+        tariffs: [
+            { period: 'month', title: '1 месяц', days: 30, price: 150, badge: '' },
+            { period: '3month', title: '3 месяца', days: 90, price: 350, badge: 'best' }
+        ]
+    };
     try {
         var res = await fetch('/api/prices');
         if (res.ok) {
             var data = await res.json();
-            applyLoadedPrices(data.prices || fallback);
+            applyLoadedPrices(data || fallback);
             return;
         }
     } catch (e) {

@@ -34,7 +34,8 @@
         }
 
         function goToChoosePaymentMethod(period, subscriptionId) {
-            _deps.setCurrentPaymentPeriod(period === '3month' ? '3month' : 'month');
+            var normalizedPeriod = String(period || '').trim().toLowerCase();
+            _deps.setCurrentPaymentPeriod(normalizedPeriod || 'month');
             if (subscriptionId != null) _deps.setCurrentExtendSubscriptionId(subscriptionId);
             else _deps.setCurrentExtendSubscriptionId(null);
             resetCheckoutPaymentState();
@@ -168,7 +169,8 @@
             }
 
             var gw = currentPaymentData.gateway || 'yookassa';
-            var periodText = currentPaymentData.period === 'month' ? '1 месяц' : (currentPaymentData.period === '3month' ? '3 месяца' : '—');
+            var periodRaw = String(currentPaymentData.period || '').trim();
+            var periodText = periodRaw === 'month' ? '1 месяц' : (periodRaw === '3month' ? '3 месяца' : (periodRaw || '—'));
             document.getElementById('payment-period').textContent = periodText;
             document.getElementById('payment-amount').textContent = currentPaymentData.amount != null ? String(currentPaymentData.amount) + '₽' : '—';
 

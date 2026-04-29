@@ -51,15 +51,25 @@ def create_blueprint(bot_app):
         if request.method == "OPTIONS":
             return "", 200, CORS_OPTIONS_HEADERS
         try:
-            from daralla_backend.prices_config import PRICES
+            from daralla_backend.prices_config import PRICES, get_tariffs
+            tariffs = get_tariffs()
             return jsonify({
-                "success": True, "prices": PRICES,
+                "success": True,
+                "prices": PRICES,
+                "tariffs": tariffs,
                 "month": PRICES.get("month", 150), "3month": PRICES.get("3month", 350),
             }), 200, CORS_HEADERS
         except Exception as e:
             logger.error("Ошибка в API /api/prices: %s", e, exc_info=True)
             return jsonify({
-                "success": True, "prices": {"month": 150, "3month": 350}, "month": 150, "3month": 350,
+                "success": True,
+                "prices": {"month": 150, "3month": 350},
+                "tariffs": [
+                    {"period": "month", "title": "1 месяц", "days": 30, "price": 150, "badge": ""},
+                    {"period": "3month", "title": "3 месяца", "days": 90, "price": 350, "badge": "best"},
+                ],
+                "month": 150,
+                "3month": 350,
             }), 200, CORS_HEADERS
 
     @bp.route("/api/servers", methods=["GET", "OPTIONS"])

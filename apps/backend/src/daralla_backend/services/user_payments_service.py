@@ -23,7 +23,7 @@ from daralla_backend.platega_config import (
 )
 from daralla_backend.db.subscriptions_db import get_subscription_by_id
 from daralla_backend.cryptocloud_config import CRYPTOCLOUD_AVAILABLE_CURRENCIES
-from daralla_backend.prices_config import PRICES, get_default_device_limit_async
+from daralla_backend.prices_config import PRICES, get_default_device_limit_async, get_tariff
 from daralla_backend.web.routes.api_user_helpers import cryptocloud_extract_address
 
 
@@ -64,8 +64,10 @@ async def create_user_payment(
     gateway_method: str,
     logger,
 ):
-    if not period or period not in ("month", "3month"):
-        raise UserPaymentServiceError('Invalid period. Use "month" or "3month"', 400)
+    period = str(period or "").strip().lower()
+    tariff = get_tariff(period)
+    if not period or not tariff:
+        raise UserPaymentServiceError("Invalid period", 400)
     if gateway not in ("yookassa", "cryptocloud", "platega"):
         gateway = "yookassa"
 
@@ -93,7 +95,9 @@ async def create_user_payment(
             referrer_user_id = None
 
     default_dl = await get_default_device_limit_async()
-    price = f"{PRICES[period]:.2f}"
+    tariff_price = float(tariff.get("price", PRICES.get(period, 0)) or 0)
+    tariff_days = int(tariff.get("days", 30) or 30)
+    price = f"{tariff_price:.2f}"
     await cancel_pending_user_payments(user_id)
 
     subscription_uuid = str(uuid.uuid4())
@@ -105,6 +109,7 @@ async def create_user_payment(
         "unique_email": unique_email,
         "message_id": None,
         "device_limit": default_dl,
+        "period_days": tariff_days,
     }
     if subscription_id:
         payment_meta_base["extension_subscription_id"] = int(subscription_id)
@@ -117,7 +122,7 @@ async def create_user_payment(
         if not api_token or not shop_id:
             logger.warning("CryptoCloud payment is not configured: missing token or shop_id")
             raise UserPaymentServiceError("CryptoCloud payment is not configured", 503)
-        amount_rub = float(PRICES[period])
+        amount_rub = tariff_price
         order_id = f"{user_id}_{int(time.time() * 1000)}"
         payload = {
             "shop_id": shop_id,
@@ -206,7 +211,7 @@ async def create_user_payment(
             logger.error("PLATEGA return/failed URL is missing")
             raise UserPaymentServiceError("Platega redirect URLs are not configured", 503)
 
-        amount_rub = float(PRICES[period])
+        amount_rub = tariff_price
         normalized_method = (gateway_method or "").strip().lower()
         platega_method = PLATEGA_PAYMENT_METHOD
         platega_method_label = "custom"

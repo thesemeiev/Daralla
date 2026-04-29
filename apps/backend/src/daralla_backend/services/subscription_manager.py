@@ -32,6 +32,7 @@ from .subscription_helpers import (
     panel_entry_from_snapshot,
     normalize_subscription_link,
 )
+from ..prices_config import get_tariff_days
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class SubscriptionManager:
 
         # 2. Считаем срок действия, если не передан
         if expires_at is None:
-            days = 90 if period == "3month" else 30
+            days = get_tariff_days(period, default_days=30)
             now = int(datetime.datetime.now().timestamp())
             expires_at = now + days * 24 * 60 * 60
 

@@ -98,7 +98,13 @@ async def process_extension_payment(payment_id, user_id, meta):
             actual_period = period.replace('extend_sub_', '', 1)
         elif period.startswith('extend_'):
             actual_period = period.replace('extend_', '', 1)
-        days = 90 if actual_period == '3month' else 30
+        try:
+            days = int(meta.get("period_days") or 0)
+        except (TypeError, ValueError):
+            days = 0
+        if days <= 0:
+            from ...prices_config import get_tariff_days
+            days = get_tariff_days(actual_period, default_days=30)
         
         # Проверяем, это продление подписки
         is_subscription_extension = period.startswith('extend_sub_')
@@ -270,8 +276,14 @@ async def process_extension_payment(payment_id, user_id, meta):
 async def process_new_purchase_payment(payment_id, user_id, meta):
     """Обрабатывает новую покупку - создаёт подписку и клиентов на всех доступных серверах"""
     try:
-        period = meta.get('type', 'month')
-        days = 90 if period == '3month' else 30
+        period = str(meta.get('type', 'month') or 'month')
+        try:
+            days = int(meta.get("period_days") or 0)
+        except (TypeError, ValueError):
+            days = 0
+        if days <= 0:
+            from ...prices_config import get_tariff_days
+            days = get_tariff_days(period, default_days=30)
         device_limit = int(meta.get('device_limit', 1))
         unique_email = meta.get('unique_email')
         
