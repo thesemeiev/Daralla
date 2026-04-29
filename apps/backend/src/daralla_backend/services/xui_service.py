@@ -485,7 +485,44 @@ class X3:
         if inbound_id is None:
             raise ValueError("updateClient: у клиента нет inbound_id")
         api = self._api.client
-        uuid_for_url = c.id
+        uuid_for_url = getattr(c, "id", None) or getattr(c, "uuid", None)
+        protocol_norm = (
+            self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
+            if protocol_hint
+            else ""
+        )
+        if not uuid_for_url:
+            email = getattr(c, "email", None)
+            if email:
+                resolved = await self._api.client.get_by_email(str(email))
+                if resolved is not None:
+                    resolved.expiry_time = getattr(c, "expiry_time", getattr(resolved, "expiry_time", None))
+                    resolved.limit_ip = getattr(c, "limit_ip", getattr(resolved, "limit_ip", None))
+                    if flow_override is not None:
+                        resolved.flow = flow_override
+                    self._ensure_client_id_for_update(resolved)
+                    uuid_for_url = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
+                    c = resolved
+                    inbound_id = (
+                        int(inbound_id_override)
+                        if inbound_id_override is not None
+                        else getattr(resolved, "inbound_id", inbound_id)
+                    )
+            if not uuid_for_url and email and inbound_id is not None:
+                await self._update_client_via_inbound_settings(
+                    inbound_id=int(inbound_id),
+                    email=str(email),
+                    expiry_time=getattr(c, "expiry_time", None),
+                    limit_ip=getattr(c, "limit_ip", None),
+                    flow_override=flow_override,
+                    protocol_hint=protocol_norm or protocol_hint,
+                )
+                return
+        if not uuid_for_url:
+            raise ValueError(
+                f"updateClient: empty client id for protocol={protocol_norm or 'unknown'} "
+                f"email={getattr(c, 'email', None)} inbound_id={inbound_id}"
+            )
         endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
         settings = {
             "clients": [
@@ -499,6 +536,44 @@ class X3:
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url(endpoint)
         await api._post(url, {"Accept": "application/json"}, data)
+
+    async def _update_client_via_inbound_settings(
+        self,
+        *,
+        inbound_id: int,
+        email: str,
+        expiry_time: Any,
+        limit_ip: Any,
+        flow_override: Optional[str],
+        protocol_hint: Optional[str],
+    ) -> None:
+        """Fallback update path by inbound settings when updateClient has empty client id."""
+        inv = await self._api.inbound.get_by_id(int(inbound_id))
+        settings = getattr(inv, "settings", None)
+        clients = getattr(settings, "clients", None) or []
+        target = None
+        for cl in clients:
+            if str(getattr(cl, "email", "")).strip() == email:
+                target = cl
+                break
+        if target is None:
+            raise ValueError(
+                f"inbound.update fallback: client not found by email={email} inbound_id={inbound_id}"
+            )
+
+        if expiry_time is not None:
+            target.expiry_time = int(expiry_time)
+        if limit_ip is not None:
+            target.limit_ip = int(limit_ip)
+        protocol_norm = (
+            self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
+            if protocol_hint
+            else ""
+        )
+        if protocol_norm == "vless" and flow_override is not None:
+            target.flow = flow_override
+
+        await self._api.inbound.update(int(inbound_id), inv)
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def reconcile_client(
