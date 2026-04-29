@@ -518,8 +518,23 @@ class X3:
             if protocol_hint
             else ""
         )
+        email = self._client_get(c, "email", None)
+
+        # 3x-ui часто не умеет стабильный updateClient для hy2/tuic/trojan/vmess
+        # (падает с "empty client ID"). Для non-vless безопаснее сразу обновлять
+        # через inbound.update по email в settings.users/clients.
+        if protocol_norm and protocol_norm != "vless" and email and inbound_id is not None:
+            await self._update_client_via_inbound_settings(
+                inbound_id=int(inbound_id),
+                email=str(email),
+                expiry_time=self._client_get(c, "expiry_time", None),
+                limit_ip=self._client_get(c, "limit_ip", None),
+                flow_override=flow_override,
+                protocol_hint=protocol_norm,
+            )
+            return
+
         if not uuid_for_url:
-            email = self._client_get(c, "email", None)
             if email:
                 resolved = None
                 try:
@@ -569,7 +584,27 @@ class X3:
         }
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url(endpoint)
-        await api._post(url, {"Accept": "application/json"}, data)
+        try:
+            await api._post(url, {"Accept": "application/json"}, data)
+        except ValueError as exc:
+            # Даже при непустом URL-id панель может отвечать empty client ID.
+            # Для таких кейсов fallback через inbound.update (если знаем email).
+            msg = str(exc).lower()
+            if (
+                "empty client id" in msg
+                and email
+                and inbound_id is not None
+            ):
+                await self._update_client_via_inbound_settings(
+                    inbound_id=int(inbound_id),
+                    email=str(email),
+                    expiry_time=self._client_get(c, "expiry_time", None),
+                    limit_ip=self._client_get(c, "limit_ip", None),
+                    flow_override=flow_override,
+                    protocol_hint=protocol_norm or protocol_hint,
+                )
+                return
+            raise
 
     async def _update_client_via_inbound_settings(
         self,
