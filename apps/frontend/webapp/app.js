@@ -2389,7 +2389,8 @@ function syncChooseOptionCards() {
             card.classList.toggle('choose-option-card-selected', isSelected);
             card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
-        if (plategaMethodBlock) plategaMethodBlock.style.display = g === 'platega' ? '' : 'none';
+        // Метод Platega выбирается автоматически из "Тип оплаты", поэтому блок не показываем.
+        if (plategaMethodBlock) plategaMethodBlock.style.display = 'none';
         if (g === 'platega') {
             currentPlategaPaymentMethod = paymentType === 'crypto' ? 'crypto' : 'sbp';
             setPlategaMethod(currentPlategaPaymentMethod, paymentType);
@@ -2455,6 +2456,8 @@ function bindChoosePaymentSubmit() {
         var container = document.getElementById('page-choose-payment-method');
         var periodCard = container && container.querySelector('.choose-option-card[data-period].choose-option-card-selected');
         var gatewayCard = container && container.querySelector('.choose-option-card[data-gateway].choose-option-card-selected');
+        var paymentTypeCard = container && container.querySelector('.choose-option-card[data-payment-type].choose-option-card-selected');
+        var paymentType = paymentTypeCard && paymentTypeCard.getAttribute('data-payment-type') === 'crypto' ? 'crypto' : 'fiat';
         var period = periodCard ? (periodCard.getAttribute('data-period') === '3month' ? '3month' : 'month') : (currentPaymentPeriod || 'month');
         var gateway = 'yookassa';
         if (gatewayCard) {
@@ -2464,9 +2467,9 @@ function bindChoosePaymentSubmit() {
         }
         var gatewayMethod = null;
         if (gateway === 'platega') {
-            var methodCard = container && container.querySelector('.choose-option-card[data-platega-method].choose-option-card-selected');
-            gatewayMethod = methodCard ? methodCard.getAttribute('data-platega-method') : (currentPlategaPaymentMethod || 'sbp');
-            currentPlategaPaymentMethod = gatewayMethod === 'crypto' ? 'crypto' : 'sbp';
+            // Автосопоставление без отдельного шага выбора метода.
+            gatewayMethod = paymentType === 'crypto' ? 'crypto' : 'sbp';
+            currentPlategaPaymentMethod = gatewayMethod;
         }
         currentPaymentGateway = gateway;
         createPayment(period, currentExtendSubscriptionId, gateway, gatewayMethod);

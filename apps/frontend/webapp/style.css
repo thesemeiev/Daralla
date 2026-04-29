@@ -1898,6 +1898,11 @@ h1 {
     font-size: 20px;
     margin-bottom: 4px;
 }
+.choose-option-card .choose-option-icon--text {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
 .choose-option-card .choose-option-sub {
     display: block;
     font-size: 12px;
