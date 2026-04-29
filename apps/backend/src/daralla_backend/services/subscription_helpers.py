@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
+from .xui_helpers import clients_from_settings_payload
+
 
 logger = logging.getLogger(__name__)
 _PROTOCOL_PREFIXES = ("vless://", "trojan://", "vmess://", "ss://", "socks://")
@@ -23,7 +25,7 @@ def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dic
             settings = json.loads(inbound.get("settings") or "{}")
         except (json.JSONDecodeError, TypeError):
             continue
-        for client in settings.get("clients") or []:
+        for client in clients_from_settings_payload(settings):
             email = client.get("email")
             if not email:
                 continue

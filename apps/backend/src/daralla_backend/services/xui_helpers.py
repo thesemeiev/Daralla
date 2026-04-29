@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from typing import Any, Dict, Optional
 
 
@@ -30,6 +31,26 @@ def client_to_api_dict(c: Any) -> dict:
     return out
 
 
+def clients_from_settings_payload(settings: Dict[str, Any]) -> list[dict]:
+    """
+    Return unified client rows from 3x-ui settings JSON.
+
+    Some protocols/panel versions store users under ``users`` instead of ``clients``
+    (notably hysteria2). We normalize both into one list.
+    """
+    rows: list[dict] = []
+    for key in ("clients", "users"):
+        raw = settings.get(key) or []
+        if not isinstance(raw, Iterable) or isinstance(raw, (str, bytes, dict)):
+            continue
+        for item in raw:
+            if isinstance(item, dict):
+                rows.append(client_to_api_dict(item))
+            else:
+                rows.append(client_to_api_dict(item))
+    return rows
+
+
 def normalize_client_flow_value(v: Any) -> str:
     if v is None:
         return ""
@@ -43,7 +64,11 @@ def dedupe_flow_json_key(d: Dict[str, Any]) -> None:
             d.pop(k, None)
 
 
-def panel_client_settings_dict(c: Any, flow_override: Optional[str] = None) -> Dict[str, Any]:
+def panel_client_settings_dict(
+    c: Any,
+    flow_override: Optional[str] = None,
+    protocol_hint: Optional[str] = None,
+) -> Dict[str, Any]:
     """Build clients[] payload for addClient/updateClient."""
     if isinstance(c, dict):
         d = dict(c)
@@ -54,7 +79,7 @@ def panel_client_settings_dict(c: Any, flow_override: Optional[str] = None) -> D
     dedupe_flow_json_key(d)
     # flow релевантен только для VLESS/XTLS сценариев; для прочих протоколов
     # (например hysteria2/tuic) не добавляем лишние поля.
-    protocol = str(d.get("protocol", "") or "").strip().lower()
+    protocol = str(protocol_hint or d.get("protocol", "") or "").strip().lower()
     supports_flow = protocol in ("", "vless")
     if flow_override is not None and supports_flow:
         d["flow"] = str(flow_override).strip() if str(flow_override).strip() else ""
@@ -111,7 +136,7 @@ def inbound_to_dict(inv: Any) -> dict:
     settings = getattr(inv, "settings", None)
     clients = []
     if settings is not None:
-        raw_clients = getattr(settings, "clients", None) or []
+        raw_clients = (getattr(settings, "clients", None) or []) + (getattr(settings, "users", None) or [])
         for c in raw_clients:
             clients.append(client_to_api_dict(c))
     settings_str = json.dumps({"clients": clients})

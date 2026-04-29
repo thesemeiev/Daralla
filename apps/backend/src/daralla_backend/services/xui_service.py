@@ -18,6 +18,7 @@ import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_fixed
 
 from .xui_helpers import (
+    clients_from_settings_payload,
     client_to_api_dict,
     flow_matches_desired,
     inbound_to_dict,
@@ -125,6 +126,12 @@ def _apply_py3xui_request_timeout() -> None:
 
 
 class X3:
+    @staticmethod
+    def _settings_clients_obj(settings: Any) -> list[Any]:
+        clients = list(getattr(settings, "clients", None) or [])
+        users = list(getattr(settings, "users", None) or [])
+        return clients + users
+
     @staticmethod
     def _extract_hysteria_version(inv: Any) -> Optional[int]:
         settings = getattr(inv, "settings", None)
@@ -265,7 +272,7 @@ class X3:
         if inbound_id is None:
             inbounds = await self._api.inbound.get_list()
             for inv in inbounds:
-                clients = getattr(getattr(inv, "settings", None), "clients", None) or []
+                clients = self._settings_clients_obj(getattr(inv, "settings", None))
                 for cl in clients:
                     if getattr(cl, "email", None) == user_email:
                         inbound_id = getattr(inv, "id", None)
@@ -295,7 +302,7 @@ class X3:
                 settings = json.loads(inbound.get("settings", "{}"))
             except (json.JSONDecodeError, TypeError):
                 continue
-            for client in settings.get("clients", []):
+            for client in clients_from_settings_payload(settings):
                 if str(client.get("tgId", "")) == str(tg_id):
                     result.append({
                         "email": client.get("email"),
@@ -309,7 +316,7 @@ class X3:
         await self._ensure_login()
         inbounds = await self._api.inbound.get_list()
         for inv in inbounds:
-            clients = getattr(getattr(inv, "settings", None), "clients", None) or []
+            clients = self._settings_clients_obj(getattr(inv, "settings", None))
             for c in clients:
                 if getattr(c, "email", None) == user_email:
                     return getattr(inv, "id", None)
@@ -348,7 +355,10 @@ class X3:
 
     @staticmethod
     def _extract_protocol(inv: Any) -> str:
-        raw = (getattr(inv, "protocol", "vless") or "vless").strip().lower()
+        raw = getattr(inv, "protocol", "vless")
+        if not isinstance(raw, str):
+            raw = "vless"
+        raw = (raw or "vless").strip().lower()
         return X3._normalize_protocol_name(raw, inv)
 
     async def _resolve_target_inbound(
@@ -456,6 +466,7 @@ class X3:
         c: Any,
         inbound_id_override: Optional[int] = None,
         flow_override: Optional[str] = None,
+        protocol_hint: Optional[str] = None,
     ) -> None:
         """updateClient: как py3xui, но flow всегда в JSON — иначе сброс flow на панели не работает.
 
@@ -476,7 +487,15 @@ class X3:
         api = self._api.client
         uuid_for_url = c.id
         endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
-        settings = {"clients": [panel_client_settings_dict(c, flow_override=flow_override)]}
+        settings = {
+            "clients": [
+                panel_client_settings_dict(
+                    c,
+                    flow_override=flow_override,
+                    protocol_hint=protocol_hint,
+                )
+            ]
+        }
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url(endpoint)
         await api._post(url, {"Accept": "application/json"}, data)
@@ -512,7 +531,7 @@ class X3:
 
         inbounds = await self._api.inbound.get_list()
         wanted_protocol = (target_protocol or "").strip().lower()
-        work_items: List[Tuple[int, Any]] = []
+        work_items: List[Tuple[int, str, Any]] = []
         for inv in inbounds:
             inv_id = getattr(inv, "id", None)
             if inv_id is None:
@@ -523,22 +542,26 @@ class X3:
             if wanted_protocol and inv_protocol != wanted_protocol:
                 continue
             settings = getattr(inv, "settings", None)
-            clients = getattr(settings, "clients", None) or []
+            clients = self._settings_clients_obj(settings)
             for cl in clients:
                 em = getattr(cl, "email", None)
                 if em is None:
                     continue
                 if str(em).strip() == needle:
-                    work_items.append((int(inv_id), cl))
+                    work_items.append((int(inv_id), inv_protocol, cl))
 
         if work_items:
-            for inbound_id, c in work_items:
+            for inbound_id, inbound_protocol, c in work_items:
                 c.expiry_time = exp_ms
                 c.limit_ip = li
-                c.flow = want_flow
+                if inbound_protocol == "vless":
+                    c.flow = want_flow
                 self._ensure_client_id_for_update(c)
                 await self._post_inbound_update_client(
-                    c, inbound_id_override=inbound_id, flow_override=want_flow
+                    c,
+                    inbound_id_override=inbound_id,
+                    flow_override=want_flow if inbound_protocol == "vless" else None,
+                    protocol_hint=inbound_protocol,
                 )
             return True, True
 
@@ -559,6 +582,7 @@ class X3:
         await self._post_inbound_update_client(
             c,
             flow_override=want_flow if (not wanted_protocol or wanted_protocol == "vless") else None,
+            protocol_hint=(wanted_protocol or None),
         )
         return True, True
 
@@ -703,7 +727,7 @@ class X3:
                 except (json.JSONDecodeError, TypeError):
                     continue
                 try:
-                    for client in settings.get("clients", []):
+                    for client in clients_from_settings_payload(settings):
                         expiry_ms = client.get("expiryTime", 0) or 0
                         if expiry_ms == 0 or current_ms < expiry_ms:
                             total_active += 1
@@ -749,7 +773,7 @@ class X3:
         for inv in data.get("obj", []):
             try:
                 settings = json.loads(inv.get("settings", "{}"))
-                n += len(settings.get("clients", []))
+                n += len(clients_from_settings_payload(settings))
             except (json.JSONDecodeError, TypeError):
                 pass
         return n
@@ -764,7 +788,7 @@ class X3:
         for inv in data.get("obj", []):
             try:
                 settings = json.loads(inv.get("settings", "{}"))
-                for c in settings.get("clients", []):
+                for c in clients_from_settings_payload(settings):
                     total += 1
                     exp = c.get("expiryTime", 0) or 0
                     if exp == 0 or now_ms < exp:
@@ -798,7 +822,7 @@ class X3:
             if inv_id is None:
                 continue
             settings = getattr(inv, "settings", None)
-            clients = getattr(settings, "clients", None) or []
+            clients = self._settings_clients_obj(settings)
             for c in clients:
                 if getattr(c, "email", None):
                     work_items.append((int(inv_id), c))
@@ -853,7 +877,7 @@ class X3:
                     stream = json.loads(stream)
                 except (json.JSONDecodeError, TypeError):
                     stream = {}
-            client = next((c for c in settings.get("clients", []) if c.get("email") == user_id), None)
+            client = next((c for c in clients_from_settings_payload(settings) if c.get("email") == user_id), None)
             if not client:
                 continue
             protocol = (inbounds.get("protocol") or "vless").lower()
@@ -915,7 +939,7 @@ class X3:
                 settings = json.loads(inv.get("settings", "{}"))
             except (json.JSONDecodeError, TypeError):
                 continue
-            for client in settings.get("clients", []):
+            for client in clients_from_settings_payload(settings):
                 if client.get("email") == user_email:
                     sub_id = client.get("subId", "")
                     if sub_id:

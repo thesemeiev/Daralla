@@ -272,11 +272,20 @@ class SubscriptionManager:
                             server_name,
                         )
                 except Exception as rec_e:
+                    root = rec_e
+                    # tenacity RetryError hides underlying exception in last_attempt
+                    last_attempt = getattr(rec_e, "last_attempt", None)
+                    if last_attempt is not None:
+                        try:
+                            root = last_attempt.exception() or rec_e
+                        except Exception:
+                            root = rec_e
                     logger.warning(
-                        "Ошибка reconcile_client на сервере %s для %s: %s",
+                        "Ошибка reconcile_client на сервере %s для %s: %s (root=%r)",
                         server_name,
                         client_email,
                         rec_e,
+                        root,
                     )
                     return False, False
 
