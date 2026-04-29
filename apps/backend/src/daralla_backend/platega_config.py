@@ -15,7 +15,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-PLATEGA_BASE_URL = (os.getenv("PLATEGA_BASE_URL") or "https://api.platega.io").strip().rstrip("/")
+PLATEGA_BASE_URL = (os.getenv("PLATEGA_BASE_URL") or "https://app.platega.io").strip().rstrip("/")
 PLATEGA_CREATE_PATH = (os.getenv("PLATEGA_CREATE_PATH") or "/transaction/process").strip()
 if not PLATEGA_CREATE_PATH.startswith("/"):
     PLATEGA_CREATE_PATH = f"/{PLATEGA_CREATE_PATH}"
