@@ -658,6 +658,78 @@ class X3:
 
         await self._api.inbound.update(int(inbound_id), inv)
 
+    async def _delete_client_via_inbound_settings(
+        self,
+        *,
+        email: str,
+        preferred_inbound_id: Optional[int] = None,
+    ) -> bool:
+        """
+        Fallback delete path for panels where client.delete may fail with malformed/non-JSON response.
+        Removes all rows with matching email from settings.clients/settings.users and updates inbound(s).
+        """
+        inbounds = await self._api.inbound.get_list()
+        deleted_any = False
+
+        def _filter_group(group: list[Any]) -> tuple[list[Any], bool]:
+            out: list[Any] = []
+            removed = False
+            for item in group:
+                item_email = self._client_get(item, "email", "")
+                if str(item_email).strip() == email:
+                    removed = True
+                    continue
+                out.append(item)
+            return out, removed
+
+        ordered: list[Any] = []
+        if preferred_inbound_id is not None:
+            for inv in inbounds:
+                if getattr(inv, "id", None) == int(preferred_inbound_id):
+                    ordered.append(inv)
+                    break
+        for inv in inbounds:
+            if inv not in ordered:
+                ordered.append(inv)
+
+        for inv in ordered:
+            inv_id = getattr(inv, "id", None)
+            if inv_id is None:
+                continue
+            settings = getattr(inv, "settings", None)
+            if settings is None:
+                continue
+
+            changed = False
+            if isinstance(settings, dict):
+                clients = list(settings.get("clients") or [])
+                users = list(settings.get("users") or [])
+                new_clients, removed_clients = _filter_group(clients)
+                new_users, removed_users = _filter_group(users)
+                if removed_clients:
+                    settings["clients"] = new_clients
+                    changed = True
+                if removed_users:
+                    settings["users"] = new_users
+                    changed = True
+            else:
+                clients = list(getattr(settings, "clients", None) or [])
+                users = list(getattr(settings, "users", None) or [])
+                new_clients, removed_clients = _filter_group(clients)
+                new_users, removed_users = _filter_group(users)
+                if removed_clients:
+                    setattr(settings, "clients", new_clients)
+                    changed = True
+                if removed_users:
+                    setattr(settings, "users", new_users)
+                    changed = True
+
+            if changed:
+                await self._api.inbound.update(int(inv_id), inv)
+                deleted_any = True
+
+        return deleted_any
+
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def reconcile_client(
         self,
@@ -890,7 +962,27 @@ class X3:
             return False
         # Панель 3x-ui при delete ожидает client id в том же формате, что и при update (UUID для VLESS)
         self._ensure_client_id_for_update(c)
-        await self._api.client.delete(int(inbound_id), c.id)
+        try:
+            await self._api.client.delete(int(inbound_id), c.id)
+        except Exception as exc:
+            logger.warning(
+                "deleteClient API failed for %s (inbound_id=%s): %s; trying inbound.update fallback",
+                user_email,
+                inbound_id,
+                exc,
+            )
+            deleted_any = await self._delete_client_via_inbound_settings(
+                email=str(user_email),
+                preferred_inbound_id=int(inbound_id),
+            )
+            if not deleted_any:
+                raise
+            logger.info(
+                "Клиент удалён через inbound.update fallback: %s (preferred_inbound_id=%s)",
+                user_email,
+                inbound_id,
+            )
+            return True
         logger.info("Клиент удалён: %s (inbound_id=%s)", user_email, inbound_id)
         # True — один клиент с таким email был удалён
         return True
