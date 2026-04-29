@@ -219,7 +219,11 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             if resp.status_code >= 400:
                 logger.warning("Platega create transaction failed: %s %s", resp.status_code, resp.text)
                 raise UserPaymentServiceError("Failed to create Platega transaction", 502)
-            body = resp.json()
+            try:
+                body = resp.json()
+            except ValueError:
+                logger.warning("Platega create transaction invalid JSON: %s", resp.text)
+                raise UserPaymentServiceError("Invalid Platega response", 502)
 
         result = body.get("result") if isinstance(body.get("result"), dict) else body
         transaction_id = (
@@ -233,6 +237,8 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             or result.get("redirectUrl")
             or result.get("redirect_url")
             or result.get("payment_url")
+            or result.get("payUrl")
+            or result.get("pay_url")
             or result.get("url")
         )
         if not transaction_id or not payment_link:

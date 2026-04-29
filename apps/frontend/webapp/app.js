@@ -137,6 +137,7 @@ let notifSelectedTriggerHours = appState.notifSelectedTriggerHours;
 let currentExtendSubscriptionId = appState.currentExtendSubscriptionId;
 let currentPaymentData = appState.currentPaymentData;
 let currentPaymentPeriod = appState.currentPaymentPeriod;
+let currentPaymentGateway = appState.currentPaymentGateway || 'yookassa';
 let isAdmin = appState.isAdmin;
 let currentAdminUserPage = appState.currentAdminUserPage;
 let currentAdminUserSearch = appState.currentAdminUserSearch;
@@ -182,6 +183,7 @@ var appFeatures = window.DarallaAppComposition.create({
     setCurrentSubscriptionDetail: function (value) { currentSubscriptionDetail = value; },
     onBuySubscription: function () {
         currentPaymentPeriod = 'month';
+        currentPaymentGateway = 'yookassa';
         currentExtendSubscriptionId = null;
         resetCheckoutPaymentState();
         showPage('choose-payment-method');
@@ -246,6 +248,8 @@ var appFeatures = window.DarallaAppComposition.create({
     getCurrentExtendSubscriptionId: function () { return currentExtendSubscriptionId; },
     setCurrentPaymentPeriod: function (value) { currentPaymentPeriod = value; },
     getCurrentPaymentPeriod: function () { return currentPaymentPeriod; },
+    setCurrentPaymentGateway: function (value) { currentPaymentGateway = value; },
+    getCurrentPaymentGateway: function () { return currentPaymentGateway; },
     isHttpUrl: function (value) { return isHttpUrl(value); },
     getReferralCodeFromCurrentPage: function () { return getReferralCodeFromCurrentPage(); },
     hideFormMessage: function (container) { return hideFormMessage(container); },
@@ -383,6 +387,7 @@ function applyRoute(route, isAuthenticated, isAdmin) {
     }
     if (route.pageName === 'buy-subscription') {
         currentPaymentPeriod = 'month';
+        currentPaymentGateway = 'yookassa';
         currentExtendSubscriptionId = null;
         resetCheckoutPaymentState();
         showPage('choose-payment-method');
@@ -2277,8 +2282,10 @@ function syncChooseOptionCards() {
 
     function updatePayButtonText() {
         var period = currentPaymentPeriod === '3month' ? '3month' : 'month';
-        var price = period === '3month' ? '350' : '150';
-        if (submitBtn) submitBtn.textContent = 'Оплатить ' + price + '₽';
+        var periodPriceEl = periodRow.querySelector('.choose-option-card[data-period="' + period + '"] .choose-option-price');
+        var priceText = periodPriceEl ? String(periodPriceEl.textContent || '').trim() : '';
+        if (!priceText) priceText = period === '3month' ? '350₽' : '150₽';
+        if (submitBtn) submitBtn.textContent = 'Оплатить ' + priceText;
     }
 
     function setPeriod(period) {
@@ -2295,6 +2302,7 @@ function syncChooseOptionCards() {
         var g = 'yookassa';
         if (gateway === 'cryptocloud') g = 'cryptocloud';
         if (gateway === 'platega') g = 'platega';
+        currentPaymentGateway = g;
         paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
             var isSelected = card.getAttribute('data-gateway') === g;
             card.classList.toggle('choose-option-card-selected', isSelected);
@@ -2314,7 +2322,7 @@ function syncChooseOptionCards() {
     });
 
     setPeriod(currentPaymentPeriod || 'month');
-    setGateway('yookassa');
+    setGateway(currentPaymentGateway || 'yookassa');
     updatePayButtonText();
 }
 
@@ -2335,6 +2343,7 @@ function bindChoosePaymentSubmit() {
             if (selectedGateway === 'cryptocloud') gateway = 'cryptocloud';
             if (selectedGateway === 'platega') gateway = 'platega';
         }
+        currentPaymentGateway = gateway;
         createPayment(period, currentExtendSubscriptionId, gateway);
     });
 }

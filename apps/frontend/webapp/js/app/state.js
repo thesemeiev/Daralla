@@ -12,6 +12,7 @@
             currentExtendSubscriptionId: null,
             currentPaymentData: null,
             currentPaymentPeriod: null,
+            currentPaymentGateway: 'yookassa',
             isAdmin: false,
             currentAdminUserPage: 1,
             currentAdminUserSearch: '',
