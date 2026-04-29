@@ -55,7 +55,7 @@
 
         async function createPayment(period, subscriptionId, gateway) {
             if (subscriptionId === undefined) subscriptionId = null;
-            if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud')) gateway = 'yookassa';
+            if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud' && gateway !== 'platega')) gateway = 'yookassa';
             try {
                 var referrerCode = _deps.getReferralCodeFromCurrentPage();
                 var body = { period: period, subscription_id: subscriptionId, gateway: gateway };
@@ -188,6 +188,7 @@
             if (hintEl) {
                 if (gw === 'yookassa') hintEl.textContent = 'Оплата откроется на сайте ЮKassa в браузере. После оплаты вы вернётесь в приложение — статус проверится автоматически.';
                 else if (gw === 'cryptocloud') hintEl.textContent = 'Оплата на странице CryptoCloud в браузере. Счёт действителен 15 минут; статус обновится после зачисления.';
+                else if (gw === 'platega') hintEl.textContent = 'Оплата откроется на странице Platega в браузере. После завершения статус обновится автоматически.';
                 else hintEl.textContent = 'Ссылка действительна 15 минут';
             }
 

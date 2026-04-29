@@ -1,5 +1,6 @@
 """
-Quart Blueprint: POST /webhook/yookassa (YooKassa), POST /webhook/cryptocloud (CryptoCloud).
+Quart Blueprint: POST /webhook/yookassa (YooKassa), POST /webhook/cryptocloud (CryptoCloud),
+POST /webhook/platega (Platega).
 Async: respond 200 immediately, process payment in background task.
 
 CryptoCloud: постбек приходит после подтверждения транзакции в блокчейне (обычно 30 сек – 10 мин;
@@ -16,8 +17,11 @@ from quart import Blueprint, request, jsonify
 from daralla_backend.handlers.api_support.payment_processors import process_payment_webhook
 from daralla_backend.services.payment_webhook_service import (
     normalize_cryptocloud_payload,
+    parse_platega_webhook_payload,
     parse_yookassa_webhook_payload,
+    resolve_platega_postback_target,
     resolve_cryptocloud_postback_target,
+    verify_platega_webhook_headers,
 )
 from daralla_backend.utils.logging_helpers import log_event, sanitize_headers
 from daralla_backend.web.observability import inc_metric
@@ -125,6 +129,87 @@ def create_blueprint(bot_app):
     async def cryptocloud_callback():
         """Тот же постбэк CryptoCloud — для случая, когда в ЛК указан URL https://daralla.ru/callback."""
         return await _cryptocloud_postback()
+
+    @bp.route("/webhook/platega", methods=["POST"])
+    async def platega_webhook():
+        inc_metric("webhook_received_total", provider="platega")
+        try:
+            data = await request.get_json(silent=True)
+            normalized = parse_platega_webhook_payload(data)
+            target = await resolve_platega_postback_target(normalized)
+            if not target:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "platega_postback_missing_target",
+                    path=request.path,
+                )
+                return jsonify({"status": "ok"}), 200
+
+            merchant_id = (os.getenv("PLATEGA_MERCHANT_ID") or "").strip()
+            secret = (os.getenv("PLATEGA_SECRET") or "").strip()
+            if not merchant_id or not secret:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "platega_webhook_secret_missing",
+                )
+                inc_metric("webhook_failed_total", provider="platega", reason="config_missing")
+                return jsonify({"status": "error"}), 503
+
+            if not verify_platega_webhook_headers(request.headers, merchant_id, secret):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "platega_postback_invalid_headers",
+                    raw_id=target["raw_id"],
+                )
+                inc_metric("webhook_failed_total", provider="platega", reason="invalid_headers")
+                return jsonify({"status": "error"}), 401
+
+            if not target["payment_found"]:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "platega_postback_payment_not_found",
+                    raw_id=target["raw_id"],
+                )
+            log_event(
+                logger,
+                logging.INFO,
+                "platega_postback_received",
+                provider="platega",
+                status=target["status"],
+                raw_id=target["raw_id"],
+                payment_id=target["payment_id"],
+                payment_found=target["payment_found"],
+                path=request.path,
+            )
+            if target["payment_found"]:
+                asyncio.create_task(_process_webhook(target["payment_id"], target["mapped_status"]))
+                inc_metric("webhook_processed_total", provider="platega", status=target["mapped_status"])
+            return jsonify({"status": "ok"}), 200
+        except (TypeError, ValueError) as e:
+            log_event(
+                logger,
+                logging.WARNING,
+                "platega_webhook_invalid_payload",
+                error=str(e),
+                path=request.path,
+            )
+            inc_metric("webhook_failed_total", provider="platega", reason="invalid_payload")
+            return jsonify({"status": "error"}), 400
+        except Exception as e:
+            log_event(
+                logger,
+                logging.ERROR,
+                "platega_webhook_internal_error",
+                error=str(e),
+                path=request.path,
+            )
+            logger.debug("platega_webhook_internal_error_traceback", exc_info=True)
+            inc_metric("webhook_failed_total", provider="platega", reason="internal_error")
+            return jsonify({"status": "error"}), 500
 
     @bp.route("/webhook/yookassa", methods=["POST"])
     async def yookassa_webhook():

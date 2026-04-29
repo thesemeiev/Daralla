@@ -2292,7 +2292,9 @@ function syncChooseOptionCards() {
     }
 
     function setGateway(gateway) {
-        var g = (gateway === 'cryptocloud') ? 'cryptocloud' : 'yookassa';
+        var g = 'yookassa';
+        if (gateway === 'cryptocloud') g = 'cryptocloud';
+        if (gateway === 'platega') g = 'platega';
         paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
             var isSelected = card.getAttribute('data-gateway') === g;
             card.classList.toggle('choose-option-card-selected', isSelected);
@@ -2327,7 +2329,12 @@ function bindChoosePaymentSubmit() {
         var periodCard = container && container.querySelector('.choose-option-card[data-period].choose-option-card-selected');
         var gatewayCard = container && container.querySelector('.choose-option-card[data-gateway].choose-option-card-selected');
         var period = periodCard ? (periodCard.getAttribute('data-period') === '3month' ? '3month' : 'month') : (currentPaymentPeriod || 'month');
-        var gateway = gatewayCard ? (gatewayCard.getAttribute('data-gateway') === 'cryptocloud' ? 'cryptocloud' : 'yookassa') : 'yookassa';
+        var gateway = 'yookassa';
+        if (gatewayCard) {
+            var selectedGateway = gatewayCard.getAttribute('data-gateway');
+            if (selectedGateway === 'cryptocloud') gateway = 'cryptocloud';
+            if (selectedGateway === 'platega') gateway = 'platega';
+        }
         createPayment(period, currentExtendSubscriptionId, gateway);
     });
 }

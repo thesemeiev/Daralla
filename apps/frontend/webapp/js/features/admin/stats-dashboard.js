@@ -80,7 +80,7 @@
                 el.textContent = '';
                 return;
             }
-            var names = { yookassa: 'YooKassa', cryptocloud: 'CryptoCloud' };
+            var names = { yookassa: 'YooKassa', cryptocloud: 'CryptoCloud', platega: 'Platega' };
             el.textContent = entries.map(function (entry) {
                 var k = entry[0];
                 var v = entry[1];

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 
 from daralla_backend.db import get_payment_by_id
 
@@ -99,4 +100,57 @@ async def resolve_cryptocloud_postback_target(payload: dict):
         "payment_id": payment_id,
         "payment_found": bool(info),
         "mapped_status": map_cryptocloud_status(status),
+    }
+
+
+def parse_platega_webhook_payload(data):
+    """
+    Parse Platega webhook payload and normalize to dict with id/status.
+
+    Raises ValueError on invalid payload.
+    """
+    if not data or not isinstance(data, dict):
+        raise ValueError("missing payload")
+    payment_id = data.get("id")
+    status = data.get("status")
+    if not payment_id or not status:
+        raise ValueError("platega payload missing id or status")
+    return {
+        "id": str(payment_id).strip(),
+        "status": str(status).strip(),
+    }
+
+
+def map_platega_status(raw_status: str) -> str:
+    status = (raw_status or "").strip().upper()
+    if status == "CONFIRMED":
+        return "succeeded"
+    if status == "CANCELED":
+        return "canceled"
+    return "failed"
+
+
+def verify_platega_webhook_headers(headers, expected_merchant_id: str, expected_secret: str) -> bool:
+    merchant_header = (headers.get("X-MerchantId") or "").strip()
+    secret_header = (headers.get("X-Secret") or "").strip()
+    if not merchant_header or not secret_header:
+        return False
+    return (
+        secrets.compare_digest(merchant_header, expected_merchant_id)
+        and secrets.compare_digest(secret_header, expected_secret)
+    )
+
+
+async def resolve_platega_postback_target(payload: dict):
+    """Resolve processing target from normalized Platega callback payload."""
+    raw_id = (payload.get("id") or "").strip()
+    if not raw_id:
+        return None
+    info = await get_payment_by_id(raw_id)
+    return {
+        "status": payload.get("status"),
+        "raw_id": raw_id,
+        "payment_id": raw_id,
+        "payment_found": bool(info),
+        "mapped_status": map_platega_status(payload.get("status")),
     }

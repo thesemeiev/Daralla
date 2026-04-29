@@ -11,6 +11,16 @@ import aiosqlite
 import httpx
 
 from daralla_backend.db import DB_PATH, add_payment, get_payment_by_id
+from daralla_backend.platega_config import (
+    PLATEGA_BASE_URL,
+    PLATEGA_CREATE_PATH,
+    PLATEGA_CURRENCY,
+    PLATEGA_FAILED_URL,
+    PLATEGA_MERCHANT_ID,
+    PLATEGA_PAYMENT_METHOD,
+    PLATEGA_RETURN_URL,
+    PLATEGA_SECRET,
+)
 from daralla_backend.db.subscriptions_db import get_subscription_by_id
 from daralla_backend.cryptocloud_config import CRYPTOCLOUD_AVAILABLE_CURRENCIES
 from daralla_backend.prices_config import PRICES, get_default_device_limit_async
@@ -48,7 +58,7 @@ async def fetch_payment_by_id(payment_id: str):
 async def create_user_payment(user_id: str, period: str, subscription_id, referrer_code: str, gateway: str, logger):
     if not period or period not in ("month", "3month"):
         raise UserPaymentServiceError('Invalid period. Use "month" or "3month"', 400)
-    if gateway not in ("yookassa", "cryptocloud"):
+    if gateway not in ("yookassa", "cryptocloud", "platega"):
         gateway = "yookassa"
 
     if subscription_id:
@@ -171,6 +181,77 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             "cryptocurrency": payment_meta_base.get("cryptocurrency"),
             "crypto": crypto_out,
             "h2h_available": bool(crypto_out),
+        }
+
+    if gateway == "platega":
+        if not PLATEGA_MERCHANT_ID or not PLATEGA_SECRET:
+            raise UserPaymentServiceError("Platega payment is not configured", 503)
+
+        webapp_base = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
+        default_return_url = f"{webapp_base}/?{urlencode({'payment_return': '1'})}" if webapp_base else ""
+        default_failed_url = f"{webapp_base}/?{urlencode({'payment_return': '0'})}" if webapp_base else ""
+        return_url = (PLATEGA_RETURN_URL or default_return_url).strip()
+        failed_url = (PLATEGA_FAILED_URL or default_failed_url).strip()
+        if not return_url or not failed_url:
+            logger.error("PLATEGA return/failed URL is missing")
+            raise UserPaymentServiceError("Platega redirect URLs are not configured", 503)
+
+        amount_rub = float(PRICES[period])
+        payload = {
+            "paymentMethod": PLATEGA_PAYMENT_METHOD,
+            "paymentDetails": {"amount": amount_rub, "currency": PLATEGA_CURRENCY},
+            "description": f"VPN {period} для {user_id}",
+            "return": return_url,
+            "failedUrl": failed_url,
+            "payload": f"user_id={user_id};type={payment_period};email={unique_email}",
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{PLATEGA_BASE_URL}{PLATEGA_CREATE_PATH}",
+                headers={
+                    "X-MerchantId": PLATEGA_MERCHANT_ID,
+                    "X-Secret": PLATEGA_SECRET,
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            if resp.status_code >= 400:
+                logger.warning("Platega create transaction failed: %s %s", resp.status_code, resp.text)
+                raise UserPaymentServiceError("Failed to create Platega transaction", 502)
+            body = resp.json()
+
+        result = body.get("result") if isinstance(body.get("result"), dict) else body
+        transaction_id = (
+            result.get("id")
+            or result.get("transactionId")
+            or result.get("transaction_id")
+            or result.get("uuid")
+        )
+        payment_link = (
+            result.get("redirect")
+            or result.get("redirectUrl")
+            or result.get("redirect_url")
+            or result.get("payment_url")
+            or result.get("url")
+        )
+        if not transaction_id or not payment_link:
+            logger.warning("Platega create transaction invalid response: %s", body)
+            raise UserPaymentServiceError("Invalid Platega response", 502)
+
+        payment_meta_base["gateway"] = "platega"
+        await create_pending_payment(
+            payment_id=str(transaction_id).strip(),
+            user_id=user_id,
+            meta=payment_meta_base,
+        )
+        return {
+            "success": True,
+            "payment_id": str(transaction_id).strip(),
+            "payment_url": str(payment_link).strip(),
+            "amount": price,
+            "period": period,
+            "gateway": "platega",
         }
 
     from yookassa import Payment
