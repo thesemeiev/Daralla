@@ -521,7 +521,14 @@ class X3:
         if not uuid_for_url:
             email = self._client_get(c, "email", None)
             if email:
-                resolved = await self._api.client.get_by_email(str(email))
+                resolved = None
+                try:
+                    resolved = await self._api.client.get_by_email(str(email))
+                except ValueError as exc:
+                    # hy2/tuic панели нередко отвечают "Error getting traffics / Inbound Not Found"
+                    # даже для существующего клиента; в этом случае идем в inbound.update fallback.
+                    if not _value_error_client_absent_on_panel(exc):
+                        raise
                 if resolved is not None:
                     resolved.expiry_time = self._client_get(c, "expiry_time", getattr(resolved, "expiry_time", None))
                     resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
@@ -577,11 +584,25 @@ class X3:
         """Fallback update path by inbound settings when updateClient has empty client id."""
         inv = await self._api.inbound.get_by_id(int(inbound_id))
         settings = getattr(inv, "settings", None)
-        clients = getattr(settings, "clients", None) or []
         target = None
-        for cl in clients:
-            if str(getattr(cl, "email", "")).strip() == email:
-                target = cl
+
+        def _groups_from_settings() -> list[list[Any]]:
+            if settings is None:
+                return []
+            if isinstance(settings, dict):
+                return [list(settings.get("clients") or []), list(settings.get("users") or [])]
+            return [
+                list(getattr(settings, "clients", None) or []),
+                list(getattr(settings, "users", None) or []),
+            ]
+
+        for group in _groups_from_settings():
+            for cl in group:
+                cl_email = self._client_get(cl, "email", "")
+                if str(cl_email).strip() == email:
+                    target = cl
+                    break
+            if target is not None:
                 break
         if target is None:
             raise ValueError(
@@ -589,16 +610,16 @@ class X3:
             )
 
         if expiry_time is not None:
-            target.expiry_time = int(expiry_time)
+            self._client_set(target, "expiry_time", int(expiry_time))
         if limit_ip is not None:
-            target.limit_ip = int(limit_ip)
+            self._client_set(target, "limit_ip", int(limit_ip))
         protocol_norm = (
             self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
             if protocol_hint
             else ""
         )
         if protocol_norm == "vless" and flow_override is not None:
-            target.flow = flow_override
+            self._client_set(target, "flow", flow_override)
 
         await self._api.inbound.update(int(inbound_id), inv)
 

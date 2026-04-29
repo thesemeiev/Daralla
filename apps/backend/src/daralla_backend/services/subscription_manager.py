@@ -388,9 +388,18 @@ class SubscriptionManager:
                                 )
                                 return True, True
                         except Exception as set_expiry_e:
+                            details = str(set_expiry_e)
+                            last_attempt = getattr(set_expiry_e, "last_attempt", None)
+                            if last_attempt is not None and callable(getattr(last_attempt, "exception", None)):
+                                try:
+                                    cause = last_attempt.exception()
+                                except Exception:
+                                    cause = None
+                                if cause is not None:
+                                    details = f"{details}; root_cause={cause!r}"
                             logger.warning(
                                 f"Ошибка синхронизации после создания клиента {client_email} "
-                                f"на сервере {server_name}: {set_expiry_e}. "
+                                f"на сервере {server_name}: {details}. "
                                 f"Клиент создан, параметры будут догнаны позднее."
                             )
                             return True, True
