@@ -9,8 +9,9 @@ from typing import Any, Dict, Optional
 
 def client_to_api_dict(c: Any) -> dict:
     """Convert py3xui client (or dict) to 3x-ui API dict (camelCase keys)."""
-    if hasattr(c, "model_dump"):
-        d = c.model_dump()
+    if hasattr(c, "model_dump") and callable(getattr(c, "model_dump", None)):
+        maybe_dump = c.model_dump()
+        d = maybe_dump if isinstance(maybe_dump, dict) else {}
     elif isinstance(c, dict):
         d = dict(c)
     else:
@@ -25,6 +26,12 @@ def client_to_api_dict(c: Any) -> dict:
     out = {}
     for k, v in d.items():
         out[key_map.get(k, k)] = v
+    if not isinstance(c, dict) and not d:
+        # Fallback for lightweight objects/mocks that expose attrs but no model_dump.
+        for attr in ("email", "id", "uuid", "expiry_time", "expiryTime", "limit_ip", "limitIp", "flow", "auth", "password"):
+            if hasattr(c, attr):
+                d[attr] = getattr(c, attr)
+
     if not isinstance(c, dict) and hasattr(c, "flow"):
         raw = getattr(c, "flow", None)
         out["flow"] = "" if raw is None else str(raw).strip()

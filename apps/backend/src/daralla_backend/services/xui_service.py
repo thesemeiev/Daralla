@@ -127,6 +127,19 @@ def _apply_py3xui_request_timeout() -> None:
 
 class X3:
     @staticmethod
+    def _client_get(c: Any, key: str, default: Any = None) -> Any:
+        if isinstance(c, dict):
+            return c.get(key, default)
+        return getattr(c, key, default)
+
+    @staticmethod
+    def _client_set(c: Any, key: str, value: Any) -> None:
+        if isinstance(c, dict):
+            c[key] = value
+        else:
+            setattr(c, key, value)
+
+    @staticmethod
     def _settings_clients_obj(settings: Any) -> list[Any]:
         clients = list(getattr(settings, "clients", None) or [])
         users = list(getattr(settings, "users", None) or [])
@@ -241,6 +254,20 @@ class X3:
 
     async def client_exists(self, user_email: str) -> bool:
         """Проверяет наличие клиента по email. При ошибке «Inbound Not Found» считаем, что клиента нет."""
+        # Prefer list snapshot for protocols where getClientTraffics may be incomplete (e.g. hysteria2).
+        try:
+            data = await self.list()
+            for inbound in data.get("obj", []):
+                try:
+                    settings = json.loads(inbound.get("settings", "{}"))
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    continue
+                for client in clients_from_settings_payload(settings):
+                    if str(client.get("email", "")).strip() == str(user_email).strip():
+                        return True
+        except Exception:
+            logger.debug("client_exists list-based check failed, fallback to get_by_email", exc_info=True)
+
         await self._ensure_login()
         try:
             c = await self._api.client.get_by_email(user_email)
@@ -480,24 +507,24 @@ class X3:
         inbound_id = (
             int(inbound_id_override)
             if inbound_id_override is not None
-            else getattr(c, "inbound_id", None)
+            else self._client_get(c, "inbound_id", None)
         )
         if inbound_id is None:
             raise ValueError("updateClient: у клиента нет inbound_id")
         api = self._api.client
-        uuid_for_url = getattr(c, "id", None) or getattr(c, "uuid", None)
+        uuid_for_url = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
         protocol_norm = (
             self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
             if protocol_hint
             else ""
         )
         if not uuid_for_url:
-            email = getattr(c, "email", None)
+            email = self._client_get(c, "email", None)
             if email:
                 resolved = await self._api.client.get_by_email(str(email))
                 if resolved is not None:
-                    resolved.expiry_time = getattr(c, "expiry_time", getattr(resolved, "expiry_time", None))
-                    resolved.limit_ip = getattr(c, "limit_ip", getattr(resolved, "limit_ip", None))
+                    resolved.expiry_time = self._client_get(c, "expiry_time", getattr(resolved, "expiry_time", None))
+                    resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
                     if flow_override is not None:
                         resolved.flow = flow_override
                     self._ensure_client_id_for_update(resolved)
@@ -512,8 +539,8 @@ class X3:
                 await self._update_client_via_inbound_settings(
                     inbound_id=int(inbound_id),
                     email=str(email),
-                    expiry_time=getattr(c, "expiry_time", None),
-                    limit_ip=getattr(c, "limit_ip", None),
+                    expiry_time=self._client_get(c, "expiry_time", None),
+                    limit_ip=self._client_get(c, "limit_ip", None),
                     flow_override=flow_override,
                     protocol_hint=protocol_norm or protocol_hint,
                 )
@@ -521,7 +548,7 @@ class X3:
         if not uuid_for_url:
             raise ValueError(
                 f"updateClient: empty client id for protocol={protocol_norm or 'unknown'} "
-                f"email={getattr(c, 'email', None)} inbound_id={inbound_id}"
+                f"email={self._client_get(c, 'email', None)} inbound_id={inbound_id}"
             )
         endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
         settings = {
@@ -604,10 +631,50 @@ class X3:
         li = int(limit_ip)
         needle = str(user_email).strip()
 
-        inbounds = await self._api.inbound.get_list()
+        data = await self.list()
         wanted_protocol = (target_protocol or "").strip().lower()
-        work_items: List[Tuple[int, str, Any]] = []
-        for inv in inbounds:
+        work_items: List[Tuple[int, str, dict]] = []
+        for inv in data.get("obj", []):
+            inv_id = inv.get("id")
+            if inv_id is None:
+                continue
+            inv_protocol = self._normalize_protocol_name((inv.get("protocol") or "vless").strip().lower(), None)
+            if target_inbound_id is not None and int(inv_id) != int(target_inbound_id):
+                continue
+            if wanted_protocol and inv_protocol != wanted_protocol:
+                continue
+            try:
+                settings = json.loads(inv.get("settings", "{}"))
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                continue
+            clients = clients_from_settings_payload(settings)
+            for cl in clients:
+                em = cl.get("email")
+                if em is None:
+                    continue
+                if str(em).strip() == needle:
+                    work_items.append((int(inv_id), inv_protocol, cl))
+
+        if work_items:
+            for inbound_id, inbound_protocol, c in work_items:
+                self._client_set(c, "expiry_time", exp_ms)
+                self._client_set(c, "limit_ip", li)
+                if inbound_protocol == "vless":
+                    self._client_set(c, "flow", want_flow)
+                self._ensure_client_id_for_update(c)
+                await self._post_inbound_update_client(
+                    c,
+                    inbound_id_override=inbound_id,
+                    flow_override=want_flow if inbound_protocol == "vless" else None,
+                    protocol_hint=inbound_protocol,
+                )
+            return True, True
+
+        # Compatibility fallback: walk py3xui models directly (helps protocols/panels
+        # where list JSON normalization misses some rows).
+        inbounds_models = await self._api.inbound.get_list()
+        fallback_items: List[Tuple[int, str, Any]] = []
+        for inv in inbounds_models:
             inv_id = getattr(inv, "id", None)
             if inv_id is None:
                 continue
@@ -623,14 +690,14 @@ class X3:
                 if em is None:
                     continue
                 if str(em).strip() == needle:
-                    work_items.append((int(inv_id), inv_protocol, cl))
+                    fallback_items.append((int(inv_id), inv_protocol, cl))
 
-        if work_items:
-            for inbound_id, inbound_protocol, c in work_items:
-                c.expiry_time = exp_ms
-                c.limit_ip = li
+        if fallback_items:
+            for inbound_id, inbound_protocol, c in fallback_items:
+                self._client_set(c, "expiry_time", exp_ms)
+                self._client_set(c, "limit_ip", li)
                 if inbound_protocol == "vless":
-                    c.flow = want_flow
+                    self._client_set(c, "flow", want_flow)
                 self._ensure_client_id_for_update(c)
                 await self._post_inbound_update_client(
                     c,
