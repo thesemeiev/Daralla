@@ -2938,7 +2938,7 @@ function renderChoosePaymentTariffCards(tariffs) {
         return [
             '<button type="button" class="choose-option-card', idx === 0 ? ' choose-option-card-selected' : '',
             '" data-period="', t.period, '" aria-pressed="', idx === 0 ? 'true' : 'false', '">',
-            badgeText ? '<span class="choose-option-sub">' + badgeText + '</span>' : '',
+            badgeText ? '<span class="choose-option-badge">' + badgeText + '</span>' : '',
             '<span class="choose-option-title">' + t.title + '</span>',
             '<span class="choose-option-price">' + t.price + '₽</span>',
             '</button>'

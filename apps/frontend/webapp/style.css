@@ -1951,6 +1951,27 @@ h1 {
 .choose-option-card.choose-option-card-selected .choose-option-sub {
     color: var(--text-secondary);
 }
+.choose-option-card .choose-option-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-muted);
+    color: var(--accent-on-tint);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+.choose-option-card-selected .choose-option-badge,
+.choose-option-card.choose-option-card-selected .choose-option-badge {
+    border-color: var(--accent);
+    background: var(--accent-muted);
+}
 .choose-option-card-disabled,
 .choose-option-card.choose-option-card-disabled {
     opacity: 0.45;
