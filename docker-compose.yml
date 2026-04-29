@@ -33,6 +33,9 @@ services:
       - PLATEGA_CURRENCY=${PLATEGA_CURRENCY:-RUB}
       - PLATEGA_RETURN_URL=${PLATEGA_RETURN_URL:-}
       - PLATEGA_FAILED_URL=${PLATEGA_FAILED_URL:-}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
 
 
     ports:

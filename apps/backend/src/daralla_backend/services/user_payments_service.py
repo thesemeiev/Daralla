@@ -207,25 +207,40 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
             "failedUrl": failed_url,
             "payload": f"user_id={user_id};type={payment_period};email={unique_email}",
         }
+        target_url = f"{PLATEGA_BASE_URL}{PLATEGA_CREATE_PATH}"
+        logger.info(
+            "Platega create transaction request: url=%s method=%s currency=%s",
+            target_url,
+            PLATEGA_PAYMENT_METHOD,
+            PLATEGA_CURRENCY,
+        )
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"{PLATEGA_BASE_URL}{PLATEGA_CREATE_PATH}",
-                headers={
-                    "X-MerchantId": PLATEGA_MERCHANT_ID,
-                    "X-Secret": PLATEGA_SECRET,
-                    "Content-Type": "application/json",
-                },
-                json=payload,
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    target_url,
+                    headers={
+                        "X-MerchantId": PLATEGA_MERCHANT_ID,
+                        "X-Secret": PLATEGA_SECRET,
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                if resp.status_code >= 400:
+                    logger.warning("Platega create transaction failed: %s %s", resp.status_code, resp.text)
+                    raise UserPaymentServiceError("Failed to create Platega transaction", 502)
+                try:
+                    body = resp.json()
+                except ValueError:
+                    logger.warning("Platega create transaction invalid JSON: %s", resp.text)
+                    raise UserPaymentServiceError("Invalid Platega response", 502)
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Platega create transaction network error: url=%s error=%s",
+                target_url,
+                exc,
             )
-            if resp.status_code >= 400:
-                logger.warning("Platega create transaction failed: %s %s", resp.status_code, resp.text)
-                raise UserPaymentServiceError("Failed to create Platega transaction", 502)
-            try:
-                body = resp.json()
-            except ValueError:
-                logger.warning("Platega create transaction invalid JSON: %s", resp.text)
-                raise UserPaymentServiceError("Invalid Platega response", 502)
+            raise UserPaymentServiceError("Platega temporarily unavailable", 502)
 
         result = body.get("result") if isinstance(body.get("result"), dict) else body
         transaction_id = (
