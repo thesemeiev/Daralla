@@ -219,38 +219,58 @@
                         <span class="choose-option-price">350₽</span>
                     </button>
                 </div>
-                <p class="choose-section-label" style="margin-top: 20px;">Способ оплаты</p>
-                <div class="choose-options-row" role="group" aria-label="Способ оплаты">
-                    <button type="button" class="choose-option-card choose-option-card-selected" data-gateway="yookassa" aria-pressed="true">
+                <p class="choose-section-label" style="margin-top: 20px;">Тип оплаты</p>
+                <div class="choose-options-row" role="group" aria-label="Тип оплаты">
+                    <button type="button" class="choose-option-card choose-option-card-selected" data-payment-type="fiat" aria-pressed="true">
                         <span class="choose-option-icon">₽</span>
-                        <span class="choose-option-title">Рублями</span>
+                        <span class="choose-option-title">Рубли</span>
                         <span class="choose-option-sub">карта, СБП</span>
                     </button>
-                    <button type="button" class="choose-option-card" data-gateway="cryptocloud" aria-pressed="false">
+                    <button type="button" class="choose-option-card" data-payment-type="crypto" aria-pressed="false">
                         <span class="choose-option-icon">₿</span>
-                        <span class="choose-option-title">Криптой</span>
+                        <span class="choose-option-title">Крипта</span>
+                        <span class="choose-option-sub">TON, USDT</span>
+                    </button>
+                </div>
+                <p class="choose-section-label" style="margin-top: 20px;">Провайдер оплаты</p>
+                <div class="choose-options-row" role="group" aria-label="Провайдер оплаты">
+                    <button type="button" class="choose-option-card choose-option-card-selected" data-gateway="yookassa" data-supported-types="fiat" aria-pressed="true">
+                        <span class="choose-option-icon">Y</span>
+                        <span class="choose-option-title">YooKassa</span>
+                        <span class="choose-option-sub">Карта, СБП</span>
+                    </button>
+                    <button type="button" class="choose-option-card" data-gateway="cryptocloud" data-supported-types="crypto" aria-pressed="false">
+                        <span class="choose-option-icon">₿</span>
+                        <span class="choose-option-title">CryptoCloud</span>
                         <span class="choose-option-sub">TON, USDT</span>
                     </button>
                     <button type="button" class="choose-option-card" data-gateway="platega" aria-pressed="false">
                         <span class="choose-option-icon">P</span>
                         <span class="choose-option-title">Platega</span>
-                        <span class="choose-option-sub">СБП, Крипта</span>
+                        <span class="choose-option-sub" id="choose-platega-provider-sub">СБП</span>
                     </button>
                 </div>
                 <div id="choose-platega-method-block" style="display: none;">
                     <p class="choose-section-label" style="margin-top: 20px;">Метод в Platega</p>
                     <div class="choose-options-row" role="group" aria-label="Метод оплаты Platega">
-                        <button type="button" class="choose-option-card choose-option-card-selected" data-platega-method="sbp" aria-pressed="true">
+                        <button type="button" class="choose-option-card choose-option-card-selected" data-platega-method="sbp" data-supported-types="fiat" aria-pressed="true">
                             <span class="choose-option-icon">₽</span>
                             <span class="choose-option-title">СБП</span>
                             <span class="choose-option-sub">QR и банковские приложения</span>
                         </button>
-                        <button type="button" class="choose-option-card" data-platega-method="crypto" aria-pressed="false">
+                        <button type="button" class="choose-option-card" data-platega-method="crypto" data-supported-types="crypto" aria-pressed="false">
                             <span class="choose-option-icon">₿</span>
                             <span class="choose-option-title">Крипта</span>
                             <span class="choose-option-sub">Через Platega</span>
                         </button>
                     </div>
+                </div>
+                <div class="choose-summary-card">
+                    <p class="choose-summary-title">Итог заказа</p>
+                    <div class="choose-summary-row"><span>Период</span><span id="choose-summary-period">1 месяц</span></div>
+                    <div class="choose-summary-row"><span>Тип оплаты</span><span id="choose-summary-type">Рубли</span></div>
+                    <div class="choose-summary-row"><span>Провайдер</span><span id="choose-summary-provider">YooKassa</span></div>
+                    <div class="choose-summary-row choose-summary-row-total"><span>Сумма</span><span id="choose-summary-price">150₽</span></div>
                 </div>
                 <div id="choose-referral-code-block" class="referral-code-block" style="display: none; margin-top: 20px; padding: 16px;">
                     <label class="form-group" style="margin-bottom: 0;">
@@ -258,7 +278,7 @@
                         <input type="text" class="referral-code-input" placeholder="Например X7K2M" maxlength="8" style="margin-top: 8px;" />
                     </label>
                 </div>
-                <button type="button" class="btn-primary" id="choose-payment-submit" style="width: 100%; margin-top: 24px;">Оплатить</button>
+                <button type="button" class="btn-primary" id="choose-payment-submit" style="width: 100%; margin-top: 24px;">Создать платёж</button>
                 <p class="legal-inline legal-inline--payment">
                     Оплачивая, вы принимаете
                     <a href="/terms">Пользовательское соглашение</a>

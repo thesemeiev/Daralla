@@ -1908,6 +1908,45 @@ h1 {
 .choose-option-card.choose-option-card-selected .choose-option-sub {
     color: var(--text-secondary);
 }
+.choose-option-card-disabled,
+.choose-option-card.choose-option-card-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.choose-summary-card {
+    margin-top: 20px;
+    padding: 14px 16px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    border-radius: 10px;
+}
+
+.choose-summary-title {
+    margin: 0 0 10px 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.choose-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.choose-summary-row-total {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--card-border);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
 
 /* Стили для страницы покупки подписки */
 .subscription-plans {

@@ -2281,18 +2281,56 @@ function syncChooseOptionCards() {
     var container = document.getElementById('page-choose-payment-method');
     if (!container) return;
     var periodRow = container.querySelector('.choose-options-row[aria-label="Период подписки"]');
-    var paymentRow = container.querySelector('.choose-options-row[aria-label="Способ оплаты"]');
+    var paymentTypeRow = container.querySelector('.choose-options-row[aria-label="Тип оплаты"]');
+    var paymentRow = container.querySelector('.choose-options-row[aria-label="Провайдер оплаты"]');
     var plategaMethodBlock = document.getElementById('choose-platega-method-block');
     var plategaMethodRow = plategaMethodBlock && plategaMethodBlock.querySelector('.choose-options-row[aria-label="Метод оплаты Platega"]');
+    var plategaProviderSubEl = document.getElementById('choose-platega-provider-sub');
     var submitBtn = document.getElementById('choose-payment-submit');
-    if (!periodRow || !paymentRow) return;
+    var summaryPeriodEl = document.getElementById('choose-summary-period');
+    var summaryTypeEl = document.getElementById('choose-summary-type');
+    var summaryProviderEl = document.getElementById('choose-summary-provider');
+    var summaryPriceEl = document.getElementById('choose-summary-price');
+    if (!periodRow || !paymentTypeRow || !paymentRow) return;
+
+    function getCurrentPaymentType() {
+        if (currentPaymentGateway === 'cryptocloud') return 'crypto';
+        if (currentPaymentGateway === 'platega' && currentPlategaPaymentMethod === 'crypto') return 'crypto';
+        return 'fiat';
+    }
 
     function updatePayButtonText() {
         var period = currentPaymentPeriod === '3month' ? '3month' : 'month';
         var periodPriceEl = periodRow.querySelector('.choose-option-card[data-period="' + period + '"] .choose-option-price');
         var priceText = periodPriceEl ? String(periodPriceEl.textContent || '').trim() : '';
         if (!priceText) priceText = period === '3month' ? '350₽' : '150₽';
-        if (submitBtn) submitBtn.textContent = 'Оплатить ' + priceText;
+        if (submitBtn) submitBtn.textContent = 'Создать платёж ' + priceText;
+        if (summaryPriceEl) summaryPriceEl.textContent = priceText;
+    }
+
+    function providerLabel(gateway) {
+        if (gateway === 'cryptocloud') return 'CryptoCloud';
+        if (gateway === 'platega') {
+            return currentPlategaPaymentMethod === 'crypto' ? 'Platega (Крипта)' : 'Platega (СБП)';
+        }
+        return 'YooKassa';
+    }
+
+    function updateSummary() {
+        var period = currentPaymentPeriod === '3month' ? '3month' : 'month';
+        if (summaryPeriodEl) summaryPeriodEl.textContent = period === '3month' ? '3 месяца' : '1 месяц';
+        if (summaryTypeEl) summaryTypeEl.textContent = getCurrentPaymentType() === 'crypto' ? 'Крипта' : 'Рубли';
+        if (summaryProviderEl) summaryProviderEl.textContent = providerLabel(currentPaymentGateway || 'yookassa');
+        if (plategaProviderSubEl) {
+            plategaProviderSubEl.textContent = getCurrentPaymentType() === 'crypto' ? 'Крипта' : 'СБП';
+        }
+        updatePayButtonText();
+    }
+
+    function supportsPaymentType(card, paymentType) {
+        var allowed = String(card.getAttribute('data-supported-types') || '').trim();
+        if (!allowed) return true;
+        return allowed.split(',').map(function (v) { return String(v || '').trim(); }).indexOf(paymentType) !== -1;
     }
 
     function setPeriod(period) {
@@ -2302,37 +2340,90 @@ function syncChooseOptionCards() {
             card.classList.toggle('choose-option-card-selected', isSelected);
             card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
-        updatePayButtonText();
+        updateSummary();
     }
 
-    function setGateway(gateway) {
+    function setPaymentType(paymentType) {
+        var normalized = paymentType === 'crypto' ? 'crypto' : 'fiat';
+        paymentTypeRow.querySelectorAll('.choose-option-card[data-payment-type]').forEach(function (card) {
+            var isSelected = card.getAttribute('data-payment-type') === normalized;
+            card.classList.toggle('choose-option-card-selected', isSelected);
+            card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+
+        var hasSelectedGateway = false;
+        paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
+            var allowed = supportsPaymentType(card, normalized);
+            card.style.display = allowed ? '' : 'none';
+            card.classList.toggle('choose-option-card-disabled', !allowed);
+            if (!allowed && card.classList.contains('choose-option-card-selected')) {
+                card.classList.remove('choose-option-card-selected');
+                card.setAttribute('aria-pressed', 'false');
+            }
+            if (allowed && card.getAttribute('data-gateway') === currentPaymentGateway) {
+                hasSelectedGateway = true;
+            }
+        });
+
+        if (!hasSelectedGateway) {
+            currentPaymentGateway = normalized === 'crypto' ? 'cryptocloud' : 'yookassa';
+        }
+        if (currentPaymentGateway === 'platega') {
+            currentPlategaPaymentMethod = normalized === 'crypto' ? 'crypto' : 'sbp';
+        }
+        setGateway(currentPaymentGateway, normalized);
+    }
+
+    function setGateway(gateway, paymentTypeOverride) {
+        var paymentType = paymentTypeOverride === 'crypto' ? 'crypto' : (paymentTypeOverride === 'fiat' ? 'fiat' : getCurrentPaymentType());
         var g = 'yookassa';
         if (gateway === 'cryptocloud') g = 'cryptocloud';
         if (gateway === 'platega') g = 'platega';
+        var gatewayCard = paymentRow.querySelector('.choose-option-card[data-gateway="' + g + '"]');
+        if (!gatewayCard || !supportsPaymentType(gatewayCard, paymentType)) {
+            g = paymentType === 'crypto' ? 'cryptocloud' : 'yookassa';
+        }
         currentPaymentGateway = g;
         paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
-            var isSelected = card.getAttribute('data-gateway') === g;
+            var isSelected = card.style.display !== 'none' && card.getAttribute('data-gateway') === g;
             card.classList.toggle('choose-option-card-selected', isSelected);
             card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
         if (plategaMethodBlock) plategaMethodBlock.style.display = g === 'platega' ? '' : 'none';
+        if (g === 'platega') {
+            currentPlategaPaymentMethod = paymentType === 'crypto' ? 'crypto' : 'sbp';
+            setPlategaMethod(currentPlategaPaymentMethod, paymentType);
+        }
+        updateSummary();
     }
 
-    function setPlategaMethod(method) {
+    function setPlategaMethod(method, paymentTypeOverride) {
+        var paymentType = paymentTypeOverride === 'crypto' ? 'crypto' : (paymentTypeOverride === 'fiat' ? 'fiat' : getCurrentPaymentType());
         var resolved = method === 'crypto' ? 'crypto' : 'sbp';
+        if (paymentType === 'crypto') resolved = 'crypto';
+        if (paymentType === 'fiat') resolved = 'sbp';
         currentPlategaPaymentMethod = resolved;
         if (!plategaMethodRow) return;
         plategaMethodRow.querySelectorAll('.choose-option-card[data-platega-method]').forEach(function (card) {
-            var isSelected = card.getAttribute('data-platega-method') === resolved;
+            var allowed = supportsPaymentType(card, paymentType);
+            card.style.display = allowed ? '' : 'none';
+            card.classList.toggle('choose-option-card-disabled', !allowed);
+            var isSelected = allowed && card.getAttribute('data-platega-method') === resolved;
             card.classList.toggle('choose-option-card-selected', isSelected);
             card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
         });
+        updateSummary();
     }
 
     periodRow.querySelectorAll('.choose-option-card[data-period]').forEach(function (card) {
         card.removeEventListener('click', card._periodClick);
         card._periodClick = function () { setPeriod(card.getAttribute('data-period')); };
         card.addEventListener('click', card._periodClick);
+    });
+    paymentTypeRow.querySelectorAll('.choose-option-card[data-payment-type]').forEach(function (card) {
+        card.removeEventListener('click', card._paymentTypeClick);
+        card._paymentTypeClick = function () { setPaymentType(card.getAttribute('data-payment-type')); };
+        card.addEventListener('click', card._paymentTypeClick);
     });
     paymentRow.querySelectorAll('.choose-option-card[data-gateway]').forEach(function (card) {
         card.removeEventListener('click', card._gatewayClick);
@@ -2348,9 +2439,10 @@ function syncChooseOptionCards() {
     }
 
     setPeriod(currentPaymentPeriod || 'month');
+    setPaymentType(getCurrentPaymentType());
     setGateway(currentPaymentGateway || 'yookassa');
     setPlategaMethod(currentPlategaPaymentMethod || 'sbp');
-    updatePayButtonText();
+    updateSummary();
 }
 
 /** Кнопка «Оплатить» на странице оформления. */

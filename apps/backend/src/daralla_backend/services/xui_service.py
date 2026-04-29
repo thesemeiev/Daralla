@@ -127,6 +127,36 @@ def _apply_py3xui_request_timeout() -> None:
 
 class X3:
     @staticmethod
+    def _to_int(value: Any) -> int:
+        if value is None:
+            return 0
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            s = value.strip()
+            if not s:
+                return 0
+            try:
+                return int(float(s))
+            except (TypeError, ValueError):
+                return 0
+        return 0
+
+    @classmethod
+    def _extract_traffic_from_mapping(cls, payload: Any) -> Optional[dict]:
+        if not isinstance(payload, dict):
+            return None
+        up = cls._to_int(payload.get("up", payload.get("upload", 0)))
+        down = cls._to_int(payload.get("down", payload.get("download", 0)))
+        total = cls._to_int(payload.get("total", payload.get("used", 0)))
+        if total <= 0 and (up > 0 or down > 0):
+            total = up + down
+        # Возвращаем структуру даже с нулями — это валидное состояние для нового клиента.
+        return {"upload": up, "download": down, "total": total}
+
+    @staticmethod
     def _client_get(c: Any, key: str, default: Any = None) -> Any:
         if isinstance(c, dict):
             return c.get(key, default)
@@ -1035,6 +1065,7 @@ class X3:
             return 0, 0, 0
 
     async def get_client_traffic(self, user_email: str, timeout: int = 15) -> Optional[dict]:
+        target_email = str(user_email).strip()
         data = await self.list(timeout=timeout)
         if not data.get("success") or not data.get("obj"):
             return None
@@ -1042,19 +1073,34 @@ class X3:
             stats = inbound.get("clientStats", [])
             if isinstance(stats, list):
                 for s in stats:
-                    if s.get("email") == user_email:
-                        up = s.get("up", 0) or s.get("upload", 0)
-                        down = s.get("down", 0) or s.get("download", 0)
-                        total = s.get("total", 0)
-                        return {"upload": up, "download": down, "total": total}
+                    if str(s.get("email", "")).strip() == target_email:
+                        mapped = self._extract_traffic_from_mapping(s)
+                        if mapped is not None:
+                            return mapped
             elif isinstance(stats, dict):
-                s = stats.get(user_email)
+                s = stats.get(target_email)
+                if s is None:
+                    # Иногда ключи в panel-ответе содержат лишние пробелы.
+                    for k, v in stats.items():
+                        if str(k).strip() == target_email:
+                            s = v
+                            break
                 if s:
-                    return {
-                        "upload": s.get("up", 0) or s.get("upload", 0),
-                        "download": s.get("down", 0) or s.get("download", 0),
-                        "total": s.get("total", 0),
-                    }
+                    mapped = self._extract_traffic_from_mapping(s)
+                    if mapped is not None:
+                        return mapped
+
+        # Fallback: для Hysteria2 list().clientStats может быть пустым/неполным.
+        # get_by_email обычно возвращает актуальные up/down/total из panel API.
+        try:
+            await self._ensure_login()
+            c = await self._api.client.get_by_email(target_email)
+            if c is not None:
+                mapped = self._extract_traffic_from_mapping(client_to_api_dict(c))
+                if mapped is not None:
+                    return mapped
+        except Exception:
+            logger.debug("get_client_traffic fallback get_by_email failed for %s", target_email, exc_info=True)
         return None
 
     async def get_client_count(self, timeout: int = 15) -> int:
