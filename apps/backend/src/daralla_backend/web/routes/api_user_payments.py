@@ -34,6 +34,16 @@ async def handle_api_user_payment_create(_auth, logger):
         )
         return jsonify(payload), 200, _cors_headers()
     except UserPaymentServiceError as e:
+        safe_data = data if isinstance(data, dict) else {}
+        logger.warning(
+            "payment_create_failed: status=%s error=%s user_id=%s gateway=%s period=%s subscription_id=%s",
+            e.status_code,
+            e.message,
+            user_id if "user_id" in locals() else None,
+            safe_data.get("gateway"),
+            safe_data.get("period"),
+            safe_data.get("subscription_id"),
+        )
         return jsonify({"error": e.message}), e.status_code, _cors_headers()
     except Exception as e:
         logger.error("Ошибка в API /api/user/payment/create: %s", e, exc_info=True)

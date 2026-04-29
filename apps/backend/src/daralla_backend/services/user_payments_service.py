@@ -107,6 +107,7 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
         api_token = os.getenv("CRYPTOCLOUD_API_TOKEN")
         shop_id = os.getenv("CRYPTOCLOUD_SHOP_ID")
         if not api_token or not shop_id:
+            logger.warning("CryptoCloud payment is not configured: missing token or shop_id")
             raise UserPaymentServiceError("CryptoCloud payment is not configured", 503)
         amount_rub = float(PRICES[period])
         order_id = f"{user_id}_{int(time.time() * 1000)}"
@@ -185,6 +186,7 @@ async def create_user_payment(user_id: str, period: str, subscription_id, referr
 
     if gateway == "platega":
         if not PLATEGA_MERCHANT_ID or not PLATEGA_SECRET:
+            logger.warning("Platega payment is not configured: missing merchant_id or secret")
             raise UserPaymentServiceError("Platega payment is not configured", 503)
 
         webapp_base = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
