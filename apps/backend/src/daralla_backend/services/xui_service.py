@@ -443,10 +443,9 @@ class X3:
             "protocol": protocol_norm,
         }
         if protocol_norm == "hysteria2":
-            # Compatibility: different 3x-ui builds may rely on auth or password.
+            # Hysteria2 panel UI uses "Auth Password"; keep payload aligned with it.
             hy2_secret = str(uuid.uuid4()).replace("-", "")
             payload["auth"] = hy2_secret
-            payload["password"] = hy2_secret
         elif protocol_norm in _PASSWORD_BASED_PROTOCOLS:
             payload["password"] = str(uuid.uuid4())
         else:
@@ -787,13 +786,13 @@ class X3:
             else ""
         )
         if protocol_norm == "hysteria2":
-            # Some 3x-ui builds use auth, others password.
-            # Keep both populated to avoid panel-specific toggle/update glitches.
+            # Normalize to auth-first shape used by panel UI for hysteria2.
             target_auth = str(self._client_get(target, "auth", "") or "").strip()
             target_password = str(self._client_get(target, "password", "") or "").strip()
-            normalized_secret = self._normalize_hysteria_secret(target_password or target_auth)
-            self._client_set(target, "password", normalized_secret)
-            self._client_set(target, "auth", normalized_secret)
+            if target_password and not target_auth:
+                self._client_set(target, "auth", target_password)
+            elif not target_auth and not target_password:
+                self._client_set(target, "auth", self._normalize_hysteria_secret(None))
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 
