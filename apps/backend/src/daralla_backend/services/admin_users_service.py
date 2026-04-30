@@ -19,6 +19,7 @@ from daralla_backend.db.subscriptions_db import (
     update_subscription_expiry,
 )
 from daralla_backend.db.users_db import delete_user_completely, resolve_user_by_query
+from daralla_backend.services.sync_outbox_service import enqueue_subscription_sync_jobs, outbox_write_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,16 @@ async def create_subscription_for_user(
                     failed_servers.append({"server": server_name, "error": "Failed to create client"})
             except Exception as e:
                 failed_servers.append({"server": server_name, "error": str(e)})
+
+    if outbox_write_enabled():
+        try:
+            await enqueue_subscription_sync_jobs(
+                int(subscription_id),
+                reason="admin_create_subscription_for_user",
+                server_names=[f["server"] for f in failed_servers] if failed_servers else None,
+            )
+        except Exception as outbox_e:
+            logger.warning("Outbox enqueue после admin create sub=%s: %s", subscription_id, outbox_e)
 
     payload = {
         "subscription": {

@@ -3286,6 +3286,7 @@ var adminServerActions = appActions.bindFeature(adminServersFeature, [
     'saveServerConfig',
     'deleteServerConfig',
     'syncAllServers',
+    'showSyncOutboxStatus',
     'runSyncAllServers'
 ]);
 var loadServerManagement = adminServerActions.loadServerManagement;
@@ -3308,6 +3309,7 @@ var editServerConfig = adminServerActions.editServerConfig;
 var saveServerConfig = adminServerActions.saveServerConfig;
 var deleteServerConfig = adminServerActions.deleteServerConfig;
 var syncAllServers = adminServerActions.syncAllServers;
+var showSyncOutboxStatus = adminServerActions.showSyncOutboxStatus;
 var runSyncAllServers = adminServerActions.runSyncAllServers;
 
 // Public UI API: whitelisted globals used by inline handlers in index.html
@@ -3354,6 +3356,7 @@ var PUBLIC_UI_API_NAMES = [
     'sendBroadcast',
     'showAddServerConfigModal',
     'showAddServerGroupModal',
+    'showSyncOutboxStatus',
     'showAdminEventForm',
     'showInstructionModal',
     'showModal',

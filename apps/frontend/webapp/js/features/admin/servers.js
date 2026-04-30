@@ -520,6 +520,44 @@
             runSyncAllServers();
         }
 
+        async function showSyncOutboxStatus() {
+            try {
+                var resp = await _deps.apiFetch('/api/admin/sync-outbox', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'stats', limit: 30 })
+                });
+                var data = await resp.json();
+                if (!data || !data.success) throw new Error((data && data.error) || 'Ошибка outbox');
+                var s = data.stats || {};
+                var lines = [
+                    'Pending: ' + (s.pending || 0),
+                    'Retry: ' + (s.retry || 0),
+                    'Processing: ' + (s.processing || 0),
+                    'Dead: ' + (s.dead || 0),
+                    'Due now: ' + (s.due_now || 0)
+                ];
+                if (s.dead > 0) {
+                    var retry = await _deps.appShowConfirm(
+                        'Найдено dead-задач: ' + s.dead + '. Перезапустить их?',
+                        { title: 'Outbox синка', confirmText: 'Retry dead' }
+                    );
+                    if (retry) {
+                        var rr = await _deps.apiFetch('/api/admin/sync-outbox', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'retry_dead', limit: 200 })
+                        });
+                        var rd = await rr.json();
+                        if (rd && rd.success) lines.push('Перезапущено: ' + (rd.retried || 0));
+                    }
+                }
+                await _deps.appShowAlert(lines.join('\n'), { title: 'Outbox синка' });
+            } catch (e) {
+                await _deps.appShowAlert('Не удалось получить статус outbox: ' + (e.message || e), { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
         async function runSyncAllServers() {
             var btns = [document.getElementById('admin-sync-all-panels-btn'), document.getElementById('admin-sync-all-panels-group-btn')].filter(Boolean);
             btns.forEach(function (b) { b.disabled = true; });
@@ -539,6 +577,37 @@
                     var errN = st.total_errors;
                     if (errN == null && st.errors && st.errors.length) errN = st.errors.length;
                     if (errN) parts.push('Замечаний в логе sync: ' + errN);
+                    try {
+                        var outboxResp = await _deps.apiFetch('/api/admin/sync-outbox', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'stats', limit: 30 })
+                        });
+                        var outboxData = await outboxResp.json();
+                        if (outboxData && outboxData.success && outboxData.stats) {
+                            var stOut = outboxData.stats;
+                            parts.push('Outbox: pending=' + (stOut.pending || 0) + ', retry=' + (stOut.retry || 0) + ', dead=' + (stOut.dead || 0));
+                            if (stOut.dead > 0) {
+                                var retryDead = await _deps.appShowConfirm(
+                                    'Есть зависшие outbox-задачи синка: ' + stOut.dead + '. Перезапустить их сейчас?',
+                                    { title: 'Outbox синка', confirmText: 'Перезапустить' }
+                                );
+                                if (retryDead) {
+                                    var retryResp = await _deps.apiFetch('/api/admin/sync-outbox', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ action: 'retry_dead', limit: 200 })
+                                    });
+                                    var retryData = await retryResp.json();
+                                    if (retryData && retryData.success) {
+                                        parts.push('Outbox перезапущено: ' + (retryData.retried || 0));
+                                    }
+                                }
+                            }
+                        }
+                    } catch (outboxErr) {
+                        console.warn('outbox stats error:', outboxErr);
+                    }
                     _deps.platform.showAlert('Синхронизация завершена.\n\n' + parts.join('\n'));
                     loadServerGroups();
                 } else {
@@ -574,6 +643,7 @@
             saveServerConfig: saveServerConfig,
             deleteServerConfig: deleteServerConfig,
             syncAllServers: syncAllServers,
+            showSyncOutboxStatus: showSyncOutboxStatus,
             runSyncAllServers: runSyncAllServers
         };
     }

@@ -10,6 +10,7 @@ from daralla_backend.services.admin_servers_service import (
     handle_server_config_update,
     handle_server_group_update,
     handle_server_groups,
+    handle_sync_outbox,
     handle_servers_config,
     handle_sync_all,
 )
@@ -65,6 +66,13 @@ def create_blueprint(bot_app):
     @admin_route
     async def api_admin_sync_all(request, admin_id):
         payload, status = await handle_sync_all()
+        return jsonify(payload), status, _cors_headers()
+
+    @bp.route("/api/admin/sync-outbox", methods=["POST", "OPTIONS"])
+    @admin_route
+    async def api_admin_sync_outbox(request, admin_id):
+        data = await request.get_json(silent=True) or {}
+        payload, status = await handle_sync_outbox(data)
         return jsonify(payload), status, _cors_headers()
 
     return bp

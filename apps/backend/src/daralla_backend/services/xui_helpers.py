@@ -113,6 +113,23 @@ def _limit_ip_matches_panel(panel_limit: Any, device_limit: int) -> bool:
         return False
 
 
+def _panel_enable_is_disabled(panel_enable: Any) -> bool:
+    """Best-effort parse panel 'enable' value; True means client is disabled on panel."""
+    if panel_enable is None:
+        return False
+    if isinstance(panel_enable, bool):
+        return panel_enable is False
+    if isinstance(panel_enable, (int, float)):
+        return int(panel_enable) == 0
+    s = str(panel_enable).strip().lower()
+    if s in ("false", "0", "off", "no", "disabled"):
+        return True
+    if s in ("true", "1", "on", "yes", "enabled"):
+        return False
+    # Unknown textual state: don't treat as disabled to avoid false positives.
+    return False
+
+
 def flow_matches_desired(panel_flow: Any, flow_from_config: Optional[str]) -> bool:
     desired = (flow_from_config or "").strip()
     panel = normalize_client_flow_value(panel_flow)
@@ -127,6 +144,9 @@ def panel_snapshot_matches_desired(
 ) -> bool:
     """True if panel list() snapshot matches desired state."""
     if not panel_snapshot.get("on_panel"):
+        return False
+    # Критично: even with matching expiry/limit/flow, disabled client must be reconciled.
+    if _panel_enable_is_disabled(panel_snapshot.get("enable")):
         return False
     se = panel_snapshot.get("expiry_sec")
     if not _expiry_sec_matches_panel(se, expiry_sec):

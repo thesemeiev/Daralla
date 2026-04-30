@@ -5768,29 +5768,38 @@ a.instruction-platform-btn {
     gap: 6px;
     justify-content: flex-end;
 }
+.dashboard-revenue-select-wrap {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    max-width: 280px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+.dashboard-revenue-select {
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--input-color);
+    font-size: 13px;
+}
 @media (max-width: 640px) {
     .dashboard-revenue-presets {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-        justify-content: stretch;
+        display: none;
     }
-    .dashboard-revenue-preset {
-        width: 100%;
-        text-align: center;
-        padding: 8px 8px;
-    }
-}
-@media (max-width: 420px) {
-    .dashboard-revenue-presets {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .dashboard-revenue-select-wrap {
+        display: flex;
     }
 }
 
 .dashboard-revenue-preset {
-    padding: 6px 11px;
-    font-size: 12px;
+    padding: 5px 10px;
+    font-size: 11px;
     font-weight: 500;
     border-radius: 20px;
     border: 1px solid var(--card-border);

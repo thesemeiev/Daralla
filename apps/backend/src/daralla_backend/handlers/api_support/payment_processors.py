@@ -4,6 +4,7 @@
 import logging
 import json
 import datetime
+import os
 
 from ...db import get_payment_by_id, update_payment_status, update_payment_activation
 
@@ -18,6 +19,7 @@ def get_globals():
         'server_manager': ctx.server_manager,
         'notification_manager': ctx.notification_manager,
         'subscription_manager': ctx.subscription_manager,
+        'sync_manager': ctx.sync_manager,
     }
 
 
@@ -240,6 +242,51 @@ async def process_extension_payment(payment_id, user_id, meta):
                     f"ошибки на {len(failed_extensions)} серверах: {failed_extensions}. "
                     f"Серверы будут синхронизированы при следующей автоматической синхронизации."
                 )
+                # Outbox-догон проблемных серверов конкретной подписки.
+                if os.getenv("DARALLA_SYNC_OUTBOX_WRITE_ENABLED", "1").strip() != "0":
+                    try:
+                        from ...services.sync_outbox_service import enqueue_subscription_sync_jobs
+                        enq = await enqueue_subscription_sync_jobs(
+                            int(extension_subscription_id),
+                            reason="payment_extension_partial_failure",
+                            server_names=[str(s) for s in failed_extensions],
+                        )
+                        if enq:
+                            logger.info(
+                                "Outbox enqueue после частичного продления: sub=%s jobs=%s",
+                                extension_subscription_id,
+                                enq,
+                            )
+                    except Exception as outbox_e:
+                        logger.warning(
+                            "Не удалось enqueue outbox после частичного продления sub=%s: %s",
+                            extension_subscription_id,
+                            outbox_e,
+                        )
+                # Ускоренный догон после частичного продления — иначе может быть долгий рассинхрон
+                # до планового full/catchup цикла.
+                try:
+                    import asyncio
+                    sync_manager = get_globals().get("sync_manager")
+                    if sync_manager is not None:
+                        async def _kick_sync_clients_from_db_only():
+                            try:
+                                await sync_manager.sync_clients_from_db_only()
+                            except Exception as kick_e:
+                                logger.warning(
+                                    "Ошибка ускоренного догона после частичного продления "
+                                    "subscription_id=%s: %s",
+                                    extension_subscription_id,
+                                    kick_e,
+                                )
+                        asyncio.create_task(_kick_sync_clients_from_db_only())
+                except Exception as kick_spawn_e:
+                    logger.warning(
+                        "Не удалось запустить ускоренный догон после частичного продления "
+                        "subscription_id=%s: %s",
+                        extension_subscription_id,
+                        kick_spawn_e,
+                    )
             
             await update_payment_status(payment_id, 'succeeded')
             await update_payment_activation(payment_id, 1)
@@ -453,6 +500,26 @@ async def process_new_purchase_payment(payment_id, user_id, meta):
                 f"клиенты созданы на {len(successful_servers)} серверах, "
                 f"на {len(failed_servers)} серверах будут созданы при синхронизации: {failed_servers}"
             )
+            if os.getenv("DARALLA_SYNC_OUTBOX_WRITE_ENABLED", "1").strip() != "0":
+                try:
+                    from ...services.sync_outbox_service import enqueue_subscription_sync_jobs
+                    enq = await enqueue_subscription_sync_jobs(
+                        int(sub_dict["id"]),
+                        reason="payment_new_purchase_partial_failure",
+                        server_names=[str(s) for s in failed_servers],
+                    )
+                    if enq:
+                        logger.info(
+                            "Outbox enqueue после новой покупки с partial failure: sub=%s jobs=%s",
+                            sub_dict["id"],
+                            enq,
+                        )
+                except Exception as outbox_e:
+                    logger.warning(
+                        "Не удалось enqueue outbox после новой покупки sub=%s: %s",
+                        sub_dict["id"],
+                        outbox_e,
+                    )
         else:
             logger.info(f"Подписка {sub_dict['id']} создана: клиенты созданы на всех {len(successful_servers)} серверах")
         

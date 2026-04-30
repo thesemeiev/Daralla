@@ -12,6 +12,7 @@ from daralla_backend.db.subscriptions_db import (
     update_subscription_name,
 )
 from daralla_backend.db.users_db import get_user_server_usage
+from daralla_backend.services.sync_outbox_service import enqueue_subscription_sync_jobs, outbox_write_enabled
 
 
 async def list_user_subscriptions(user_id: str):
@@ -27,6 +28,12 @@ async def rename_subscription_for_user(sub_id: int, user_id: str, new_name: str)
     if not sub:
         return False
     await update_subscription_name(sub_id, new_name)
+    if outbox_write_enabled():
+        try:
+            await enqueue_subscription_sync_jobs(int(sub_id), reason="user_rename_subscription")
+        except Exception:
+            # Ошибка outbox не должна ломать пользовательский rename.
+            pass
     return True
 
 

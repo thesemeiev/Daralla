@@ -46,6 +46,7 @@ def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dic
                 "expiry_sec": expiry_sec,
                 "limit_ip": client.get("limitIp"),
                 "flow": flow_s,
+                "enable": client.get("enable"),
                 "protocol": protocol,
             }
     return out
@@ -65,6 +66,7 @@ def panel_entry_from_snapshot(
         "expiry_sec": row["expiry_sec"],
         "limit_ip": row.get("limit_ip"),
         "flow": row.get("flow"),
+        "enable": row.get("enable"),
         "protocol": row.get("protocol") or "vless",
     }
 

@@ -74,6 +74,8 @@
                 var pr = btn.getAttribute('data-dash-revenue-preset');
                 btn.classList.toggle('dashboard-revenue-preset--active', pr === r.preset);
             });
+            var selectEl = document.getElementById('dash-revenue-preset-select');
+            if (selectEl) selectEl.value = r.preset;
             var row = document.getElementById('dash-revenue-custom-row');
             if (row) {
                 if (r.preset === 'custom') {
@@ -295,13 +297,12 @@
         function initDashboardRevenueControls() {
             if (revenueControlsInitialized) return;
             var presetsEl = document.querySelector('.dashboard-revenue-presets');
-            if (!presetsEl) return;
+            var selectEl = document.getElementById('dash-revenue-preset-select');
+            if (!presetsEl && !selectEl) return;
             revenueControlsInitialized = true;
 
-            presetsEl.addEventListener('click', function (e) {
-                var btn = e.target.closest('[data-dash-revenue-preset]');
-                if (!btn) return;
-                var preset = btn.getAttribute('data-dash-revenue-preset');
+            function applyPresetSelection(preset) {
+                if (!preset) return;
                 if (preset === 'custom') {
                     seedCustomDatesIfNeeded();
                     var fromEl = document.getElementById('dash-revenue-from');
@@ -316,7 +317,21 @@
                 }
                 syncRevenuePresetUi();
                 loadAdminStats({ quiet: true });
-            });
+            }
+
+            if (presetsEl) {
+                presetsEl.addEventListener('click', function (e) {
+                    var btn = e.target.closest('[data-dash-revenue-preset]');
+                    if (!btn) return;
+                    applyPresetSelection(btn.getAttribute('data-dash-revenue-preset'));
+                });
+            }
+
+            if (selectEl) {
+                selectEl.addEventListener('change', function () {
+                    applyPresetSelection(selectEl.value);
+                });
+            }
 
             var applyBtn = document.getElementById('dash-revenue-apply-custom');
             if (applyBtn) {

@@ -29,6 +29,7 @@ async def init_subscriptions_db():
                 price REAL NOT NULL,
                 name TEXT,
                 group_id INTEGER,
+                sync_revision INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (subscriber_id) REFERENCES users(id),
                 FOREIGN KEY (group_id) REFERENCES server_groups(id)
             )
@@ -60,9 +61,9 @@ async def create_subscription(subscriber_id: int, period: str, device_limit: int
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """INSERT INTO subscriptions 
-               (subscriber_id, status, period, device_limit, created_at, expires_at, subscription_token, price, name, group_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (subscriber_id, 'active', period, device_limit, now, expires_at, token, price, name, group_id)
+               (subscriber_id, status, period, device_limit, created_at, expires_at, subscription_token, price, name, group_id, sync_revision)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (subscriber_id, 'active', period, device_limit, now, expires_at, token, price, name, group_id, 1)
         ) as cur:
             sub_id = cur.lastrowid
             await db.commit()
@@ -134,12 +135,16 @@ async def update_subscription_status(subscription_id: int, status: str):
         if status == "deleted":
             now = int(time.time())
             await db.execute(
-                "UPDATE subscriptions SET status = ?, deleted_at = COALESCE(deleted_at, ?) WHERE id = ?",
+                "UPDATE subscriptions "
+                "SET status = ?, deleted_at = COALESCE(deleted_at, ?), sync_revision = COALESCE(sync_revision, 0) + 1 "
+                "WHERE id = ?",
                 (status, now, subscription_id),
             )
         else:
             await db.execute(
-                "UPDATE subscriptions SET status = ?, deleted_at = NULL WHERE id = ?",
+                "UPDATE subscriptions "
+                "SET status = ?, deleted_at = NULL, sync_revision = COALESCE(sync_revision, 0) + 1 "
+                "WHERE id = ?",
                 (status, subscription_id),
             )
         await db.commit()
@@ -147,7 +152,12 @@ async def update_subscription_status(subscription_id: int, status: str):
 
 async def update_subscription_name(subscription_id: int, name: str):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE subscriptions SET name = ? WHERE id = ?", (name, subscription_id))
+        await db.execute(
+            "UPDATE subscriptions "
+            "SET name = ?, sync_revision = COALESCE(sync_revision, 0) + 1 "
+            "WHERE id = ?",
+            (name, subscription_id),
+        )
         await db.commit()
 
 
@@ -163,16 +173,31 @@ async def update_subscription_expiry(subscription_id: int, new_expires_at: int):
                 return
             current_status = row[0]
 
-        await db.execute("UPDATE subscriptions SET expires_at = ? WHERE id = ?", (new_expires_at, subscription_id))
+        await db.execute(
+            "UPDATE subscriptions "
+            "SET expires_at = ?, sync_revision = COALESCE(sync_revision, 0) + 1 "
+            "WHERE id = ?",
+            (new_expires_at, subscription_id),
+        )
 
         if current_status != 'deleted':
             if new_expires_at > current_time:
                 if current_status == 'expired':
-                    await db.execute("UPDATE subscriptions SET status = 'active' WHERE id = ?", (subscription_id,))
+                    await db.execute(
+                        "UPDATE subscriptions "
+                        "SET status = 'active', sync_revision = COALESCE(sync_revision, 0) + 1 "
+                        "WHERE id = ?",
+                        (subscription_id,),
+                    )
                     logger.info(f"Подписка {subscription_id} автоматически активирована (продлена до {new_expires_at})")
             else:
                 if current_status == 'active':
-                    await db.execute("UPDATE subscriptions SET status = 'expired' WHERE id = ?", (subscription_id,))
+                    await db.execute(
+                        "UPDATE subscriptions "
+                        "SET status = 'expired', sync_revision = COALESCE(sync_revision, 0) + 1 "
+                        "WHERE id = ?",
+                        (subscription_id,),
+                    )
                     logger.info(f"Подписка {subscription_id} автоматически истекла (expires_at: {new_expires_at})")
 
         await db.commit()
@@ -181,15 +206,35 @@ async def update_subscription_expiry(subscription_id: int, new_expires_at: int):
 async def update_subscription_device_limit(subscription_id: int, new_device_limit: int):
     """Обновляет лимит устройств/IP для подписки"""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE subscriptions SET device_limit = ? WHERE id = ?", (new_device_limit, subscription_id))
+        await db.execute(
+            "UPDATE subscriptions "
+            "SET device_limit = ?, sync_revision = COALESCE(sync_revision, 0) + 1 "
+            "WHERE id = ?",
+            (new_device_limit, subscription_id),
+        )
         await db.commit()
 
 
 async def update_subscription_price(subscription_id: int, price: float):
     """Обновляет цену подписки"""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE subscriptions SET price = ? WHERE id = ?", (price, subscription_id))
+        await db.execute(
+            "UPDATE subscriptions "
+            "SET price = ?, sync_revision = COALESCE(sync_revision, 0) + 1 "
+            "WHERE id = ?",
+            (price, subscription_id),
+        )
         await db.commit()
+
+
+async def get_subscription_sync_revision(subscription_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COALESCE(sync_revision, 0) FROM subscriptions WHERE id = ?",
+            (subscription_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
 
 
 def is_subscription_active(sub: dict) -> bool:
@@ -207,7 +252,8 @@ async def sync_subscription_statuses():
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
             UPDATE subscriptions 
-            SET status = 'expired' 
+            SET status = 'expired',
+                sync_revision = COALESCE(sync_revision, 0) + 1
             WHERE status = 'active' 
             AND expires_at < ? 
             AND status != 'deleted'
@@ -216,7 +262,8 @@ async def sync_subscription_statuses():
 
         async with db.execute("""
             UPDATE subscriptions 
-            SET status = 'active' 
+            SET status = 'active',
+                sync_revision = COALESCE(sync_revision, 0) + 1
             WHERE status = 'expired' 
             AND expires_at > ? 
             AND status != 'deleted'

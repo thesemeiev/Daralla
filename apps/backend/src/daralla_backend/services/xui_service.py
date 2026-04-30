@@ -678,6 +678,9 @@ class X3:
             self._client_set(target, "expiry_time", int(expiry_time))
         if limit_ip is not None:
             self._client_set(target, "limit_ip", int(limit_ip))
+        # После продления часть панелей оставляет клиента disabled.
+        # Явно включаем, чтобы не оставался в статусе "expired/exhausted" при актуальном expiry.
+        self._client_set(target, "enable", True)
         protocol_norm = (
             self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
             if protocol_hint
@@ -817,6 +820,7 @@ class X3:
             for inbound_id, inbound_protocol, c in work_items:
                 self._client_set(c, "expiry_time", exp_ms)
                 self._client_set(c, "limit_ip", li)
+                self._client_set(c, "enable", True)
                 if inbound_protocol == "vless":
                     self._client_set(c, "flow", want_flow)
                 self._ensure_client_id_for_update(c)
@@ -854,6 +858,7 @@ class X3:
             for inbound_id, inbound_protocol, c in fallback_items:
                 self._client_set(c, "expiry_time", exp_ms)
                 self._client_set(c, "limit_ip", li)
+                self._client_set(c, "enable", True)
                 if inbound_protocol == "vless":
                     self._client_set(c, "flow", want_flow)
                 self._ensure_client_id_for_update(c)
@@ -876,6 +881,7 @@ class X3:
 
         c.expiry_time = exp_ms
         c.limit_ip = li
+        c.enable = True
         if not wanted_protocol or wanted_protocol == "vless":
             c.flow = want_flow
         self._ensure_client_id_for_update(c)

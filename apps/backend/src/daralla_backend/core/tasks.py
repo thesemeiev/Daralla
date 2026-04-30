@@ -6,6 +6,10 @@ import logging
 import os
 
 from daralla_backend.core.retention_policy import get_retention_policy
+from daralla_backend.services.sync_outbox_service import (
+    outbox_worker_enabled,
+    process_outbox_once,
+)
 from daralla_backend.utils.logging_helpers import log_event
 from daralla_backend.web.observability import inc_metric
 
@@ -41,6 +45,12 @@ async def start_background_tasks(sync_manager, subscription_manager, notificatio
         )
     else:
         logger.info("Фоновый догон клиентов выключен (DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS=0)")
+
+    if outbox_worker_enabled():
+        asyncio.create_task(sync_outbox_worker_loop(subscription_manager))
+        logger.info("Outbox worker: включён (DARALLA_SYNC_OUTBOX_WORKER_ENABLED=1)")
+    else:
+        logger.info("Outbox worker выключен (DARALLA_SYNC_OUTBOX_WORKER_ENABLED=0)")
     
     # 2. Задача проверки истекающих подписок для уведомлений (каждые 30 минут)
     asyncio.create_task(notifications_task_loop(notification_manager))
@@ -316,3 +326,32 @@ async def retention_maintenance_loop():
             logger.error("Ошибка в retention maintenance loop: %s", e, exc_info=True)
             inc_metric("background_task_error_total", task="retention_maintenance")
         await asyncio.sleep(24 * 3600)
+
+
+async def sync_outbox_worker_loop(subscription_manager):
+    """Background worker applying sync_outbox jobs."""
+    interval = max(1, _int_env("DARALLA_SYNC_OUTBOX_INTERVAL_SECONDS", 3))
+    logger.info(
+        "Outbox worker interval: %s с (DARALLA_SYNC_OUTBOX_INTERVAL_SECONDS)",
+        interval,
+    )
+    await asyncio.sleep(5)
+    while True:
+        try:
+            summary = await process_outbox_once(subscription_manager=subscription_manager)
+            if summary.get("claimed"):
+                logger.info(
+                    "Outbox batch: claimed=%s done=%s retried=%s dead=%s stale=%s",
+                    summary.get("claimed"),
+                    summary.get("done"),
+                    summary.get("retried"),
+                    summary.get("dead"),
+                    summary.get("stale"),
+                )
+            inc_metric("background_task_success_total", task="sync_outbox_worker")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("Ошибка outbox worker loop: %s", e, exc_info=True)
+            inc_metric("background_task_error_total", task="sync_outbox_worker")
+        await asyncio.sleep(interval)

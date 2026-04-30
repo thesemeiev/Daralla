@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import os
 
 from daralla_backend.db.notifications_db import clear_subscription_notifications
 from daralla_backend.db.subscriptions_db import (
@@ -23,6 +24,7 @@ from daralla_backend.services.admin_subscriptions_service import (
     get_user_id_from_subscriber_id,
     get_user_id_from_subscription_id,
 )
+from daralla_backend.services.sync_outbox_service import enqueue_subscription_sync_jobs, outbox_write_enabled
 
 
 def serialize_subscription(sub: dict) -> dict:
@@ -261,17 +263,39 @@ async def update_subscription_payload(sub_id: int, updates: dict, logger: loggin
         await clear_subscription_notifications(sub_id)
 
     updated_sub = await get_subscription_by_id_only(sub_id)
-    try:
-        await asyncio.wait_for(
-            _sync_after_update(sub_id, updated_sub, old_status, old_expires_at, old_device_limit, updates, logger),
-            timeout=60.0,
-        )
-    except asyncio.TimeoutError:
-        logger.error("Таймаут при синхронизации подписки %s", sub_id)
-    except Exception as sync_e:
-        logger.error("Ошибка при синхронизации подписки %s: %s", sub_id, sync_e, exc_info=True)
+    outbox_enqueued = 0
+    if outbox_write_enabled():
+        try:
+            outbox_enqueued = await enqueue_subscription_sync_jobs(
+                int(sub_id),
+                reason="admin_subscription_update",
+            )
+        except Exception as outbox_e:
+            logger.warning("Не удалось поставить outbox jobs для sub=%s: %s", sub_id, outbox_e)
 
-    return {"success": True, "subscription": serialize_subscription(updated_sub)}, None, None
+    # Не блокируем HTTP-ответ синхронизацией: в мобильном WebView долгий запрос часто
+    # обрывается как "Load failed", хотя данные уже сохранены в БД.
+    async def _sync_in_background():
+        try:
+            await asyncio.wait_for(
+                _sync_after_update(sub_id, updated_sub, old_status, old_expires_at, old_device_limit, updates, logger),
+                timeout=60.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Таймаут при фоновой синхронизации подписки %s", sub_id)
+        except Exception as sync_e:
+            logger.error("Ошибка при фоновой синхронизации подписки %s: %s", sub_id, sync_e, exc_info=True)
+
+    fallback_enabled = (os.getenv("DARALLA_SYNC_OUTBOX_USE_LEGACY_SYNC_FALLBACK", "1").strip() != "0")
+    if fallback_enabled:
+        asyncio.create_task(_sync_in_background())
+
+    return {
+        "success": True,
+        "subscription": serialize_subscription(updated_sub),
+        "sync_outbox_enqueued": outbox_enqueued,
+        "legacy_sync_fallback": fallback_enabled,
+    }, None, None
 
 
 async def manual_sync_payload(sub_id: int, logger: logging.Logger):

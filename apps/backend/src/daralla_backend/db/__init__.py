@@ -70,6 +70,7 @@ from .subscriptions_db import (
     update_subscription_expiry,
     update_subscription_device_limit,
     update_subscription_price,
+    get_subscription_sync_revision,
     is_subscription_active,
     sync_subscription_statuses,
     get_subscription_by_token,
@@ -86,6 +87,17 @@ from .subscriptions_db import (
     get_conversion_data,
     upsert_agg_subscriptions_daily,
     cleanup_deleted_subscriptions,
+)
+from .sync_outbox_db import (
+    enqueue_sync_job,
+    enqueue_sync_jobs_bulk,
+    claim_due_jobs,
+    mark_job_done,
+    mark_job_retry,
+    mark_job_dead,
+    get_sync_outbox_stats,
+    list_sync_outbox_jobs,
+    retry_dead_jobs,
 )
 from .notifications_db import (
     init_notifications_db, record_notification_metrics, cleanup_old_notifications,
@@ -158,6 +170,7 @@ __all__ = [
     'get_all_active_subscriptions_by_user', 'get_all_subscriptions_by_user',
     'update_subscription_status', 'update_subscription_name', 'update_subscription_expiry',
     'update_subscription_device_limit', 'update_subscription_price',
+    'get_subscription_sync_revision',
     'is_subscription_active', 'sync_subscription_statuses',
     'get_subscription_by_token', 'get_subscription_by_id', 'get_subscription_by_id_only',
     'get_subscription_servers', 'get_subscription_servers_for_subscription_ids',
@@ -173,5 +186,8 @@ __all__ = [
     'get_default_group_id', 'resolve_group_id',
     'add_server_group', 'add_server_config', 'update_server_group', 'update_server_config',
     'delete_server_config', 'SERVER_CONFIG_UPDATE_KEYS',
+    'enqueue_sync_job', 'enqueue_sync_jobs_bulk',
+    'claim_due_jobs', 'mark_job_done', 'mark_job_retry', 'mark_job_dead',
+    'get_sync_outbox_stats', 'list_sync_outbox_jobs', 'retry_dead_jobs',
     'get_table_row_counts', 'cleanup_old_daily_aggregates',
 ]

@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=35">
+    <link rel="stylesheet" href="/style.css?v=36">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы страница открывалась даже при недоступности внешнего CDN -->
@@ -593,6 +593,16 @@
                                 <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="month">Этот месяц</button>
                                 <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="custom">С даты…</button>
                             </div>
+                            <label class="dashboard-revenue-select-wrap" for="dash-revenue-preset-select">
+                                <span>Период</span>
+                                <select id="dash-revenue-preset-select" class="dashboard-revenue-select">
+                                    <option value="7d">Последние 7 дней</option>
+                                    <option value="14d">Последние 14 дней</option>
+                                    <option value="30d">Последние 30 дней</option>
+                                    <option value="month">Текущий месяц</option>
+                                    <option value="custom">Свой диапазон</option>
+                                </select>
+                            </label>
                         </div>
                         <div id="dash-revenue-custom-row" class="dashboard-revenue-custom-row" hidden>
                             <label class="dashboard-revenue-date-label">
@@ -1157,6 +1167,7 @@
                         <div class="admin-sm-toolbar-actions">
                             <button type="button" class="btn-primary admin-sm-btn-add-group" data-action="showAddServerGroupModal">Добавить группу</button>
                             <button type="button" class="btn-outline admin-sm-btn-sync-panels" id="admin-sync-all-panels-btn" data-action="syncAllServers" title="Полная синхронизация: клиенты подписок по базе на всех нодах 3x-ui. Может занять несколько минут.">Синхронизация с панелями</button>
+                            <button type="button" class="btn-secondary admin-sm-btn-sync-panels" data-action="showSyncOutboxStatus" title="Статус outbox синка и ручной retry зависших задач">Outbox синка</button>
                         </div>
                     </div>
                     <div id="admin-server-groups-list"></div>
@@ -1572,7 +1583,7 @@
     <script src="/js/features/admin/stats-dashboard.js?v=2"></script>
     <script src="/js/features/admin/broadcast.js?v=1"></script>
     <script src="/js/features/admin/commerce.js?v=1"></script>
-    <script src="/js/features/admin/servers.js?v=1"></script>
+    <script src="/js/features/admin/servers.js?v=2"></script>
     <script src="/js/features/servers/list.js?v=1"></script>
     <script src="/js/features/events/core.js?v=1"></script>
     <script src="/js/features/notifications/rules.js?v=1"></script>
@@ -1585,6 +1596,6 @@
     <script src="/js/app/actions.js?v=1"></script>
     <script src="/js/app/composition.js?v=1"></script>
     <script src="/js/app/dom-bindings.js?v=1"></script>
-    <script src="/app.js?v=38"></script>
+    <script src="/app.js?v=39"></script>
 </body>
 </html>

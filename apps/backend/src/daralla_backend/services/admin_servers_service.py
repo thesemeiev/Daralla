@@ -22,6 +22,12 @@ from daralla_backend.db.servers_db import (
 )
 from daralla_backend.db.subscriptions_db import sync_subscription_statuses
 from daralla_backend.services.server_provider import ServerProvider
+from daralla_backend.services.sync_outbox_service import (
+    enqueue_group_sync_jobs,
+    get_outbox_admin_payload,
+    process_outbox_once,
+    retry_outbox_dead,
+)
 from daralla_backend.services.xui_service import X3
 
 logger = logging.getLogger(__name__)
@@ -192,6 +198,10 @@ async def handle_server_group_update(data: dict):
         if pair:
             return pair
         raise
+    try:
+        await enqueue_group_sync_jobs(int(group_id), reason="admin_group_update")
+    except Exception as e:
+        logger.warning("Outbox enqueue group update failed group=%s: %s", group_id, e)
     return {"success": True}, 200
 
 
@@ -241,6 +251,10 @@ async def handle_servers_config(data: dict):
         sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
             need_sync=(insert_active == 1)
         )
+        try:
+            await enqueue_group_sync_jobs(int(group_id), reason="admin_server_add")
+        except Exception as e:
+            logger.warning("Outbox enqueue server add failed group=%s: %s", group_id, e)
         payload = {"success": True, "server_id": server_id}
         if sync_stats is not None:
             payload["sync_stats"] = sync_stats
@@ -290,6 +304,11 @@ async def handle_server_config_update(data: dict):
     sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
         need_sync=_was_inactive_and_now_active(old_server, update_data)
     )
+    try:
+        if old_server and old_server.get("group_id") is not None:
+            await enqueue_group_sync_jobs(int(old_server["group_id"]), reason="admin_server_update")
+    except Exception as e:
+        logger.warning("Outbox enqueue server update failed server=%s: %s", server_id, e)
     payload = {
         "success": True,
         "client_flow_changed": client_flow_changed,
@@ -336,8 +355,14 @@ async def handle_server_config_delete(data: dict):
     server_id = data.get("id")
     if not server_id:
         return {"error": "Server ID is required"}, 400
+    old_server = await get_server_by_id(int(server_id))
     await delete_server_config(server_id)
     sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(need_sync=True)
+    try:
+        if old_server and old_server.get("group_id") is not None:
+            await enqueue_group_sync_jobs(int(old_server["group_id"]), reason="admin_server_delete")
+    except Exception as e:
+        logger.warning("Outbox enqueue server delete failed server=%s: %s", server_id, e)
     payload = {"success": True}
     if sync_stats is not None:
         payload["sync_stats"] = sync_stats
@@ -354,3 +379,23 @@ async def handle_sync_all():
         return {"error": "Sync manager not available"}, 503
     stats = await sync_manager.sync_all_subscriptions(auto_fix=True)
     return {"success": True, "stats": stats}, 200
+
+
+async def handle_sync_outbox(data: dict):
+    action = str((data or {}).get("action") or "stats").strip().lower()
+    if action == "stats":
+        limit = data.get("limit", 100)
+        payload = await get_outbox_admin_payload(limit=int(limit))
+        return payload, 200
+    if action == "retry_dead":
+        limit = data.get("limit", 100)
+        payload = await retry_outbox_dead(limit=int(limit))
+        return payload, 200
+    if action == "process_once":
+        ctx = get_ctx()
+        sub_mgr = ctx.subscription_manager
+        if not sub_mgr:
+            return {"success": False, "error": "subscription_manager unavailable"}, 503
+        summary = await process_outbox_once(subscription_manager=sub_mgr)
+        return {"success": True, "summary": summary}, 200
+    return {"success": False, "error": "Invalid action"}, 400

@@ -59,9 +59,15 @@ def create_blueprint(bot_app):
         if "name" in data:
             updates["name"] = data["name"]
         if "expires_at" in data:
-            updates["expires_at"] = int(data["expires_at"])
+            try:
+                updates["expires_at"] = int(data["expires_at"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "Некорректная дата истечения"}), 400, _cors_headers()
         if "device_limit" in data:
-            updates["device_limit"] = int(data["device_limit"])
+            try:
+                updates["device_limit"] = int(data["device_limit"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "Некорректный лимит устройств"}), 400, _cors_headers()
         if "status" in data:
             updates["status"] = data["status"]
         payload, err_body, err_code = await update_subscription_payload(sub_id=sub_id, updates=updates, logger=logger)
