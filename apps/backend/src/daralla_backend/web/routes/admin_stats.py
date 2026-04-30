@@ -16,11 +16,15 @@ def create_blueprint(bot_app):
     @bp.route("/api/admin/stats", methods=["POST", "OPTIONS"])
     @admin_route
     async def api_admin_stats(request, admin_id):
+        data = {}
         try:
-            await request.get_json(silent=True) or {}
+            data = await request.get_json(silent=True) or {}
         except Exception as json_e:
             logger.warning("Ошибка парсинга JSON в /api/admin/stats: %s", json_e)
-        payload = await admin_stats_payload()
+        revenue_range = data.get("revenue_range")
+        if revenue_range is not None and not isinstance(revenue_range, dict):
+            revenue_range = None
+        payload = await admin_stats_payload(revenue_range=revenue_range)
         return jsonify(payload), 200, _cors_headers()
 
     return bp

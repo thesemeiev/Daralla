@@ -585,7 +585,27 @@
                     </div>
 
                     <section class="dashboard-chart-section">
-                        <h3 class="dashboard-section-title">Выручка за 30 дней</h3>
+                        <div class="dashboard-revenue-head">
+                            <h3 class="dashboard-section-title dashboard-revenue-title" id="dash-revenue-chart-heading">Выручка</h3>
+                            <div class="dashboard-revenue-presets" role="toolbar" aria-label="Период выручки">
+                                <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="7d">7 дней</button>
+                                <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="14d">14 дней</button>
+                                <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="30d">30 дней</button>
+                                <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="month">Этот месяц</button>
+                                <button type="button" class="dashboard-revenue-preset" data-dash-revenue-preset="custom">С даты…</button>
+                            </div>
+                        </div>
+                        <div id="dash-revenue-custom-row" class="dashboard-revenue-custom-row" hidden>
+                            <label class="dashboard-revenue-date-label">
+                                <span>От</span>
+                                <input type="date" id="dash-revenue-from" autocomplete="off">
+                            </label>
+                            <label class="dashboard-revenue-date-label">
+                                <span>До</span>
+                                <input type="date" id="dash-revenue-to" autocomplete="off">
+                            </label>
+                            <button type="button" class="btn-secondary dashboard-revenue-apply-custom" id="dash-revenue-apply-custom">Применить</button>
+                        </div>
                         <div class="dashboard-chart-wrap">
                             <canvas id="dash-revenue-chart"></canvas>
                         </div>
@@ -1136,12 +1156,11 @@
                 <section class="admin-sm-section" aria-labelledby="admin-sm-groups-heading">
                     <div class="admin-sm-toolbar">
                         <div class="admin-sm-toolbar-text">
-                            <h2 id="admin-sm-groups-heading" class="page-section-title admin-sm-title">Группы серверов</h2>
-                            <p class="admin-sm-lead">Выберите группу для списка нод и порядка в подписке. Кнопка «Синхронизация с панелями» догоняет клиентов на 3x-ui по базе.</p>
+                            <h2 id="admin-sm-groups-heading" class="admin-sm-title">Группы</h2>
                         </div>
                         <div class="admin-sm-toolbar-actions">
-                            <button type="button" class="btn-primary admin-sm-btn-primary" data-action="showAddServerGroupModal">+ Группа</button>
-                            <button type="button" class="btn-secondary admin-sm-btn-sync admin-toolbar-sync-wide" id="admin-sync-all-panels-btn" data-action="syncAllServers" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация с панелями</button>
+                            <button type="button" class="btn-primary admin-sm-btn-add-group" data-action="showAddServerGroupModal">Добавить группу</button>
+                            <button type="button" class="btn-outline admin-sm-btn-sync-panels" id="admin-sync-all-panels-btn" data-action="syncAllServers" title="Полная синхронизация: клиенты подписок по базе на всех нодах 3x-ui. Может занять несколько минут.">Синхронизация с панелями</button>
                         </div>
                     </div>
                     <div id="admin-server-groups-list"></div>

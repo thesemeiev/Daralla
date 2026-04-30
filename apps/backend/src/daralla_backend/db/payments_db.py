@@ -272,63 +272,124 @@ async def cleanup_expired_pending_payments(minutes_old: int = 60) -> int:
         logger.error(f"CLEANUP_EXPIRED_PENDING_PAYMENTS error: {e}")
         return 0
 
-async def get_daily_revenue(days: int = 30) -> list:
-    """Возвращает выручку по дням за период из таблицы payments."""
-    start_ts = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
-    result = {}
+async def get_daily_revenue_between(start_ts: int, end_ts: int) -> list:
+    """Выручку по дням за интервал [start_ts, end_ts] (unix), все календарные дни UTC с нулями."""
+    result: dict = {}
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             db.row_factory = aiosqlite.Row
-            async with db.execute("""
+            async with db.execute(
+                """
                 SELECT created_at, meta FROM payments
-                WHERE status = 'succeeded' AND activated = 1 AND created_at >= ?
-            """, (start_ts,)) as cur:
+                WHERE status = 'succeeded' AND activated = 1
+                  AND created_at >= ? AND created_at <= ?
+                """,
+                (int(start_ts), int(end_ts)),
+            ) as cur:
                 rows = await cur.fetchall()
                 for row in rows:
                     meta = {}
-                    if row['meta']:
+                    if row["meta"]:
                         try:
-                            meta = json.loads(row['meta'])
+                            meta = json.loads(row["meta"])
                         except (TypeError, json.JSONDecodeError):
                             pass
-                    price = float(meta.get('price', 0))
+                    price = float(meta.get("price", 0))
                     if price <= 0:
                         continue
-                    date_key = datetime.datetime.utcfromtimestamp(row['created_at']).strftime('%Y-%m-%d')
+                    date_key = _date_key_utc(row["created_at"])
                     if date_key not in result:
-                        result[date_key] = {'date': date_key, 'revenue': 0, 'count': 0}
-                    result[date_key]['revenue'] += price
-                    result[date_key]['count'] += 1
+                        result[date_key] = {"date": date_key, "revenue": 0.0, "count": 0}
+                    result[date_key]["revenue"] += price
+                    result[date_key]["count"] += 1
     except (aiosqlite.Error, ValueError, TypeError) as e:
-        logger.error(f"GET_DAILY_REVENUE error: {e}")
-    return sorted(result.values(), key=lambda x: x['date'])
+        logger.error(f"GET_DAILY_REVENUE_BETWEEN error: {e}")
+
+    utc = datetime.timezone.utc
+    try:
+        start_day = datetime.datetime.fromtimestamp(int(start_ts), tz=utc).date()
+        end_day = datetime.datetime.fromtimestamp(int(end_ts), tz=utc).date()
+    except (OverflowError, OSError, ValueError):
+        return []
+
+    if start_day > end_day:
+        return []
+
+    out = []
+    d = start_day
+    while d <= end_day:
+        key = d.strftime("%Y-%m-%d")
+        bucket = result.get(key)
+        if bucket:
+            out.append(
+                {
+                    "date": key,
+                    "revenue": round(float(bucket["revenue"]), 2),
+                    "count": int(bucket["count"]),
+                }
+            )
+        else:
+            out.append({"date": key, "revenue": 0.0, "count": 0})
+        d += datetime.timedelta(days=1)
+    return out
+
+
+async def get_daily_revenue(days: int = 30) -> list:
+    """Последние N календарных дней UTC (включая сегодня)."""
+    utc = datetime.timezone.utc
+    now = datetime.datetime.now(utc)
+    today = now.date()
+    n = max(1, int(days))
+    start_d = today - datetime.timedelta(days=n - 1)
+    start_ts = int(datetime.datetime.combine(start_d, datetime.time.min, tzinfo=utc).timestamp())
+    end_ts = int(
+        datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time.min, tzinfo=utc).timestamp()
+    ) - 1
+    return await get_daily_revenue_between(start_ts, end_ts)
+
+
+async def get_revenue_by_gateway_between(start_ts: int, end_ts: int) -> dict:
+    """Выручка по шлюзам за интервал [start_ts, end_ts]."""
+    agg: dict = {}
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT meta FROM payments
+                WHERE status = 'succeeded' AND activated = 1
+                  AND created_at >= ? AND created_at <= ?
+                """,
+                (int(start_ts), int(end_ts)),
+            ) as cur:
+                rows = await cur.fetchall()
+                for row in rows:
+                    meta = {}
+                    if row["meta"]:
+                        try:
+                            meta = json.loads(row["meta"])
+                        except (TypeError, json.JSONDecodeError):
+                            pass
+                    gateway = meta.get("gateway", "yookassa")
+                    price = float(meta.get("price", 0))
+                    agg[gateway] = agg.get(gateway, 0.0) + price
+    except (aiosqlite.Error, ValueError, TypeError) as e:
+        logger.error(f"GET_REVENUE_BY_GATEWAY_BETWEEN error: {e}")
+    return agg
 
 
 async def get_revenue_by_gateway(days: int = 30) -> dict:
-    """Возвращает выручку по платёжным шлюзам за период."""
-    start_ts = int((datetime.datetime.now() - datetime.timedelta(days=days)).timestamp())
-    result = {}
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("""
-                SELECT meta FROM payments
-                WHERE status = 'succeeded' AND activated = 1 AND created_at >= ?
-            """, (start_ts,)) as cur:
-                rows = await cur.fetchall()
-                for row in rows:
-                    meta = {}
-                    if row['meta']:
-                        try:
-                            meta = json.loads(row['meta'])
-                        except (TypeError, json.JSONDecodeError):
-                            pass
-                    gateway = meta.get('gateway', 'yookassa')
-                    price = float(meta.get('price', 0))
-                    result[gateway] = result.get(gateway, 0) + price
-    except (aiosqlite.Error, ValueError, TypeError) as e:
-        logger.error(f"GET_REVENUE_BY_GATEWAY error: {e}")
-    return result
+    """Последние N календарных дней UTC (включая сегодня)."""
+    utc = datetime.timezone.utc
+    now = datetime.datetime.now(utc)
+    today = now.date()
+    n = max(1, int(days))
+    start_d = today - datetime.timedelta(days=n - 1)
+    start_ts = int(datetime.datetime.combine(start_d, datetime.time.min, tzinfo=utc).timestamp())
+    end_ts = int(
+        datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time.min, tzinfo=utc).timestamp()
+    ) - 1
+    return await get_revenue_by_gateway_between(start_ts, end_ts)
 
 
 async def get_payments_by_user(user_id: str, limit: int = 50) -> list:
