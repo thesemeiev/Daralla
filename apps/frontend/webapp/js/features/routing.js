@@ -3,7 +3,7 @@
         'landing', 'login', 'register',
         'subscriptions', 'subscription-detail', 'buy-subscription', 'extend-subscription', 'choose-payment-method', 'payment',
         'servers', 'events', 'event-detail', 'instructions', 'about', 'account',
-        'admin-stats', 'admin-users', 'admin-broadcast',
+        'admin-stats', 'admin-users', 'admin-broadcast', 'admin-subscriptions', 'admin-notifications',
         'admin-user-detail', 'admin-create-subscription', 'admin-subscription-edit', 'admin-server-management', 'admin-server-group',
         'admin-commerce', 'admin-events'
     ]);

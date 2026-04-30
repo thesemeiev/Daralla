@@ -177,7 +177,7 @@
 
         async function testSendNotificationRule() {
             var template = _deps.buildNotifTemplate();
-            var btn = document.querySelector('.btn-outline[onclick*="testSend"]');
+            var btn = document.querySelector('#admin-notification-form-modal .btn-outline[data-action="testSendNotificationRule"]');
             if (btn) { btn.disabled = true; btn.textContent = 'Отправка…'; }
             try {
                 var resp = await _deps.apiFetch('/api/admin/notification-rules-test', {

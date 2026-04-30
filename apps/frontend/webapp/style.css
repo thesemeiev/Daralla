@@ -19,6 +19,8 @@
     --accent-focus-ring: rgba(255, 255, 255, 0.45);
     /* Текст на заливке --accent (светлая кнопка на тёмном фоне) */
     --accent-contrast: #121214;
+    /* Алиас для старых правил (уведомления, chips) — совпадает с --accent */
+    --accent-color: var(--accent);
 
     /* Semantic */
     --color-success: #34c759;
@@ -111,6 +113,7 @@
     --accent-ring-strong: rgba(0, 0, 0, 0.18);
     --accent-focus-ring: rgba(0, 0, 0, 0.32);
     --accent-contrast: #f4f4f6;
+    --accent-color: var(--accent);
 
     --card-bg: #ececee;
     --card-border: #d0d0d6;
@@ -1065,24 +1068,29 @@ header:has(.back-button):not(:has(h1)) {
 
 /* Шапка «Назад» + заголовок: кнопка слева, заголовок по центру экрана */
 .header-with-back {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 12px;
+    column-gap: 8px;
 }
 .header-with-back .back-button {
+    grid-column: 1;
+    justify-self: start;
     flex-shrink: 0;
 }
-.header-with-back h1 {
-    flex: 1;
+.header-with-back h1,
+.header-with-back .page-section-title {
+    grid-column: 2;
+    margin: 0;
     min-width: 0;
+    max-width: 100%;
     text-align: center;
+    justify-self: center;
 }
-/* Невидимый блок справа той же ширины, что и «Назад», чтобы заголовок был ровно по центру */
+/* Колонки 1 и 3 одинаковой ширины (1fr) — заголовок по центру экрана без фиксированного спейсера */
 .header-with-back::after {
-    content: '';
-    display: block;
-    width: 80px;
-    flex-shrink: 0;
+    content: none;
+    display: none;
 }
 
 h1 {
@@ -1901,9 +1909,13 @@ h1 {
     font-size: 15px;
     font-weight: 500;
     cursor: pointer;
-    transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+    transition: border-color 0.2s, background-color 0.2s, color 0.2s, box-shadow 0.2s;
     -webkit-appearance: none;
     appearance: none;
+}
+.choose-option-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
 @media (hover: hover) and (pointer: fine) {
 .choose-option-card:hover {
@@ -1915,8 +1927,17 @@ h1 {
 .choose-option-card-selected,
 .choose-option-card.choose-option-card-selected {
     border-color: var(--accent);
-    background: var(--accent-muted);
+    background: var(--card-bg);
     color: var(--text-primary);
+    box-shadow:
+        0 0 0 1px var(--accent-line),
+        0 8px 28px var(--accent-shadow);
+}
+[data-theme="light"] .choose-option-card-selected,
+[data-theme="light"] .choose-option-card.choose-option-card-selected {
+    box-shadow:
+        0 0 0 1px var(--accent-line),
+        0 8px 24px var(--accent-shadow);
 }
 .choose-option-card .choose-option-title {
     display: block;
@@ -1929,7 +1950,7 @@ h1 {
 }
 .choose-option-card-selected .choose-option-price,
 .choose-option-card.choose-option-card-selected .choose-option-price {
-    color: var(--accent-on-tint);
+    color: var(--text-secondary);
 }
 .choose-option-card .choose-option-icon {
     display: block;
@@ -1949,7 +1970,7 @@ h1 {
 }
 .choose-option-card-selected .choose-option-sub,
 .choose-option-card.choose-option-card-selected .choose-option-sub {
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
 }
 .choose-option-card .choose-option-badge {
     display: inline-flex;
@@ -1970,7 +1991,8 @@ h1 {
 .choose-option-card-selected .choose-option-badge,
 .choose-option-card.choose-option-card-selected .choose-option-badge {
     border-color: var(--accent);
-    background: var(--accent-muted);
+    background: var(--accent);
+    color: var(--accent-contrast);
 }
 .choose-option-card-disabled,
 .choose-option-card.choose-option-card-disabled {
@@ -4039,15 +4061,16 @@ a.instruction-platform-btn {
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 12px;
+    box-sizing: border-box;
+    padding: 12px 16px;
     background: var(--input-bg);
     border: 1px solid var(--input-border);
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     color: var(--input-color);
     font-size: 16px; /* 16px предотвращает зум в iOS */
     font-family: inherit;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     -webkit-appearance: none; /* Убирает стандартные стили в Safari */
     appearance: none;
 }
@@ -4056,6 +4079,7 @@ a.instruction-platform-btn {
 .form-group textarea:focus,
 .form-group select:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .form-group textarea {
@@ -4065,6 +4089,7 @@ a.instruction-platform-btn {
 
 .form-group input[type="datetime-local"] {
     min-height: 48px;
+    min-width: 0;
 }
 
 /* Стили для чекбоксов */
@@ -4496,64 +4521,6 @@ a.instruction-platform-btn {
         align-items: flex-start;
         gap: 4px;
     }
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--text-primary);
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.form-group input,
-.form-group select {
-    width: 100%;
-    padding: 12px 16px;
-    background: var(--input-bg);
-    border: 1px solid var(--input-border);
-    border-radius: var(--radius-sm);
-    color: var(--input-color);
-    font-size: 16px;
-    outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    box-sizing: border-box;
-}
-
-.form-group input[type="datetime-local"] {
-    width: 100%;
-    min-width: 0;
-    min-height: 48px;
-    padding: 12px 16px;
-    background: var(--input-bg);
-    border: 1px solid var(--input-border);
-    border-radius: 8px;
-    color: var(--input-color);
-    font-size: 16px;
-    outline: none;
-    transition: border-color 0.2s;
-    box-sizing: border-box;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group input[type="datetime-local"]:focus {
-    border-color: var(--accent);
-    outline: none;
-    box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
-.form-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 24px;
 }
 
 .btn-primary,
@@ -5705,6 +5672,12 @@ a.instruction-platform-btn {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
     margin-bottom: 20px;
+}
+
+@media (max-width: 520px) {
+    .dashboard-cards {
+        grid-template-columns: 1fr;
+    }
 }
 
 .dashboard-card {

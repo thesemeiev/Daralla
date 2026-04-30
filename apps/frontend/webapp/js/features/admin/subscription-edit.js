@@ -75,7 +75,6 @@
                 document.getElementById('sub-expires-at').value = year + '-' + month + '-' + day + 'T' + hours + ':' + minutes;
 
                 loadSubscriptionKeys(servers);
-                loadSubscriptionKeys(servers);
             } catch (error) {
                 console.error('Ошибка загрузки подписки:', error);
                 document.getElementById('admin-subscription-edit-loading').style.display = 'none';
@@ -85,11 +84,6 @@
 
         async function saveSubscriptionChanges(event) {
             event.preventDefault();
-            var submitBtn = event.target.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Сохранить';
-            }
 
             var currentEditingSubscriptionId = _deps.getCurrentEditingSubscriptionId();
             var originalSubscriptionData = _deps.getOriginalSubscriptionData();
@@ -240,12 +234,12 @@
             tabContents.forEach(function (content) { return content.classList.remove('active'); });
 
             if (tabName === 'params') {
-                var paramsBtn = document.querySelector('#page-admin-subscription-edit .tab-button[onclick*="params"]');
+                var paramsBtn = document.querySelector('#page-admin-subscription-edit .tab-button[data-arg="params"]');
                 if (paramsBtn) paramsBtn.classList.add('active');
                 var paramsContent = document.getElementById('subscription-tab-params');
                 if (paramsContent) paramsContent.classList.add('active');
             } else if (tabName === 'keys') {
-                var keysBtn = document.querySelector('#page-admin-subscription-edit .tab-button[onclick*="keys"]');
+                var keysBtn = document.querySelector('#page-admin-subscription-edit .tab-button[data-arg="keys"]');
                 if (keysBtn) keysBtn.classList.add('active');
                 var keysContent = document.getElementById('subscription-tab-keys');
                 if (keysContent) keysContent.classList.add('active');
@@ -348,9 +342,11 @@
                     await _deps.appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
                     return;
                 }
-                var deleteBtn = document.querySelector('.btn-danger');
-                deleteBtn.disabled = true;
-                deleteBtn.textContent = 'Удаление...';
+                var deleteBtn = document.getElementById('admin-subscription-delete-btn');
+                if (deleteBtn) {
+                    deleteBtn.disabled = true;
+                    deleteBtn.textContent = 'Удаление...';
+                }
                 var response = await _deps.apiFetch('/api/admin/subscription/' + currentEditingSubscriptionId + '/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -365,10 +361,10 @@
             } catch (error) {
                 console.error('Ошибка удаления подписки:', error);
                 await _deps.appShowAlert('Ошибка удаления: ' + error.message, { title: 'Ошибка', variant: 'error' });
-                var deleteBtn = document.querySelector('.btn-danger');
-                if (deleteBtn) {
-                    deleteBtn.disabled = false;
-                    deleteBtn.textContent = 'Удалить подписку';
+                var deleteBtnErr = document.getElementById('admin-subscription-delete-btn');
+                if (deleteBtnErr) {
+                    deleteBtnErr.disabled = false;
+                    deleteBtnErr.textContent = 'Удалить подписку';
                 }
             }
         }
