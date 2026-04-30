@@ -1447,6 +1447,18 @@ class X3:
                         break
                 if sub_id:
                     break
+            if not sub_id:
+                # Compatibility fallback for tests/panels where list() snapshot
+                # doesn't expose subId but get_by_email still works.
+                try:
+                    client = await self._api.client.get_by_email(user_email)
+                except Exception:
+                    client = None
+                if client:
+                    sub_id = getattr(client, "sub_id", None) or getattr(client, "subId", None)
+                    if not sub_id and hasattr(client, "model_dump"):
+                        d = (client.model_dump() or {})
+                        sub_id = d.get("sub_id") or d.get("subId")
             if not sub_id and subscription_token:
                 sub_id = subscription_token
                 logger.debug("get_subscription_links: используем subscription_token как sub_id для email=%s", user_email)
