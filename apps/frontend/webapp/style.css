@@ -802,7 +802,16 @@ header:has(.back-button):not(:has(h1)) {
     border-radius: 10px;
     box-sizing: border-box;
 }
+/* Сброс глобального flex:1 у .btn-primary/.btn-secondary — иначе «+ Сервер», «Порядок» и «⋯» растягиваются поровну */
+.admin-server-group-toolbar__row .admin-server-group-toolbar-btn.btn-primary {
+    flex: 1 1 140px;
+    min-width: 0;
+}
+.admin-server-group-toolbar__row .admin-server-group-toolbar-btn.btn-secondary {
+    flex: 0 0 auto;
+}
 .admin-server-group-toolbar-sync {
+    flex: 0 0 auto;
     width: 100%;
     box-sizing: border-box;
     min-height: 44px;
@@ -3654,6 +3663,10 @@ a.instruction-platform-btn {
 }
 .admin-sm-toolbar-actions .admin-sm-btn-add-group,
 .admin-sm-toolbar-actions .admin-sm-btn-sync-panels {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
     min-height: 42px;
     padding: 10px 14px;
     font-size: 14px;
@@ -6006,24 +6019,36 @@ a.instruction-platform-btn {
 .btn-outline {
     width: 100%;
     padding: 10px 20px;
-    border: 1.5px solid var(--accent-color, #4caf50);
+    border: 1.5px solid var(--accent-line);
     border-radius: 8px;
     background: transparent;
-    color: var(--accent-color, #4caf50);
+    color: var(--text-primary);
     font-size: 15px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.btn-outline:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 @media (hover: hover) and (pointer: fine) {
 .btn-outline:hover {
-    background: rgba(76, 175, 80, 0.08);
+    background: var(--accent-muted-subtle);
+    border-color: var(--accent-line-soft);
+    color: var(--text-primary);
 }
 }
 
 .btn-outline:active {
     transform: scale(0.98);
+    background: var(--accent-muted);
 }
 
 .btn-outline:disabled {
@@ -6053,8 +6078,9 @@ a.instruction-platform-btn {
 
 @media (hover: hover) and (pointer: fine) {
 .notif-chip:hover {
-    border-color: var(--accent-color, #4caf50);
-    color: var(--accent-color, #4caf50);
+    border-color: var(--accent-line-soft);
+    color: var(--text-primary);
+    background: var(--accent-muted-subtle);
 }
 }
 
@@ -6079,7 +6105,7 @@ a.instruction-platform-btn {
 .notif-check-row input[type="checkbox"] {
     width: 18px;
     height: 18px;
-    accent-color: var(--accent-color, #4caf50);
+    accent-color: var(--accent);
     flex-shrink: 0;
 }
 
@@ -6099,9 +6125,9 @@ a.instruction-platform-btn {
 }
 
 [data-theme="light"] .notif-preview-bubble {
-    background: #e1ffc7;
-    color: #1a1a1a;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: var(--card-bg-hover);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .notif-preview-bubble b {
