@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("static", __name__)
 
 
+def _set_no_cache_headers(resp: Response) -> Response:
+    """Disable browser/proxy cache for HTML entrypoints."""
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
 def _webapp_base_dir():
     """Project root (where apps/backend and apps/frontend live)."""
     # __file__ = .../apps/backend/src/daralla_backend/web/routes/static.py
@@ -28,11 +36,12 @@ async def root_index():
         if webapp_path.exists():
             with webapp_path.open("rb") as f:
                 body = f.read()
-            return Response(
+            resp = Response(
                 body,
                 status=200,
                 content_type="text/html; charset=utf-8",
             )
+            return _set_no_cache_headers(resp)
         logger.warning("Web app not found at: %s", webapp_path)
         return Response("Web app not found", status=404, mimetype="text/plain")
     except Exception as e:
@@ -58,7 +67,9 @@ async def privacy_page():
     body, status = _read_webapp_file("legal/privacy.html")
     if status != 200:
         return ("File not found", 404) if status == 404 else ("Forbidden", status)
-    return Response(body, status=200, content_type="text/html; charset=utf-8")
+    return _set_no_cache_headers(
+        Response(body, status=200, content_type="text/html; charset=utf-8")
+    )
 
 
 @bp.route("/terms", methods=["GET"])
@@ -66,7 +77,9 @@ async def terms_page():
     body, status = _read_webapp_file("legal/terms.html")
     if status != 200:
         return ("File not found", 404) if status == 404 else ("Forbidden", status)
-    return Response(body, status=200, content_type="text/html; charset=utf-8")
+    return _set_no_cache_headers(
+        Response(body, status=200, content_type="text/html; charset=utf-8")
+    )
 
 
 @bp.route("/support", methods=["GET"])
