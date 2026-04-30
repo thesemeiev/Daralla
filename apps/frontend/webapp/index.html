@@ -1166,8 +1166,8 @@
                     <div class="admin-sm-toolbar">
                         <div class="admin-sm-toolbar-actions">
                             <button type="button" class="btn-primary admin-sm-btn-add-group" data-action="showAddServerGroupModal">Добавить группу</button>
-                            <button type="button" class="btn-outline admin-sm-btn-sync-panels" id="admin-sync-all-panels-btn" data-action="syncAllServers" title="Полная синхронизация: клиенты подписок по базе на всех нодах 3x-ui. Может занять несколько минут.">Синхронизация с панелями</button>
-                            <button type="button" class="btn-secondary admin-sm-btn-sync-panels" data-action="showSyncOutboxStatus" title="Статус outbox синка и ручной retry зависших задач">Outbox синка</button>
+                            <button type="button" class="btn-outline admin-sm-btn-sync-now" id="admin-sync-all-panels-btn" data-action="syncAllServers" title="Полная синхронизация: клиенты подписок по базе на всех нодах 3x-ui. Может занять несколько минут.">Синхронизация</button>
+                            <button type="button" class="btn-secondary admin-sm-btn-sync-outbox" data-action="showSyncOutboxStatus" title="Статус outbox синка и ручной retry зависших задач">Outbox</button>
                         </div>
                     </div>
                     <div id="admin-server-groups-list"></div>
@@ -1188,7 +1188,7 @@
                         <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-reorder-toggle-btn" data-action="toggleAdminServerReorderMode">Порядок</button>
                         <button type="button" class="btn-secondary admin-server-group-toolbar-btn" id="admin-server-group-edit-btn" title="Редактировать группу">⋯</button>
                     </div>
-                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn admin-server-group-toolbar-sync" id="admin-sync-all-panels-group-btn" data-action="syncAllServers" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация с панелями</button>
+                    <button type="button" class="btn-secondary admin-server-group-toolbar-btn admin-server-group-toolbar-sync" id="admin-sync-all-panels-group-btn" data-action="syncAllServers" title="Полная синхронизация подписок с панелями 3x-ui по базе. Может занять несколько минут.">Синхронизация</button>
                 </div>
                 <details class="group-detail-hint-details admin-server-group-hint">
                     <summary class="group-detail-hint-summary">Про порядок в подписке</summary>

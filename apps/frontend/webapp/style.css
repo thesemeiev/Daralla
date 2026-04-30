@@ -3666,21 +3666,22 @@ a.instruction-platform-btn {
 .admin-sm-toolbar-actions {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 8px;
     align-self: stretch;
     flex: 0 1 min(100%, 280px);
     min-width: min(100%, 200px);
 }
 @media (min-width: 720px) {
     .admin-sm-toolbar-actions {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         align-self: center;
-        flex: 0 0 auto;
+        flex: 1 1 100%;
         min-width: 0;
     }
 }
 .admin-sm-toolbar-actions .admin-sm-btn-add-group,
-.admin-sm-toolbar-actions .admin-sm-btn-sync-panels {
+.admin-sm-toolbar-actions .admin-sm-btn-sync-now,
+.admin-sm-toolbar-actions .admin-sm-btn-sync-outbox {
     flex: none;
     width: 100%;
     min-width: 0;
@@ -3692,11 +3693,25 @@ a.instruction-platform-btn {
     border-radius: var(--radius-sm, 10px);
     box-sizing: border-box;
     justify-content: center;
-}
-.admin-sm-btn-sync-panels {
-    white-space: normal;
+    white-space: nowrap;
     text-align: center;
-    line-height: 1.25;
+}
+.admin-sm-toolbar-actions .admin-sm-btn-add-group {
+    border-radius: var(--radius-sm, 10px);
+}
+.admin-sm-btn-sync-now {
+    border-width: 1.5px;
+}
+.admin-sm-btn-sync-outbox {
+    border-width: 1px;
+}
+@media (max-width: 719px) {
+    .admin-sm-toolbar-actions .admin-sm-btn-add-group,
+    .admin-sm-toolbar-actions .admin-sm-btn-sync-now,
+    .admin-sm-toolbar-actions .admin-sm-btn-sync-outbox {
+        min-height: 44px;
+        font-size: 14px;
+    }
 }
 .admin-server-groups-grid {
     display: grid;

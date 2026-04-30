@@ -29,7 +29,7 @@ from .xui_helpers import (
 logger = logging.getLogger(__name__)
 _URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 _SUPPORTED_PROTOCOLS = {"vless", "vmess", "trojan", "hysteria2", "tuic"}
-_PASSWORD_BASED_PROTOCOLS = {"trojan", "tuic"}
+_PASSWORD_BASED_PROTOCOLS = {"trojan", "tuic", "hysteria2"}
 
 # Backward-compatibility aliases for existing tests/imports.
 _flow_matches_desired = flow_matches_desired
@@ -181,6 +181,21 @@ class X3:
         val = int(limit_ip)
         cls._client_set(c, "limit_ip", val)
         cls._client_set(c, "limitIp", val)
+
+    @staticmethod
+    def _coerce_optional_bool(v: Any) -> Optional[bool]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return int(v) != 0
+        s = str(v).strip().lower()
+        if s in {"1", "true", "on", "yes", "enabled"}:
+            return True
+        if s in {"0", "false", "off", "no", "disabled"}:
+            return False
+        return None
 
     @staticmethod
     def _settings_clients_obj(settings: Any) -> list[Any]:
@@ -414,7 +429,10 @@ class X3:
             "protocol": protocol_norm,
         }
         if protocol_norm == "hysteria2":
-            payload["auth"] = str(uuid.uuid4())[:16]
+            # Compatibility: different 3x-ui builds may rely on auth or password.
+            hy2_secret = str(uuid.uuid4()).replace("-", "")
+            payload["auth"] = hy2_secret
+            payload["password"] = hy2_secret
         elif protocol_norm in _PASSWORD_BASED_PROTOCOLS:
             payload["password"] = str(uuid.uuid4())
         else:
@@ -517,9 +535,10 @@ class X3:
     @staticmethod
     def _ensure_client_id_for_update(c: Any) -> Any:
         """Панель 3x-ui для VLESS ожидает в теле update поле id = UUID. get_by_email возвращает id как число — подставляем uuid."""
-        uuid_val = getattr(c, "uuid", None)
-        if uuid_val and isinstance(getattr(c, "id", None), int):
-            c.id = uuid_val
+        uuid_val = X3._client_get(c, "uuid", None)
+        id_val = X3._client_get(c, "id", None)
+        if uuid_val and (id_val is None or id_val == "" or isinstance(id_val, int)):
+            X3._client_set(c, "id", uuid_val)
         return c
 
     async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
@@ -562,18 +581,34 @@ class X3:
             else ""
         )
         email = self._client_get(c, "email", None)
+        auth = self._client_get(c, "auth", None)
+        password = self._client_get(c, "password", None)
+        enable_override = self._coerce_optional_bool(self._client_get(c, "enable", None))
+        if not protocol_norm:
+            protocol_from_payload = str(self._client_get(c, "protocol", "") or "").strip().lower()
+            if protocol_from_payload:
+                protocol_norm = self._normalize_protocol_name(protocol_from_payload, None)
 
         # 3x-ui часто не умеет стабильный updateClient для hy2/tuic/trojan/vmess
         # (падает с "empty client ID"). Для non-vless безопаснее сразу обновлять
         # через inbound.update по email в settings.users/clients.
-        if protocol_norm and protocol_norm != "vless" and email and inbound_id is not None:
+        if (
+            protocol_norm
+            and protocol_norm != "vless"
+            and inbound_id is not None
+            and any(v for v in (email, auth, password, uuid_for_url))
+        ):
             await self._update_client_via_inbound_settings(
                 inbound_id=int(inbound_id),
-                email=str(email),
+                email=(str(email) if email else None),
+                auth=(str(auth) if auth else None),
+                password=(str(password) if password else None),
+                client_id=(str(uuid_for_url) if uuid_for_url else None),
                 expiry_time=self._client_get(c, "expiry_time", None),
                 limit_ip=self._client_get(c, "limit_ip", None),
                 flow_override=flow_override,
                 protocol_hint=protocol_norm,
+                enable_override=enable_override,
             )
             return
 
@@ -600,14 +635,22 @@ class X3:
                         if inbound_id_override is not None
                         else getattr(resolved, "inbound_id", inbound_id)
                     )
-            if not uuid_for_url and email and inbound_id is not None:
+            if (
+                not uuid_for_url
+                and inbound_id is not None
+                and any(v for v in (email, auth, password))
+            ):
                 await self._update_client_via_inbound_settings(
                     inbound_id=int(inbound_id),
-                    email=str(email),
+                    email=(str(email) if email else None),
+                    auth=(str(auth) if auth else None),
+                    password=(str(password) if password else None),
+                    client_id=None,
                     expiry_time=self._client_get(c, "expiry_time", None),
                     limit_ip=self._client_get(c, "limit_ip", None),
                     flow_override=flow_override,
                     protocol_hint=protocol_norm or protocol_hint,
+                    enable_override=enable_override,
                 )
                 return
         if not uuid_for_url:
@@ -635,16 +678,20 @@ class X3:
             msg = str(exc).lower()
             if (
                 "empty client id" in msg
-                and email
                 and inbound_id is not None
+                and any(v for v in (email, auth, password, uuid_for_url))
             ):
                 await self._update_client_via_inbound_settings(
                     inbound_id=int(inbound_id),
-                    email=str(email),
+                    email=(str(email) if email else None),
+                    auth=(str(auth) if auth else None),
+                    password=(str(password) if password else None),
+                    client_id=(str(uuid_for_url) if uuid_for_url else None),
                     expiry_time=self._client_get(c, "expiry_time", None),
                     limit_ip=self._client_get(c, "limit_ip", None),
                     flow_override=flow_override,
                     protocol_hint=protocol_norm or protocol_hint,
+                    enable_override=enable_override,
                 )
                 return
             raise
@@ -653,16 +700,24 @@ class X3:
         self,
         *,
         inbound_id: int,
-        email: str,
+        email: Optional[str],
+        auth: Optional[str],
+        password: Optional[str],
+        client_id: Optional[str],
         expiry_time: Any,
         limit_ip: Any,
         flow_override: Optional[str],
         protocol_hint: Optional[str],
+        enable_override: Optional[bool] = None,
     ) -> None:
         """Fallback update path by inbound settings when updateClient has empty client id."""
         inv = await self._api.inbound.get_by_id(int(inbound_id))
         settings = getattr(inv, "settings", None)
         target = None
+        email_norm = str(email).strip() if email else ""
+        auth_norm = str(auth).strip() if auth else ""
+        password_norm = str(password).strip() if password else ""
+        client_id_norm = str(client_id).strip() if client_id else ""
 
         def _groups_from_settings() -> list[list[Any]]:
             if settings is None:
@@ -676,24 +731,42 @@ class X3:
 
         for group in _groups_from_settings():
             for cl in group:
-                cl_email = self._client_get(cl, "email", "")
-                if str(cl_email).strip() == email:
+                cl_email = str(self._client_get(cl, "email", "") or "").strip()
+                cl_auth = str(self._client_get(cl, "auth", "") or "").strip()
+                cl_password = str(self._client_get(cl, "password", "") or "").strip()
+                cl_id = str(self._client_get(cl, "id", "") or "").strip()
+                cl_uuid = str(self._client_get(cl, "uuid", "") or "").strip()
+                matched = False
+                if email_norm and cl_email == email_norm:
+                    matched = True
+                elif auth_norm and cl_auth == auth_norm:
+                    matched = True
+                elif password_norm and cl_password == password_norm:
+                    matched = True
+                elif client_id_norm and (cl_id == client_id_norm or cl_uuid == client_id_norm):
+                    matched = True
+                if matched:
                     target = cl
                     break
             if target is not None:
                 break
         if target is None:
             raise ValueError(
-                f"inbound.update fallback: client not found by email={email} inbound_id={inbound_id}"
+                "inbound.update fallback: client not found "
+                f"inbound_id={inbound_id} email={email_norm or '-'} auth={auth_norm or '-'} "
+                f"password={'***' if password_norm else '-'} client_id={client_id_norm or '-'}"
             )
 
         if expiry_time is not None:
             self._client_set_expiry_ms(target, int(expiry_time))
         if limit_ip is not None:
             self._client_set_limit_ip(target, int(limit_ip))
-        # После продления часть панелей оставляет клиента disabled.
-        # Явно включаем, чтобы не оставался в статусе "expired/exhausted" при актуальном expiry.
-        self._client_set(target, "enable", True)
+        if enable_override is None:
+            # После продления часть панелей оставляет клиента disabled.
+            # Явно включаем, чтобы не оставался в статусе "expired/exhausted" при актуальном expiry.
+            self._client_set(target, "enable", True)
+        else:
+            self._client_set(target, "enable", bool(enable_override))
         protocol_norm = (
             self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
             if protocol_hint
