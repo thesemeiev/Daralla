@@ -169,6 +169,19 @@ class X3:
         else:
             setattr(c, key, value)
 
+    @classmethod
+    def _client_set_expiry_ms(cls, c: Any, expiry_ms: int) -> None:
+        val = int(expiry_ms)
+        # Keep both shapes for compatibility between py3xui models and dict snapshots.
+        cls._client_set(c, "expiry_time", val)
+        cls._client_set(c, "expiryTime", val)
+
+    @classmethod
+    def _client_set_limit_ip(cls, c: Any, limit_ip: int) -> None:
+        val = int(limit_ip)
+        cls._client_set(c, "limit_ip", val)
+        cls._client_set(c, "limitIp", val)
+
     @staticmethod
     def _settings_clients_obj(settings: Any) -> list[Any]:
         clients = list(getattr(settings, "clients", None) or [])
@@ -675,9 +688,9 @@ class X3:
             )
 
         if expiry_time is not None:
-            self._client_set(target, "expiry_time", int(expiry_time))
+            self._client_set_expiry_ms(target, int(expiry_time))
         if limit_ip is not None:
-            self._client_set(target, "limit_ip", int(limit_ip))
+            self._client_set_limit_ip(target, int(limit_ip))
         # После продления часть панелей оставляет клиента disabled.
         # Явно включаем, чтобы не оставался в статусе "expired/exhausted" при актуальном expiry.
         self._client_set(target, "enable", True)
@@ -818,8 +831,8 @@ class X3:
 
         if work_items:
             for inbound_id, inbound_protocol, c in work_items:
-                self._client_set(c, "expiry_time", exp_ms)
-                self._client_set(c, "limit_ip", li)
+                self._client_set_expiry_ms(c, exp_ms)
+                self._client_set_limit_ip(c, li)
                 self._client_set(c, "enable", True)
                 if inbound_protocol == "vless":
                     self._client_set(c, "flow", want_flow)
@@ -856,8 +869,8 @@ class X3:
 
         if fallback_items:
             for inbound_id, inbound_protocol, c in fallback_items:
-                self._client_set(c, "expiry_time", exp_ms)
-                self._client_set(c, "limit_ip", li)
+                self._client_set_expiry_ms(c, exp_ms)
+                self._client_set_limit_ip(c, li)
                 self._client_set(c, "enable", True)
                 if inbound_protocol == "vless":
                     self._client_set(c, "flow", want_flow)
@@ -879,8 +892,8 @@ class X3:
         if c is None:
             return False, False
 
-        c.expiry_time = exp_ms
-        c.limit_ip = li
+        self._client_set_expiry_ms(c, exp_ms)
+        self._client_set_limit_ip(c, li)
         c.enable = True
         if not wanted_protocol or wanted_protocol == "vless":
             c.flow = want_flow
@@ -908,7 +921,7 @@ class X3:
         if current_ms == 0:
             current_ms = int(datetime.datetime.now().timestamp() * 1000)
         new_ms = current_ms + (extend_days * 86400000)
-        c.expiry_time = new_ms
+        self._client_set_expiry_ms(c, new_ms)
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
@@ -929,7 +942,7 @@ class X3:
         if c is None:
             # Клиент не найден — считаем, что нечего обновлять
             return False
-        c.expiry_time = expiry_timestamp * 1000
+        self._client_set_expiry_ms(c, expiry_timestamp * 1000)
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)
@@ -949,7 +962,7 @@ class X3:
         if c is None:
             # Клиент не найден — limitIp обновлять нечему
             return False
-        c.limit_ip = limit_ip
+        self._client_set_limit_ip(c, limit_ip)
         if flow is not None:
             c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
         self._ensure_client_id_for_update(c)

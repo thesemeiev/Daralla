@@ -83,6 +83,20 @@ def panel_client_settings_dict(
         d = c.model_dump(by_alias=True, mode="json", exclude_defaults=False)
     else:
         d = {}
+    # Keep panel JSON keys canonical. Reconcile code may mutate snake_case attrs
+    # when working with mixed object/dict snapshots.
+    if "expiry_time" in d:
+        d["expiryTime"] = d.get("expiry_time")
+        d.pop("expiry_time", None)
+    if "limit_ip" in d:
+        d["limitIp"] = d.get("limit_ip")
+        d.pop("limit_ip", None)
+    if "sub_id" in d:
+        d["subId"] = d.get("sub_id")
+        d.pop("sub_id", None)
+    if "tg_id" in d:
+        d["tgId"] = d.get("tg_id")
+        d.pop("tg_id", None)
     dedupe_flow_json_key(d)
     # flow релевантен только для VLESS/XTLS сценариев; для прочих протоколов
     # (например hysteria2/tuic) не добавляем лишние поля.

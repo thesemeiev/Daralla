@@ -37,6 +37,12 @@ async def _get_current_version(db: aiosqlite.Connection) -> int:
         return row[0] or 0
 
 
+async def _get_applied_versions(db: aiosqlite.Connection) -> set[int]:
+    async with db.execute("SELECT version FROM schema_version") as cur:
+        rows = await cur.fetchall()
+        return {int(r[0]) for r in rows if r and r[0] is not None}
+
+
 def _discover_migrations() -> list[tuple[int, str, str]]:
     """Возвращает [(version, module_name, filename), ...] отсортированные по version."""
     results = []
@@ -62,10 +68,11 @@ async def run_migrations() -> int:
         await db.execute("PRAGMA busy_timeout=15000")
         await _ensure_version_table(db)
         current = await _get_current_version(db)
+        applied_versions = await _get_applied_versions(db)
         migrations = _discover_migrations()
 
         for version, module_name, fname in migrations:
-            if version <= current:
+            if version in applied_versions:
                 continue
 
             logger.info("Применяю миграцию %03d (%s)...", version, module_name)
@@ -79,6 +86,7 @@ async def run_migrations() -> int:
             )
             await db.commit()
             applied += 1
+            applied_versions.add(version)
             desc = getattr(mod, "DESCRIPTION", "")
             logger.info("Миграция %03d применена: %s", version, desc)
 

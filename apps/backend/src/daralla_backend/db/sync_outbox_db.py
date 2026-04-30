@@ -3,6 +3,7 @@ DB helpers for sync outbox jobs (БД -> 3x-ui).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Iterable
@@ -12,10 +13,67 @@ import aiosqlite
 from . import DB_PATH
 
 _LIVE_STATUSES = ("pending", "retry")
+_SCHEMA_READY = False
+_SCHEMA_LOCK = asyncio.Lock()
 
 
 def _now_ts() -> int:
     return int(time.time())
+
+
+async def ensure_sync_outbox_schema() -> None:
+    """
+    Defensive self-heal for environments where schema_version is ahead,
+    but sync_outbox table is missing (e.g. old DB restored with stale version rows).
+    """
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if _SCHEMA_READY:
+            return
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sync_outbox (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subscription_id INTEGER NOT NULL,
+                    server_name TEXT NOT NULL,
+                    client_email TEXT NOT NULL,
+                    op TEXT NOT NULL DEFAULT 'ensure_client',
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    desired_revision INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    next_run_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    last_error TEXT,
+                    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    done_at INTEGER,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+                )
+                """
+            )
+            await db.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_outbox_unique_job
+                ON sync_outbox(subscription_id, server_name, client_email, op, desired_revision)
+                """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_run
+                ON sync_outbox(status, next_run_at, id)
+                """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_sync_outbox_subscription
+                ON sync_outbox(subscription_id, id)
+                """
+            )
+            await db.commit()
+        _SCHEMA_READY = True
 
 
 async def enqueue_sync_job(
@@ -28,6 +86,7 @@ async def enqueue_sync_job(
     payload: dict | None = None,
     next_run_at: int | None = None,
 ) -> bool:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     run_at = int(next_run_at) if next_run_at is not None else now
     payload_json = json.dumps(payload or {}, ensure_ascii=False)
@@ -72,6 +131,7 @@ async def enqueue_sync_jobs_bulk(jobs: Iterable[dict]) -> int:
 
 
 async def claim_due_jobs(limit: int = 50) -> list[dict]:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     lim = max(1, min(int(limit), 500))
     ids: list[int] = []
@@ -123,6 +183,7 @@ async def claim_due_jobs(limit: int = 50) -> list[dict]:
 
 
 async def mark_job_done(job_id: int) -> None:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -140,6 +201,7 @@ async def mark_job_done(job_id: int) -> None:
 
 
 async def mark_job_retry(job_id: int, *, error_text: str, delay_sec: int) -> None:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -157,6 +219,7 @@ async def mark_job_retry(job_id: int, *, error_text: str, delay_sec: int) -> Non
 
 
 async def mark_job_dead(job_id: int, *, error_text: str) -> None:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -173,6 +236,7 @@ async def mark_job_dead(job_id: int, *, error_text: str) -> None:
 
 
 async def get_sync_outbox_stats() -> dict:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     out = {
         "pending": 0,
@@ -221,6 +285,7 @@ async def get_sync_outbox_stats() -> dict:
 
 
 async def list_sync_outbox_jobs(status: str | None = None, limit: int = 100) -> list[dict]:
+    await ensure_sync_outbox_schema()
     lim = max(1, min(int(limit), 500))
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -247,6 +312,7 @@ async def list_sync_outbox_jobs(status: str | None = None, limit: int = 100) -> 
 
 
 async def retry_dead_jobs(limit: int = 100) -> int:
+    await ensure_sync_outbox_schema()
     now = _now_ts()
     lim = max(1, min(int(limit), 1000))
     async with aiosqlite.connect(DB_PATH) as db:
