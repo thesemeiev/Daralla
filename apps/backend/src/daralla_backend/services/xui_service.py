@@ -584,6 +584,13 @@ class X3:
             if protocol_hint
             else ""
         )
+        inbound_id = (
+            int(inbound_id_override)
+            if inbound_id_override is not None
+            else self._client_get(c, "inbound_id", None)
+        )
+        if inbound_id is None:
+            raise ValueError("updateClient: у клиента нет inbound_id")
         if not protocol_norm:
             protocol_from_payload = str(self._client_get(c, "protocol", "") or "").strip().lower()
             if protocol_from_payload:
@@ -601,13 +608,6 @@ class X3:
         # Для остальных протоколов оставляем старую страховку against get_by_email integer id.
         if protocol_norm != "hysteria2":
             self._ensure_client_id_for_update(c)
-        inbound_id = (
-            int(inbound_id_override)
-            if inbound_id_override is not None
-            else self._client_get(c, "inbound_id", None)
-        )
-        if inbound_id is None:
-            raise ValueError("updateClient: у клиента нет inbound_id")
         api = self._api.client
         uuid_for_url = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
         email = self._client_get(c, "email", None)
