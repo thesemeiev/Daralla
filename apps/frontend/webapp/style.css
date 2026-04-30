@@ -1078,9 +1078,10 @@ header:has(.back-button):not(:has(h1)) {
 /* Шапка «Назад» + заголовок: кнопка слева, заголовок по центру экрана */
 .header-with-back {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(88px, 1fr) auto minmax(88px, 1fr);
     align-items: center;
     column-gap: 8px;
+    min-height: 40px;
 }
 .header-with-back .back-button {
     grid-column: 1;
@@ -1091,7 +1092,7 @@ header:has(.back-button):not(:has(h1)) {
 .header-with-back .page-section-title {
     grid-column: 2;
     margin: 0;
-    min-width: 0;
+    min-width: min(100%, 180px);
     max-width: 100%;
     text-align: center;
     justify-self: center;
@@ -1100,24 +1101,6 @@ header:has(.back-button):not(:has(h1)) {
 .header-with-back::after {
     content: none;
     display: none;
-}
-
-/* Админ-шапки: заголовок отдельной строкой, не на одной линии с "Назад" */
-[id^="page-admin-"] > .header-with-back {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-}
-[id^="page-admin-"] > .header-with-back .back-button {
-    grid-column: auto;
-    justify-self: auto;
-}
-[id^="page-admin-"] > .header-with-back h1,
-[id^="page-admin-"] > .header-with-back .page-section-title {
-    grid-column: auto;
-    justify-self: auto;
-    text-align: left;
 }
 
 h1 {
@@ -4336,6 +4319,145 @@ a.instruction-platform-btn {
     }
 }
 
+/* Админ-формы: единая плотность и типографика */
+[id^="page-admin-"] .header-with-back {
+    margin-bottom: 2px;
+}
+[id^="page-admin-"] .page-section-title,
+[id^="page-admin-"] .header-with-back h1 {
+    font-size: 19px;
+}
+[id^="page-admin-"] .admin-page-content > form,
+[id^="page-admin-"] .admin-page-content > .admin-section,
+[id^="page-admin-"] .admin-page-content > .dashboard-chart-section,
+[id^="page-admin-"] .admin-page-content > .dashboard-servers-section {
+    margin-top: 8px;
+}
+
+[id^="page-admin-"] .form-group,
+#admin-notification-form .form-group,
+#admin-event-form .form-group,
+#add-server-group-form .form-group,
+#edit-server-group-form .form-group,
+#add-server-config-form .form-group,
+#edit-server-config-form .form-group {
+    margin-bottom: 14px;
+    gap: 6px;
+}
+[id^="page-admin-"] .form-group label,
+#admin-notification-form .form-group label,
+#admin-event-form .form-group label,
+#add-server-group-form .form-group label,
+#edit-server-group-form .form-group label,
+#add-server-config-form .form-group label,
+#edit-server-config-form .form-group label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-secondary);
+}
+[id^="page-admin-"] .form-group input[type="text"],
+[id^="page-admin-"] .form-group input[type="number"],
+[id^="page-admin-"] .form-group input[type="password"],
+[id^="page-admin-"] .form-group input[type="datetime-local"],
+[id^="page-admin-"] .form-group select,
+[id^="page-admin-"] .form-group textarea,
+#admin-notification-form .form-group input,
+#admin-notification-form .form-group select,
+#admin-notification-form .form-group textarea,
+#admin-event-form .form-group input,
+#admin-event-form .form-group select,
+#admin-event-form .form-group textarea,
+#add-server-group-form .form-group input,
+#add-server-group-form .form-group select,
+#add-server-group-form .form-group textarea,
+#edit-server-group-form .form-group input,
+#edit-server-group-form .form-group select,
+#edit-server-group-form .form-group textarea,
+#add-server-config-form .form-group input,
+#add-server-config-form .form-group select,
+#add-server-config-form .form-group textarea,
+#edit-server-config-form .form-group input,
+#edit-server-config-form .form-group select,
+#edit-server-config-form .form-group textarea {
+    min-height: 44px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border-color: var(--input-border);
+    font-size: 15px;
+}
+[id^="page-admin-"] .form-group input[type="datetime-local"],
+#admin-event-form .form-group input[type="datetime-local"] {
+    min-height: 46px;
+}
+[id^="page-admin-"] .form-group textarea,
+#admin-notification-form .form-group textarea,
+#admin-event-form .form-group textarea,
+#add-server-config-form .form-group textarea,
+#edit-server-config-form .form-group textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+[id^="page-admin-"] .form-group select,
+#admin-notification-form .form-group select,
+#admin-event-form .form-group select,
+#add-server-config-form .form-group select,
+#edit-server-config-form .form-group select {
+    padding-right: 38px;
+}
+[id^="page-admin-"] .form-group input:focus,
+[id^="page-admin-"] .form-group textarea:focus,
+[id^="page-admin-"] .form-group select:focus,
+#admin-notification-form .form-group input:focus,
+#admin-notification-form .form-group textarea:focus,
+#admin-notification-form .form-group select:focus,
+#admin-event-form .form-group input:focus,
+#admin-event-form .form-group textarea:focus,
+#admin-event-form .form-group select:focus,
+#add-server-group-form .form-group input:focus,
+#add-server-group-form .form-group textarea:focus,
+#add-server-group-form .form-group select:focus,
+#edit-server-group-form .form-group input:focus,
+#edit-server-group-form .form-group textarea:focus,
+#edit-server-group-form .form-group select:focus,
+#add-server-config-form .form-group input:focus,
+#add-server-config-form .form-group textarea:focus,
+#add-server-config-form .form-group select:focus,
+#edit-server-config-form .form-group input:focus,
+#edit-server-config-form .form-group textarea:focus,
+#edit-server-config-form .form-group select:focus {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.modal-content .form-actions,
+[id^="page-admin-"] .form-actions {
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 18px;
+}
+.modal-content .form-actions .btn-primary,
+.modal-content .form-actions .btn-secondary,
+.modal-content .form-actions .btn-danger,
+[id^="page-admin-"] .form-actions .btn-primary,
+[id^="page-admin-"] .form-actions .btn-secondary,
+[id^="page-admin-"] .form-actions .btn-danger {
+    min-height: 44px;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+}
+
+@media (max-width: 640px) {
+    [id^="page-admin-"] .page-section-title,
+    [id^="page-admin-"] .header-with-back h1 {
+        font-size: 18px;
+    }
+    .modal-content .form-actions,
+    [id^="page-admin-"] .form-actions {
+        flex-direction: column-reverse;
+    }
+}
+
 /* Модалка «Отвязать Telegram»: основная кнопка шире и заметнее, «Отмена» компактнее */
 #unlink-telegram-modal .unlink-telegram-modal-actions {
     flex-direction: row;
@@ -5767,10 +5889,14 @@ a.instruction-platform-btn {
 .dashboard-revenue-head {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
-    gap: 10px 14px;
+    gap: 10px;
     margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
 }
 
 .dashboard-revenue-title {
@@ -5780,43 +5906,57 @@ a.instruction-platform-btn {
 .dashboard-revenue-presets {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     justify-content: flex-end;
+    align-items: center;
 }
 .dashboard-revenue-select-wrap {
     display: none;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     width: 100%;
-    max-width: 280px;
-    font-size: 11px;
+    max-width: 320px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-secondary);
 }
 .dashboard-revenue-select {
     width: 100%;
-    min-height: 36px;
-    padding: 7px 10px;
+    min-height: 40px;
+    padding: 8px 12px;
     border: 1px solid var(--input-border);
-    border-radius: var(--radius-sm);
+    border-radius: 10px;
     background: var(--input-bg);
     color: var(--input-color);
-    font-size: 13px;
+    font-size: 14px;
+}
+.dashboard-revenue-select:focus-visible {
+    outline: none;
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
 @media (max-width: 640px) {
+    .dashboard-revenue-head {
+        align-items: stretch;
+        gap: 8px;
+        padding: 8px;
+    }
     .dashboard-revenue-presets {
         display: none;
     }
     .dashboard-revenue-select-wrap {
         display: flex;
+        max-width: 100%;
     }
 }
 
 .dashboard-revenue-preset {
-    padding: 5px 10px;
-    font-size: 11px;
+    padding: 7px 11px;
+    min-height: 34px;
+    font-size: 12px;
     font-weight: 500;
-    border-radius: 20px;
+    line-height: 1;
+    border-radius: 999px;
     border: 1px solid var(--card-border);
     background: var(--card-bg);
     color: var(--text-secondary);
@@ -5836,7 +5976,7 @@ a.instruction-platform-btn {
 
 .dashboard-revenue-preset.dashboard-revenue-preset--active {
     border-color: var(--accent);
-    background: var(--accent-muted-subtle);
+    background: var(--accent-muted);
     color: var(--text-primary);
 }
 
@@ -5844,8 +5984,12 @@ a.instruction-platform-btn {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 10px 14px;
+    gap: 10px;
     margin-bottom: 12px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
 }
 
 .dashboard-revenue-custom-row[hidden] {
@@ -5855,28 +5999,47 @@ a.instruction-platform-btn {
 .dashboard-revenue-date-label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    flex: 1 1 148px;
+    gap: 6px;
     font-size: 11px;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
 .dashboard-revenue-date-label input[type="date"] {
-    padding: 8px 10px;
-    font-size: 13px;
-    border-radius: var(--radius-sm);
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 10px;
     border: 1px solid var(--input-border);
     background: var(--input-bg);
     color: var(--input-color);
 }
+.dashboard-revenue-date-label input[type="date"]:focus-visible {
+    outline: none;
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+}
 
 .dashboard-revenue-apply-custom {
-    padding: 8px 14px !important;
+    padding: 0 16px !important;
     font-size: 13px !important;
-    border-radius: var(--radius-sm) !important;
+    border-radius: 10px !important;
     margin-top: 0 !important;
     width: auto !important;
-    min-height: 38px;
+    min-height: 40px;
+}
+@media (max-width: 640px) {
+    .dashboard-revenue-custom-row {
+        padding: 8px;
+        gap: 8px;
+    }
+    .dashboard-revenue-date-label {
+        flex-basis: 100%;
+    }
+    .dashboard-revenue-apply-custom {
+        width: 100% !important;
+    }
 }
 
 .dashboard-section-title {
