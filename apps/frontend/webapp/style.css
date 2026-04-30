@@ -1102,6 +1102,24 @@ header:has(.back-button):not(:has(h1)) {
     display: none;
 }
 
+/* Админ-шапки: заголовок отдельной строкой, не на одной линии с "Назад" */
+[id^="page-admin-"] > .header-with-back {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+[id^="page-admin-"] > .header-with-back .back-button {
+    grid-column: auto;
+    justify-self: auto;
+}
+[id^="page-admin-"] > .header-with-back h1,
+[id^="page-admin-"] > .header-with-back .page-section-title {
+    grid-column: auto;
+    justify-self: auto;
+    text-align: left;
+}
+
 h1 {
     font-family: var(--font-display);
     font-size: 24px;
@@ -3653,7 +3671,7 @@ a.instruction-platform-btn {
     flex: 0 1 min(100%, 280px);
     min-width: min(100%, 200px);
 }
-@media (min-width: 520px) {
+@media (min-width: 720px) {
     .admin-sm-toolbar-actions {
         grid-template-columns: 1fr 1fr;
         align-self: center;
@@ -5750,6 +5768,25 @@ a.instruction-platform-btn {
     gap: 6px;
     justify-content: flex-end;
 }
+@media (max-width: 640px) {
+    .dashboard-revenue-presets {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        justify-content: stretch;
+    }
+    .dashboard-revenue-preset {
+        width: 100%;
+        text-align: center;
+        padding: 8px 8px;
+    }
+}
+@media (max-width: 420px) {
+    .dashboard-revenue-presets {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
 
 .dashboard-revenue-preset {
     padding: 6px 11px;
@@ -5859,7 +5896,7 @@ a.instruction-platform-btn {
 
 .admin-notification-card.active {
     border-color: var(--border-strong);
-    box-shadow: inset 3px 0 0 var(--color-success);
+    box-shadow: none;
 }
 
 .admin-notification-card.inactive {
