@@ -579,7 +579,28 @@ class X3:
         flow_override: явное значение flow в JSON (массовый sync); иначе берётся с объекта c.
         """
         await self._ensure_login()
-        self._ensure_client_id_for_update(c)
+        protocol_norm = (
+            self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
+            if protocol_hint
+            else ""
+        )
+        if not protocol_norm:
+            protocol_from_payload = str(self._client_get(c, "protocol", "") or "").strip().lower()
+            if protocol_from_payload:
+                protocol_norm = self._normalize_protocol_name(protocol_from_payload, None)
+        # get_by_email часто не возвращает protocol, особенно на flaky hy2 панелях.
+        # Если знаем inbound_id — подтягиваем протокол inbound, чтобы не тащить flow
+        # в non-vless update path.
+        if not protocol_norm and inbound_id is not None:
+            try:
+                inv = await self._api.inbound.get_by_id(int(inbound_id))
+                protocol_norm = self._extract_protocol(inv)
+            except Exception:
+                pass
+        # Для hysteria2 принудительно не трогаем id: панель не использует его как client key.
+        # Для остальных протоколов оставляем старую страховку against get_by_email integer id.
+        if protocol_norm != "hysteria2":
+            self._ensure_client_id_for_update(c)
         inbound_id = (
             int(inbound_id_override)
             if inbound_id_override is not None
@@ -589,19 +610,10 @@ class X3:
             raise ValueError("updateClient: у клиента нет inbound_id")
         api = self._api.client
         uuid_for_url = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
-        protocol_norm = (
-            self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
-            if protocol_hint
-            else ""
-        )
         email = self._client_get(c, "email", None)
         auth = self._client_get(c, "auth", None)
         password = self._client_get(c, "password", None)
         enable_override = self._coerce_optional_bool(self._client_get(c, "enable", None))
-        if not protocol_norm:
-            protocol_from_payload = str(self._client_get(c, "protocol", "") or "").strip().lower()
-            if protocol_from_payload:
-                protocol_norm = self._normalize_protocol_name(protocol_from_payload, None)
 
         # 3x-ui часто не умеет стабильный updateClient для hy2/tuic/trojan/vmess
         # (падает с "empty client ID"). Для non-vless безопаснее сразу обновлять
@@ -641,7 +653,8 @@ class X3:
                     resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
                     if flow_override is not None:
                         resolved.flow = flow_override
-                    self._ensure_client_id_for_update(resolved)
+                    if protocol_norm != "hysteria2":
+                        self._ensure_client_id_for_update(resolved)
                     uuid_for_url = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
                     c = resolved
                     inbound_id = (
@@ -930,7 +943,8 @@ class X3:
                 self._client_set(c, "enable", True)
                 if inbound_protocol == "vless":
                     self._client_set(c, "flow", want_flow)
-                self._ensure_client_id_for_update(c)
+                if inbound_protocol != "hysteria2":
+                    self._ensure_client_id_for_update(c)
                 await self._post_inbound_update_client(
                     c,
                     inbound_id_override=inbound_id,
@@ -968,7 +982,8 @@ class X3:
                 self._client_set(c, "enable", True)
                 if inbound_protocol == "vless":
                     self._client_set(c, "flow", want_flow)
-                self._ensure_client_id_for_update(c)
+                if inbound_protocol != "hysteria2":
+                    self._ensure_client_id_for_update(c)
                 await self._post_inbound_update_client(
                     c,
                     inbound_id_override=inbound_id,
