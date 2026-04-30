@@ -88,13 +88,13 @@
             if (!listEl) return;
             var query = (state.currentQuery || '').trim();
             if (!query) {
-                listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Введите ID для поиска</div>';
+                listEl.innerHTML = '<div class="broadcast-empty-state hint broadcast-empty-state-box">Введите ID для поиска</div>';
                 return;
             }
 
             var usersToShow = (state.currentResults || []).filter(function (u) { return !state.selectedUsers.includes(u.user_id); });
             if (usersToShow.length === 0) {
-                listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Нет результатов</div>';
+                listEl.innerHTML = '<div class="broadcast-empty-state hint broadcast-empty-state-box">Нет результатов</div>';
                 return;
             }
 
@@ -108,14 +108,14 @@
                 var checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.checked = false;
-                checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
+                checkbox.className = 'broadcast-user-checkbox';
                 checkbox.onclick = function (e) {
                     e.stopPropagation();
                     toggleUserForBroadcast(user.user_id);
                 };
 
                 var userInfo = document.createElement('div');
-                userInfo.style.cssText = 'flex: 1;';
+                userInfo.className = 'broadcast-user-info';
                 var idLine = highlightMatchRaw('ID: ' + String(user.user_id), qLower);
                 var subsText = 'Подписок: ' + (user.subscriptions_count || 0);
                 userInfo.innerHTML = '<div class="broadcast-user-id">' + idLine + '</div><div class="broadcast-user-subs">' + _deps.escapeHtml(subsText) + '</div>';
@@ -141,7 +141,7 @@
 
             state.userSearchTimeout = setTimeout(async function () {
                 try {
-                    listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Поиск...</div>';
+                    listEl.innerHTML = '<div class="broadcast-empty-state hint broadcast-empty-state-box">Поиск...</div>';
                     var response = await _deps.apiFetch('/api/admin/users', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -150,14 +150,14 @@
                     if (!response.ok) throw new Error('Ошибка поиска пользователей');
                     var data = await response.json();
                     if (!data.users || data.users.length === 0) {
-                        listEl.innerHTML = '<div class="broadcast-empty-state hint" style="padding: 16px; text-align: center;">Пользователи не найдены</div>';
+                        listEl.innerHTML = '<div class="broadcast-empty-state hint broadcast-empty-state-box">Пользователи не найдены</div>';
                         return;
                     }
                     state.currentResults = data.users;
                     renderBroadcastUserResults();
                 } catch (error) {
                     console.error('Ошибка поиска пользователей:', error);
-                    listEl.innerHTML = '<div class="error-text" style="padding: 16px;">Ошибка загрузки пользователей</div>';
+                    listEl.innerHTML = '<div class="error-text error-text-box">Ошибка загрузки пользователей</div>';
                 }
             }, 500);
         }

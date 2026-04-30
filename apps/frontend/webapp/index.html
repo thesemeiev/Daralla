@@ -556,6 +556,7 @@
         <div id="page-admin-stats" class="page" style="display: none;">
             <header class="header-with-back">
                 <button class="back-button" data-action="showPage" data-arg="account">← Назад</button>
+                <h1 class="page-section-title">Админ-панель</h1>
             </header>
             
             <div id="admin-stats-content" class="admin-panel-content">
@@ -635,18 +636,19 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Уведомления -->
         <div id="page-admin-notifications" class="page" style="display: none;">
-            <header>
+            <header class="header-with-back">
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
+                <h1 class="page-section-title">Уведомления</h1>
             </header>
             <div id="admin-notifications-content" class="admin-page-content">
-                <button type="button" class="btn-primary" style="width:100%; margin-bottom: 16px;" data-action="showNotificationRuleForm">+ Добавить правило</button>
+                <button type="button" class="btn-primary admin-action-full" data-action="showNotificationRuleForm">+ Добавить правило</button>
                 <div id="admin-notifications-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
                 <div id="admin-notifications-error" class="error" style="display: none;"></div>
                 <div id="admin-notifications-list" style="display: none;"></div>
             </div>
         </div>
         <div id="admin-notification-form-modal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-content admin-modal-content-wide">
                 <h2 id="admin-notification-form-title">Создать правило</h2>
                 <form id="admin-notification-form">
                     <div class="form-group">
@@ -659,16 +661,16 @@
                     <div class="form-group">
                         <label>Время срабатывания</label>
                         <div class="notif-chips-row" id="notif-trigger-chips"></div>
-                        <div id="notif-trigger-custom-wrap" style="display:none; margin-top: 8px;">
-                            <div style="display: flex; gap: 8px;">
-                                <input type="number" id="notif-rule-trigger-value" min="1" placeholder="Число" style="flex: 1;">
-                                <select id="notif-rule-trigger-unit" style="width: 120px;">
+                        <div id="notif-trigger-custom-wrap" class="admin-inline-hidden admin-stack-gap-xs">
+                            <div class="admin-inline-row admin-inline-row-compact">
+                                <input type="number" id="notif-rule-trigger-value" min="1" placeholder="Число" class="admin-flex-1">
+                                <select id="notif-rule-trigger-unit" class="admin-field-unit">
                                     <option value="hours">Часов</option>
                                     <option value="days" selected>Дней</option>
                                 </select>
                             </div>
                         </div>
-                        <p class="hint" style="margin: 6px 0 0; font-size: 12px; opacity: 0.6;" id="notif-rule-trigger-hint">
+                        <p class="hint admin-hint-subtle" id="notif-rule-trigger-hint">
                             За сколько дней/часов ДО истечения подписки отправить уведомление
                         </p>
                     </div>
@@ -681,7 +683,7 @@
                         <textarea id="notif-rule-body" rows="3" required placeholder="Продлите подписку заранее, чтобы не прерывать использование VPN." oninput="updateNotifPreview()"></textarea>
                     </div>
                     <div class="form-group">
-                        <label style="margin-bottom: 8px;">Дополнительные блоки</label>
+                        <label class="admin-form-label-compact">Дополнительные блоки</label>
                         <label class="notif-check-row">
                             <input type="checkbox" id="notif-rule-show-time" checked>
                             <span>Показать оставшееся время</span>
@@ -695,8 +697,8 @@
                         <label>Превью сообщения</label>
                         <div class="notif-preview-bubble" id="notif-preview-bubble"></div>
                     </div>
-                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
-                        <label for="notif-rule-active" style="margin: 0;">Активно</label>
+                    <div class="form-group admin-inline-row admin-inline-row-tight">
+                        <label for="notif-rule-active" class="admin-label-no-margin">Активно</label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="notif-rule-active" checked>
                             <span class="toggle-slider"></span>
@@ -707,29 +709,29 @@
                             <input type="checkbox" id="notif-rule-repeat">
                             <span>Повторять уведомление</span>
                         </label>
-                        <div id="notif-repeat-fields" style="display: none; margin-top: 10px;">
-                            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-                                <span style="white-space: nowrap; font-size: 14px;">Каждые</span>
-                                <input type="number" id="notif-rule-repeat-value" min="1" value="3" style="width: 70px;">
-                                <select id="notif-rule-repeat-unit" style="width: 120px;">
+                        <div id="notif-repeat-fields" class="admin-inline-hidden admin-stack-gap-sm">
+                            <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
+                                <span class="admin-inline-text">Каждые</span>
+                                <input type="number" id="notif-rule-repeat-value" min="1" value="3" class="admin-field-xs">
+                                <select id="notif-rule-repeat-unit" class="admin-field-unit">
                                     <option value="hours">Часов</option>
                                     <option value="days" selected>Дней</option>
                                 </select>
                             </div>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <span style="white-space: nowrap; font-size: 14px;">Макс. отправок</span>
-                                <input type="number" id="notif-rule-max-repeats" min="1" value="5" style="width: 70px;">
+                            <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
+                                <span class="admin-inline-text">Макс. отправок</span>
+                                <input type="number" id="notif-rule-max-repeats" min="1" value="5" class="admin-field-xs">
                             </div>
-                            <p class="hint" style="margin: 6px 0 0; font-size: 12px; opacity: 0.6;">
+                            <p class="hint admin-hint-subtle">
                                 Первая отправка по времени срабатывания, затем повтор с указанным интервалом до максимума.
                             </p>
                         </div>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                    <div class="admin-stack-gap-md admin-mt-lg">
                         <button type="button" class="btn-outline" data-action="testSendNotificationRule">Отправить тест мне</button>
-                        <div style="display: flex; gap: 12px;">
+                        <div class="admin-inline-row">
                             <button type="button" class="btn-secondary" data-action="closeNotificationRuleForm">Отмена</button>
-                            <button type="submit" class="btn-primary" style="flex:1;">Сохранить</button>
+                            <button type="submit" class="btn-primary admin-flex-1">Сохранить</button>
                         </div>
                     </div>
                 </form>
@@ -738,11 +740,12 @@
 
         <!-- АДМИН-ПАНЕЛЬ: События -->
         <div id="page-admin-events" class="page" style="display: none;">
-            <header>
+            <header class="header-with-back">
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
+                <h1 class="page-section-title">События</h1>
             </header>
             <div id="admin-events-content" class="admin-page-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div class="admin-inline-row admin-inline-row-between admin-mb-md">
                     <button type="button" class="btn-primary" data-action="showAdminEventForm">Создать</button>
                 </div>
                 <div id="admin-events-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
@@ -752,7 +755,7 @@
             </div>
         </div>
         <div id="admin-event-form-modal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-content admin-modal-content-md">
                 <h2 id="admin-event-form-title">Создать событие</h2>
                 <form id="admin-event-form">
                     <div class="form-group">
@@ -773,21 +776,21 @@
                     </div>
                     <div class="form-group">
                         <label>Награды</label>
-                        <p class="hint" style="margin: 0 0 8px 0; font-size: 12px;">Текст приза для каждого места (например: 100 дней, Футболка, Скидка 50%)</p>
-                        <div class="form-group" style="margin-bottom: 8px;">
-                            <label for="admin-event-reward1" style="font-size: 13px;">1 место</label>
+                        <p class="hint admin-hint-subtle admin-hint-no-top">Текст приза для каждого места (например: 100 дней, Футболка, Скидка 50%)</p>
+                        <div class="form-group admin-form-group-compact">
+                            <label for="admin-event-reward1" class="admin-label-small">1 место</label>
                             <input type="text" id="admin-event-reward1" placeholder="Например: 100 дней подписки">
                         </div>
-                        <div class="form-group" style="margin-bottom: 8px;">
-                            <label for="admin-event-reward2" style="font-size: 13px;">2 место</label>
+                        <div class="form-group admin-form-group-compact">
+                            <label for="admin-event-reward2" class="admin-label-small">2 место</label>
                             <input type="text" id="admin-event-reward2" placeholder="Например: Футболка">
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label for="admin-event-reward3" style="font-size: 13px;">3 место</label>
+                        <div class="form-group admin-form-group-none">
+                            <label for="admin-event-reward3" class="admin-label-small">3 место</label>
                             <input type="text" id="admin-event-reward3" placeholder="Например: 30 дней подписки">
                         </div>
                     </div>
-                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <div class="admin-inline-row admin-mt-lg">
                         <button type="button" class="btn-secondary" data-action="closeAdminEventForm">Отмена</button>
                         <button type="submit" class="btn-primary">Сохранить</button>
                     </div>
@@ -880,8 +883,9 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Рассылка -->
         <div id="page-admin-broadcast" class="page" style="display: none;">
-            <header>
+            <header class="header-with-back">
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
+                <h1 class="page-section-title">Рассылка</h1>
             </header>
             
             <div id="admin-broadcast-loading" class="loading" style="display: none;">
@@ -897,10 +901,10 @@
             <div id="admin-broadcast-content" class="admin-page-content">
                 <div class="broadcast-top">
                     <div class="broadcast-recipients-box">
-                        <p class="broadcast-recipients-label" style="font-size: 14px; margin: 0;">
+                            <p class="broadcast-recipients-label">
                             Получателей: <span id="broadcast-recipients-count" class="broadcast-recipients-count">-</span>
                         </p>
-                        <p id="broadcast-mode-hint" class="broadcast-mode-hint" style="font-size: 12px; margin: 6px 0 0;">Отправка всем пользователям</p>
+                            <p id="broadcast-mode-hint" class="broadcast-mode-hint">Отправка всем пользователям</p>
                     </div>
                     <div class="broadcast-mode">
                         <label class="radio-option">
@@ -914,68 +918,63 @@
                     </div>
                 </div>
                 
-                <div id="broadcast-user-selection" style="display: none; margin-top: 16px; margin-bottom: 20px;">
-                    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
-                        <div style="flex: 1 1 220px;">
+                <div id="broadcast-user-selection" class="admin-inline-hidden admin-my-md">
+                    <div class="admin-inline-row admin-inline-row-center admin-inline-wrap admin-mb-sm">
+                        <div class="admin-flex-basis-md">
                             <input 
                                 type="text" 
                                 id="broadcast-user-search" 
-                                class="broadcast-input"
+                                class="broadcast-input broadcast-input-search"
                                 placeholder="Поиск пользователей по ID..." 
                                 oninput="searchUsersForBroadcast()"
-                                style="width: 100%; padding: 10px; border-radius: 8px; font-size: 14px; box-sizing: border-box;"
                             >
                         </div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <div class="admin-inline-row admin-inline-row-compact admin-inline-wrap">
                             <button 
                                 data-action="selectAllBroadcastResults" 
-                                class="btn-secondary"
-                                style="padding: 8px 12px; font-size: 14px;"
+                                class="btn-secondary admin-btn-compact"
                             >
                                 Выбрать все в выдаче
                             </button>
                             <button 
                                 data-action="clearUserSelection" 
-                                class="btn-secondary"
-                                style="padding: 8px 12px; font-size: 14px;"
+                                class="btn-secondary admin-btn-compact"
                             >
                                 Очистить выбор
                             </button>
                         </div>
                     </div>
                     
-                    <div id="broadcast-selected-chips" class="chip-container" style="display: none; margin-bottom: 12px;"></div>
+                    <div id="broadcast-selected-chips" class="chip-container admin-inline-hidden admin-mb-sm"></div>
                     
-                    <div id="broadcast-users-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 12px;">
-                        <div class="broadcast-empty-state" style="padding: 16px; text-align: center;">
+                    <div id="broadcast-users-list" class="broadcast-users-list-scroll admin-mb-sm">
+                        <div class="broadcast-empty-state broadcast-empty-state-box">
                             Введите ID для поиска
                         </div>
                     </div>
                 </div>
                 
-                <div style="margin-bottom: 20px;">
+                <div class="admin-mb-md">
                     <label for="broadcast-message" class="broadcast-label">Текст сообщения:</label>
                     <textarea 
                         id="broadcast-message" 
-                        class="broadcast-input"
+                        class="broadcast-input broadcast-input-message"
                         placeholder="Введите текст сообщения для рассылки..."
-                        style="width: 100%; min-height: 200px; padding: 12px; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"
                     ></textarea>
-                    <p class="hint" style="font-size: 12px; margin-top: 8px; margin-bottom: 0;">
+                    <p class="hint admin-hint-subtle admin-hint-tight">
                         Поддерживается HTML разметка (жирный текст, ссылки и т.д.)
                     </p>
                 </div>
                 
                 <button 
                     id="broadcast-send-btn" 
-                    class="btn-primary" 
+                    class="btn-primary admin-btn-full" 
                     data-action="sendBroadcast" 
-                    style="width: 100%; padding: 12px; font-size: 16px; font-weight: 500;"
                 >
                     Отправить рассылку
                 </button>
                 
-                <div id="broadcast-result" class="broadcast-result" style="display: none; margin-top: 20px; padding: 16px;">
+                <div id="broadcast-result" class="broadcast-result admin-inline-hidden admin-result-box">
                     <h3>Результат рассылки:</h3>
                     <div class="broadcast-result-body">
                         <p>Отправлено: <span id="broadcast-sent-count" class="broadcast-count-success">0</span></p>
@@ -1123,11 +1122,12 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Управление серверами -->
         <div id="page-admin-server-management" class="page" style="display: none;">
-            <header>
+            <header class="header-with-back">
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
+                <h1 class="page-section-title">Управление серверами</h1>
             </header>
             
-            <div id="admin-server-management-loading" class="loading" style="display: none;">
+            <div id="admin-server-management-loading" class="loading admin-inline-hidden">
                 <div class="spinner"></div>
                 <p>Загрузка конфигурации...</p>
             </div>
@@ -1174,28 +1174,29 @@
 
         <!-- АДМИН: цены и лимит устройств -->
         <div id="page-admin-commerce" class="page" style="display: none;">
-            <header>
+            <header class="header-with-back">
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
+                <h1 class="page-section-title">Цены и лимит устройств</h1>
             </header>
             <div class="admin-page-content admin-commerce-page">
-                <div id="admin-commerce-loading" class="loading" style="display: none;">
+                <div id="admin-commerce-loading" class="loading admin-inline-hidden">
                     <div class="spinner"></div>
                     <p>Загрузка...</p>
                 </div>
-                <p id="admin-commerce-error" class="error-text" style="display: none; margin-bottom: 12px;"></p>
-                <form id="admin-commerce-form" style="display: none;">
+                <p id="admin-commerce-error" class="error-text admin-inline-hidden admin-mb-sm"></p>
+                <form id="admin-commerce-form" class="admin-inline-hidden">
                     <p class="admin-commerce-lead">Тарифы используются в приложении и на экране оплаты. Для каждого тарифа можно задать цену, срок и бейдж (например, «Выгодно» или «Хит»).</p>
                     <div id="admin-commerce-tariffs" class="admin-commerce-tariffs"></div>
-                    <button type="button" id="admin-commerce-add-tariff" class="btn-secondary" style="width: 100%; margin: 8px 0 14px 0;">+ Добавить тариф</button>
+                    <button type="button" id="admin-commerce-add-tariff" class="btn-secondary admin-btn-full admin-commerce-add-tariff-btn">+ Добавить тариф</button>
                     <div class="admin-commerce-grid">
                         <div class="form-group admin-commerce-field">
                             <label for="admin-commerce-device-limit">Устройств по умолчанию</label>
                             <input type="number" id="admin-commerce-device-limit" min="1" max="100" step="1" required inputmode="numeric">
-                            <span class="hint" style="display:block;margin-top:6px;font-size:12px;opacity:0.65;">Не меняет уже оформленные подписки.</span>
+                            <span class="hint admin-hint-subtle admin-hint-inline-block">Не меняет уже оформленные подписки.</span>
                         </div>
                     </div>
-                    <div id="admin-commerce-form-message" class="form-message" role="alert" aria-live="polite" style="display: none;"></div>
-                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;">Сохранить</button>
+                    <div id="admin-commerce-form-message" class="form-message admin-inline-hidden" role="alert" aria-live="polite"></div>
+                    <button type="submit" class="btn-primary admin-btn-full admin-mt-sm">Сохранить</button>
                 </form>
             </div>
         </div>
@@ -1204,7 +1205,7 @@
         <div id="server-group-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h2 id="server-group-modal-title">Группа серверов</h2>
-                <form id="server-group-form" style="margin-top: 16px;">
+                <form id="server-group-form" class="admin-mt-md">
                     <input type="hidden" id="group-id-input">
                     <div class="form-group">
                         <label for="group-name-input">Название группы</label>
@@ -1228,9 +1229,9 @@
 
         <!-- Модальное окно: Добавить/Редактировать сервер -->
         <div id="server-config-modal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-content admin-modal-content-sm">
                 <h2 id="server-config-modal-title">Конфигурация сервера</h2>
-                <form id="server-config-form" style="margin-top: 16px; max-height: 70vh; overflow-y: auto; padding-right: 4px;">
+                <form id="server-config-form" class="admin-server-config-form">
                     <input type="hidden" id="server-id-input">
                     <div class="form-group">
                         <label for="server-name-input">Идентификатор (уникальный ID)</label>
@@ -1279,13 +1280,13 @@
                     <div class="form-group">
                         <label for="server-subscription-url-input">URL подписки</label>
                         <input type="text" id="server-subscription-url-input" placeholder="https://host:2096/sub — полный путь без sub_id на конце">
-                        <p style="margin:4px 0 0;font-size:0.82em;color:var(--text-muted, #888);">Полный базовый URL подписки. Примеры: <code>https://89.169.15.98:2096/sub</code>, <code>https://89.169.15.98:2096/Daralla</code></p>
+                        <p class="admin-server-help-text">Полный базовый URL подписки. Примеры: <code>https://89.169.15.98:2096/sub</code>, <code>https://89.169.15.98:2096/Daralla</code></p>
                     </div>
                     <div class="form-group">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                        <div class="admin-inline-row admin-inline-row-between admin-inline-row-center">
                             <div>
-                                <span style="font-weight:500;">xtls-rprx-vision</span>
-                                <p style="margin:4px 0 0;font-size:0.85em;color:var(--text-muted, #888);">Flow для совместимого подключения клиентов</p>
+                                <span class="admin-inline-strong">xtls-rprx-vision</span>
+                                <p class="admin-server-help-text">Flow для совместимого подключения клиентов</p>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="server-client-flow-enable">
@@ -1293,13 +1294,13 @@
                             </label>
                         </div>
                         <input type="hidden" id="server-client-flow-select" value="xtls-rprx-vision">
-                        <p id="server-flow-legacy-warning" class="hint" style="display:none;margin-top:8px;color:#c9a227;">В базе сохранено нестандартное значение flow — при сохранении будет заменено на xtls-rprx-vision.</p>
+                        <p id="server-flow-legacy-warning" class="hint admin-inline-hidden admin-flow-warning">В базе сохранено нестандартное значение flow — при сохранении будет заменено на xtls-rprx-vision.</p>
                     </div>
                     <div class="form-group">
                         <label for="server-map-label-input">Название на карте</label>
                         <input type="text" id="server-map-label-input" placeholder="Показывается на карте серверов">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                    <div class="admin-grid-two admin-mb-md">
                         <div class="form-group">
                             <label for="server-lat-input">Широта (Lat)</label>
                             <input type="number" step="0.0001" id="server-lat-input" placeholder="51.5074">

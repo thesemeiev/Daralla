@@ -10,7 +10,7 @@
             var modal = document.getElementById('delete-user-confirm-modal');
             if (!modal) {
                 var modalHTML = '\n'
-                    + '            <div id="delete-user-confirm-modal" class="modal" style="display: none;">\n'
+                    + '            <div id="delete-user-confirm-modal" class="modal admin-inline-hidden">\n'
                     + '                <div class="modal-content">\n'
                     + '                    <h2>⚠️ Удаление пользователя</h2>\n'
                     + '                    <p class="delete-modal-text">\n'
@@ -24,9 +24,9 @@
                     + '                        </ul>\n'
                     + '                        <strong class="delete-modal-warning">Это действие нельзя отменить!</strong>\n'
                     + '                    </p>\n'
-                    + '                    <div style="display: flex; gap: 12px; margin-top: 24px; align-items: stretch;">\n'
-                    + '                        <button class="btn-secondary" onclick="closeDeleteUserModal()" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Отмена</button>\n'
-                    + '                        <button class="btn-danger" id="delete-user-confirm-btn" style="flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0;">Удалить</button>\n'
+                    + '                    <div class="admin-inline-row admin-mt-lg admin-inline-row-stretch">\n'
+                    + '                        <button class="btn-secondary admin-btn-modal-action" onclick="closeDeleteUserModal()">Отмена</button>\n'
+                    + '                        <button class="btn-danger admin-btn-modal-action admin-btn-modal-danger" id="delete-user-confirm-btn">Удалить</button>\n'
                     + '                    </div>\n'
                     + '                </div>\n'
                     + '            </div>\n'
