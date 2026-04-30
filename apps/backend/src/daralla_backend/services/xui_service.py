@@ -204,6 +204,14 @@ class X3:
         return None
 
     @staticmethod
+    def _normalize_hysteria_secret(v: Any) -> str:
+        raw = str(v or "").strip()
+        if raw:
+            return raw
+        # Fallback token for panel-side client-id compatibility.
+        return str(uuid.uuid4()).replace("-", "")
+
+    @staticmethod
     def _settings_clients_obj(settings: Any) -> list[Any]:
         clients = list(getattr(settings, "clients", None) or [])
         users = list(getattr(settings, "users", None) or [])
@@ -783,10 +791,9 @@ class X3:
             # Keep both populated to avoid panel-specific toggle/update glitches.
             target_auth = str(self._client_get(target, "auth", "") or "").strip()
             target_password = str(self._client_get(target, "password", "") or "").strip()
-            if target_password and not target_auth:
-                self._client_set(target, "auth", target_password)
-            elif target_auth and not target_password:
-                self._client_set(target, "password", target_auth)
+            normalized_secret = self._normalize_hysteria_secret(target_password or target_auth)
+            self._client_set(target, "password", normalized_secret)
+            self._client_set(target, "auth", normalized_secret)
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 
