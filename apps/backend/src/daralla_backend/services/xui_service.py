@@ -778,6 +778,15 @@ class X3:
             if protocol_hint
             else ""
         )
+        if protocol_norm == "hysteria2":
+            # Some 3x-ui builds use auth, others password.
+            # Keep both populated to avoid panel-specific toggle/update glitches.
+            target_auth = str(self._client_get(target, "auth", "") or "").strip()
+            target_password = str(self._client_get(target, "password", "") or "").strip()
+            if target_password and not target_auth:
+                self._client_set(target, "auth", target_password)
+            elif target_auth and not target_password:
+                self._client_set(target, "password", target_auth)
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 

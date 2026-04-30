@@ -470,12 +470,14 @@ class SyncManager:
                     except json.JSONDecodeError as e:
                         logger.warning(f"Ошибка парсинга settings для inbound {inbound.get('id', 'unknown')} на сервере {server_name}: {e}")
                         continue
-                    except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                    except Exception as e:
                         error_msg = f"Ошибка обработки inbound на сервере {server_name}: {e}"
                         logger.error(error_msg)
                         stats['errors'].append(error_msg)
             
-            except (RuntimeError, ValueError, TypeError, KeyError) as e:
+            except Exception as e:
+                # Изоляция недоступной панели: таймауты/сетевые ошибки одной ноды
+                # не должны ронять весь run_sync цикл.
                 error_msg = f"Ошибка проверки сервера {server_name}: {e}"
                 logger.error(error_msg)
                 stats['errors'].append(error_msg)
