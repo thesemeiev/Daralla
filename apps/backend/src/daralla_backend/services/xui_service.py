@@ -443,9 +443,10 @@ class X3:
             "protocol": protocol_norm,
         }
         if protocol_norm == "hysteria2":
-            # Hysteria2 panel UI uses "Auth Password"; keep payload aligned with it.
+            # Compatibility: different 3x-ui builds store hy2 secret in auth or password.
             hy2_secret = str(uuid.uuid4()).replace("-", "")
             payload["auth"] = hy2_secret
+            payload["password"] = hy2_secret
         elif protocol_norm in _PASSWORD_BASED_PROTOCOLS:
             payload["password"] = str(uuid.uuid4())
         else:
@@ -786,13 +787,12 @@ class X3:
             else ""
         )
         if protocol_norm == "hysteria2":
-            # Normalize to auth-first shape used by panel UI for hysteria2.
+            # Keep both fields populated: panel builds disagree on auth vs password.
             target_auth = str(self._client_get(target, "auth", "") or "").strip()
             target_password = str(self._client_get(target, "password", "") or "").strip()
-            if target_password and not target_auth:
-                self._client_set(target, "auth", target_password)
-            elif not target_auth and not target_password:
-                self._client_set(target, "auth", self._normalize_hysteria_secret(None))
+            normalized_secret = self._normalize_hysteria_secret(target_auth or target_password)
+            self._client_set(target, "auth", normalized_secret)
+            self._client_set(target, "password", normalized_secret)
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 
@@ -1430,20 +1430,28 @@ class X3:
                 if host_for_sub and ":" in host_for_sub:
                     host_for_sub = host_for_sub.rsplit(":", 1)[0]
                 base_url = f"{scheme}://{host_for_sub}:{self.subscription_port}/sub"
-            client = await self._api.client.get_by_email(user_email)
-            if not client:
-                logger.debug("get_subscription_links: клиент не найден email=%s", user_email)
-                return []
-            # sub_id с панели; при создании через API панель может не сохранить subId (3x-ui #3237)
-            sub_id = getattr(client, "sub_id", None) or getattr(client, "subId", None)
-            if not sub_id and hasattr(client, "model_dump"):
-                d = (client.model_dump() or {})
-                sub_id = d.get("sub_id") or d.get("subId")
+            # On some panels/protocols (notably hysteria2) get_by_email may fail with
+            # "Inbound Not Found For Email" even when client exists. Resolve sub_id from list snapshot.
+            sub_id = None
+            email_norm = str(user_email).strip()
+            for inv in data.get("obj", []):
+                try:
+                    settings = json.loads(inv.get("settings", "{}"))
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    continue
+                for client in clients_from_settings_payload(settings):
+                    if str(client.get("email", "")).strip() != email_norm:
+                        continue
+                    sub_id = client.get("subId") or client.get("sub_id")
+                    if sub_id:
+                        break
+                if sub_id:
+                    break
             if not sub_id and subscription_token:
                 sub_id = subscription_token
                 logger.debug("get_subscription_links: используем subscription_token как sub_id для email=%s", user_email)
             if not sub_id:
-                logger.debug("get_subscription_links: sub_id пустой у клиента email=%s", user_email)
+                logger.debug("get_subscription_links: sub_id не найден в list() для email=%s", user_email)
                 return []
             sub_url = f"{base_url.rstrip('/')}/{sub_id}"
             try:

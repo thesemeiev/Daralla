@@ -48,6 +48,8 @@ def clients_by_email_from_xui_list_response(list_payload: dict) -> Dict[str, Dic
                 "flow": flow_s,
                 "enable": client.get("enable"),
                 "protocol": protocol,
+                "auth": client.get("auth"),
+                "password": client.get("password"),
             }
     return out
 
@@ -68,6 +70,8 @@ def panel_entry_from_snapshot(
         "flow": row.get("flow"),
         "enable": row.get("enable"),
         "protocol": row.get("protocol") or "vless",
+        "auth": row.get("auth"),
+        "password": row.get("password"),
     }
 
 

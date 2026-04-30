@@ -102,13 +102,13 @@ def panel_client_settings_dict(
     # (например hysteria2/tuic) не добавляем лишние поля.
     protocol = str(protocol_hint or d.get("protocol", "") or "").strip().lower()
     if protocol in ("hysteria2", "hysteria"):
-        # Align with panel UI shape for hy2 clients: email + auth.
-        # Some panel responses use password for the same secret; normalize to auth.
+        # Compatibility across panel builds: hy2 secret may live in auth or password.
         auth_val = str(d.get("auth") or "").strip()
         password_val = str(d.get("password") or "").strip()
-        if not auth_val and password_val:
-            d["auth"] = password_val
-        d.pop("password", None)
+        secret_val = auth_val or password_val
+        if secret_val:
+            d["auth"] = secret_val
+            d["password"] = secret_val
         d.pop("id", None)
         d.pop("protocol", None)
         if not str(d.get("method") or "").strip():
@@ -171,6 +171,13 @@ def panel_snapshot_matches_desired(
     """True if panel list() snapshot matches desired state."""
     if not panel_snapshot.get("on_panel"):
         return False
+    protocol = str(panel_snapshot.get("protocol") or "").strip().lower()
+    if protocol in ("hysteria", "hysteria2", "hy2"):
+        # For hy2 clients, empty secret means broken panel row even if expiry/limit look fine.
+        auth_val = str(panel_snapshot.get("auth") or "").strip()
+        password_val = str(panel_snapshot.get("password") or "").strip()
+        if not auth_val and not password_val:
+            return False
     # Критично: even with matching expiry/limit/flow, disabled client must be reconciled.
     if _panel_enable_is_disabled(panel_snapshot.get("enable")):
         return False
