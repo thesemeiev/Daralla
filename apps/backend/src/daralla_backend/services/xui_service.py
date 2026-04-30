@@ -167,7 +167,13 @@ class X3:
         if isinstance(c, dict):
             c[key] = value
         else:
-            setattr(c, key, value)
+            try:
+                setattr(c, key, value)
+            except Exception:
+                # py3xui/pydantic модели части протоколов не принимают "чужие" поля
+                # (например expiryTime/limitIp в snake_case-only моделях и наоборот).
+                # Это не критичная ошибка: совместимое поле задаётся соседним вызовом.
+                return
 
     @classmethod
     def _client_set_expiry_ms(cls, c: Any, expiry_ms: int) -> None:
