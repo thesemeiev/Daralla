@@ -5,6 +5,7 @@
 import asyncio
 import base64
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -211,6 +212,12 @@ class X3:
             return raw
         # Fallback token for panel-side client-id compatibility.
         return str(uuid.uuid4()).replace("-", "")
+
+    @staticmethod
+    def _derive_hysteria_secret(email: str, inbound_id: int) -> str:
+        """Stable recovery secret for broken hy2 rows with empty auth/password."""
+        seed = f"{email.strip().lower()}|{int(inbound_id)}|daralla-hy2-secret-v1"
+        return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
 
     @staticmethod
     def _settings_clients_obj(settings: Any) -> list[Any]:
@@ -626,9 +633,9 @@ class X3:
         # Для hy2 чаще работает key по auth/password. Это уменьшает количество
         # fallback-вызовов inbound.update, которые могут перетирать inbound settings.
         if protocol_norm == "hysteria2":
-            hy2_secret = str(auth or password or "").strip()
-            if hy2_secret:
-                client_identifier = hy2_secret
+            hy2_identifier = str(email or auth or password or "").strip()
+            if hy2_identifier:
+                client_identifier = hy2_identifier
         uuid_for_url = str(client_identifier).strip() if client_identifier is not None else None
         if not uuid_for_url:
             uuid_for_url = None
@@ -652,10 +659,11 @@ class X3:
                         self._ensure_client_id_for_update(resolved)
                     resolved_identifier = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
                     if protocol_norm == "hysteria2":
+                        resolved_email = self._client_get(resolved, "email", None)
                         resolved_auth = self._client_get(resolved, "auth", None)
                         resolved_password = self._client_get(resolved, "password", None)
                         resolved_secret = str(
-                            resolved_auth or resolved_password or auth or password or ""
+                            resolved_email or resolved_auth or resolved_password or email or auth or password or ""
                         ).strip()
                         if resolved_secret:
                             resolved_identifier = resolved_secret
@@ -814,8 +822,13 @@ class X3:
                 self._client_set(target, "auth", normalized_secret)
                 self._client_set(target, "password", normalized_secret)
             else:
+                # Self-heal: once panel row is broken (empty auth/password), derive a stable
+                # secret to stop endless reconcile loops and make client links usable again.
+                recovered_secret = self._derive_hysteria_secret(email_norm, int(inbound_id))
+                self._client_set(target, "auth", recovered_secret)
+                self._client_set(target, "password", recovered_secret)
                 logger.warning(
-                    "inbound.update fallback: keep empty hy2 secret unchanged "
+                    "inbound.update fallback: recovered empty hy2 secret "
                     "(inbound_id=%s email=%s)",
                     inbound_id,
                     email_norm or "-",
