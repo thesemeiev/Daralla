@@ -458,6 +458,13 @@ class SubscriptionManager:
                 # Это будет название конкретного сервера (локация)
                 server_config = self.server_manager.get_server_config(server_name)
                 server_display_name = server_config.get("display_name") or resolved_name
+                configured_protocol = (
+                    (server_config.get("client_protocol") or server_config.get("protocol") or "").strip().lower()
+                    if server_config
+                    else ""
+                )
+                if configured_protocol in ("hysteria", "hy2"):
+                    configured_protocol = "hysteria2"
                 
                 # Используем только название сервера в tag
                 # VPN клиент будет группировать серверы по главному названию из subscription URL
@@ -491,32 +498,12 @@ class SubscriptionManager:
                             client_email,
                         )
                     else:
-                        # Fallback: если subscription endpoint не работает, используем ручную генерацию
                         logger.warning(
-                            "Subscription endpoint не вернул ссылки, используем ручную генерацию: server=%s, email=%s",
+                            "Subscription endpoint не вернул ссылки (ручная генерация отключена): protocol=%s, server=%s, email=%s",
+                            configured_protocol or "unknown",
                             resolved_name,
                             client_email,
                         )
-                        vless_link = await xui.link(client_email, server_name=display_name)
-                        if vless_link and vless_link != 'Клиент не найден.':
-                            plain = normalize_subscription_link(vless_link)
-                            link_without_tag = plain.split('#')[0] if '#' in plain else plain
-                            if link_without_tag not in seen_links:
-                                seen_links.add(link_without_tag)
-                                links.append(plain)
-                                logger.debug(
-                                    "Ссылка сгенерирована вручную: server=%s, email=%s",
-                                    resolved_name,
-                                    client_email,
-                                )
-                            else:
-                                logger.debug(f"Пропуск дубликата ссылки (ручная генерация) для {server_name}: {plain[:100]}...")
-                        else:
-                            logger.warning(
-                                "Не удалось сгенерировать ссылку для server=%s, email=%s",
-                                resolved_name,
-                                client_email,
-                            )
                 except (RuntimeError, ValueError, TypeError, KeyError) as link_e:
                     logger.error(
                         "Ошибка получения ссылок для server=%s, email=%s: %s",
