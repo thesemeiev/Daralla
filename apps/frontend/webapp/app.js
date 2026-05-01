@@ -2332,7 +2332,7 @@ function syncChooseOptionCards() {
         if (summaryTypeEl) summaryTypeEl.textContent = getCurrentPaymentType() === 'crypto' ? 'Крипта' : 'Рубли';
         if (summaryProviderEl) summaryProviderEl.textContent = providerLabel(currentPaymentGateway || 'yookassa');
         if (plategaProviderSubEl) {
-            plategaProviderSubEl.textContent = getCurrentPaymentType() === 'crypto' ? 'Крипта' : 'СБП';
+            plategaProviderSubEl.textContent = getCurrentPaymentType() === 'crypto' ? 'TON, USDT' : 'СБП';
         }
         updatePayButtonText();
     }
