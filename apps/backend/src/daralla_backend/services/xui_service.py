@@ -25,6 +25,7 @@ from .xui_helpers import (
     panel_client_settings_dict,
     panel_snapshot_matches_desired,
 )
+from ..utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
 _URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
@@ -617,34 +618,20 @@ class X3:
         if protocol_norm != "hysteria2":
             self._ensure_client_id_for_update(c)
         api = self._api.client
-        uuid_for_url = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
+        client_identifier = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
         email = self._client_get(c, "email", None)
         auth = self._client_get(c, "auth", None)
         password = self._client_get(c, "password", None)
         enable_override = self._coerce_optional_bool(self._client_get(c, "enable", None))
-
-        # 3x-ui часто не умеет стабильный updateClient для hy2/tuic/trojan/vmess
-        # (падает с "empty client ID"). Для non-vless безопаснее сразу обновлять
-        # через inbound.update по email в settings.users/clients.
-        if (
-            protocol_norm
-            and protocol_norm != "vless"
-            and inbound_id is not None
-            and any(v for v in (email, auth, password, uuid_for_url))
-        ):
-            await self._update_client_via_inbound_settings(
-                inbound_id=int(inbound_id),
-                email=(str(email) if email else None),
-                auth=(str(auth) if auth else None),
-                password=(str(password) if password else None),
-                client_id=(str(uuid_for_url) if uuid_for_url else None),
-                expiry_time=self._client_get(c, "expiry_time", None),
-                limit_ip=self._client_get(c, "limit_ip", None),
-                flow_override=flow_override,
-                protocol_hint=protocol_norm,
-                enable_override=enable_override,
-            )
-            return
+        # Для hy2 чаще работает key по auth/password. Это уменьшает количество
+        # fallback-вызовов inbound.update, которые могут перетирать inbound settings.
+        if protocol_norm == "hysteria2":
+            hy2_secret = str(auth or password or "").strip()
+            if hy2_secret:
+                client_identifier = hy2_secret
+        uuid_for_url = str(client_identifier).strip() if client_identifier is not None else None
+        if not uuid_for_url:
+            uuid_for_url = None
 
         if not uuid_for_url:
             if email:
@@ -663,7 +650,18 @@ class X3:
                         resolved.flow = flow_override
                     if protocol_norm != "hysteria2":
                         self._ensure_client_id_for_update(resolved)
-                    uuid_for_url = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
+                    resolved_identifier = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
+                    if protocol_norm == "hysteria2":
+                        resolved_auth = self._client_get(resolved, "auth", None)
+                        resolved_password = self._client_get(resolved, "password", None)
+                        resolved_secret = str(
+                            resolved_auth or resolved_password or auth or password or ""
+                        ).strip()
+                        if resolved_secret:
+                            resolved_identifier = resolved_secret
+                    uuid_for_url = str(resolved_identifier).strip() if resolved_identifier is not None else None
+                    if not uuid_for_url:
+                        uuid_for_url = None
                     c = resolved
                     inbound_id = (
                         int(inbound_id_override)
@@ -811,9 +809,17 @@ class X3:
             # Keep both fields populated: panel builds disagree on auth vs password.
             target_auth = str(self._client_get(target, "auth", "") or "").strip()
             target_password = str(self._client_get(target, "password", "") or "").strip()
-            normalized_secret = self._normalize_hysteria_secret(target_auth or target_password)
-            self._client_set(target, "auth", normalized_secret)
-            self._client_set(target, "password", normalized_secret)
+            normalized_secret = str(target_auth or target_password or auth_norm or password_norm).strip()
+            if normalized_secret:
+                self._client_set(target, "auth", normalized_secret)
+                self._client_set(target, "password", normalized_secret)
+            else:
+                logger.warning(
+                    "inbound.update fallback: keep empty hy2 secret unchanged "
+                    "(inbound_id=%s email=%s)",
+                    inbound_id,
+                    email_norm or "-",
+                )
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 
@@ -1489,18 +1495,19 @@ class X3:
                 logger.debug("get_subscription_links: sub_id не найден в list() для email=%s", user_email)
                 return []
             sub_url = f"{base_url.rstrip('/')}/{sub_id}"
+            sub_url_log = f"{base_url.rstrip('/')}/{mask_secret(sub_id)}"
             try:
                 async with httpx.AsyncClient(verify=False, timeout=15.0) as hc:
                     r = await hc.get(sub_url)
                     if r.status_code != 200:
                         logger.debug(
                             "Subscription endpoint вернул не 200: url=%s status=%s body_len=%s",
-                            sub_url, r.status_code, len(r.text or ""),
+                            sub_url_log, r.status_code, len(r.text or ""),
                         )
                         return []
                     text = r.text
             except Exception as e:
-                logger.warning("Ошибка запроса subscription URL %s: %s", sub_url, e)
+                logger.warning("Ошибка запроса subscription URL %s: %s", sub_url_log, e)
                 return []
             # Некоторые панели отдают подписку в base64 (одна строка).
             # Не ограничиваемся vless/vmess/trojan: в подписке могут быть hy2/tuic и другие схемы.
@@ -1544,7 +1551,7 @@ class X3:
             if not links and raw:
                 logger.debug(
                     "Subscription endpoint вернул тело без URI-ссылок: url=%s body_len=%s",
-                    sub_url, len(raw),
+                    sub_url_log, len(raw),
                 )
             return links
         except Exception as e:

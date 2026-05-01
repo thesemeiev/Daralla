@@ -15,6 +15,7 @@ from daralla_backend.db.subscriptions_db import (
     get_subscription_servers,
     is_subscription_active,
 )
+from daralla_backend.utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,8 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
     if method == "OPTIONS":
         return "", 200, _cors_headers()
 
-    logger.info("Входящий запрос subscription: token=%s, method=%s", token, method)
+    token_masked = mask_secret(token)
+    logger.info("Входящий запрос subscription: token=%s, method=%s", token_masked, method)
 
     try:
         subscription_manager = get_ctx().subscription_manager
@@ -65,12 +67,12 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
 
         sub = await get_subscription_by_token(token)
         if not sub:
-            logger.warning("Подписка с токеном %s не найдена", token)
+            logger.warning("Подписка с токеном %s не найдена", token_masked)
             return "Subscription not found", 404, None
 
         logger.info(
             "Запрос подписки: token=%s, subscription_id=%s, status=%s, expires_at=%s",
-            token,
+            token_masked,
             sub["id"],
             sub["status"],
             sub["expires_at"],
@@ -83,7 +85,7 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             current_str = datetime.datetime.fromtimestamp(now_ts).strftime("%Y-%m-%d %H:%M:%S")
             logger.warning(
                 "Подписка с токеном %s не активна: status=%s, expires_at=%s, current=%s",
-                token,
+                token_masked,
                 sub.get("status"),
                 expires_str,
                 current_str,
@@ -101,7 +103,7 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
         if not links:
             logger.warning("Серверов в подписке: %s", len(servers))
             for server in servers:
-                logger.warning("  - %s: %s", server["server_name"], server["client_email"])
+                logger.warning("  - %s", server["server_name"])
             return "No servers available", 503, None
 
         vpn_brand_name = get_ctx().vpn_brand_name

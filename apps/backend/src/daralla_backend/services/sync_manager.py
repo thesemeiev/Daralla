@@ -21,6 +21,7 @@ from ..db.notifications_db import clear_subscription_notifications
 from ..core.retention_policy import get_retention_policy
 from .subscription_manager import SubscriptionManager
 from .xui_helpers import clients_from_settings_payload
+from ..utils.logging_helpers import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -132,13 +133,15 @@ class SyncManager:
                 stats["errors"].append(f"cleanup_orphaned_clients: {e}")
 
             stats["total_errors"] = len(stats["errors"])
-            logger.info(
-                "✅ sync_all_subscriptions завершена: subs=%s, synced=%s, servers=%s, orphaned=%s, errors=%s",
-                stats["subscriptions_checked"],
-                stats["subscriptions_synced"],
-                stats["total_servers_synced"],
-                stats.get("orphaned_clients_deleted", 0),
-                stats["total_errors"],
+            log_event(
+                logger,
+                logging.INFO,
+                "sync_all_subscriptions_completed",
+                subscriptions_checked=stats["subscriptions_checked"],
+                subscriptions_synced=stats["subscriptions_synced"],
+                total_servers_synced=stats["total_servers_synced"],
+                orphaned_clients_deleted=stats.get("orphaned_clients_deleted", 0),
+                error_count=stats["total_errors"],
             )
             return stats
 
@@ -152,15 +155,23 @@ class SyncManager:
         if self._sync_lock.locked():
             logger.info("sync_clients_from_db_only ждёт завершения текущего sync")
         async with self._sync_lock:
+            started_at = time.perf_counter()
             stats = await self.subscription_manager.sync_servers_with_config(
                 auto_create_clients=True
             )
             err_n = len(stats.get("errors") or [])
-            logger.info(
-                "Лёгкий догон панелей: подписок=%s, ensure по нодам=%s, ошибок=%s",
-                stats.get("subscriptions_checked"),
-                stats.get("total_servers_synced"),
-                err_n,
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            log_event(
+                logger,
+                logging.INFO,
+                "sync_clients_from_db_only_completed",
+                subscriptions_checked=stats.get("subscriptions_checked"),
+                ensure_total=stats.get("total_servers_checked"),
+                ensure_success=stats.get("total_servers_synced"),
+                clients_created=stats.get("clients_created"),
+                clients_restored=stats.get("clients_restored"),
+                error_count=err_n,
+                duration_ms=duration_ms,
             )
             return stats
 
@@ -182,11 +193,21 @@ class SyncManager:
         if self._sync_lock.locked():
             logger.info("run_sync ожидает завершения другого цикла синхронизации")
         async with self._sync_lock:
+            started_at = time.perf_counter()
+            step_started_at = started_at
+            agg_rows = 0
+            step1_duration_ms = 0
+            step2_duration_ms = 0
+            step2b_duration_ms = 0
+            step3_duration_ms = 0
+            step4_duration_ms = 0
+            step3_stats = {}
         
             # Шаг 1: Синхронизация статусов подписок в БД
             # Обновляет статусы active ↔ expired на основе expires_at
             logger.info("📊 Шаг 1: Синхронизация статусов подписок в БД...")
             await sync_subscription_statuses()
+            step1_duration_ms = int((time.perf_counter() - step_started_at) * 1000)
             logger.info("✅ Шаг 1 завершен: статусы подписок синхронизированы")
             try:
                 agg_rows = await upsert_agg_subscriptions_daily()
@@ -198,17 +219,21 @@ class SyncManager:
             # Шаг 2: Удаление старых подписок (истекли более 3 дней назад)
             # Удаляет подписки со статусом deleted и их клиентов с серверов
             logger.info("🗑️ Шаг 2: Удаление старых подписок (истекли > 3 дней)...")
+            step_started_at = time.perf_counter()
             await self.cleanup_expired_subscriptions(days_limit=3)
+            step2_duration_ms = int((time.perf_counter() - step_started_at) * 1000)
             logger.info("✅ Шаг 2 завершен: старые подписки удалены")
 
             logger.info(
                 "🧾 Шаг 2b: Retention hard-delete для deleted подписок (>%s дней)...",
                 policy.deleted_subscriptions_retention_days,
             )
+            step_started_at = time.perf_counter()
             deleted_count = await cleanup_deleted_subscriptions(
                 days=policy.deleted_subscriptions_retention_days,
                 dry_run=policy.dry_run,
             )
+            step2b_duration_ms = int((time.perf_counter() - step_started_at) * 1000)
             if deleted_count > 0:
                 mode = "кандидатов (dry-run)" if policy.dry_run else "физически удалено"
                 logger.info("✅ Шаг 2b завершён: %s %s подписок", mode, deleted_count)
@@ -218,19 +243,43 @@ class SyncManager:
             # - Гарантирует наличие клиентов на всех серверах из конфигурации
             # - Синхронизирует параметры (expires_at, device_limit)
             logger.info("🔄 Шаг 3: Синхронизация подписок с серверами (БД → Серверы)...")
-            await self.subscription_manager.sync_servers_with_config(auto_create_clients=True)
+            step_started_at = time.perf_counter()
+            step3_stats = await self.subscription_manager.sync_servers_with_config(auto_create_clients=True)
+            step3_duration_ms = int((time.perf_counter() - step_started_at) * 1000)
             logger.info("✅ Шаг 3 завершен: подписки синхронизированы с серверами")
         
             # Шаг 4: Очистка сиротских клиентов (Серверы → БД)
             # Удаляет клиентов на серверах, которых нет в БД (в active или expired подписках)
             logger.info("🧹 Шаг 4: Очистка сиротских клиентов (Серверы → БД)...")
+            step_started_at = time.perf_counter()
             orphaned_stats = await self.cleanup_orphaned_clients()
+            step4_duration_ms = int((time.perf_counter() - step_started_at) * 1000)
             if orphaned_stats['deleted_count'] > 0:
                 logger.info(f"✅ Шаг 4 завершен: удалено {orphaned_stats['deleted_count']} сиротских клиентов")
             else:
                 logger.info("✅ Шаг 4 завершен: сиротских клиентов не найдено")
-        
-            logger.info("✅ Полная синхронизация завершена успешно")
+
+            total_duration_ms = int((time.perf_counter() - started_at) * 1000)
+            log_event(
+                logger,
+                logging.INFO,
+                "run_sync_completed",
+                duration_ms=total_duration_ms,
+                step1_duration_ms=step1_duration_ms,
+                step2_duration_ms=step2_duration_ms,
+                step2b_duration_ms=step2b_duration_ms,
+                step3_duration_ms=step3_duration_ms,
+                step4_duration_ms=step4_duration_ms,
+                agg_rows=agg_rows,
+                deleted_subscriptions_count=deleted_count,
+                orphaned_clients_deleted=orphaned_stats.get("deleted_count", 0),
+                step3_subscriptions_checked=step3_stats.get("subscriptions_checked"),
+                step3_ensure_total=step3_stats.get("total_servers_checked"),
+                step3_ensure_success=step3_stats.get("total_servers_synced"),
+                step3_clients_created=step3_stats.get("clients_created"),
+                step3_clients_restored=step3_stats.get("clients_restored"),
+                step3_error_count=len(step3_stats.get("errors") or []),
+            )
 
     async def cleanup_expired_subscriptions(self, days_limit: int = 3):
         """Удаляет подписки, которые истекли более N дней назад"""

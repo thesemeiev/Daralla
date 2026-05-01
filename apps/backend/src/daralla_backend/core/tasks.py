@@ -75,7 +75,15 @@ async def sync_task_loop(sync_manager):
     )
     while True:
         try:
+            started_at = asyncio.get_running_loop().time()
             await sync_manager.run_sync()
+            duration_ms = int((asyncio.get_running_loop().time() - started_at) * 1000)
+            log_event(
+                logger,
+                logging.INFO,
+                "background_full_sync_completed",
+                duration_ms=duration_ms,
+            )
             inc_metric("background_task_success_total", task="full_sync")
         except asyncio.CancelledError:
             raise
@@ -97,7 +105,15 @@ async def client_catchup_loop(sync_manager):
     await asyncio.sleep(90)
     while True:
         try:
+            started_at = asyncio.get_running_loop().time()
             await sync_manager.sync_clients_from_db_only()
+            duration_ms = int((asyncio.get_running_loop().time() - started_at) * 1000)
+            log_event(
+                logger,
+                logging.INFO,
+                "background_client_catchup_completed",
+                duration_ms=duration_ms,
+            )
             inc_metric("background_task_success_total", task="client_catchup")
         except asyncio.CancelledError:
             raise
@@ -338,15 +354,20 @@ async def sync_outbox_worker_loop(subscription_manager):
     await asyncio.sleep(5)
     while True:
         try:
+            started_at = asyncio.get_running_loop().time()
             summary = await process_outbox_once(subscription_manager=subscription_manager)
+            duration_ms = int((asyncio.get_running_loop().time() - started_at) * 1000)
             if summary.get("claimed"):
-                logger.info(
-                    "Outbox batch: claimed=%s done=%s retried=%s dead=%s stale=%s",
-                    summary.get("claimed"),
-                    summary.get("done"),
-                    summary.get("retried"),
-                    summary.get("dead"),
-                    summary.get("stale"),
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "outbox_batch_completed",
+                    claimed=summary.get("claimed"),
+                    done=summary.get("done"),
+                    retried=summary.get("retried"),
+                    dead=summary.get("dead"),
+                    stale=summary.get("stale"),
+                    duration_ms=duration_ms,
                 )
             inc_metric("background_task_success_total", task="sync_outbox_worker")
         except asyncio.CancelledError:

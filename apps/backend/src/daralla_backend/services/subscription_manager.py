@@ -33,6 +33,7 @@ from .subscription_helpers import (
     normalize_subscription_link,
 )
 from ..prices_config import get_tariff_days
+from ..utils.logging_helpers import log_event, mask_secret
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ class SubscriptionManager:
         logger.info(
             "Подписка создана: subscription_id=%s, token=%s, user_id=%s, group_id=%s",
             subscription_id,
-            token,
+            mask_secret(token),
             user_id,
             sub_dict.get("group_id"),
         )
@@ -245,7 +246,7 @@ class SubscriptionManager:
                 if panel_entry is not None:
                     logger.debug("Клиент %s на сервере %s (снимок list, требует reconcile)", client_email, server_name)
                 else:
-                    logger.info(
+                    logger.debug(
                         "Клиент %s уже существует на сервере %s",
                         client_email,
                         server_name,
@@ -267,7 +268,7 @@ class SubscriptionManager:
                         )
                         return False, False
                     elif did_update:
-                        logger.info(
+                        logger.debug(
                             "Синхронизирован клиент %s на %s (expiry, limitIp, flow по БД/конфигу)",
                             client_email,
                             server_name,
@@ -309,18 +310,18 @@ class SubscriptionManager:
                         if not ok:
                             return False, False
                         if did_update:
-                            logger.info(
+                            logger.debug(
                                 "Синхронизирован клиент %s на %s (expiry, limitIp, flow по БД/конфигу)",
                                 client_email,
                                 server_name,
                             )
                         return True, False
 
-                    logger.info(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
+                    logger.debug(f"Клиент {client_email} не найден на сервере {server_name}, создаем...")
                     current_time = int(time.time())
                     days_remaining = max(1, (expires_at - current_time) // (24 * 60 * 60))
                     server_config = self.server_manager.get_server_config(server_name)
-                    logger.info(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
+                    logger.debug(f"Создание клиента {client_email} на сервере {server_name} с limitIp={device_limit}")
                     client_flow = (server_config.get("client_flow") or "").strip() or None if server_config else None
                     created = await xui.addClient(
                         day=days_remaining,
@@ -348,13 +349,13 @@ class SubscriptionManager:
                         return False, False
 
                     if created_ok:
-                        logger.info(f"Клиент {client_email} успешно создан на сервере {server_name}")
+                        logger.debug(f"Клиент {client_email} успешно создан на сервере {server_name}")
 
                         # ВАЖНО: Устанавливаем точное время истечения из БД
                         # addClient использует округление до дней, что может давать неточное время
                         # Поэтому после создания устанавливаем точное время из expires_at
                         try:
-                            logger.info(
+                            logger.debug(
                                 f"Установка точного времени истечения и flow для клиента {client_email} "
                                 f"на сервере {server_name}: {expires_at}"
                             )
@@ -376,7 +377,7 @@ class SubscriptionManager:
                                 await asyncio.sleep(min(1.2, 0.3 * (attempt + 1)))
 
                             if ok_rec:
-                                logger.info(
+                                logger.debug(
                                     f"Точное время и flow синхронизированы для клиента {client_email} "
                                     f"на сервере {server_name}"
                                 )
@@ -535,6 +536,7 @@ class SubscriptionManager:
         больше не входит в группу (удалён, другая группа). Временно выключенные (is_active=0)
         остаются в subscription_servers — ссылки на них не отдаются, пока сервер не в рантайме.
         """
+        sync_started_at = time.perf_counter()
         logger.info("Начало синхронизации подписок с серверами (БД → Серверы)")
 
         # Получаем все подписки, которые нужно синхронизировать
@@ -875,18 +877,24 @@ class SubscriptionManager:
                 if total > 0 and sub_ok.get(sid, 0) == total:
                     stats["subscriptions_synced"] += 1
 
-        logger.info(
-            f"Синхронизация завершена: "
-            f"проверено {stats['subscriptions_checked']} подписок, "
-            f"добавлено {stats['servers_added']} серверов, "
-            f"удалено {stats['servers_removed']} серверов, "
-            f"создано {stats['clients_created']} клиентов, "
-            f"восстановлено {stats['clients_restored']} клиентов, "
-            f"пропущено unsupported {stats['ensure_skipped_unsupported']}, "
-            f"ошибок протокола {stats['ensure_failed_protocol']}, "
-            f"удалено лишних (strict) {stats['clients_deleted_strict']} клиентов, "
-            f"серверов (ensure) {stats['total_servers_checked']}, "
-            f"ошибок {len(stats['errors'])}"
+        duration_ms = int((time.perf_counter() - sync_started_at) * 1000)
+        log_event(
+            logger,
+            logging.INFO,
+            "sync_servers_with_config_completed",
+            subscriptions_checked=stats["subscriptions_checked"],
+            subscriptions_synced=stats["subscriptions_synced"],
+            servers_added=stats["servers_added"],
+            servers_removed=stats["servers_removed"],
+            clients_created=stats["clients_created"],
+            clients_restored=stats["clients_restored"],
+            ensure_skipped_unsupported=stats["ensure_skipped_unsupported"],
+            ensure_failed_protocol=stats["ensure_failed_protocol"],
+            clients_deleted_strict=stats["clients_deleted_strict"],
+            ensure_total=stats["total_servers_checked"],
+            ensure_success=stats["total_servers_synced"],
+            error_count=len(stats["errors"]),
+            duration_ms=duration_ms,
         )
 
         return stats
