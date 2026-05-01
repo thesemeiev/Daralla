@@ -2,8 +2,10 @@
 Менеджер синхронизации данных между БД и серверами X-UI
 """
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import logging
+import threading
 import time
 
 from tenacity import RetryError
@@ -73,7 +75,27 @@ class SyncManager:
         self.subscription_manager = subscription_manager
         self.is_running = False
         # Глобальная защита от параллельных sync-циклов (ручной + фоновый + post-CRUD).
-        self._sync_lock = asyncio.Lock()
+        # Важно: sync может вызываться из разных event loop (бот + веб-поток),
+        # поэтому asyncio.Lock здесь нельзя шарить между loop.
+        self._sync_gate = threading.Lock()
+
+    @asynccontextmanager
+    async def _acquire_sync_gate(self, op_name: str):
+        """
+        Межпотоковая сериализация sync-задач без привязки к конкретному event loop.
+        """
+        wait_logged = False
+        while True:
+            if self._sync_gate.acquire(blocking=False):
+                break
+            if not wait_logged:
+                logger.info("%s ожидает завершения текущего цикла синхронизации", op_name)
+                wait_logged = True
+            await asyncio.sleep(0.2)
+        try:
+            yield
+        finally:
+            self._sync_gate.release()
 
     async def sync_all_subscriptions(self, auto_fix: bool = False):
         """
@@ -85,10 +107,7 @@ class SyncManager:
         (используется как флаг --fix).
         """
         logger.info("🌀 Запуск sync_all_subscriptions (auto_fix=%s)", auto_fix)
-
-        if self._sync_lock.locked():
-            logger.info("sync_all_subscriptions ожидает завершения текущего цикла синхронизации")
-        async with self._sync_lock:
+        async with self._acquire_sync_gate("sync_all_subscriptions"):
             stats = {
                 "subscriptions_checked": 0,
                 "subscriptions_synced": 0,
@@ -150,11 +169,9 @@ class SyncManager:
         Только догон клиентов на панелях (sync_servers_with_config).
 
         Без синка статусов подписок, без cleanup просроченных и без cleanup_orphaned_clients.
-        Тот же _sync_lock, что у run_sync / sync_all — не параллелится с ними.
+        Тот же sync gate, что у run_sync / sync_all — не параллелится с ними.
         """
-        if self._sync_lock.locked():
-            logger.info("sync_clients_from_db_only ждёт завершения текущего sync")
-        async with self._sync_lock:
+        async with self._acquire_sync_gate("sync_clients_from_db_only"):
             started_at = time.perf_counter()
             stats = await self.subscription_manager.sync_servers_with_config(
                 auto_create_clients=True
@@ -190,9 +207,7 @@ class SyncManager:
         logger.info("🌀 Запуск полной синхронизации БД с серверами X-UI...")
         logger.info("📋 Принцип: БД - источник истины, серверы синхронизируются с БД")
         policy = get_retention_policy()
-        if self._sync_lock.locked():
-            logger.info("run_sync ожидает завершения другого цикла синхронизации")
-        async with self._sync_lock:
+        async with self._acquire_sync_gate("run_sync"):
             started_at = time.perf_counter()
             step_started_at = started_at
             agg_rows = 0
