@@ -1502,9 +1502,10 @@ class X3:
             except Exception as e:
                 logger.warning("Ошибка запроса subscription URL %s: %s", sub_url, e)
                 return []
-            # Некоторые панели отдают подписку в base64 (одна строка)
+            # Некоторые панели отдают подписку в base64 (одна строка).
+            # Не ограничиваемся vless/vmess/trojan: в подписке могут быть hy2/tuic и другие схемы.
             raw = (text or "").strip()
-            if raw and "vless://" not in raw and "vmess://" not in raw and "trojan://" not in raw:
+            if raw and "://" not in raw:
                 try:
                     decoded = base64.standard_b64decode(raw).decode("utf-8", errors="replace")
                     if decoded.strip():
@@ -1542,7 +1543,7 @@ class X3:
                 links.append(line)
             if not links and raw:
                 logger.debug(
-                    "Subscription endpoint вернул тело без vless/vmess/trojan: url=%s body_len=%s",
+                    "Subscription endpoint вернул тело без URI-ссылок: url=%s body_len=%s",
                     sub_url, len(raw),
                 )
             return links
