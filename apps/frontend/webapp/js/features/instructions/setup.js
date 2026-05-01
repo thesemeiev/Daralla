@@ -7,17 +7,17 @@
     // Структура пошаговых инструкций
     var instructionSteps = {
         android: {
-            title: 'Android (v2RayTun, Happ)',
+            title: 'Android (Happ)',
             steps: [
                 {
-                    title: 'Шаг 1: Выберите приложение',
+                    title: 'Шаг 1: Установите приложение',
                     content: `
-                    <p>Выберите одно из приложений для Android:</p>
+                    <p>Установите Happ для Android:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" class="instruction-link">v2RayTun из Google Play</a></li>
                         <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/search?q=happ+plus&c=apps" target="_blank" class="instruction-link">Happ из Google Play</a></li>
                     </ul>
-                    <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
+                    <p>Если ссылка на Happ недоступна, смените регион в магазине приложений (Google Play) и попробуйте снова.</p>
+                    <p>Скачайте и установите приложение на ваше устройство.</p>
                 `
                 },
                 {
@@ -70,17 +70,17 @@
             ]
         },
         ios: {
-            title: 'iOS (v2RayTun, Happ)',
+            title: 'iOS (Happ)',
             steps: [
                 {
-                    title: 'Шаг 1: Выберите приложение',
+                    title: 'Шаг 1: Установите приложение',
                     content: `
-                    <p>Выберите одно из приложений для iPhone:</p>
+                    <p>Установите Happ для iPhone:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=iphone" target="_blank" class="instruction-link">v2RayTun из App Store</a></li>
                         <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973" target="_blank" class="instruction-link">Happ из App Store</a></li>
                     </ul>
-                    <p>Скачайте и установите выбранное приложение на ваше устройство.</p>
+                    <p>Если ссылка на Happ недоступна, смените регион в магазине приложений (App Store) и попробуйте снова.</p>
+                    <p>Скачайте и установите приложение на ваше устройство.</p>
                 `
                 },
                 {
@@ -126,14 +126,13 @@
             ]
         },
         windows: {
-            title: 'Windows (v2RayTun, Happ)',
+            title: 'Windows (Happ)',
             steps: [
                 {
                     title: 'Шаг 1: Скачайте приложение',
                     content: `
-                    <p>Выберите и скачайте одно из приложений:</p>
+                    <p>Скачайте Happ для Windows:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://storage.v2raytun.com/v2RayTun_Setup.exe" target="_blank" class="instruction-link">v2RayTun для Windows</a></li>
                         <li style="margin-bottom: 8px;"><a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" target="_blank" class="instruction-link">Happ для Windows</a></li>
                     </ul>
                     <p>Установите приложение на ваш компьютер.</p>
@@ -176,16 +175,16 @@
             ]
         },
         macos: {
-            title: 'macOS (v2RayTun, Happ)',
+            title: 'macOS (Happ)',
             steps: [
                 {
                     title: 'Шаг 1: Скачайте приложение',
                     content: `
-                    <p>Выберите и скачайте одно из приложений:</p>
+                    <p>Скачайте Happ для Mac:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/us/app/v2raytun/id6476628951?platform=mac" target="_blank" class="instruction-link">v2RayTun для Mac</a></li>
                         <li style="margin-bottom: 8px;"><a href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?platform=mac" target="_blank" class="instruction-link">Happ для Mac</a></li>
                     </ul>
+                    <p>Если ссылка на Happ недоступна, смените регион в магазине приложений (App Store) и попробуйте снова.</p>
                     <p>Установите приложение на ваш Mac.</p>
                 `
                 },
@@ -270,16 +269,16 @@
             ]
         },
         tv: {
-            title: 'Android TV (v2RayTun, Happ)',
+            title: 'Android TV (Happ)',
             steps: [
                 {
-                    title: 'Шаг 1: Выберите приложение',
+                    title: 'Шаг 1: Установите приложение',
                     content: `
-                    <p>Выберите одно из приложений для Android TV:</p>
+                    <p>Установите Happ для Android TV:</p>
                     <ul style="margin: 12px 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.v2raytun.android" target="_blank" class="instruction-link">v2RayTun для Android TV</a></li>
                         <li style="margin-bottom: 8px;"><a href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank" class="instruction-link">Happ для Android TV</a></li>
                     </ul>
+                    <p>Если ссылка на Happ недоступна, смените регион в магазине приложений (Google Play) и попробуйте снова.</p>
                 `
                 },
                 {

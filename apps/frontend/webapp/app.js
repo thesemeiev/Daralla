@@ -2318,11 +2318,11 @@ function syncChooseOptionCards() {
     }
 
     function providerLabel(gateway) {
-        if (gateway === 'cryptocloud') return 'CryptoCloud';
+        if (gateway === 'cryptocloud') return 'CryptoCloud (TON, USDT)';
         if (gateway === 'platega') {
-            return currentPlategaPaymentMethod === 'crypto' ? 'Platega (Крипта)' : 'Platega (СБП)';
+            return currentPlategaPaymentMethod === 'crypto' ? 'Platega (TON, USDT)' : 'Platega (СБП)';
         }
-        return 'YooKassa';
+        return 'YooKassa (Карта, СБП)';
     }
 
     function updateSummary() {

@@ -559,7 +559,15 @@ class X3:
         """addClient: как py3xui, но flow всегда в JSON (см. panel_client_settings_dict)."""
         await self._ensure_login()
         api = self._api.client
-        settings = {"clients": [panel_client_settings_dict(c) for c in clients]}
+        protocol_hint: Optional[str] = None
+        try:
+            inv = await self._api.inbound.get_by_id(int(inbound_id))
+            protocol_hint = self._extract_protocol(inv)
+        except Exception:
+            protocol_hint = None
+        settings = {
+            "clients": [panel_client_settings_dict(c, protocol_hint=protocol_hint) for c in clients]
+        }
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url("panel/api/inbounds/addClient")
         await api._post(url, {"Accept": "application/json"}, data)
@@ -691,7 +699,7 @@ class X3:
                 panel_client_settings_dict(
                     c,
                     flow_override=flow_override,
-                    protocol_hint=protocol_hint,
+                    protocol_hint=(protocol_norm or protocol_hint),
                 )
             ]
         }
