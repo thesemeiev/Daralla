@@ -633,6 +633,15 @@ class X3:
         # Для hy2 чаще работает key по auth/password. Это уменьшает количество
         # fallback-вызовов inbound.update, которые могут перетирать inbound settings.
         if protocol_norm == "hysteria2":
+            # Никогда не отправляем пустой секрет в updateClient для hy2:
+            # это приводит к "битым" строкам clients[] (password="") на панели.
+            secret_candidate = str(auth or password or "").strip()
+            if not secret_candidate:
+                secret_candidate = self._derive_hysteria_secret(str(email or ""), int(inbound_id))
+                self._client_set(c, "auth", secret_candidate)
+                self._client_set(c, "password", secret_candidate)
+            auth = secret_candidate
+            password = secret_candidate
             hy2_identifier = str(email or auth or password or "").strip()
             if hy2_identifier:
                 client_identifier = hy2_identifier
@@ -655,6 +664,18 @@ class X3:
                     resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
                     if flow_override is not None:
                         resolved.flow = flow_override
+                    if protocol_norm == "hysteria2":
+                        resolved_email = self._client_get(resolved, "email", None) or email
+                        resolved_auth = self._client_get(resolved, "auth", None)
+                        resolved_password = self._client_get(resolved, "password", None)
+                        resolved_secret = str(resolved_auth or resolved_password or "").strip()
+                        if not resolved_secret:
+                            resolved_secret = self._derive_hysteria_secret(
+                                str(resolved_email or ""),
+                                int(inbound_id),
+                            )
+                            self._client_set(resolved, "auth", resolved_secret)
+                            self._client_set(resolved, "password", resolved_secret)
                     if protocol_norm != "hysteria2":
                         self._ensure_client_id_for_update(resolved)
                     resolved_identifier = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
