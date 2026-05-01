@@ -835,25 +835,100 @@ class X3:
             else ""
         )
         if protocol_norm == "hysteria2":
-            # Keep both fields populated: panel builds disagree on auth vs password.
+            # Force canonical hy2 schema before inbound.update:
+            # settings.clients[]: {"email","auth"}, settings.version=2.
+            # Some panel builds break inbound when they receive password/id/flow legacy fields.
             target_auth = str(self._client_get(target, "auth", "") or "").strip()
             target_password = str(self._client_get(target, "password", "") or "").strip()
             normalized_secret = str(target_auth or target_password or auth_norm or password_norm).strip()
-            if normalized_secret:
-                self._client_set(target, "auth", normalized_secret)
-                self._client_set(target, "password", normalized_secret)
-            else:
+            if not normalized_secret:
                 # Self-heal: once panel row is broken (empty auth/password), derive a stable
                 # secret to stop endless reconcile loops and make client links usable again.
-                recovered_secret = self._derive_hysteria_secret(email_norm, int(inbound_id))
-                self._client_set(target, "auth", recovered_secret)
-                self._client_set(target, "password", recovered_secret)
+                normalized_secret = self._derive_hysteria_secret(email_norm, int(inbound_id))
                 logger.warning(
                     "inbound.update fallback: recovered empty hy2 secret "
                     "(inbound_id=%s email=%s)",
                     inbound_id,
                     email_norm or "-",
                 )
+            self._client_set(target, "auth", normalized_secret)
+            if isinstance(target, dict):
+                target.pop("password", None)
+                target.pop("id", None)
+                target.pop("uuid", None)
+                target.pop("flow", None)
+                target.pop("method", None)
+
+            # Normalize whole settings payload to hy2-safe shape when possible.
+            if not isinstance(settings, dict):
+                dumped_settings = None
+                try:
+                    dumped_settings = settings.model_dump(
+                        by_alias=True,
+                        mode="json",
+                        exclude_none=False,
+                    )
+                except Exception:
+                    dumped_settings = None
+                if isinstance(dumped_settings, dict):
+                    settings = dumped_settings
+                    self._client_set(inv, "settings", settings)
+
+            if isinstance(settings, dict):
+                merged_rows: list[dict[str, str]] = []
+                for key in ("clients", "users"):
+                    raw_rows = settings.get(key) or []
+                    if not isinstance(raw_rows, list):
+                        continue
+                    for row in raw_rows:
+                        row_email = str(self._client_get(row, "email", "") or "").strip()
+                        if not row_email:
+                            continue
+                        row_auth = str(
+                            self._client_get(row, "auth", "") or self._client_get(row, "password", "")
+                        ).strip()
+                        row_secret = row_auth or self._derive_hysteria_secret(row_email, int(inbound_id))
+                        merged_rows.append({"email": row_email, "auth": row_secret})
+                # Keep deterministic order + remove duplicates by email.
+                seen: set[str] = set()
+                normalized_rows: list[dict[str, str]] = []
+                for row in merged_rows:
+                    row_email = row["email"]
+                    if row_email in seen:
+                        continue
+                    seen.add(row_email)
+                    normalized_rows.append(row)
+                settings["clients"] = normalized_rows
+                settings.pop("users", None)
+                settings["version"] = 2
+                settings.pop("decryption", None)
+                settings.pop("fallbacks", None)
+
+            # Ensure streamSettings keeps hysteriaSettings/version to prevent schema downgrade.
+            stream_obj = self._client_get(inv, "stream_settings", None)
+            if stream_obj is None:
+                stream_obj = self._client_get(inv, "streamSettings", None)
+            stream_dict = stream_obj if isinstance(stream_obj, dict) else None
+            if stream_dict is None and stream_obj is not None:
+                try:
+                    maybe_stream = stream_obj.model_dump(
+                        by_alias=True,
+                        mode="json",
+                        exclude_none=False,
+                    )
+                    if isinstance(maybe_stream, dict):
+                        stream_dict = maybe_stream
+                except Exception:
+                    stream_dict = None
+            if isinstance(stream_dict, dict):
+                hy_settings = stream_dict.get("hysteriaSettings")
+                if not isinstance(hy_settings, dict):
+                    hy_settings = {}
+                hy_settings["version"] = 2
+                hy_settings.setdefault("auth", "")
+                stream_dict["hysteriaSettings"] = hy_settings
+                self._client_set(inv, "stream_settings", stream_dict)
+                self._client_set(inv, "streamSettings", stream_dict)
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 
