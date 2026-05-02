@@ -181,7 +181,8 @@ def panel_snapshot_matches_desired(
         # For hy2 clients, missing auth triggers 3x-ui UI update errors ("empty client ID"),
         # so such rows must be treated as inconsistent and reconciled.
         auth_val = str(panel_snapshot.get("auth") or "").strip()
-        if not auth_val:
+        password_val = str(panel_snapshot.get("password") or "").strip()
+        if not (auth_val or password_val):
             return False
     # Критично: even with matching expiry/limit/flow, disabled client must be reconciled.
     if _panel_enable_is_disabled(panel_snapshot.get("enable")):

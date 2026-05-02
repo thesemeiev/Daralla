@@ -702,11 +702,6 @@ class X3:
                 and inbound_id is not None
                 and any(v for v in (email, auth, password))
             ):
-                if protocol_norm == "hysteria2":
-                    raise ValueError(
-                        "updateClient(hy2): empty client id and inbound.update fallback disabled "
-                        f"email={email or '-'} inbound_id={inbound_id}"
-                    )
                 await self._update_client_via_inbound_settings(
                     inbound_id=int(inbound_id),
                     email=(str(email) if email else None),
@@ -748,11 +743,6 @@ class X3:
                 and inbound_id is not None
                 and any(v for v in (email, auth, password, uuid_for_url))
             ):
-                if protocol_norm == "hysteria2":
-                    raise ValueError(
-                        "updateClient(hy2): panel returned empty client ID and inbound.update fallback disabled "
-                        f"email={email or '-'} inbound_id={inbound_id}"
-                    ) from exc
                 await self._update_client_via_inbound_settings(
                     inbound_id=int(inbound_id),
                     email=(str(email) if email else None),
@@ -1185,17 +1175,6 @@ class X3:
         try:
             await self._api.client.delete(int(inbound_id), c.id)
         except Exception as exc:
-            inbound_protocol = ""
-            try:
-                inv = await self._api.inbound.get_by_id(int(inbound_id))
-                inbound_protocol = self._extract_protocol(inv)
-            except Exception:
-                inbound_protocol = ""
-            if inbound_protocol == "hysteria2":
-                raise ValueError(
-                    "deleteClient(hy2): client.delete failed and inbound.update fallback disabled "
-                    f"email={user_email} inbound_id={inbound_id}"
-                ) from exc
             logger.warning(
                 "deleteClient API failed for %s (inbound_id=%s): %s; trying inbound.update fallback",
                 user_email,
