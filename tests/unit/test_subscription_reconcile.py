@@ -1,6 +1,6 @@
 """Unit tests: panel snapshot helpers, list snapshot shape, reconcile_client."""
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -78,153 +78,111 @@ def test_panel_snapshot_matches_requires_flow_for_trojan():
     assert _panel_snapshot_matches_desired(snap, 50, 1, "should-ignore") is True
 
 
+def _inbound_dict(inv_id: int, protocol: str, clients: list) -> dict:
+    """Build a panel-shaped inbound dict for mocking _panel.list_inbounds."""
+    return {
+        "id": inv_id,
+        "protocol": protocol,
+        "settings": json.dumps({"clients": clients}),
+    }
+
+
+def _make_x3():
+    """Create a bare X3 with a mocked panel client."""
+    from daralla_backend.services.xui_service import X3
+    x3 = X3.__new__(X3)
+    x3._panel = MagicMock()
+    x3._ensure_login = AsyncMock()
+    x3._post_inbound_update_client = AsyncMock()
+    return x3
+
+
 @pytest.mark.asyncio
 async def test_reconcile_client_applies_flow_from_config_when_mismatch():
-    """Reconcile обходит get_list: один inbound, update с inbound_id_override."""
-    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("daralla_backend.services.xui_service.AsyncApi"):
-            from daralla_backend.services.xui_service import X3
+    """Reconcile проходит через snapshot list_inbounds: один inbound, update с inbound_id_override."""
+    x3 = _make_x3()
+    inv = _inbound_dict(
+        7, "vless",
+        [{"email": "u@test", "id": "uuid", "expiryTime": 2000 * 1000, "limitIp": 1, "flow": ""}],
+    )
+    x3._panel.list_inbounds = AsyncMock(return_value=[inv])
 
-            x3 = X3.__new__(X3)
-            x3._logged_in = True
-            x3._api = MagicMock()
-            mock_c = MagicMock()
-            mock_c.email = "u@test"
-            mock_c.expiry_time = 2000 * 1000
-            mock_c.limit_ip = 1
-            mock_c.flow = ""
-            mock_c.id = "uuid"
-            inv = MagicMock()
-            inv.id = 7
-            inv.settings = MagicMock(clients=[mock_c])
-            x3._api.inbound.get_list = AsyncMock(return_value=[inv])
-            x3._api.client.get_by_email = AsyncMock()
-            x3._api.login = AsyncMock()
-            x3._ensure_login = AsyncMock()
-            x3._ensure_client_id_for_update = MagicMock(side_effect=lambda c: c)
-            x3._post_inbound_update_client = AsyncMock()
-
-            ok, did_upd = await x3.reconcile_client(
-                "u@test",
-                expiry_sec=2000,
-                limit_ip=1,
-                flow_from_config="xtls-rprx-vision",
-            )
-            assert ok is True
-            assert did_upd is True
-            x3._api.client.get_by_email.assert_not_called()
-            assert mock_c.flow == "xtls-rprx-vision"
-            x3._post_inbound_update_client.assert_called_once()
-            ca = x3._post_inbound_update_client.call_args
-            assert ca.kwargs.get("inbound_id_override") == 7
-            assert ca.kwargs.get("flow_override") == "xtls-rprx-vision"
+    ok, did_upd = await x3.reconcile_client(
+        "u@test",
+        expiry_sec=2000,
+        limit_ip=1,
+        flow_from_config="xtls-rprx-vision",
+    )
+    assert ok is True
+    assert did_upd is True
+    x3._post_inbound_update_client.assert_called_once()
+    ca = x3._post_inbound_update_client.call_args
+    assert ca.kwargs.get("inbound_id_override") == 7
+    assert ca.kwargs.get("flow_override") == "xtls-rprx-vision"
 
 
 @pytest.mark.asyncio
 async def test_reconcile_client_always_posts_even_when_api_looks_in_sync():
     """Каждый reconcile по списку inbound шлёт update + flow_override."""
-    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("daralla_backend.services.xui_service.AsyncApi"):
-            from daralla_backend.services.xui_service import X3
+    x3 = _make_x3()
+    inv = _inbound_dict(
+        1, "vless",
+        [{"email": "u@test", "id": "uuid", "expiryTime": 2000 * 1000, "limitIp": 1, "flow": "a"}],
+    )
+    x3._panel.list_inbounds = AsyncMock(return_value=[inv])
 
-            x3 = X3.__new__(X3)
-            x3._logged_in = True
-            x3._api = MagicMock()
-            mock_c = MagicMock()
-            mock_c.email = "u@test"
-            mock_c.expiry_time = 2000 * 1000
-            mock_c.limit_ip = 1
-            mock_c.flow = "a"
-            mock_c.id = "uuid"
-            inv = MagicMock()
-            inv.id = 1
-            inv.settings = MagicMock(clients=[mock_c])
-            x3._api.inbound.get_list = AsyncMock(return_value=[inv])
-            x3._api.client.get_by_email = AsyncMock()
-            x3._api.login = AsyncMock()
-            x3._ensure_login = AsyncMock()
-            x3._ensure_client_id_for_update = MagicMock(side_effect=lambda c: c)
-            x3._post_inbound_update_client = AsyncMock()
-
-            ok, did_upd = await x3.reconcile_client(
-                "u@test",
-                expiry_sec=2000,
-                limit_ip=1,
-                flow_from_config="a",
-            )
-            assert ok is True
-            assert did_upd is True
-            x3._api.client.get_by_email.assert_not_called()
-            x3._post_inbound_update_client.assert_called_once()
-            assert x3._post_inbound_update_client.call_args.kwargs.get("flow_override") == "a"
+    ok, did_upd = await x3.reconcile_client(
+        "u@test",
+        expiry_sec=2000,
+        limit_ip=1,
+        flow_from_config="a",
+    )
+    assert ok is True
+    assert did_upd is True
+    x3._post_inbound_update_client.assert_called_once()
+    assert x3._post_inbound_update_client.call_args.kwargs.get("flow_override") == "a"
 
 
 @pytest.mark.asyncio
 async def test_reconcile_client_updates_same_email_in_every_inbound():
     """Один email в двух inbound — два updateClient с разным inbound_id_override."""
-    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("daralla_backend.services.xui_service.AsyncApi"):
-            from daralla_backend.services.xui_service import X3
+    x3 = _make_x3()
+    inv_a = _inbound_dict(
+        10, "vless",
+        [{"email": "x@y", "id": "u1", "expiryTime": 0, "limitIp": 1, "flow": ""}],
+    )
+    inv_b = _inbound_dict(
+        20, "vless",
+        [{"email": "x@y", "id": "u2", "expiryTime": 0, "limitIp": 1, "flow": ""}],
+    )
+    x3._panel.list_inbounds = AsyncMock(return_value=[inv_a, inv_b])
 
-            x3 = X3.__new__(X3)
-            x3._logged_in = True
-            x3._api = MagicMock()
-            c1 = MagicMock(email="x@y", id="u1", expiry_time=0, limit_ip=1, flow="")
-            c2 = MagicMock(email="x@y", id="u2", expiry_time=0, limit_ip=1, flow="")
-            inv_a = MagicMock(id=10, settings=MagicMock(clients=[c1]))
-            inv_b = MagicMock(id=20, settings=MagicMock(clients=[c2]))
-            x3._api.inbound.get_list = AsyncMock(return_value=[inv_a, inv_b])
-            x3._api.client.get_by_email = AsyncMock()
-            x3._api.login = AsyncMock()
-            x3._ensure_login = AsyncMock()
-            x3._ensure_client_id_for_update = MagicMock(side_effect=lambda c: c)
-            x3._post_inbound_update_client = AsyncMock()
-
-            ok, did_upd = await x3.reconcile_client(
-                "x@y",
-                expiry_sec=100,
-                limit_ip=2,
-                flow_from_config="xtls-rprx-vision",
-            )
-            assert ok is True
-            assert did_upd is True
-            x3._api.client.get_by_email.assert_not_called()
-            assert x3._post_inbound_update_client.await_count == 2
-            calls = x3._post_inbound_update_client.await_args_list
-            ids = sorted(c.kwargs.get("inbound_id_override") for c in calls)
-            assert ids == [10, 20]
+    ok, did_upd = await x3.reconcile_client(
+        "x@y",
+        expiry_sec=100,
+        limit_ip=2,
+        flow_from_config="xtls-rprx-vision",
+    )
+    assert ok is True
+    assert did_upd is True
+    assert x3._post_inbound_update_client.await_count == 2
+    calls = x3._post_inbound_update_client.await_args_list
+    ids = sorted(c.kwargs.get("inbound_id_override") for c in calls)
+    assert ids == [10, 20]
 
 
 @pytest.mark.asyncio
-async def test_reconcile_client_fallback_get_by_email_when_not_in_list():
-    """Пустой список inbound / нет email в clients — fallback на get_by_email."""
-    with patch("daralla_backend.services.xui_service.PY3XUI_AVAILABLE", True):
-        with patch("daralla_backend.services.xui_service.AsyncApi"):
-            from daralla_backend.services.xui_service import X3
+async def test_reconcile_client_returns_false_when_email_not_found():
+    """Пустой список inbound / нет email в clients — reconcile сообщает False."""
+    x3 = _make_x3()
+    x3._panel.list_inbounds = AsyncMock(return_value=[])
 
-            x3 = X3.__new__(X3)
-            x3._logged_in = True
-            x3._api = MagicMock()
-            mock_c = MagicMock()
-            mock_c.expiry_time = 0
-            mock_c.limit_ip = 1
-            mock_c.flow = ""
-            mock_c.id = "uuid"
-            mock_c.inbound_id = 5
-            x3._api.inbound.get_list = AsyncMock(return_value=[])
-            x3._api.client.get_by_email = AsyncMock(return_value=mock_c)
-            x3._api.login = AsyncMock()
-            x3._ensure_login = AsyncMock()
-            x3._ensure_client_id_for_update = MagicMock(side_effect=lambda c: c)
-            x3._post_inbound_update_client = AsyncMock()
-
-            ok, did_upd = await x3.reconcile_client(
-                "orphan@test",
-                expiry_sec=100,
-                limit_ip=2,
-                flow_from_config="",
-            )
-            assert ok is True
-            assert did_upd is True
-            x3._api.client.get_by_email.assert_called_once_with("orphan@test")
-            x3._post_inbound_update_client.assert_called_once()
+    ok, did_upd = await x3.reconcile_client(
+        "orphan@test",
+        expiry_sec=100,
+        limit_ip=2,
+        flow_from_config="",
+    )
+    assert ok is False
+    assert did_upd is False
+    x3._post_inbound_update_client.assert_not_called()

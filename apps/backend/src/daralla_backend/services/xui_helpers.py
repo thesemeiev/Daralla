@@ -1,21 +1,39 @@
-"""Low-level helper functions for xui_service."""
+"""Low-level helper functions for xui_service.
+
+Все вспомогательные функции работают с сырым ответом 3x-ui (dict / list / str).
+Зависимостей на py3xui-модели больше нет.
+"""
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from typing import Any, Dict, Optional
 
 
 def client_to_api_dict(c: Any) -> dict:
-    """Convert py3xui client (or dict) to 3x-ui API dict (camelCase keys)."""
-    if hasattr(c, "model_dump") and callable(getattr(c, "model_dump", None)):
+    """Нормализует словарь клиента 3x-ui к camelCase ключам.
+
+    Принимает:
+      - dict от panel API,
+      - lightweight-объект (для совместимости с тестами/моками).
+    """
+    if isinstance(c, dict):
+        d = dict(c)
+    elif hasattr(c, "model_dump") and callable(getattr(c, "model_dump", None)):
+        # Лёгкая совместимость с тестами/моками, у которых есть model_dump().
         maybe_dump = c.model_dump()
         d = maybe_dump if isinstance(maybe_dump, dict) else {}
-    elif isinstance(c, dict):
-        d = dict(c)
     else:
         d = {}
+        for attr in (
+            "email", "id", "uuid", "expiry_time", "expiryTime",
+            "limit_ip", "limitIp", "flow", "auth", "password",
+            "sub_id", "subId", "tg_id", "tgId", "total_gb", "totalGB",
+            "enable",
+        ):
+            if hasattr(c, attr):
+                d[attr] = getattr(c, attr)
+
     key_map = {
         "expiry_time": "expiryTime",
         "limit_ip": "limitIp",
@@ -23,27 +41,16 @@ def client_to_api_dict(c: Any) -> dict:
         "tg_id": "tgId",
         "total_gb": "totalGB",
     }
-    out = {}
-    for k, v in d.items():
-        out[key_map.get(k, k)] = v
-    if not isinstance(c, dict) and not d:
-        # Fallback for lightweight objects/mocks that expose attrs but no model_dump.
-        for attr in ("email", "id", "uuid", "expiry_time", "expiryTime", "limit_ip", "limitIp", "flow", "auth", "password"):
-            if hasattr(c, attr):
-                d[attr] = getattr(c, attr)
-
-    if not isinstance(c, dict) and hasattr(c, "flow"):
-        raw = getattr(c, "flow", None)
-        out["flow"] = "" if raw is None else str(raw).strip()
+    out = {key_map.get(k, k): v for k, v in d.items()}
     return out
 
 
 def clients_from_settings_payload(settings: Dict[str, Any]) -> list[dict]:
     """
-    Return unified client rows from 3x-ui settings JSON.
+    Возвращает плоский список клиентов из 3x-ui settings JSON.
 
-    Some protocols/panel versions store users under ``users`` instead of ``clients``
-    (notably hysteria2). We normalize both into one list.
+    Часть протоколов (особенно hysteria2) хранит клиентов в `users`,
+    а не в `clients`; нормализуем оба варианта в один список.
     """
     rows: list[dict] = []
     for key in ("clients", "users"):
@@ -51,10 +58,7 @@ def clients_from_settings_payload(settings: Dict[str, Any]) -> list[dict]:
         if not isinstance(raw, Iterable) or isinstance(raw, (str, bytes, dict)):
             continue
         for item in raw:
-            if isinstance(item, dict):
-                rows.append(client_to_api_dict(item))
-            else:
-                rows.append(client_to_api_dict(item))
+            rows.append(client_to_api_dict(item))
     return rows
 
 
@@ -65,7 +69,7 @@ def normalize_client_flow_value(v: Any) -> str:
 
 
 def dedupe_flow_json_key(d: Dict[str, Any]) -> None:
-    """Keep only lower-case flow key."""
+    """Оставляет только lower-case ключ `flow`."""
     for k in list(d.keys()):
         if isinstance(k, str) and k != "flow" and k.lower() == "flow":
             d.pop(k, None)
@@ -76,15 +80,13 @@ def panel_client_settings_dict(
     flow_override: Optional[str] = None,
     protocol_hint: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build clients[] payload for addClient/updateClient."""
+    """Готовит запись `clients[0]` для запросов addClient/updateClient."""
     if isinstance(c, dict):
         d = dict(c)
-    elif hasattr(c, "model_dump"):
+    elif hasattr(c, "model_dump") and callable(getattr(c, "model_dump", None)):
         d = c.model_dump(by_alias=True, mode="json", exclude_defaults=False)
     else:
         d = {}
-    # Keep panel JSON keys canonical. Reconcile code may mutate snake_case attrs
-    # when working with mixed object/dict snapshots.
     if "expiry_time" in d:
         d["expiryTime"] = d.get("expiry_time")
         d.pop("expiry_time", None)
@@ -105,7 +107,7 @@ def panel_client_settings_dict(
     if flow_override is not None and supports_flow:
         d["flow"] = str(flow_override).strip() if str(flow_override).strip() else ""
     elif supports_flow:
-        fv = getattr(c, "flow", None)
+        fv = d.get("flow", None) if isinstance(c, dict) else getattr(c, "flow", None)
         d["flow"] = "" if fv is None else str(fv).strip()
     else:
         d.pop("flow", None)
@@ -128,7 +130,7 @@ def _limit_ip_matches_panel(panel_limit: Any, device_limit: int) -> bool:
 
 
 def _panel_enable_is_disabled(panel_enable: Any) -> bool:
-    """Best-effort parse panel 'enable' value; True means client is disabled on panel."""
+    """Best-effort parse: True если клиент на панели в статусе disabled."""
     if panel_enable is None:
         return False
     if isinstance(panel_enable, bool):
@@ -140,7 +142,6 @@ def _panel_enable_is_disabled(panel_enable: Any) -> bool:
         return True
     if s in ("true", "1", "on", "yes", "enabled"):
         return False
-    # Unknown textual state: don't treat as disabled to avoid false positives.
     return False
 
 
@@ -156,18 +157,17 @@ def panel_snapshot_matches_desired(
     limit_ip: int,
     flow_from_config: Optional[str],
 ) -> bool:
-    """True if panel list() snapshot matches desired state."""
+    """True если снимок клиента из list() соответствует желаемому состоянию."""
     if not panel_snapshot.get("on_panel"):
         return False
     protocol = str(panel_snapshot.get("protocol") or "").strip().lower()
     if protocol in ("hysteria", "hysteria2", "hy2"):
-        # For hy2 we write auth only, but tolerate legacy password on reads.
-        # Missing both means broken row and requires reconcile.
+        # У hy2 секрет хранится в `auth`; на старых записях может встречаться `password`.
+        # Если оба пусты — строка "битая" и нуждается в reconcile.
         auth_val = str(panel_snapshot.get("auth") or "").strip()
         password_val = str(panel_snapshot.get("password") or "").strip()
         if not (auth_val or password_val):
             return False
-    # Критично: even with matching expiry/limit/flow, disabled client must be reconciled.
     if _panel_enable_is_disabled(panel_snapshot.get("enable")):
         return False
     se = panel_snapshot.get("expiry_sec")
@@ -178,43 +178,3 @@ def panel_snapshot_matches_desired(
     if not flow_matches_desired(panel_snapshot.get("flow"), flow_from_config):
         return False
     return True
-
-
-def inbound_to_dict(inv: Any) -> dict:
-    """Convert py3xui Inbound object to list() payload entry."""
-    settings = getattr(inv, "settings", None)
-    clients = []
-    if settings is not None:
-        raw_clients = (getattr(settings, "clients", None) or []) + (getattr(settings, "users", None) or [])
-        for c in raw_clients:
-            clients.append(client_to_api_dict(c))
-    settings_str = json.dumps({"clients": clients})
-
-    stream = getattr(inv, "stream_settings", None)
-    if stream is not None and hasattr(stream, "model_dump"):
-        stream_dict = stream.model_dump()
-    elif isinstance(stream, dict):
-        stream_dict = stream
-    else:
-        stream_dict = {}
-
-    client_stats = getattr(inv, "client_stats", None) or []
-    client_stats_list = []
-    for s in client_stats:
-        if hasattr(s, "model_dump"):
-            client_stats_list.append(s.model_dump())
-        elif isinstance(s, dict):
-            client_stats_list.append(s)
-        else:
-            client_stats_list.append(client_to_api_dict(s))
-
-    return {
-        "id": getattr(inv, "id", None),
-        "protocol": getattr(inv, "protocol", "vless"),
-        "port": getattr(inv, "port", 443),
-        "settings": settings_str,
-        "streamSettings": stream_dict,
-        "clientStats": client_stats_list if client_stats_list else [],
-        "enable": getattr(inv, "enable", True),
-        "remark": getattr(inv, "remark", ""),
-    }

@@ -10,7 +10,8 @@
 подписок: Telegram-бот (python-telegram-bot, long polling), HTTP-сервер
 (Quart + Hypercorn) для вебхуков платёжных систем, REST API для веб-клиента
 и Mini App, статика SPA из каталога apps/frontend/webapp/. Состояние хранится в SQLite
-(daralla.db); панели 3x-ui обслуживаются через py3xui.
+(daralla.db); панели 3x-ui обслуживаются собственным HTTP-клиентом
+(apps/backend/src/daralla_backend/services/xui_panel_client.py).
 
 Доменная модель в целом последовательная: пользователи (users, привязка
 Telegram), подписки (subscriptions + subscription_servers), платежи
@@ -93,7 +94,7 @@ subscription_manager) уже заполнены после ensure_db_and_servers
   • Документация README с диаграммой и таблицей env.
   • Обработка продления подписки: сначала обновление expires_at в БД, затем
     синхронизация на серверы — правильный порядок для согласованности.
-  • Логирование с ротацией, снижение уровня шума httpx/py3xui.
+  • Логирование с ротацией, снижение уровня шума httpx.
 
 
 5. РИСКИ (БЕЗОПАСНОСТЬ, НАДЁЖНОСТЬ, ОПЕРАЦИИ)

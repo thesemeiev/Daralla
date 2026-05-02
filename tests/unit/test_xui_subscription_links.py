@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -34,11 +33,6 @@ def _make_x3_for_subscription_links() -> X3:
     x3.subscription_url = None
     x3._ensure_login = AsyncMock(return_value=None)
     x3.list = AsyncMock(return_value={"success": True, "obj": []})
-    x3._api = SimpleNamespace(
-        client=SimpleNamespace(
-            get_by_email=AsyncMock(return_value=SimpleNamespace(sub_id="sub-token-1"))
-        )
-    )
     return x3
 
 
@@ -56,7 +50,9 @@ async def test_get_subscription_links_accepts_hysteria2_and_tuic(monkeypatch):
         lambda **kwargs: _FakeAsyncClient(_FakeResponse(200, payload)),
     )
 
-    links = await x3.get_subscription_links("user@example.com")
+    links = await x3.get_subscription_links(
+        "user@example.com", subscription_token="sub-token-1",
+    )
 
     assert links == [
         "hysteria2://pass@host:443?sni=example.com#Node-1",
@@ -81,7 +77,9 @@ async def test_get_subscription_links_keeps_mixed_protocols_and_skips_garbage(mo
         lambda **kwargs: _FakeAsyncClient(_FakeResponse(200, payload)),
     )
 
-    links = await x3.get_subscription_links("user@example.com", server_name="Unified")
+    links = await x3.get_subscription_links(
+        "user@example.com", server_name="Unified", subscription_token="sub-token-1",
+    )
 
     assert links == [
         "vless://uuid@host:443?encryption=none#Unified",

@@ -1,6 +1,9 @@
 """
-Сервис для работы с X-UI API через библиотеку py3xui (AsyncApi).
-Сохраняет прежний публичный интерфейс класса X3 для совместимости с кодом проекта.
+Сервис работы с панелью 3x-ui через собственный HTTP-клиент (XUiPanelClient).
+
+Раньше использовалась библиотека py3xui, но она добавляла Pydantic-валидацию
+поверх ответов панели и ломалась на «грязных» инбаундах (например, hy2 без
+обязательного `enable`). Сейчас весь IO идёт напрямую через panel REST API.
 """
 import asyncio
 import base64
@@ -9,22 +12,21 @@ import json
 import logging
 import os
 import re
-import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .xui_helpers import (
     clients_from_settings_payload,
     client_to_api_dict,
     flow_matches_desired,
-    inbound_to_dict,
     panel_client_settings_dict,
     panel_snapshot_matches_desired,
 )
+from .xui_panel_client import XUiPanelClient
 from ..utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
@@ -35,95 +37,6 @@ _PASSWORD_BASED_PROTOCOLS = {"trojan", "tuic", "hysteria2"}
 # Backward-compatibility aliases for existing tests/imports.
 _flow_matches_desired = flow_matches_desired
 _panel_snapshot_matches_desired = panel_snapshot_matches_desired
-
-try:
-    _XUI_LIST_DB_LOCK_RETRIES = max(2, min(int(os.getenv("XUI_LIST_DB_LOCK_RETRIES", "6")), 15))
-except ValueError:
-    _XUI_LIST_DB_LOCK_RETRIES = 6
-
-
-def _before_sleep_xui_list(retry_state) -> None:
-    exc = retry_state.outcome.exception() if retry_state.outcome else None
-    host = ""
-    try:
-        if retry_state.args:
-            host = getattr(retry_state.args[0], "host", "") or ""
-    except Exception:
-        pass
-    logger.warning(
-        "X-UI %s: inbound list — SQLite database locked, попытка %s/%s, повтор после задержки: %s",
-        host or "?",
-        retry_state.attempt_number,
-        _XUI_LIST_DB_LOCK_RETRIES,
-        exc,
-    )
-
-
-def _is_xui_sqlite_locked_error(exc: BaseException) -> bool:
-    """Панель 3x-ui на SQLite иногда отвечает «database is locked» при пиковой нагрузке."""
-    if not isinstance(exc, ValueError):
-        return False
-    return "database is locked" in str(exc).lower()
-
-
-def _value_error_client_absent_on_panel(exc: ValueError) -> bool:
-    """
-    py3xui при get_by_email может кинуть ValueError, если клиента нет на этой ноде
-    (текст от 3x-ui вроде «Inbound Not Found For Email» / «Error getting traffics»).
-    Это не сбой сети — на панели просто нечего удалять.
-    """
-    msg = str(exc).lower()
-    return (
-        "not found for email" in msg
-        or "inbound not found" in msg
-        or ("error getting traffics" in msg and "not found" in msg)
-    )
-
-
-# Опциональный импорт py3xui — при отсутствии библиотеки будет понятная ошибка
-try:
-    from py3xui import AsyncApi
-    from py3xui import Client as Py3xuiClient
-    PY3XUI_AVAILABLE = True
-except ImportError:
-    PY3XUI_AVAILABLE = False
-    AsyncApi = None
-    Py3xuiClient = None
-
-_py3xui_timeout_patch_applied = False
-
-
-def _float_env(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, str(default)))
-    except (TypeError, ValueError):
-        return default
-
-
-def _apply_py3xui_request_timeout() -> None:
-    """
-    py3xui по умолчанию не передаёт timeout в httpx (≈5 с) — при удалённых панелях и пиках нагрузки
-    сыпятся предупреждения «Request to … failed: , retry» (у части исключений str(e) пустой).
-    Подмешиваем увеличенный timeout ко всем запросам AsyncBaseApi.
-    """
-    global _py3xui_timeout_patch_applied
-    if not PY3XUI_AVAILABLE or _py3xui_timeout_patch_applied:
-        return
-    from py3xui.async_api.async_api_base import AsyncBaseApi
-
-    total = max(5.0, _float_env("XUI_HTTP_TIMEOUT_TOTAL", 30.0))
-    connect = max(3.0, _float_env("XUI_HTTP_TIMEOUT_CONNECT", 15.0))
-    pool = max(2.0, _float_env("XUI_HTTP_TIMEOUT_POOL", 10.0))
-    timeout = httpx.Timeout(total, connect=connect, pool=pool)
-
-    _orig = AsyncBaseApi._request_with_retry
-
-    async def _request_with_timeout(self, method, url, headers, **kwargs):
-        kwargs.setdefault("timeout", timeout)
-        return await _orig(self, method, url, headers, **kwargs)
-
-    AsyncBaseApi._request_with_retry = _request_with_timeout
-    _py3xui_timeout_patch_applied = True
 
 
 class X3:
@@ -205,23 +118,19 @@ class X3:
         return None
 
     @staticmethod
-    def _settings_clients_obj(settings: Any) -> list[Any]:
-        clients = list(getattr(settings, "clients", None) or [])
-        users = list(getattr(settings, "users", None) or [])
-        return clients + users
-
-    @staticmethod
     def _extract_hysteria_version(inv: Any) -> Optional[int]:
-        settings = getattr(inv, "settings", None)
+        settings = X3._client_get(inv, "settings", None)
         if settings is None:
             return None
+        if isinstance(settings, str):
+            try:
+                settings = json.loads(settings)
+            except (json.JSONDecodeError, TypeError):
+                return None
         if isinstance(settings, dict):
             raw = settings.get("version")
-            try:
-                return int(raw) if raw is not None else None
-            except (TypeError, ValueError):
-                return None
-        raw = getattr(settings, "version", None)
+        else:
+            raw = getattr(settings, "version", None)
         try:
             return int(raw) if raw is not None else None
         except (TypeError, ValueError):
@@ -239,9 +148,10 @@ class X3:
             return "hysteria2"
         return p
 
-    """
-    Обёртка над py3xui.AsyncApi с тем же публичным интерфейсом, что и прежний X3.
-    Поддерживает vpn_host, subscription_port, subscription_url для link/subscription.
+    """X3 — бизнес-обёртка над `XUiPanelClient` (тонкий HTTP-клиент 3x-ui).
+
+    Сохраняет публичный интерфейс прежнего X3 для совместимости со всем кодом проекта
+    (server_manager, admin_servers_service, subscription_manager и т.д.).
     """
 
     def __init__(
@@ -253,11 +163,6 @@ class X3:
         subscription_port: int = 2096,
         subscription_url: Optional[str] = None,
     ):
-        if not PY3XUI_AVAILABLE:
-            raise RuntimeError(
-                "py3xui не установлен. Выполните: pip install py3xui>=0.5.5"
-            )
-        _apply_py3xui_request_timeout()
         self.login = login
         self.password = password
         self.host = host.rstrip("/")
@@ -265,122 +170,82 @@ class X3:
         self.subscription_port = subscription_port if subscription_port is not None else 2096
         self.subscription_url = (subscription_url or "").strip() or None
         use_tls_verify = host.startswith("https://")
-        self._api = AsyncApi(host, login, password, use_tls_verify=use_tls_verify)
         try:
             mr = int(os.getenv("XUI_PANEL_MAX_RETRIES", "5"))
         except ValueError:
             mr = 5
         mr = max(1, min(mr, 10))
-        for sub in (self._api.client, self._api.inbound, self._api.database, self._api.server):
-            sub.max_retries = mr
-        self._logged_in = False
-        self._login_ts: float = 0.0
         self._session_ttl: float = float(os.getenv("XUI_SESSION_TTL_SEC", "1800"))
-        logger.debug("X3 (py3xui) создан для %s", host)
+        self._panel = XUiPanelClient(
+            host=host,
+            login=login,
+            password=password,
+            verify_tls=use_tls_verify,
+            max_retries=mr,
+            session_ttl_sec=self._session_ttl,
+        )
+        logger.debug("X3 создан для %s", host)
 
     async def _ensure_login(self) -> None:
-        now = time.monotonic()
-        if self._logged_in and (now - self._login_ts) >= self._session_ttl:
-            logger.debug("Сессия панели %s устарела (%.0f с), перелогин", self.host, now - self._login_ts)
-            self._logged_in = False
-        if not self._logged_in:
-            await self._api.login()
-            self._logged_in = True
-            self._login_ts = time.monotonic()
+        """Совместимость со старым кодом: логин делегируется panel-клиенту."""
+        await self._panel._ensure_login()
 
     async def _relogin(self) -> None:
         """Принудительный повторный логин (при 401/session expired)."""
-        self._logged_in = False
-        await self._api.login()
-        self._logged_in = True
-        self._login_ts = time.monotonic()
+        await self._panel._relogin()
 
     async def _ensure_connected(self) -> None:
         """Алиас для совместимости с прежним кодом."""
         await self._ensure_login()
 
-    @retry(
-        retry=retry_if_exception(_is_xui_sqlite_locked_error),
-        stop=stop_after_attempt(_XUI_LIST_DB_LOCK_RETRIES),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
-        before_sleep=_before_sleep_xui_list,
-        reraise=True,
-    )
     async def list(self, timeout: int = 15) -> dict:
-        """Возвращает {success: True, obj: [inbound_dict, ...]} в формате 3x-ui API."""
-        await self._ensure_login()
-        inbounds = await self._api.inbound.get_list()
-        obj = [inbound_to_dict(inv) for inv in inbounds]
-        return {"success": True, "obj": obj}
+        """Возвращает {success: True, obj: [inbound_dict, ...]} в формате 3x-ui API.
+
+        Чтение идёт через собственный HTTP-клиент панели (XUiPanelClient),
+        без Pydantic-валидации.
+        """
+        obj = await self._panel.list_inbounds()
+        return {"success": True, "obj": obj or []}
 
     async def list_quick(self, timeout: int = 10) -> dict:
         """Быстрая проверка доступности (для health check)."""
         return await self.list(timeout=timeout)
 
     async def client_exists(self, user_email: str) -> bool:
-        """Проверяет наличие клиента по email. При ошибке «Inbound Not Found» считаем, что клиента нет."""
-        # Prefer list snapshot for protocols where getClientTraffics may be incomplete (e.g. hysteria2).
+        """Проверяет наличие клиента по email через снимок списка inbound."""
         try:
             data = await self.list()
-            for inbound in data.get("obj", []):
-                try:
-                    settings = json.loads(inbound.get("settings", "{}"))
-                except (json.JSONDecodeError, TypeError, AttributeError):
-                    continue
-                for client in clients_from_settings_payload(settings):
-                    if str(client.get("email", "")).strip() == str(user_email).strip():
-                        return True
         except Exception:
-            logger.debug("client_exists list-based check failed, fallback to get_by_email", exc_info=True)
-
-        await self._ensure_login()
-        try:
-            c = await self._api.client.get_by_email(user_email)
-            return c is not None
-        except Exception as e:
-            # Панель возвращает "Inbound Not Found For Email" когда клиента ещё нет — не исключение, а норма
-            msg = str(e).lower()
-            if "not found" in msg or "inbound not found" in msg or "error getting traffics" in msg:
-                logger.debug("Клиент %s не найден на панели (ожидаемо при создании): %s", user_email, e)
-                return False
-            raise
+            logger.debug("client_exists list call failed", exc_info=True)
+            return False
+        target = str(user_email).strip()
+        for inbound in data.get("obj", []):
+            try:
+                settings = json.loads(inbound.get("settings", "{}"))
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                continue
+            for client in clients_from_settings_payload(settings):
+                if str(client.get("email", "")).strip() == target:
+                    return True
+        return False
 
     async def get_client_expiry_time(self, user_email: str, timeout: int = 15) -> Optional[int]:
-        await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        if c is None:
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             return None
-        expiry_ms = getattr(c, "expiry_time", None) or getattr(c, "expiryTime", 0)
-        if not expiry_ms or expiry_ms <= 0:
+        _, _, panel_client = snap
+        expiry_ms = panel_client.get("expiryTime") or 0
+        if not expiry_ms or int(expiry_ms) <= 0:
             return None
         return int(expiry_ms) // 1000
 
     async def get_client_info(self, user_email: str, timeout: int = 15) -> Optional[dict]:
-        await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        if c is None:
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             return None
-        inbound_id = getattr(c, "inbound_id", None)
-        if inbound_id is None:
-            inbounds = await self._api.inbound.get_list()
-            for inv in inbounds:
-                clients = self._settings_clients_obj(getattr(inv, "settings", None))
-                for cl in clients:
-                    if getattr(cl, "email", None) == user_email:
-                        inbound_id = getattr(inv, "id", None)
-                        break
-                if inbound_id is not None:
-                    break
-        protocol = "vless"
-        if inbound_id is not None:
-            try:
-                inv = await self._api.inbound.get_by_id(int(inbound_id))
-                if inv:
-                    protocol = getattr(inv, "protocol", "vless") or "vless"
-            except Exception:
-                pass
+        inbound_id, protocol, panel_client = snap
         return {
-            "client": client_to_api_dict(c),
+            "client": client_to_api_dict(panel_client),
             "inbound_id": inbound_id,
             "protocol": protocol.lower(),
         }
@@ -405,13 +270,18 @@ class X3:
         return result
 
     async def _find_inbound_id_for_client(self, user_email: str) -> Optional[int]:
-        await self._ensure_login()
-        inbounds = await self._api.inbound.get_list()
+        inbounds = await self._panel.list_inbounds()
+        target = str(user_email).strip()
         for inv in inbounds:
-            clients = self._settings_clients_obj(getattr(inv, "settings", None))
-            for c in clients:
-                if getattr(c, "email", None) == user_email:
-                    return getattr(inv, "id", None)
+            try:
+                settings = json.loads(inv.get("settings") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for c in clients_from_settings_payload(settings):
+                if str(c.get("email", "")).strip() == target:
+                    inv_id = inv.get("id")
+                    if inv_id is not None:
+                        return int(inv_id)
         return None
 
     @staticmethod
@@ -449,7 +319,7 @@ class X3:
 
     @staticmethod
     def _extract_protocol(inv: Any) -> str:
-        raw = getattr(inv, "protocol", "vless")
+        raw = X3._client_get(inv, "protocol", "vless")
         if not isinstance(raw, str):
             raw = "vless"
         raw = (raw or "vless").strip().lower()
@@ -464,7 +334,7 @@ class X3:
     ) -> Tuple[Optional[int], Optional[str], Optional[str]]:
         if inbound_id is not None:
             for inv in inbounds:
-                if getattr(inv, "id", None) == inbound_id:
+                if self._client_get(inv, "id", None) == inbound_id:
                     protocol = self._extract_protocol(inv)
                     if protocol not in _SUPPORTED_PROTOCOLS:
                         return None, None, f"unsupported protocol for inbound_id={inbound_id}: {protocol}"
@@ -479,14 +349,14 @@ class X3:
             for inv in inbounds:
                 protocol = self._extract_protocol(inv)
                 if protocol == preferred:
-                    resolved_id = getattr(inv, "id", None)
+                    resolved_id = self._client_get(inv, "id", None)
                     if resolved_id is not None:
                         return int(resolved_id), protocol, None
             return None, None, f"no inbound with protocol={preferred}"
 
         for inv in inbounds:
             protocol = self._extract_protocol(inv)
-            resolved_id = getattr(inv, "id", None)
+            resolved_id = self._client_get(inv, "id", None)
             if resolved_id is not None and protocol in _SUPPORTED_PROTOCOLS:
                 return int(resolved_id), protocol, None
         return None, None, "no supported inbound found"
@@ -505,8 +375,7 @@ class X3:
         flow: Optional[str] = None,
         target_protocol: Optional[str] = None,
     ) -> Any:
-        await self._ensure_login()
-        inbounds = await self._api.inbound.get_list()
+        inbounds = await self._panel.list_inbounds()
         if not inbounds:
             return {"ok": False, "reason": "no_inbounds"}
         inbound_id_resolved, protocol, resolve_error = await self._resolve_target_inbound(
@@ -531,21 +400,14 @@ class X3:
             limit_ip=limit_ip_value,
             flow=flow,
         )
-        await self._post_inbound_add_clients(int(inbound_id_resolved), [payload])
+        await self._post_inbound_add_clients(
+            int(inbound_id_resolved), [payload], protocol_hint=protocol,
+        )
         return {
             "ok": True,
             "protocol": protocol,
             "inbound_id": int(inbound_id_resolved),
         }
-
-    @staticmethod
-    def _ensure_client_id_for_update(c: Any) -> Any:
-        """Панель 3x-ui для VLESS ожидает в теле update поле id = UUID. get_by_email возвращает id как число — подставляем uuid."""
-        uuid_val = X3._client_get(c, "uuid", None)
-        id_val = X3._client_get(c, "id", None)
-        if uuid_val and (id_val is None or id_val == "" or isinstance(id_val, int)):
-            X3._client_set(c, "id", uuid_val)
-        return c
 
     @classmethod
     def _client_url_id_for_protocol(cls, protocol: str, c: Any) -> Optional[str]:
@@ -603,22 +465,28 @@ class X3:
                     return cl
         return None
 
-    async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
-        """addClient: как py3xui, но flow всегда в JSON (см. panel_client_settings_dict)."""
-        await self._ensure_login()
-        api = self._api.client
-        protocol_hint: Optional[str] = None
-        try:
-            inv = await self._api.inbound.get_by_id(int(inbound_id))
-            protocol_hint = self._extract_protocol(inv)
-        except Exception:
-            protocol_hint = None
-        settings = {
-            "clients": [panel_client_settings_dict(c, protocol_hint=protocol_hint) for c in clients]
-        }
-        data = {"id": int(inbound_id), "settings": json.dumps(settings)}
-        url = api._url("panel/api/inbounds/addClient")
-        await api._post(url, {"Accept": "application/json"}, data)
+    async def _post_inbound_add_clients(
+        self,
+        inbound_id: int,
+        clients: List[Any],
+        *,
+        protocol_hint: Optional[str] = None,
+    ) -> None:
+        """addClient через собственный HTTP-клиент панели.
+
+        protocol_hint: если задан — используется для нормализации payload
+        (без protocol_hint некоторые поля могут быть пропущены/добавлены не для того протокола).
+        """
+        if protocol_hint is None:
+            try:
+                inv = await self._panel.get_inbound(int(inbound_id))
+                if inv is not None:
+                    protocol_hint = self._extract_protocol(inv)
+            except Exception:
+                protocol_hint = None
+        for c in clients:
+            payload = panel_client_settings_dict(c, protocol_hint=protocol_hint)
+            await self._panel.add_client(int(inbound_id), payload)
 
     async def _post_inbound_update_client(
         self,
@@ -627,14 +495,17 @@ class X3:
         flow_override: Optional[str] = None,
         protocol_hint: Optional[str] = None,
     ) -> None:
-        """updateClient: как py3xui, но flow всегда в JSON — иначе сброс flow на панели не работает.
+        """updateClient через собственный HTTP-клиент панели — единый линейный путь.
 
-        inbound_id_override: если задан, подставляется в тело запроса вместо c.inbound_id
-        (нужно при обновлении записи из снимка inbound: у клиента в settings часто нет inbound_id).
+        Идея: у каждого протокола в URL `updateClient/:clientId` идёт строго
+        своё поле клиента (см. `_client_url_id_for_protocol`). Сначала пытаемся
+        взять идентификатор из переданного `c`. Если не получилось — читаем
+        inbound, находим клиента по email, копируем недостающие
+        протокольные поля (auth/password/id/uuid) и пробуем снова.
 
-        flow_override: явное значение flow в JSON (массовый sync); иначе берётся с объекта c.
+        inbound_id_override: если задан — используется как inbound_id в URL
+        (для случаев, когда у `c` нет `inbound_id`).
         """
-        await self._ensure_login()
         protocol_norm = (
             self._normalize_protocol_name((protocol_hint or "").strip().lower(), None)
             if protocol_hint
@@ -651,87 +522,50 @@ class X3:
             protocol_from_payload = str(self._client_get(c, "protocol", "") or "").strip().lower()
             if protocol_from_payload:
                 protocol_norm = self._normalize_protocol_name(protocol_from_payload, None)
-        # get_by_email часто не возвращает protocol, особенно на flaky hy2 панелях.
-        # Если знаем inbound_id — подтягиваем протокол inbound, чтобы не тащить flow
-        # в non-vless update path.
-        if not protocol_norm and inbound_id is not None:
-            try:
-                inv = await self._api.inbound.get_by_id(int(inbound_id))
-                protocol_norm = self._extract_protocol(inv)
-            except Exception:
-                pass
-        self._ensure_client_id_for_update(c)
-        api = self._api.client
+
         email = self._client_get(c, "email", None)
-        enable_override = self._coerce_optional_bool(self._client_get(c, "enable", None))
+        client_url_id: Optional[str] = (
+            self._client_url_id_for_protocol(protocol_norm, c) if protocol_norm else None
+        )
 
-        client_url_id: Optional[str] = self._client_url_id_for_protocol(protocol_norm, c)
-
-        if not client_url_id and email:
-            resolved = None
+        # Если протокол неизвестен ИЛИ нет clientId для URL — читаем inbound и тянем
+        # текущие данные клиента с панели.
+        if (not protocol_norm) or (not client_url_id):
             try:
-                resolved = await self._api.client.get_by_email(str(email))
-            except ValueError as exc:
-                if not _value_error_client_absent_on_panel(exc):
-                    raise
-            if resolved is not None:
-                resolved.expiry_time = self._client_get(c, "expiry_time", getattr(resolved, "expiry_time", None))
-                resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
-                if flow_override is not None:
-                    resolved.flow = flow_override
-                self._ensure_client_id_for_update(resolved)
-                c = resolved
-                inbound_id = (
-                    int(inbound_id_override)
-                    if inbound_id_override is not None
-                    else getattr(resolved, "inbound_id", inbound_id)
-                )
-                client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
-
-        # Третий уровень резолва: get_by_email на части протоколов (особенно hy2)
-        # не возвращает auth/password — читаем inbound напрямую и копируем нужные поля
-        # из его settings в наш объект клиента.
-        if not client_url_id and inbound_id is not None and email:
-            try:
-                inv = await self._api.inbound.get_by_id(int(inbound_id))
-                panel_client = self._find_client_in_inbound_by_email(inv, str(email))
-                if panel_client is not None:
-                    for key in ("auth", "password", "id", "uuid"):
-                        val = self._client_get(panel_client, key, None)
-                        if val is None:
-                            continue
-                        if str(val).strip() == "":
-                            continue
-                        self._client_set(c, key, val)
-                    self._ensure_client_id_for_update(c)
-                    client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+                inv = await self._panel.get_inbound(int(inbound_id))
             except Exception:
+                inv = None
                 logger.debug(
-                    "updateClient: не удалось дотянуть identifier из inbound.settings "
-                    "(inbound_id=%s, email=%s)",
+                    "updateClient: не удалось прочитать inbound (inbound_id=%s)",
                     inbound_id,
-                    email or "-",
                     exc_info=True,
                 )
+            if inv is not None:
+                if not protocol_norm:
+                    protocol_norm = self._extract_protocol(inv)
+                if email and not client_url_id:
+                    panel_client = self._find_client_in_inbound_by_email(inv, str(email))
+                    if panel_client is not None:
+                        for key in ("auth", "password", "id", "uuid"):
+                            val = panel_client.get(key)
+                            if val is None or str(val).strip() == "":
+                                continue
+                            if not self._client_get(c, key, None):
+                                self._client_set(c, key, val)
+                        client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
 
         if not client_url_id:
             raise ValueError(
                 f"updateClient: empty client id for protocol={protocol_norm or 'unknown'} "
-                f"email={self._client_get(c, 'email', None)} inbound_id={inbound_id}"
+                f"email={email or '-'} inbound_id={inbound_id}"
             )
-        endpoint = f"panel/api/inbounds/updateClient/{client_url_id}"
-        settings = {
-            "clients": [
-                panel_client_settings_dict(
-                    c,
-                    flow_override=flow_override,
-                    protocol_hint=(protocol_norm or protocol_hint),
-                )
-            ]
-        }
-        data = {"id": int(inbound_id), "settings": json.dumps(settings)}
-        url = api._url(endpoint)
-        await api._post(url, {"Accept": "application/json"}, data)
+
+        body = panel_client_settings_dict(
+            c,
+            flow_override=flow_override,
+            protocol_hint=protocol_norm,
+        )
+        await self._panel.update_client(str(client_url_id), int(inbound_id), body)
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def reconcile_client(
@@ -786,83 +620,56 @@ class X3:
                 if str(em).strip() == needle:
                     work_items.append((int(inv_id), inv_protocol, cl))
 
-        if work_items:
-            for inbound_id, inbound_protocol, c in work_items:
-                self._client_set_expiry_ms(c, exp_ms)
-                self._client_set_limit_ip(c, li)
-                self._client_set(c, "enable", True)
-                if inbound_protocol == "vless":
-                    self._client_set(c, "flow", want_flow)
-                if inbound_protocol != "hysteria2":
-                    self._ensure_client_id_for_update(c)
-                await self._post_inbound_update_client(
-                    c,
-                    inbound_id_override=inbound_id,
-                    flow_override=want_flow if inbound_protocol == "vless" else None,
-                    protocol_hint=inbound_protocol,
-                )
-            return True, True
-
-        # Compatibility fallback: walk py3xui models directly (helps protocols/panels
-        # where list JSON normalization misses some rows).
-        inbounds_models = await self._api.inbound.get_list()
-        fallback_items: List[Tuple[int, str, Any]] = []
-        for inv in inbounds_models:
-            inv_id = getattr(inv, "id", None)
-            if inv_id is None:
-                continue
-            inv_protocol = self._extract_protocol(inv)
-            if target_inbound_id is not None and int(inv_id) != int(target_inbound_id):
-                continue
-            if wanted_protocol and inv_protocol != wanted_protocol:
-                continue
-            settings = getattr(inv, "settings", None)
-            clients = self._settings_clients_obj(settings)
-            for cl in clients:
-                em = getattr(cl, "email", None)
-                if em is None:
-                    continue
-                if str(em).strip() == needle:
-                    fallback_items.append((int(inv_id), inv_protocol, cl))
-
-        if fallback_items:
-            for inbound_id, inbound_protocol, c in fallback_items:
-                self._client_set_expiry_ms(c, exp_ms)
-                self._client_set_limit_ip(c, li)
-                self._client_set(c, "enable", True)
-                if inbound_protocol == "vless":
-                    self._client_set(c, "flow", want_flow)
-                if inbound_protocol != "hysteria2":
-                    self._ensure_client_id_for_update(c)
-                await self._post_inbound_update_client(
-                    c,
-                    inbound_id_override=inbound_id,
-                    flow_override=want_flow if inbound_protocol == "vless" else None,
-                    protocol_hint=inbound_protocol,
-                )
-            return True, True
-
-        try:
-            c = await self._api.client.get_by_email(user_email)
-        except ValueError as e:
-            if _value_error_client_absent_on_panel(e):
-                return False, False
-            raise
-        if c is None:
+        if not work_items:
+            # Клиент с этим email не существует ни в одном из подходящих inbound.
             return False, False
 
-        self._client_set_expiry_ms(c, exp_ms)
-        self._client_set_limit_ip(c, li)
-        c.enable = True
-        if not wanted_protocol or wanted_protocol == "vless":
-            c.flow = want_flow
-        self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(
-            c,
-            flow_override=want_flow if (not wanted_protocol or wanted_protocol == "vless") else None,
-            protocol_hint=(wanted_protocol or None),
-        )
+        for inbound_id, inbound_protocol, c in work_items:
+            self._client_set_expiry_ms(c, exp_ms)
+            self._client_set_limit_ip(c, li)
+            self._client_set(c, "enable", True)
+            if inbound_protocol == "vless":
+                self._client_set(c, "flow", want_flow)
+            await self._post_inbound_update_client(
+                c,
+                inbound_id_override=inbound_id,
+                flow_override=want_flow if inbound_protocol == "vless" else None,
+                protocol_hint=inbound_protocol,
+            )
         return True, True
+
+    async def _load_panel_client_snapshot(
+        self,
+        email: str,
+        *,
+        target_inbound_id: Optional[int] = None,
+    ) -> Optional[Tuple[int, str, Dict[str, Any]]]:
+        """Возвращает (inbound_id, protocol, client_dict) для клиента по email
+        или None, если клиент не найден ни в одном inbound.
+
+        Без py3xui: данные читаются через self._panel.list_inbounds() / get_inbound(),
+        клиент находится по email в settings.clients/users.
+        """
+        target = str(email).strip()
+        inbounds = await self._panel.list_inbounds()
+        for inv in inbounds:
+            inv_id = inv.get("id")
+            if inv_id is None:
+                continue
+            if target_inbound_id is not None and int(inv_id) != int(target_inbound_id):
+                continue
+            try:
+                settings = json.loads(inv.get("settings") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            clients = clients_from_settings_payload(settings)
+            for cl in clients:
+                if str(cl.get("email", "")).strip() == target:
+                    protocol = self._normalize_protocol_name(
+                        str(inv.get("protocol") or "vless").strip().lower(), None
+                    )
+                    return int(inv_id), protocol, cl
+        return None
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def extendClient(
@@ -872,20 +679,21 @@ class X3:
         timeout: int = 15,
         flow: Optional[str] = None,
     ) -> Optional[Any]:
-        await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        if c is None:
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             raise Exception(f"Клиент с email {user_email} не найден")
-        current_ms = getattr(c, "expiry_time", 0) or 0
+        inbound_id, protocol, panel_client = snap
+        current_ms = int(panel_client.get("expiryTime") or 0)
         if current_ms == 0:
             current_ms = int(datetime.datetime.now().timestamp() * 1000)
         new_ms = current_ms + (extend_days * 86400000)
+        c = dict(panel_client)
         self._client_set_expiry_ms(c, new_ms)
         if flow is not None:
-            c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
-        self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(c)
-        # Успех сигнализируется отсутствием исключения
+            c["flow"] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
+        await self._post_inbound_update_client(
+            c, inbound_id_override=inbound_id, protocol_hint=protocol,
+        )
         return True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
@@ -896,17 +704,17 @@ class X3:
         timeout: int = 15,
         flow: Optional[str] = None,
     ) -> Optional[Any]:
-        await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        if c is None:
-            # Клиент не найден — считаем, что нечего обновлять
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             return False
+        inbound_id, protocol, panel_client = snap
+        c = dict(panel_client)
         self._client_set_expiry_ms(c, expiry_timestamp * 1000)
         if flow is not None:
-            c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
-        self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(c)
-        # True — время истечения обновлено
+            c["flow"] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
+        await self._post_inbound_update_client(
+            c, inbound_id_override=inbound_id, protocol_hint=protocol,
+        )
         return True
 
     async def updateClientLimitIp(
@@ -916,16 +724,17 @@ class X3:
         timeout: int = 15,
         flow: Optional[str] = None,
     ) -> Optional[Any]:
-        await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        if c is None:
-            # Клиент не найден — limitIp обновлять нечему
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             return False
+        inbound_id, protocol, panel_client = snap
+        c = dict(panel_client)
         self._client_set_limit_ip(c, limit_ip)
         if flow is not None:
-            c.flow = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
-        self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(c)
+            c["flow"] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
+        await self._post_inbound_update_client(
+            c, inbound_id_override=inbound_id, protocol_hint=protocol,
+        )
         return True
 
     async def updateClientName(
@@ -934,115 +743,56 @@ class X3:
         new_name: str,
         timeout: int = 15,
     ) -> Any:
-        await self._ensure_login()
-        c = await self._api.client.get_by_email(user_email)
-        if c is None:
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             raise Exception(f"Клиент с email {user_email} не найден")
-        c.sub_id = new_name
-        self._ensure_client_id_for_update(c)
-        await self._post_inbound_update_client(c)
-        # Успех — отсутствие исключения
+        inbound_id, protocol, panel_client = snap
+        c = dict(panel_client)
+        c["subId"] = new_name
+        await self._post_inbound_update_client(
+            c, inbound_id_override=inbound_id, protocol_hint=protocol,
+        )
         return True
-
-    async def _post_inbound_del_client_by_email(self, inbound_id: int, email: str) -> None:
-        """Штатный клиентский эндпоинт 3x-ui: удалить клиента по email
-        внутри inbound, без перезаписи всего инбаунда.
-        """
-        await self._ensure_login()
-        api = self._api.client
-        endpoint = f"panel/api/inbounds/{int(inbound_id)}/delClientByEmail/{quote(str(email), safe='')}"
-        url = api._url(endpoint)
-        await api._post(url, {"Accept": "application/json"}, {})
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def deleteClient(self, user_email: str, timeout: int = 15) -> bool:
-        await self._ensure_login()
-        try:
-            c = await self._api.client.get_by_email(user_email)
-        except ValueError as e:
-            if _value_error_client_absent_on_panel(e):
-                logger.debug(
-                    "Клиент %s на этой панели не найден (нет inbound/email): %s — удаление не требуется",
-                    user_email,
-                    e,
-                )
-                return False
-            raise
-        if c is None:
-            logger.warning("Клиент с email=%s не найден для удаления", user_email)
-            # False — клиента по этому email нет на панели
-            return False
-        inbound_id = getattr(c, "inbound_id", None)
-        if inbound_id is None:
-            inbound_id = await self._find_inbound_id_for_client(user_email)
-        if inbound_id is None:
-            logger.warning("Не удалось определить inbound_id для клиента %s", user_email)
-            return False
-
-        # Определяем протокол inbound, чтобы выбрать правильный clientId для URL.
-        protocol_norm: str = ""
-        inv: Any = None
-        try:
-            inv = await self._api.inbound.get_by_id(int(inbound_id))
-            protocol_norm = self._extract_protocol(inv)
-        except Exception:
+        snap = await self._load_panel_client_snapshot(user_email)
+        if snap is None:
             logger.debug(
-                "deleteClient: не удалось получить protocol для inbound_id=%s",
-                inbound_id,
-                exc_info=True,
+                "deleteClient: клиент %s не найден ни в одном inbound — удаление не требуется",
+                user_email,
             )
-
-        self._ensure_client_id_for_update(c)
-        client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
-
-        # Если у объекта клиента нет нужного для протокола поля (часто у hy2/trojan/tuic),
-        # дотягиваем его из inbound.settings — без перезаписи инбаунда.
-        if not client_url_id and inv is not None:
-            panel_client = self._find_client_in_inbound_by_email(inv, str(user_email))
-            if panel_client is not None:
-                for key in ("auth", "password", "id", "uuid"):
-                    val = self._client_get(panel_client, key, None)
-                    if val is None or str(val).strip() == "":
-                        continue
-                    self._client_set(c, key, val)
-                self._ensure_client_id_for_update(c)
-                client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+            return False
+        inbound_id, protocol_norm, panel_client = snap
+        client_url_id = self._client_url_id_for_protocol(protocol_norm, panel_client)
 
         if client_url_id:
             try:
-                await self._api.client.delete(int(inbound_id), str(client_url_id))
+                await self._panel.delete_client(int(inbound_id), str(client_url_id))
                 logger.info(
                     "Клиент удалён: %s (inbound_id=%s, protocol=%s)",
-                    user_email,
-                    inbound_id,
-                    protocol_norm or "?",
+                    user_email, inbound_id, protocol_norm or "?",
                 )
                 return True
             except Exception as exc:
                 logger.warning(
-                    "deleteClient API failed for %s (inbound_id=%s, protocol=%s): %s; "
+                    "delete_client failed for %s (inbound_id=%s, protocol=%s): %s; "
                     "trying delClientByEmail",
-                    user_email,
-                    inbound_id,
-                    protocol_norm or "?",
-                    exc,
+                    user_email, inbound_id, protocol_norm or "?", exc,
                 )
 
-        # Fallback (без перезаписи inbound): штатная клиентская ручка delClientByEmail.
-        await self._post_inbound_del_client_by_email(int(inbound_id), str(user_email))
+        # Страховка: штатная клиентская ручка по email (не перезаписывает inbound).
+        await self._panel.delete_client_by_email(int(inbound_id), str(user_email))
         logger.info(
             "Клиент удалён через delClientByEmail: %s (inbound_id=%s, protocol=%s)",
-            user_email,
-            inbound_id,
-            protocol_norm or "?",
+            user_email, inbound_id, protocol_norm or "?",
         )
         return True
 
     async def get_online_clients_ids(self, timeout: int = 15) -> tuple:
         """Возвращает (set of email/ids, success)."""
-        await self._ensure_login()
         try:
-            emails = await self._api.client.online()
+            emails = await self._panel.online_emails()
             return set(emails or []), True
         except Exception as e:
             logger.warning("Ошибка получения онлайн клиентов: %s", e)
@@ -1112,17 +862,19 @@ class X3:
                         return mapped
 
         # Fallback: для Hysteria2 list().clientStats может быть пустым/неполным.
-        # get_by_email обычно возвращает актуальные up/down/total из panel API.
+        # Запрашиваем статистику конкретного клиента через штатный endpoint панели.
         try:
-            await self._ensure_login()
-            c = await self._api.client.get_by_email(target_email)
-            if c is not None:
-                mapped = self._extract_traffic_from_mapping(client_to_api_dict(c))
-                if mapped is not None:
-                    return mapped
+            stats = await self._panel.get_client_traffics_by_email(target_email)
         except Exception:
-            logger.debug("get_client_traffic fallback get_by_email failed for %s", target_email, exc_info=True)
-        return None
+            logger.debug(
+                "get_client_traffic fallback getClientTraffics failed for %s",
+                target_email,
+                exc_info=True,
+            )
+            return None
+        if stats is None:
+            return None
+        return self._extract_traffic_from_mapping(stats)
 
     async def get_client_count(self, timeout: int = 15) -> int:
         data = await self.list(timeout=timeout)
@@ -1160,60 +912,61 @@ class X3:
         """
         Массово выставляет flow для всех клиентов по inbound (протокол задаётся панелью).
 
-        Обновление по строке clients[] из get_list() для этого inbound + явный inbound_id в теле запроса.
+        Обновление по строке clients[] из снимка панели + явный inbound_id в теле запроса.
         Flow в JSON всегда задаётся через flow_override (целевое значение с сервера), без сравнения
-        со снимком: иначе при одном inbound возможны ложные skip (объект из get_list часто без flow)
-        или рассинхрон после мутации модели py3xui.
+        со снимком: иначе при одном inbound возможны ложные skip.
 
-        Несколько inbound с одним email: get_by_email не используем — обновляется каждая строка.
+        Несколько inbound с одним email: каждая строка обновляется отдельно.
 
         Returns: (updated_count, skipped_unchanged_count, errors_list).
         """
-        await self._ensure_login()
         target = (flow_value or "").strip()
-        inbounds = await self._api.inbound.get_list()
+        inbounds = await self._panel.list_inbounds()
         sem = asyncio.Semaphore(4)
-        work_items: List[Tuple[int, Any]] = []
+        work_items: List[Tuple[int, str, Dict[str, Any]]] = []
         for inv in inbounds:
-            inv_id = getattr(inv, "id", None)
+            inv_id = inv.get("id")
             if inv_id is None:
                 continue
-            settings = getattr(inv, "settings", None)
-            clients = self._settings_clients_obj(settings)
-            for c in clients:
-                if getattr(c, "email", None):
-                    work_items.append((int(inv_id), c))
+            inv_protocol = self._normalize_protocol_name(
+                str(inv.get("protocol") or "vless").strip().lower(), None
+            )
+            try:
+                settings = json.loads(inv.get("settings") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for c in clients_from_settings_payload(settings):
+                if c.get("email"):
+                    work_items.append((int(inv_id), inv_protocol, c))
 
-        async def _one(inbound_id: int, c_list: Any) -> Tuple[str, Optional[str]]:
-            """Правим flow у конкретной строки clients[] этого inbound (без get_by_email)."""
-            email = getattr(c_list, "email", None)
+        async def _one(
+            inbound_id: int, inbound_protocol: str, c: Dict[str, Any],
+        ) -> Tuple[str, Optional[str]]:
+            email = str(c.get("email") or "")
             if not email:
                 return "err", "?: нет email у записи клиента в inbound"
-            email = str(email)
             async with sem:
-                try:
-                    c = c_list
-                    self._ensure_client_id_for_update(c)
-                    last_exc: Optional[Exception] = None
-                    for attempt in range(3):
-                        try:
-                            await self._post_inbound_update_client(
-                                c,
-                                inbound_id_override=int(inbound_id),
-                                flow_override=target,
-                            )
-                            return "ok", None
-                        except Exception as up_e:
-                            last_exc = up_e
-                            if attempt < 2:
-                                await asyncio.sleep(0.4 * (attempt + 1))
-                    return "err", f"{email}: {last_exc}"
-                except Exception as e:
-                    return "err", f"{email}: {e}"
+                last_exc: Optional[Exception] = None
+                for attempt in range(3):
+                    try:
+                        await self._post_inbound_update_client(
+                            dict(c),
+                            inbound_id_override=int(inbound_id),
+                            flow_override=target,
+                            protocol_hint=inbound_protocol,
+                        )
+                        return "ok", None
+                    except Exception as up_e:
+                        last_exc = up_e
+                        if attempt < 2:
+                            await asyncio.sleep(0.4 * (attempt + 1))
+                return "err", f"{email}: {last_exc}"
 
         if not work_items:
             return 0, 0, []
-        results = await asyncio.gather(*[_one(iid, cl) for iid, cl in work_items])
+        results = await asyncio.gather(
+            *[_one(iid, proto, cl) for iid, proto, cl in work_items]
+        )
         updated = sum(1 for status, _ in results if status == "ok")
         skipped = sum(1 for status, _ in results if status == "skip")
         errors = [msg for status, msg in results if status == "err" and msg]
@@ -1355,18 +1108,6 @@ class X3:
                         break
                 if sub_id:
                     break
-            if not sub_id:
-                # Compatibility fallback for tests/panels where list() snapshot
-                # doesn't expose subId but get_by_email still works.
-                try:
-                    client = await self._api.client.get_by_email(user_email)
-                except Exception:
-                    client = None
-                if client:
-                    sub_id = getattr(client, "sub_id", None) or getattr(client, "subId", None)
-                    if not sub_id and hasattr(client, "model_dump"):
-                        d = (client.model_dump() or {})
-                        sub_id = d.get("sub_id") or d.get("subId")
             if not sub_id and subscription_token:
                 sub_id = subscription_token
                 logger.debug("get_subscription_links: используем subscription_token как sub_id для email=%s", user_email)

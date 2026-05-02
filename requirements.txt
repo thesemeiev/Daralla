@@ -19,9 +19,6 @@ PyJWT>=2.8.0
 # Retry Logic
 tenacity==8.2.3
 
-# X-UI panel API (3x-ui)
-py3xui>=0.5.5
-
 # Webhook Server (ASGI)
 quart>=0.19
 hypercorn>=0.14

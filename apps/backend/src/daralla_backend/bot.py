@@ -126,8 +126,6 @@ log_event(
 # Урезаем шум от httpx/httpcore до WARNING, чтобы логи не забивались
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-# py3xui: иначе INFO на каждый login / get inbounds / client stats / update (тысячи строк при полной синхронизации)
-logging.getLogger("py3xui").setLevel(logging.WARNING)
 
 # === ИНИЦИАЛИЗАЦИЯ AppContext ===
 from .app_context import AppContext, set_ctx, get_ctx

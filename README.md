@@ -248,7 +248,7 @@ shared/contracts/http_contracts_v1.json
 | Веб-сервер | Quart + Hypercorn (ASGI) |
 | База данных | SQLite через aiosqlite |
 | Оплата | YooKassa SDK, CryptoCloud API |
-| VPN-панели | py3xui (3x-ui API) |
+| VPN-панели | 3x-ui REST API (собственный httpx-клиент) |
 | HTTP-клиент | httpx, requests |
 | Деплой | Docker, docker-compose |
 
