@@ -2156,6 +2156,8 @@ var extractPaymentUrlFromCreateResponse = paymentsFeature.extractPaymentUrlFromC
 var resetCheckoutPaymentState = paymentsFeature.resetCheckoutPaymentState.bind(paymentsFeature);
 // Функция показа страницы продления подписки (сразу на оформление с карточками)
 var showExtendSubscriptionModal = paymentsFeature.showExtendSubscriptionModal.bind(paymentsFeature);
+var beginTrafficTopupCheckout = paymentsFeature.beginTrafficTopupCheckout.bind(paymentsFeature);
+var createTrafficTopupPayment = paymentsFeature.createTrafficTopupPayment.bind(paymentsFeature);
 // Переход на страницу оформления (покупка — с подписок)
 var goToChoosePaymentMethod = paymentsFeature.goToChoosePaymentMethod.bind(paymentsFeature);
 
@@ -2289,6 +2291,11 @@ function getReferralCodeFromCurrentPage() {
 function syncChooseOptionCards() {
     var container = document.getElementById('page-choose-payment-method');
     if (!container) return;
+    var trafficMode = !!(typeof window !== 'undefined' && window.trafficTopupCheckoutMode && window._trafficTopupSelectedPkg);
+    var periodSection = document.getElementById('choose-payment-period-section');
+    var trafficSummaryEl = document.getElementById('choose-traffic-topup-summary');
+    if (periodSection) periodSection.style.display = trafficMode ? 'none' : '';
+    if (trafficSummaryEl && !trafficMode) trafficSummaryEl.style.display = 'none';
     var periodRow = container.querySelector('.choose-options-row[aria-label="Период подписки"]');
     var paymentTypeRow = container.querySelector('.choose-options-row[aria-label="Тип оплаты"]');
     var paymentRow = container.querySelector('.choose-options-row[aria-label="Провайдер оплаты"]');
@@ -2309,10 +2316,15 @@ function syncChooseOptionCards() {
     }
 
     function updatePayButtonText() {
-        var selectedPeriodCard = periodRow.querySelector('.choose-option-card[data-period].choose-option-card-selected');
-        var periodPriceEl = selectedPeriodCard && selectedPeriodCard.querySelector('.choose-option-price');
-        var priceText = periodPriceEl ? String(periodPriceEl.textContent || '').trim() : '';
-        if (!priceText) priceText = '—';
+        var priceText = '—';
+        if (trafficMode && window._trafficTopupSelectedPkg) {
+            priceText = String(window._trafficTopupSelectedPkg.price) + '₽';
+        } else {
+            var selectedPeriodCard = periodRow.querySelector('.choose-option-card[data-period].choose-option-card-selected');
+            var periodPriceEl = selectedPeriodCard && selectedPeriodCard.querySelector('.choose-option-price');
+            priceText = periodPriceEl ? String(periodPriceEl.textContent || '').trim() : '';
+            if (!priceText) priceText = '—';
+        }
         if (submitBtn) submitBtn.textContent = 'Создать платёж ' + priceText;
         if (summaryPriceEl) summaryPriceEl.textContent = priceText;
     }
@@ -2326,9 +2338,14 @@ function syncChooseOptionCards() {
     }
 
     function updateSummary() {
-        var periodCard = periodRow.querySelector('.choose-option-card[data-period].choose-option-card-selected');
-        var periodTitleEl = periodCard && periodCard.querySelector('.choose-option-title');
-        if (summaryPeriodEl) summaryPeriodEl.textContent = periodTitleEl ? String(periodTitleEl.textContent || '').trim() : (currentPaymentPeriod || '—');
+        if (trafficMode && window._trafficTopupSelectedPkg) {
+            var tp = window._trafficTopupSelectedPkg;
+            if (summaryPeriodEl) summaryPeriodEl.textContent = tp.title + ' · ' + tp.gib + ' ГиБ';
+        } else {
+            var periodCard = periodRow.querySelector('.choose-option-card[data-period].choose-option-card-selected');
+            var periodTitleEl = periodCard && periodCard.querySelector('.choose-option-title');
+            if (summaryPeriodEl) summaryPeriodEl.textContent = periodTitleEl ? String(periodTitleEl.textContent || '').trim() : (currentPaymentPeriod || '—');
+        }
         if (summaryTypeEl) summaryTypeEl.textContent = getCurrentPaymentType() === 'crypto' ? 'Крипта' : 'Рубли';
         if (summaryProviderEl) summaryProviderEl.textContent = providerLabel(currentPaymentGateway || 'yookassa');
         if (plategaProviderSubEl) {
@@ -2490,6 +2507,10 @@ function bindChoosePaymentSubmit() {
             currentPlategaPaymentMethod = gatewayMethod;
         }
         currentPaymentGateway = gateway;
+        if (typeof window !== 'undefined' && window.trafficTopupCheckoutMode && window.currentTrafficTopupPackageId && window._trafficTopupSelectedPkg) {
+            createTrafficTopupPayment(currentExtendSubscriptionId, window.currentTrafficTopupPackageId, gateway, gatewayMethod);
+            return;
+        }
         createPayment(period, currentExtendSubscriptionId, gateway, gatewayMethod);
     });
 }

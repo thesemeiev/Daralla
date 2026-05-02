@@ -2284,6 +2284,35 @@ h1 {
     color: var(--text-secondary);
 }
 
+.subscription-traffic-teaser {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--accent-line);
+    background: var(--accent-muted-subtle);
+    display: grid;
+    gap: 2px;
+}
+
+.subscription-traffic-teaser-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-tertiary);
+}
+
+.subscription-traffic-teaser-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.subscription-traffic-teaser-note {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
 /* Нижняя навигация — liquid glass (в духе bergice/liquidglass, без WebGL) */
 .bottom-nav {
     position: fixed;
@@ -2538,6 +2567,126 @@ h1 {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid var(--card-border);
+}
+
+.subscription-traffic-card {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--accent-line);
+    background: var(--accent-muted-subtle);
+}
+
+.subscription-traffic-heading {
+    margin: 0 0 var(--space-sm);
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+.subscription-traffic-card .detail-info-grid {
+    margin-bottom: var(--space-sm);
+}
+
+.subscription-traffic-hint {
+    margin: 0;
+    font-size: var(--font-size-caption);
+    line-height: var(--line-height-body);
+}
+
+.traffic-topup-actions {
+    margin-top: var(--space-md);
+}
+
+.traffic-topup-actions-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.45px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-sm);
+}
+
+.traffic-topup-pack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: var(--space-sm);
+}
+
+.traffic-topup-pack-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .traffic-topup-pack-btn:hover {
+        border-color: var(--accent-line-soft);
+        background: var(--card-bg-hover);
+    }
+}
+
+.traffic-topup-pack-btn:active {
+    transform: scale(0.98);
+}
+
+.traffic-topup-pack-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-on-tint);
+    background: var(--accent-muted);
+    padding: 3px 8px;
+    border-radius: 999px;
+}
+
+.traffic-topup-pack-title {
+    font-weight: 600;
+    line-height: var(--line-height-tight);
+}
+
+.traffic-topup-pack-meta {
+    font-size: var(--font-size-caption);
+    color: var(--text-secondary);
+}
+
+#choose-traffic-topup-summary {
+    margin-bottom: var(--space-md);
+}
+
+.choose-traffic-topup-summary .traffic-topup-checkout-card,
+.traffic-topup-checkout-card {
+    margin-top: var(--space-sm);
+    padding: 14px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--card-border);
+    background: var(--card-bg-hover);
+}
+
+.traffic-topup-checkout-title {
+    font-weight: 600;
+    font-size: var(--font-size-lead);
+    color: var(--text-primary);
+}
+
+.traffic-topup-checkout-meta {
+    margin-top: 4px;
+    font-size: var(--font-size-caption);
+    color: var(--text-secondary);
 }
 
 /* «Продлить»: только background без контраста давал невидимый текст в тёмной теме */

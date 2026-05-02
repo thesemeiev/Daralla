@@ -173,6 +173,7 @@
             getCurrentExtendSubscriptionId: ctx.getCurrentExtendSubscriptionId,
             setCurrentPaymentPeriod: ctx.setCurrentPaymentPeriod,
             getCurrentPaymentPeriod: ctx.getCurrentPaymentPeriod,
+            escapeHtml: ctx.escapeHtml,
             appShowAlert: ctx.appShowAlert,
             showPage: ctx.showPage,
             apiFetch: ctx.apiFetch,

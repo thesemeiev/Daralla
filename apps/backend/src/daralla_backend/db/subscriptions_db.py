@@ -595,6 +595,22 @@ async def get_buckets_for_subscription_servers(subscription_id: int) -> dict[str
             return out
 
 
+async def subscription_should_show_user_traffic_quota(subscription_id: int, quota_row: dict) -> bool:
+    """
+    True if period quota / top-up applies: at least one subscription server maps to a metered bucket,
+    or (no mapping rows yet) the quota row points at a metered bucket (fallback for pending sync).
+    If every mapped bucket is unlimited, quota UI and paid top-ups are hidden even if a stale quota row exists.
+    """
+    mapping = await get_buckets_for_subscription_servers(int(subscription_id))
+    if mapping:
+        return any(int(b.get("is_unlimited") or 0) == 0 for b in mapping.values())
+    bid = int(quota_row.get("limited_bucket_id") or 0)
+    if bid <= 0:
+        return False
+    bucket = await get_subscription_traffic_bucket(bid)
+    return bool(bucket) and int(bucket.get("is_unlimited") or 0) == 0
+
+
 async def add_bucket_usage_delta(bucket_id: int, bytes_delta: int, *, day_utc: str | None = None) -> None:
     day = day_utc or _utc_day()
     now = int(time.time())

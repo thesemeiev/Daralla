@@ -6,16 +6,19 @@ import json
 
 from daralla_backend.db.config_db import set_config
 from daralla_backend.prices_config import (
-    CONFIG_KEY_TARIFFS_JSON,
     CONFIG_KEY_DEFAULT_DEVICE_LIMIT,
     CONFIG_KEY_PRICE_3MONTH,
     CONFIG_KEY_PRICE_MONTH,
+    CONFIG_KEY_TARIFFS_JSON,
+    CONFIG_KEY_TRAFFIC_TOPUP_JSON,
     PRICE_3MONTH,
     PRICE_MONTH,
     PRICES,
-    get_tariffs,
     get_default_device_limit_async,
+    get_tariffs,
+    get_traffic_topup_packages,
     normalize_tariffs,
+    normalize_traffic_topup_packages,
     refresh_prices_from_db,
 )
 
@@ -24,11 +27,13 @@ async def admin_commerce_get_payload():
     await refresh_prices_from_db()
     default_dl = await get_default_device_limit_async()
     tariffs = get_tariffs()
+    traffic_topup_packages = get_traffic_topup_packages()
     return {
         "success": True,
         "price_month": PRICES.get("month", PRICE_MONTH),
         "price_3month": PRICES.get("3month", PRICE_3MONTH),
         "tariffs": tariffs,
+        "traffic_topup_packages": traffic_topup_packages,
         "default_device_limit": default_dl,
     }, 200
 
@@ -83,6 +88,18 @@ async def admin_commerce_update_payload(data: dict):
         str(dl),
         "Лимит устройств по умолчанию",
     )
+
+    ttp_raw = data.get("traffic_topup_packages")
+    if isinstance(ttp_raw, list):
+        ttp_save = normalize_traffic_topup_packages(ttp_raw)
+        if len(ttp_save) > 15:
+            return {"success": False, "error": "Слишком много пакетов докупки трафика (максимум 15)"}, 400
+        ok = ok and await set_config(
+            CONFIG_KEY_TRAFFIC_TOPUP_JSON,
+            json.dumps(ttp_save, ensure_ascii=False),
+            "Пакеты докупки трафика (JSON)",
+        )
+
     if not ok:
         return {"success": False, "error": "Не удалось сохранить настройки"}, 500
 
@@ -93,5 +110,6 @@ async def admin_commerce_update_payload(data: dict):
         "price_month": PRICES.get("month", month_price),
         "price_3month": PRICES.get("3month", three_price),
         "tariffs": tariffs,
+        "traffic_topup_packages": get_traffic_topup_packages(),
         "default_device_limit": await get_default_device_limit_async(),
     }, 200

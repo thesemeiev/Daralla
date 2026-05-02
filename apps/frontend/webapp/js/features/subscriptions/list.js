@@ -2,6 +2,73 @@
     function createSubscriptionsFeature(deps) {
         var _deps = deps || {};
 
+        function formatBinaryBytes(num) {
+            var n = Number(num || 0);
+            if (!isFinite(n) || n <= 0) return '0 B';
+            var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var i = 0;
+            while (n >= 1024 && i < units.length - 1) {
+                n /= 1024;
+                i++;
+            }
+            return (i === 0 ? Math.round(n) : n.toFixed(2)) + ' ' + units[i];
+        }
+
+        function _attrEscape(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
+        }
+
+        function _trafficTopupButtonsHtml(sub) {
+            var pkgs = typeof window !== 'undefined' ? (window.userTrafficTopupPackages || []) : [];
+            if (!pkgs.length) return '';
+            var isPayable = sub.status === 'active' || sub.status === 'trial';
+            if (!isPayable) return '';
+            var rows = [];
+            var added = 0;
+            pkgs.forEach(function (p) {
+                if (p && p.enabled === false) return;
+                if (!added) {
+                    rows.push('<div class="traffic-topup-actions">');
+                    rows.push('<span class="traffic-topup-actions-label">Докупить трафик</span>');
+                    rows.push('<div class="traffic-topup-pack-grid">');
+                }
+                added++;
+                var title = _deps.escapeHtml(p.title || 'Пакет');
+                var gib = Number(p.gib) || 0;
+                var price = Number(p.price);
+                var badge = (p.badge && String(p.badge).trim())
+                    ? '<span class="traffic-topup-pack-badge">' + _deps.escapeHtml(String(p.badge).trim()) + '</span>'
+                    : '';
+                rows.push(
+                    '<button type="button" class="traffic-topup-pack-btn" data-traffic-topup '
+                    + 'data-sub-id="' + _attrEscape(sub.id) + '" data-pkg-id="' + _attrEscape(p.id) + '">'
+                    + badge
+                    + '<span class="traffic-topup-pack-title">' + title + '</span>'
+                    + '<span class="traffic-topup-pack-meta">' + gib + ' ГиБ · ' + (isFinite(price) ? price : '—') + ' ₽</span>'
+                    + '</button>'
+                );
+            });
+            if (!added) return '';
+            rows.push('</div></div>');
+            return rows.join('');
+        }
+
+        function bindTrafficTopupButtons(containerEl) {
+            if (!containerEl) return;
+            var btns = containerEl.querySelectorAll('[data-traffic-topup]');
+            btns.forEach(function (btn) {
+                btn.onclick = function () {
+                    var sid = btn.getAttribute('data-sub-id');
+                    var pid = btn.getAttribute('data-pkg-id');
+                    if (typeof window.beginTrafficTopupCheckout !== 'function') return;
+                    window.beginTrafficTopupCheckout(Number(sid), pid);
+                };
+            });
+        }
+
         function showSubscriptionDetail(sub) {
             window.scrollTo(0, 0);
             document.documentElement.scrollTop = 0;
@@ -56,6 +123,19 @@
                     ? '                <div class="detail-info-item full-width"><div class="detail-info-label">Осталось</div><div class="detail-info-value days-highlight">' + _deps.formatTimeRemaining(sub.expires_at) + '</div></div>\n'
                     : '')
                 + '            </div>\n'
+                + (sub.traffic_quota
+                    ? '            <div class="detail-card subscription-traffic-card">\n'
+                    + '                <h4 class="subscription-traffic-heading">Трафик (лимитные ноды)</h4>\n'
+                    + '                <div class="detail-info-grid">\n'
+                    + '                    <div class="detail-info-item"><div class="detail-info-label">Включено на период</div><div class="detail-info-value">' + formatBinaryBytes(sub.traffic_quota.included_allowance_bytes) + '</div></div>\n'
+                    + '                    <div class="detail-info-item"><div class="detail-info-label">Из включённого израсходовано</div><div class="detail-info-value">' + formatBinaryBytes(sub.traffic_quota.included_used_bytes) + '</div></div>\n'
+                    + '                    <div class="detail-info-item"><div class="detail-info-label">Остаток включённого</div><div class="detail-info-value">' + formatBinaryBytes(Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes)) + '</div></div>\n'
+                    + '                    <div class="detail-info-item"><div class="detail-info-label">Докуплено (остаток)</div><div class="detail-info-value">' + formatBinaryBytes(sub.traffic_quota.purchased_remaining_bytes) + '</div></div>\n'
+                    + '                </div>\n'
+                    + '                <p class="hint subscription-traffic-hint">Включённый объём обновляется при оплате продления. Докупка не сгорает при продлении.</p>\n'
+                    + _trafficTopupButtonsHtml(sub)
+                    + '            </div>\n'
+                    : '')
                 + '            <div class="detail-actions">\n'
                 + '                <button class="action-button" onclick="showRenameSubscriptionModal()" style="margin-bottom: 12px;">Переименовать подписку</button>\n'
                 + (isActive
@@ -67,6 +147,7 @@
                 + '            </div>\n'
                 + '        </div>\n';
 
+            bindTrafficTopupButtons(contentEl);
             _deps.showPage('subscription-detail', { id: String(sub.id) });
         }
 
@@ -93,6 +174,11 @@
                 + '        </div>\n'
                 + (isActive && sub.expires_at
                     ? '        <div class="days-badge"><span class="info-label">Осталось</span><span class="days-remaining">' + _deps.formatTimeRemaining(sub.expires_at) + '</span></div>\n'
+                    : '')
+                + (sub.traffic_quota
+                    ? '        <div class="subscription-traffic-teaser"><span class="subscription-traffic-teaser-label">Трафик (лимитные ноды)</span>'
+                    + '<span class="subscription-traffic-teaser-value">' + formatBinaryBytes(Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes) + sub.traffic_quota.purchased_remaining_bytes) + '</span>'
+                    + '<span class="subscription-traffic-teaser-note">доступно сейчас</span></div>\n'
                     : '');
             return card;
         }
@@ -135,6 +221,12 @@
                 if (!data.success) {
                     throw new Error(data.error || 'Ошибка получения данных');
                 }
+
+                try {
+                    window.userTrafficTopupPackages = Array.isArray(data.traffic_topup_packages)
+                        ? data.traffic_topup_packages
+                        : [];
+                } catch (ePkg) {}
 
                 if (loadingEl) loadingEl.style.display = 'none';
 

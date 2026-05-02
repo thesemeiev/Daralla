@@ -9,6 +9,7 @@ import copy
 import json
 import logging
 import os
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,13 @@ CONFIG_KEY_PRICE_MONTH = "price_month"
 CONFIG_KEY_PRICE_3MONTH = "price_3month"
 CONFIG_KEY_DEFAULT_DEVICE_LIMIT = "default_device_limit"
 CONFIG_KEY_TARIFFS_JSON = "tariffs_json_v1"
+CONFIG_KEY_TRAFFIC_TOPUP_JSON = "traffic_topup_packages_json_v1"
 
 ALLOWED_BADGES = {"", "best", "hit"}
+
+_TRAFFIC_TOPUP_ID_RE = re.compile(r"^[a-z0-9_-]{2,40}$")
+
+TRAFFIC_TOPUP_PACKAGES: list[dict[str, Any]] = []
 
 
 def _clamp_price(value: int) -> int:
@@ -81,6 +87,102 @@ def _normalize_tariff_item(item: Any) -> dict[str, Any] | None:
         "price": price,
         "badge": badge,
     }
+
+
+def _clamp_gib(value: float) -> float:
+    return max(0.001, min(float(value), 4096.0))
+
+
+def _normalize_traffic_topup_item(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    pid = str(item.get("id") or "").strip().lower()
+    if not pid or not _TRAFFIC_TOPUP_ID_RE.match(pid):
+        return None
+    title_raw = str(item.get("title") or "").strip()
+    title = title_raw if title_raw else pid
+    try:
+        gib = _clamp_gib(float(str(item.get("gib", 0)).replace(",", ".")))
+    except (TypeError, ValueError):
+        return None
+    try:
+        price = _clamp_price(int(float(str(item.get("price", 1)).strip().replace(",", "."))))
+    except (TypeError, ValueError):
+        price = 1
+    badge = str(item.get("badge") or "").strip().lower()
+    if badge not in ALLOWED_BADGES:
+        badge = ""
+    en = item.get("enabled", True)
+    if isinstance(en, str):
+        enabled = en.strip().lower() not in ("0", "false", "no", "")
+    else:
+        enabled = bool(en)
+    try:
+        sort_order = int(item.get("sort_order", 0))
+    except (TypeError, ValueError):
+        sort_order = 0
+    bytes_total = int(round(gib * (1024**3)))
+    if bytes_total < 1:
+        return None
+    return {
+        "id": pid,
+        "title": title[:80],
+        "gib": round(gib, 6),
+        "bytes_total": bytes_total,
+        "price": price,
+        "badge": badge,
+        "enabled": enabled,
+        "sort_order": sort_order,
+    }
+
+
+def normalize_traffic_topup_packages(raw_items: Any) -> list[dict[str, Any]]:
+    items = raw_items if isinstance(raw_items, list) else []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        norm = _normalize_traffic_topup_item(item)
+        if not norm:
+            continue
+        iid = norm["id"]
+        if iid in seen:
+            continue
+        seen.add(iid)
+        out.append(norm)
+    out.sort(key=lambda x: (int(x.get("sort_order", 0)), str(x.get("id"))))
+    return out
+
+
+def get_traffic_topup_packages() -> list[dict[str, Any]]:
+    return copy.deepcopy(TRAFFIC_TOPUP_PACKAGES)
+
+
+def get_public_traffic_topup_packages() -> list[dict[str, Any]]:
+    """Каталог для пользовательского UI (без служебных полей)."""
+    pub = []
+    for p in TRAFFIC_TOPUP_PACKAGES:
+        if not p.get("enabled", True):
+            continue
+        pub.append(
+            {
+                "id": p["id"],
+                "title": p["title"],
+                "gib": p["gib"],
+                "price": int(p["price"]),
+                "badge": p.get("badge") or "",
+            }
+        )
+    return pub
+
+
+def get_traffic_topup_package(package_id: str | None) -> dict[str, Any] | None:
+    key = str(package_id or "").strip().lower()
+    if not key:
+        return None
+    for p in TRAFFIC_TOPUP_PACKAGES:
+        if p.get("id") == key and p.get("enabled", True):
+            return dict(p)
+    return None
 
 
 def normalize_tariffs(raw_items: Any) -> list[dict[str, Any]]:
@@ -158,6 +260,24 @@ async def refresh_prices_from_db() -> None:
     PRICE_MONTH = int(PRICES.get("month", _ENV_MONTH))
     PRICE_3MONTH = int(PRICES.get("3month", _ENV_3MONTH))
     logger.debug("Тарифы в памяти: %s", TARIFFS)
+
+    await refresh_traffic_topup_packages_from_db()
+
+
+async def refresh_traffic_topup_packages_from_db() -> None:
+    """Загружает пакеты докупки трафика из config (может быть пустой список)."""
+    global TRAFFIC_TOPUP_PACKAGES
+    from daralla_backend.db.config_db import get_config
+
+    raw = await get_config(CONFIG_KEY_TRAFFIC_TOPUP_JSON, None)
+    packages: list[dict[str, Any]] = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            packages = normalize_traffic_topup_packages(parsed)
+        except Exception:
+            packages = []
+    TRAFFIC_TOPUP_PACKAGES = packages
 
 
 async def get_default_device_limit_async() -> int:

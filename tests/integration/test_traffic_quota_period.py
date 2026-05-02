@@ -10,6 +10,9 @@ from daralla_backend.db.subscriptions_db import (
     create_subscription,
     create_subscription_traffic_bucket,
     ensure_default_unlimited_bucket,
+    get_subscription_traffic_quota,
+    set_subscription_server_bucket,
+    subscription_should_show_user_traffic_quota,
     upsert_subscription_traffic_quota_row,
 )
 from daralla_backend.db.users_db import get_or_create_subscriber
@@ -47,7 +50,6 @@ async def test_allocate_quota_delta_only_included(db, monkeypatch):
     )
 
     await allocate_subscription_traffic_quota_delta(sub_id, bid, 200)
-    from daralla_backend.db.subscriptions_db import get_subscription_traffic_quota
 
     row = await get_subscription_traffic_quota(sub_id)
     assert row is not None
@@ -85,7 +87,6 @@ async def test_allocate_quota_delta_spills_to_purchased(db, monkeypatch):
     )
 
     await allocate_subscription_traffic_quota_delta(sub_id, bid, 200)
-    from daralla_backend.db.subscriptions_db import get_subscription_traffic_quota
 
     row = await get_subscription_traffic_quota(sub_id)
     assert int(row["included_used_bytes"]) == 1000
@@ -145,10 +146,106 @@ async def test_reset_included_quota_after_payment_keeps_purchased(db, monkeypatc
 
     await reset_included_quota_after_payment(sub_id, paid_period_key="3month", payment_days=90)
 
-    from daralla_backend.db.subscriptions_db import get_subscription_traffic_quota
-
     row = await get_subscription_traffic_quota(sub_id)
     assert int(row["included_used_bytes"]) == 0
     assert int(row["purchased_remaining_bytes"]) == 999
     assert int(row["included_allowance_bytes"]) == 3 * int(1024**3)
     assert int(row["traffic_period_version"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_quota_ui_hidden_when_only_unlimited_buckets_mapped(db, monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    subscriber_id = await get_or_create_subscriber(f"u_tqmap_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=None,
+    )
+    def_id = await ensure_default_unlimited_bucket(sub_id)
+    lim_id = await create_subscription_traffic_bucket(
+        sub_id,
+        f"lim_map_{suffix}",
+        limit_bytes=1024**3,
+        is_unlimited=False,
+    )
+    await upsert_subscription_traffic_quota_row(
+        sub_id,
+        lim_id,
+        included_allowance_bytes=100,
+        included_used_bytes=0,
+        purchased_remaining_bytes=0,
+    )
+    await set_subscription_server_bucket(sub_id, "srv-x", def_id)
+
+    q = await get_subscription_traffic_quota(sub_id)
+    assert q is not None
+    assert await subscription_should_show_user_traffic_quota(sub_id, dict(q)) is False
+
+    await set_subscription_server_bucket(sub_id, "srv-y", lim_id)
+    assert await subscription_should_show_user_traffic_quota(sub_id, dict(q)) is True
+
+
+@pytest.mark.asyncio
+async def test_quota_ui_true_when_metered_quota_no_mapping_yet(db, monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    subscriber_id = await get_or_create_subscriber(f"u_tqnomap_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=None,
+    )
+    await ensure_default_unlimited_bucket(sub_id)
+    lim_id = await create_subscription_traffic_bucket(
+        sub_id,
+        f"lim_nom_{suffix}",
+        limit_bytes=1024**3,
+        is_unlimited=False,
+    )
+    await upsert_subscription_traffic_quota_row(
+        sub_id,
+        lim_id,
+        included_allowance_bytes=50,
+        included_used_bytes=0,
+        purchased_remaining_bytes=0,
+    )
+
+    q = await get_subscription_traffic_quota(sub_id)
+    assert await subscription_should_show_user_traffic_quota(sub_id, dict(q)) is True
+
+
+@pytest.mark.asyncio
+async def test_quota_ui_false_when_quota_points_at_unlimited_bucket_no_mapping(db, monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    subscriber_id = await get_or_create_subscriber(f"u_tqunlim_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=None,
+    )
+    def_id = await ensure_default_unlimited_bucket(sub_id)
+    await upsert_subscription_traffic_quota_row(
+        sub_id,
+        def_id,
+        included_allowance_bytes=10,
+        included_used_bytes=0,
+        purchased_remaining_bytes=0,
+    )
+
+    q = await get_subscription_traffic_quota(sub_id)
+    assert await subscription_should_show_user_traffic_quota(sub_id, dict(q)) is False

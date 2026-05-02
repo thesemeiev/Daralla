@@ -5,6 +5,7 @@ from quart import jsonify, request
 from daralla_backend.services.user_payments_service import (
     UserPaymentServiceError,
     create_user_payment,
+    create_user_traffic_topup_payment,
     user_payment_status_payload,
 )
 from daralla_backend.web.routes.admin_common import CORS_HEADERS, _cors_headers
@@ -15,6 +16,7 @@ async def handle_api_user_payment_create(_auth, logger):
     opt = options_response_or_none()
     if opt:
         return opt
+    data = {}
     try:
         user_id, err = await require_user_id(_auth)
         if err:
@@ -22,23 +24,37 @@ async def handle_api_user_payment_create(_auth, logger):
         data = await request.get_json(silent=True) or {}
         period = data.get("period")
         subscription_id = data.get("subscription_id")
+        traffic_pkg = str(data.get("traffic_topup_package_id") or data.get("traffic_package_id") or "").strip()
         referrer_code = (data.get("referrer_code") or "").strip()
         gateway = (data.get("gateway") or "yookassa").strip().lower()
         gateway_method = (data.get("gateway_method") or "").strip().lower()
-        payload = await create_user_payment(
-            user_id=user_id,
-            period=period,
-            subscription_id=subscription_id,
-            referrer_code=referrer_code,
-            gateway=gateway,
-            gateway_method=gateway_method,
-            logger=logger,
-        )
+        if traffic_pkg:
+            if subscription_id is None or str(subscription_id).strip() == "":
+                raise UserPaymentServiceError("Укажите подписку для докупки трафика", 400)
+            payload = await create_user_traffic_topup_payment(
+                user_id=user_id,
+                subscription_id=int(subscription_id),
+                traffic_package_id=traffic_pkg,
+                referrer_code=referrer_code,
+                gateway=gateway,
+                gateway_method=gateway_method,
+                logger=logger,
+            )
+        else:
+            payload = await create_user_payment(
+                user_id=user_id,
+                period=period,
+                subscription_id=subscription_id,
+                referrer_code=referrer_code,
+                gateway=gateway,
+                gateway_method=gateway_method,
+                logger=logger,
+            )
         return jsonify(payload), 200, _cors_headers()
     except UserPaymentServiceError as e:
         safe_data = data if isinstance(data, dict) else {}
         logger.warning(
-            "payment_create_failed: status=%s error=%s user_id=%s gateway=%s gateway_method=%s period=%s subscription_id=%s",
+            "payment_create_failed: status=%s error=%s user_id=%s gateway=%s gateway_method=%s period=%s subscription_id=%s traffic_pkg=%s",
             e.status_code,
             e.message,
             user_id if "user_id" in locals() else None,
@@ -46,6 +62,7 @@ async def handle_api_user_payment_create(_auth, logger):
             safe_data.get("gateway_method"),
             safe_data.get("period"),
             safe_data.get("subscription_id"),
+            safe_data.get("traffic_topup_package_id") or safe_data.get("traffic_package_id"),
         )
         return jsonify({"error": e.message}), e.status_code, _cors_headers()
     except Exception as e:

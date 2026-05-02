@@ -8,11 +8,15 @@ import time
 from daralla_backend.db.subscriptions_db import (
     get_all_subscriptions_by_user,
     get_subscription_by_id,
+    get_subscription_traffic_quota,
     is_subscription_active,
+    subscription_should_show_user_traffic_quota,
     update_subscription_name,
 )
 from daralla_backend.db.users_db import get_user_server_usage
+from daralla_backend.prices_config import get_public_traffic_topup_packages, refresh_prices_from_db
 from daralla_backend.services.sync_outbox_service import enqueue_subscription_sync_jobs, outbox_write_enabled
+from daralla_backend.services.traffic_bucket_service import traffic_buckets_enabled
 
 
 async def list_user_subscriptions(user_id: str):
@@ -43,6 +47,10 @@ async def user_server_usage_map(user_id: str):
 
 async def subscriptions_overview_payload(user_id: str, now_ts: int | None = None) -> dict:
     current_time = int(now_ts or time.time())
+    await refresh_prices_from_db()
+    traffic_topup_catalog: list[dict] = []
+    if traffic_buckets_enabled():
+        traffic_topup_catalog = get_public_traffic_topup_packages()
     subscriptions = await list_user_subscriptions(user_id)
     formatted_subs = []
     for sub in subscriptions:
@@ -51,6 +59,16 @@ async def subscriptions_overview_payload(user_id: str, now_ts: int | None = None
         is_expired = expires_at < current_time
         expiry_datetime = datetime.datetime.fromtimestamp(expires_at)
         created_datetime = datetime.datetime.fromtimestamp(sub["created_at"])
+        traffic_quota = None
+        if traffic_buckets_enabled():
+            qrow = await get_subscription_traffic_quota(int(sub["id"]))
+            if qrow and await subscription_should_show_user_traffic_quota(int(sub["id"]), dict(qrow)):
+                traffic_quota = {
+                    "included_allowance_bytes": int(qrow["included_allowance_bytes"]),
+                    "included_used_bytes": int(qrow["included_used_bytes"]),
+                    "purchased_remaining_bytes": int(qrow["purchased_remaining_bytes"]),
+                    "traffic_period_version": int(qrow.get("traffic_period_version") or 0),
+                }
         formatted_subs.append(
             {
                 "id": sub["id"],
@@ -67,14 +85,19 @@ async def subscriptions_overview_payload(user_id: str, now_ts: int | None = None
                 "days_remaining": max(0, (expires_at - current_time) // (24 * 60 * 60))
                 if is_active
                 else 0,
+                "traffic_quota": traffic_quota,
             }
         )
     formatted_subs.sort(key=lambda x: (x["status"] != "active", -x["created_at"]))
+    traffic_topup_catalog: list[dict] = []
+    if traffic_buckets_enabled() and any(s.get("traffic_quota") is not None for s in formatted_subs):
+        traffic_topup_catalog = get_public_traffic_topup_packages()
     return {
         "success": True,
         "subscriptions": formatted_subs,
         "total": len(formatted_subs),
         "active": len([s for s in formatted_subs if s["status"] == "active"]),
+        "traffic_topup_packages": traffic_topup_catalog,
     }
 
 

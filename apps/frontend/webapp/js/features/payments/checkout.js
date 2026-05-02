@@ -20,6 +20,11 @@
         function resetCheckoutPaymentState() {
             clearPaymentStatusPolling();
             _deps.setCurrentPaymentData(null);
+            try {
+                window.trafficTopupCheckoutMode = false;
+                window.currentTrafficTopupPackageId = null;
+                window._trafficTopupSelectedPkg = null;
+            } catch (e) {}
         }
 
         async function showExtendSubscriptionModal(subscriptionId) {
@@ -27,6 +32,11 @@
                 await _deps.appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
                 return;
             }
+            try {
+                window.trafficTopupCheckoutMode = false;
+                window.currentTrafficTopupPackageId = null;
+                window._trafficTopupSelectedPkg = null;
+            } catch (e) {}
             _deps.setCurrentExtendSubscriptionId(subscriptionId);
             _deps.setCurrentPaymentPeriod('month');
             resetCheckoutPaymentState();
@@ -34,6 +44,11 @@
         }
 
         function goToChoosePaymentMethod(period, subscriptionId) {
+            try {
+                window.trafficTopupCheckoutMode = false;
+                window.currentTrafficTopupPackageId = null;
+                window._trafficTopupSelectedPkg = null;
+            } catch (e) {}
             var normalizedPeriod = String(period || '').trim().toLowerCase();
             _deps.setCurrentPaymentPeriod(normalizedPeriod || 'month');
             if (subscriptionId != null) _deps.setCurrentExtendSubscriptionId(subscriptionId);
@@ -43,6 +58,18 @@
         }
 
         function goBackFromChoosePayment() {
+            try {
+                window.trafficTopupCheckoutMode = false;
+                window.currentTrafficTopupPackageId = null;
+                window._trafficTopupSelectedPkg = null;
+            } catch (e) {}
+            var ts = document.getElementById('choose-traffic-topup-summary');
+            if (ts) {
+                ts.style.display = 'none';
+                ts.innerHTML = '';
+            }
+            var ps = document.getElementById('choose-payment-period-section');
+            if (ps) ps.style.display = '';
             if (_deps.getCurrentExtendSubscriptionId()) _deps.showPage('subscription-detail');
             else _deps.showPage('subscriptions');
         }
@@ -54,8 +81,113 @@
             _deps.showPage('choose-payment-method');
         }
 
+        async function createTrafficTopupPayment(subscriptionId, trafficPackageId, gateway, gatewayMethod) {
+            if (!subscriptionId || !trafficPackageId) {
+                await _deps.appShowAlert('Не выбрана подписка или пакет трафика.', { title: 'Ошибка', variant: 'error' });
+                return;
+            }
+            if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud' && gateway !== 'platega')) gateway = 'yookassa';
+            try {
+                var referrerCode = _deps.getReferralCodeFromCurrentPage();
+                var body = {
+                    subscription_id: subscriptionId,
+                    traffic_topup_package_id: String(trafficPackageId),
+                    gateway: gateway
+                };
+                if (gateway === 'platega' && gatewayMethod) body.gateway_method = String(gatewayMethod);
+                if (referrerCode) body.referrer_code = referrerCode;
+
+                _deps.setCurrentPaymentData(null);
+                showPaymentPage();
+
+                var response = await _deps.apiFetch('/api/user/payment/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    var error = await response.json();
+                    throw new Error(error.error || 'Ошибка создания платежа');
+                }
+                var data = await response.json();
+                if (!data.success || !data.payment_id) throw new Error('Не удалось создать платёж');
+
+                try {
+                    sessionStorage.setItem('payment_extend_sub_id', String(subscriptionId));
+                } catch (e) {}
+
+                var payWrap = {
+                    payment_id: data.payment_id,
+                    payment_url: extractPaymentUrlFromCreateResponse(data),
+                    amount: data.amount,
+                    period: data.period || 'traffic_topup',
+                    gateway: gateway,
+                    gateway_method: data.gateway_method || body.gateway_method || null,
+                    extend_subscription_id: subscriptionId,
+                    traffic_topup: true
+                };
+
+                if (gateway === 'yookassa') {
+                    var ykUrl = extractPaymentUrlFromCreateResponse(data);
+                    if (!_deps.isHttpUrl(ykUrl)) throw new Error('Не удалось получить ссылку на оплату');
+                    try { sessionStorage.setItem('payment_return_payment_id', String(data.payment_id)); } catch (e2) {}
+                    payWrap.payment_url = String(ykUrl).trim();
+                    _deps.setCurrentPaymentData(payWrap);
+                    showPaymentPage();
+                    return;
+                }
+
+                var payUrl = extractPaymentUrlFromCreateResponse(data);
+                if (!_deps.isHttpUrl(payUrl)) throw new Error('Не удалось получить ссылку на оплату');
+                payWrap.payment_url = String(payUrl).trim();
+                payWrap.gateway = gateway;
+                payWrap.gateway_method = data.gateway_method || body.gateway_method || null;
+                _deps.setCurrentPaymentData(payWrap);
+                showPaymentPage();
+            } catch (error) {
+                console.error('Ошибка создания платежа (докупка трафика):', error);
+                _deps.showFormMessage('payment-form-message', 'error', 'Ошибка создания платежа: ' + error.message);
+                goBackFromPayment();
+            }
+        }
+
+        function beginTrafficTopupCheckout(subscriptionId, packageId) {
+            clearPaymentStatusPolling();
+            _deps.setCurrentPaymentData(null);
+            var list = typeof window !== 'undefined' ? (window.userTrafficTopupPackages || []) : [];
+            var pkg = list.find(function (p) { return String(p.id) === String(packageId); });
+            if (!pkg) {
+                _deps.appShowAlert('Пакет не найден. Обновите список подписок.', { title: 'Ошибка', variant: 'error' });
+                return;
+            }
+            try {
+                window.trafficTopupCheckoutMode = true;
+                window.currentTrafficTopupPackageId = packageId;
+                window._trafficTopupSelectedPkg = pkg;
+            } catch (e) {}
+            _deps.setCurrentExtendSubscriptionId(subscriptionId);
+            var esc = typeof _deps.escapeHtml === 'function' ? _deps.escapeHtml : function (x) { return String(x == null ? '' : x); };
+            var ts = document.getElementById('choose-traffic-topup-summary');
+            if (ts) {
+                ts.style.display = 'block';
+                ts.innerHTML = ''
+                    + '<p class="choose-section-label" style="margin-bottom: 8px;">Докупка трафика</p>'
+                    + '<div class="traffic-topup-checkout-card">'
+                    + '<div class="traffic-topup-checkout-title">' + esc(pkg.title) + '</div>'
+                    + '<div class="traffic-topup-checkout-meta">' + esc(String(pkg.gib)) + ' ГиБ · ' + esc(String(pkg.price)) + '₽</div>'
+                    + '</div>';
+            }
+            _deps.showPage('choose-payment-method');
+        }
+
         async function createPayment(period, subscriptionId, gateway, gatewayMethod) {
             if (subscriptionId === undefined) subscriptionId = null;
+            try {
+                window.trafficTopupCheckoutMode = false;
+                window.currentTrafficTopupPackageId = null;
+                window._trafficTopupSelectedPkg = null;
+            } catch (e) {}
             if (!gateway || (gateway !== 'yookassa' && gateway !== 'cryptocloud' && gateway !== 'platega')) gateway = 'yookassa';
             try {
                 var referrerCode = _deps.getReferralCodeFromCurrentPage();
@@ -171,6 +303,7 @@
             var gw = currentPaymentData.gateway || 'yookassa';
             var periodRaw = String(currentPaymentData.period || '').trim();
             var periodText = periodRaw === 'month' ? '1 месяц' : (periodRaw === '3month' ? '3 месяца' : (periodRaw || '—'));
+            if (currentPaymentData.traffic_topup) periodText = 'Докупка трафика';
             document.getElementById('payment-period').textContent = periodText;
             document.getElementById('payment-amount').textContent = currentPaymentData.amount != null ? String(currentPaymentData.amount) + '₽' : '—';
 
@@ -230,7 +363,12 @@
                 statusEl.className = 'detail-status success';
             }
             var sub = _deps.ensurePaymentResultSubline(page);
-            if (sub) sub.textContent = 'Подписка уже активна. Ссылку на ключи и продление смотрите в разделе «Подписки».';
+            var pd = _deps.getCurrentPaymentData();
+            if (sub) {
+                sub.textContent = pd && pd.traffic_topup
+                    ? 'Трафик начислен на подписку. Откройте «Подписки» — там отображается остаток.'
+                    : 'Подписка уже активна. Ссылку на ключи и продление смотрите в разделе «Подписки».';
+            }
             var btn = document.getElementById('payment-link-button');
             if (btn) btn.style.display = 'none';
             var hint = document.getElementById('payment-widget-hint');
@@ -332,7 +470,14 @@
                                 _deps.loadSubscriptions();
                             }, 2500);
                         } else {
-                            _deps.showAppToast('Оплата прошла, подписка активна. Откройте «Подписки», чтобы скопировать ключ.', 5500, 'success');
+                            var pd2 = _deps.getCurrentPaymentData();
+                            _deps.showAppToast(
+                                pd2 && pd2.traffic_topup
+                                    ? 'Оплата прошла, трафик начислен. Откройте карточку подписки для проверки остатка.'
+                                    : 'Оплата прошла, подписка активна. Откройте «Подписки», чтобы скопировать ключ.',
+                                5500,
+                                'success'
+                            );
                             _deps.showPage('subscriptions');
                             setTimeout(_deps.loadSubscriptions, 1000);
                         }
@@ -364,6 +509,8 @@
             clearPaymentStatusPolling: clearPaymentStatusPolling,
             resetCheckoutPaymentState: resetCheckoutPaymentState,
             showExtendSubscriptionModal: showExtendSubscriptionModal,
+            beginTrafficTopupCheckout: beginTrafficTopupCheckout,
+            createTrafficTopupPayment: createTrafficTopupPayment,
             goToChoosePaymentMethod: goToChoosePaymentMethod,
             goBackFromChoosePayment: goBackFromChoosePayment,
             goBackFromPayment: goBackFromPayment,

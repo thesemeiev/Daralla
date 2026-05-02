@@ -208,6 +208,8 @@
                 <button class="back-button" data-action="goBackFromChoosePayment">← Назад</button>
             </header>
             <div class="buy-subscription-content choose-payment-content" style="padding: 20px;">
+                <div id="choose-traffic-topup-summary" class="choose-traffic-topup-summary" style="display: none;" aria-live="polite"></div>
+                <div id="choose-payment-period-section">
                 <p class="choose-section-label">Период</p>
                 <div class="choose-options-row" role="group" aria-label="Период подписки">
                     <button type="button" class="choose-option-card choose-option-card-selected" data-period="month" aria-pressed="true">
@@ -218,6 +220,7 @@
                         <span class="choose-option-title">3 месяца</span>
                         <span class="choose-option-price">350₽</span>
                     </button>
+                </div>
                 </div>
                 <p class="choose-section-label" style="margin-top: 20px;">Тип оплаты</p>
                 <div class="choose-options-row" role="group" aria-label="Тип оплаты">
@@ -1313,6 +1316,12 @@
                         <button type="button" id="admin-commerce-add-tariff" class="btn-secondary admin-btn-full admin-commerce-add-tariff-btn">+ Добавить тариф</button>
                     </section>
 
+                    <section class="admin-commerce-card" aria-labelledby="admin-commerce-traffic-topup-heading">
+                        <h3 id="admin-commerce-traffic-topup-heading" class="admin-commerce-card-title">Докупка трафика</h3>
+                        <p class="admin-commerce-card-intro">Пакеты для пользователей с лимитным учётом по группе (есть строка квоты на подписке). Ключ пакета — латиница, цифры, <code class="admin-commerce-code">_</code> и <code class="admin-commerce-code">-</code>. Объём — двоичные ГиБ (1024³). Цена списывается только из этого списка при оплате.</p>
+                        <div id="admin-commerce-traffic-topups" class="admin-commerce-tariffs"></div>
+                        <button type="button" id="admin-commerce-add-traffic-topup" class="btn-secondary admin-btn-full admin-commerce-add-tariff-btn">+ Пакет докупки</button>
+                    </section>
                     <section class="admin-commerce-card" aria-labelledby="admin-commerce-devices-heading">
                         <h3 id="admin-commerce-devices-heading" class="admin-commerce-card-title">Лимит устройств по умолчанию</h3>
                         <p class="admin-commerce-card-intro admin-commerce-card-intro--subtle">Применяется к новым подпискам и пробному периоду. Уже оформленные подписки не меняются.</p>
