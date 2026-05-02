@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=36">
+    <link rel="stylesheet" href="/style.css?v=37">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы страница открывалась даже при недоступности внешнего CDN -->
@@ -551,12 +551,12 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Главный экран -->
         <div id="page-admin-stats" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" data-action="showPage" data-arg="account">← Назад</button>
-                <h1 class="page-section-title">Админ-панель</h1>
             </header>
             
             <div id="admin-stats-content" class="admin-panel-content">
+                <h2 class="admin-content-page-title">Админ-панель</h2>
                 <div id="admin-stats-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
 
                 <div id="admin-dashboard" style="display: none;">
@@ -662,11 +662,11 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Уведомления -->
         <div id="page-admin-notifications" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">Уведомления</h1>
             </header>
             <div id="admin-notifications-content" class="admin-page-content">
+                <h2 class="admin-content-page-title">Уведомления</h2>
                 <button type="button" class="btn-primary admin-action-full" data-action="showNotificationRuleForm">+ Добавить правило</button>
                 <div id="admin-notifications-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
                 <div id="admin-notifications-error" class="error" style="display: none;"></div>
@@ -766,11 +766,11 @@
 
         <!-- АДМИН-ПАНЕЛЬ: События -->
         <div id="page-admin-events" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">События</h1>
             </header>
             <div id="admin-events-content" class="admin-page-content">
+                <h2 class="admin-content-page-title">События</h2>
                 <div class="admin-inline-row admin-inline-row-between admin-mb-md">
                     <button type="button" class="btn-primary" data-action="showAdminEventForm">Создать</button>
                 </div>
@@ -827,10 +827,10 @@
         <!-- АДМИН-ПАНЕЛЬ: Аналитика серверов -->
         <!-- АДМИН-ПАНЕЛЬ: Список подписок -->
         <div id="page-admin-subscriptions" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button type="button" class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">Подписки</h1>
             </header>
+            <h2 class="admin-content-page-title">Подписки</h2>
 
             <div class="admin-toolbar">
                 <div class="admin-search-box">
@@ -872,10 +872,10 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Список пользователей -->
         <div id="page-admin-users" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button type="button" class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">Пользователи</h1>
             </header>
+            <h2 class="admin-content-page-title">Пользователи</h2>
 
             <div class="admin-toolbar">
                 <div class="admin-search-box">
@@ -909,10 +909,10 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Рассылка -->
         <div id="page-admin-broadcast" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">Рассылка</h1>
             </header>
+            <h2 class="admin-content-page-title">Рассылка</h2>
             
             <div id="admin-broadcast-loading" class="loading" style="display: none;">
                 <div class="spinner"></div>
@@ -1013,10 +1013,10 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Детальная информация о пользователе -->
         <div id="page-admin-user-detail" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button type="button" class="back-button" data-action="goBackFromUserDetail">← Назад</button>
-                <h1 class="page-section-title">Клиент</h1>
             </header>
+            <h2 class="admin-content-page-title">Клиент</h2>
             
             <div id="admin-user-detail-loading" class="loading">
                 <div class="spinner"></div>
@@ -1028,12 +1028,12 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Создание подписки -->
         <div id="page-admin-create-subscription" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button type="button" class="back-button" data-action="goBackFromCreateSubscription">← Назад</button>
-                <h1 class="page-section-title">Новая подписка</h1>
             </header>
             
             <div id="admin-create-subscription-content" class="admin-page-content">
+                <h2 class="admin-content-page-title">Новая подписка</h2>
                 <form id="admin-create-subscription-form">
                     <div class="form-group">
                         <label for="create-sub-period">Период</label>
@@ -1069,10 +1069,10 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Раздел Редактирование подписки -->
         <div id="page-admin-subscription-edit" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button type="button" class="back-button" data-action="goBackFromSubscriptionEdit">← Назад</button>
-                <h1 class="page-section-title">Подписка</h1>
             </header>
+            <h2 class="admin-content-page-title">Подписка</h2>
             
             <div id="admin-subscription-edit-loading" class="loading">
                 <div class="spinner"></div>
@@ -1148,10 +1148,10 @@
 
         <!-- АДМИН-ПАНЕЛЬ: Управление серверами -->
         <div id="page-admin-server-management" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">Управление серверами</h1>
             </header>
+            <h2 class="admin-content-page-title">Управление серверами</h2>
             
             <div id="admin-server-management-loading" class="loading admin-inline-hidden">
                 <div class="spinner"></div>
@@ -1174,11 +1174,11 @@
 
         <!-- АДМИН: серверы выбранной группы -->
         <div id="page-admin-server-group" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button type="button" class="back-button" data-action="showPage" data-arg="admin-server-management">← Назад</button>
-                <h1 class="admin-server-group-header-title" id="admin-server-group-page-title">Серверы</h1>
             </header>
             <div class="admin-page-content admin-server-group-page" id="admin-server-group-page-root">
+                <h2 class="admin-content-page-title admin-server-group-header-title" id="admin-server-group-page-title">Серверы</h2>
                 <div class="admin-server-group-toolbar">
                     <div class="admin-server-group-toolbar__row">
                         <button type="button" class="btn-primary admin-server-group-toolbar-btn" data-action="showAddServerConfigModal">+ Сервер</button>
@@ -1197,11 +1197,11 @@
 
         <!-- АДМИН: цены и лимит устройств -->
         <div id="page-admin-commerce" class="page" style="display: none;">
-            <header class="header-with-back">
+            <header>
                 <button class="back-button" data-action="showPage" data-arg="admin-stats">← Назад</button>
-                <h1 class="page-section-title">Цены и лимит устройств</h1>
             </header>
             <div class="admin-page-content admin-commerce-page">
+                <h2 class="admin-content-page-title">Цены и лимит устройств</h2>
                 <div id="admin-commerce-loading" class="loading admin-inline-hidden">
                     <div class="spinner"></div>
                     <p>Загрузка...</p>
