@@ -190,7 +190,10 @@ async def _sync_after_update(
             deleted_count = 0
             failed_count = len(servers)
 
-        if deleted_count > 0 or failed_count < len(servers):
+        # Для expired удаляем клиентов с панелей, но сохраняем связи subscription_servers,
+        # чтобы при продлении можно было автоматически восстановить клиентов.
+        # Связи удаляем только для deleted.
+        if new_status == "deleted" and (deleted_count > 0 or failed_count < len(servers)):
             for server_info in servers:
                 server_name = server_info["server_name"]
                 try:
