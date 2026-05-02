@@ -691,6 +691,27 @@ class SubscriptionManager:
                     sid = int(sub["id"])
                     exhausted_by_sub[sid] = await tbs.get_servers_with_exhausted_bucket(sid)
 
+            # Клиенты с исчерпанным bucket по ноде не попадают в ensure_tasks, но должны остаться на панели
+            # (отключённые). Иначе строгий sync посчитает их «лишними» и удалит.
+            exhausted_keep_emails_by_server: Dict[str, set[str]] = defaultdict(set)
+            for sub in subs_for_ensure:
+                sid = int(sub["id"])
+                ex = exhausted_by_sub.get(sid, set())
+                if not ex:
+                    continue
+                group_id = sub.get("group_id")
+                if group_id is None:
+                    continue
+                group_servers = set(servers_by_group.get(group_id, []))
+                cur = servers_by_sub.get(sub["id"], [])
+                client_email = cur[0]["client_email"] if cur else f"{sub['user_id']}_{sub['id']}"
+                ce = str(client_email).strip()
+                if not ce:
+                    continue
+                for sname in group_servers:
+                    if sname in ex:
+                        exhausted_keep_emails_by_server[sname].add(ce)
+
             ensure_tasks: List[dict] = []
             for sub in subs_for_ensure:
                 subscription_id = sub["id"]
@@ -835,6 +856,7 @@ class SubscriptionManager:
 
                 # Жёсткий режим: сервер должен содержать только клиентов, назначенных группе
                 # (email из ensure_tasks для этого server_name). Все лишние email удаляем.
+                # Плюс email с исчерпанным трафиком по этой ноде — клиент должен остаться (disabled), не удаляем.
                 strict_deleted = 0
                 strict_errors: List[str] = []
                 expected_emails = {
@@ -842,6 +864,7 @@ class SubscriptionManager:
                     for t in tasks
                     if t.get("client_email") is not None and str(t.get("client_email")).strip()
                 }
+                expected_emails |= exhausted_keep_emails_by_server.get(server_name, set())
                 try:
                     latest = await xui.list()
                     panel_emails: set = set()
