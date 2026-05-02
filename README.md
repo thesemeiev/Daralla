@@ -124,8 +124,9 @@ cp .env.example apps/backend/src/.env
 
 | Переменная | Назначение |
 |------------|------------|
-| `WEBAPP_URL` | HTTPS мини-приложения: кнопки в боте, ссылки в уведомлениях |
-| `WEBSITE_URL` | опционально: «вернуться на сайт» |
+| `WEBAPP_URL` | HTTPS мини-приложения: кнопки в боте, уведомления; если `WEBSITE_URL` пуст — используется как «сайт» в заголовках `/sub` |
+| `WEBSITE_URL` | опционально: лендинг (`profile-web-page-url` / `website` в ответе VPN subscription URL `/sub`) |
+| `SUPPORT_URL` | поддержка для `/sub` (`support-url`, `announce-url`), редирект `/support`; вместе с сайтом даёт две кнопки. Fallback: `TELEGRAM_URL` (устар.); если задана только одна ссылка — вторая дублируется |
 
 <details>
 <summary>Остальные группы переменных (сжато)</summary>

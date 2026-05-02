@@ -1,6 +1,7 @@
 """Integration contracts for routes extracted into service layer."""
 
 import base64
+import os
 import uuid
 from unittest.mock import patch
 
@@ -298,6 +299,116 @@ async def test_subscription_positive_contract_with_mocked_dependencies(
     assert "vless://uuid@example.com:443?encryption=none#Daralla-Test" in decoded
     assert response.headers.get("subscription-userinfo")
     assert response.headers.get("profile-title")
+
+
+@pytest.mark.asyncio
+async def test_subscription_support_url_prefers_support_env(
+    quart_app_with_routes: Quart, db
+):
+    """SUPPORT_URL задаёт support-url и announce-url; TELEGRAM_URL только fallback."""
+    set_ctx(
+        AppContext(
+            subscription_manager=_FakeSubscriptionManager(),
+            server_manager=None,
+            vpn_brand_name="Daralla VPN",
+        )
+    )
+    client = quart_app_with_routes.test_client()
+    with patch.dict(
+        os.environ,
+        {
+            "SUPPORT_URL": "https://t.me/from_support",
+            "TELEGRAM_URL": "https://t.me/from_legacy",
+            "WEBSITE_URL": "https://example.com",
+        },
+        clear=False,
+    ):
+        with patch(
+            "daralla_backend.services.subscription_route_service.get_subscription_by_token",
+            return_value={"id": 101, "status": "active", "expires_at": 1893456000},
+        ), patch(
+            "daralla_backend.services.subscription_route_service.get_subscription_servers",
+            return_value=[{"server_name": "srv-1", "client_email": "u1@example.com"}],
+        ), patch(
+            "daralla_backend.services.subscription_route_service.is_subscription_active",
+            return_value=True,
+        ):
+            response = await client.get("/sub/token-101")
+    assert response.status_code == 200
+    assert response.headers.get("support-url") == "https://t.me/from_support"
+    assert response.headers.get("profile-web-page-url") == "https://example.com"
+    assert response.headers.get("announce-url") == "https://t.me/from_support"
+    assert response.headers.get("telegram-url") == "https://t.me/from_support"
+
+
+@pytest.mark.asyncio
+async def test_subscription_single_support_url_dupes_site_for_two_buttons(
+    quart_app_with_routes: Quart, db
+):
+    """Только SUPPORT_URL: дублируем в profile-web-page-url, чтобы были две кнопки."""
+    set_ctx(
+        AppContext(
+            subscription_manager=_FakeSubscriptionManager(),
+            server_manager=None,
+            vpn_brand_name="Daralla VPN",
+        )
+    )
+    client = quart_app_with_routes.test_client()
+    only = "https://t.me/only_support"
+    with patch.dict(
+        os.environ,
+        {"SUPPORT_URL": only, "TELEGRAM_URL": "", "WEBSITE_URL": "", "WEBAPP_URL": ""},
+        clear=False,
+    ):
+        with patch(
+            "daralla_backend.services.subscription_route_service.get_subscription_by_token",
+            return_value={"id": 101, "status": "active", "expires_at": 1893456000},
+        ), patch(
+            "daralla_backend.services.subscription_route_service.get_subscription_servers",
+            return_value=[{"server_name": "srv-1", "client_email": "u1@example.com"}],
+        ), patch(
+            "daralla_backend.services.subscription_route_service.is_subscription_active",
+            return_value=True,
+        ):
+            response = await client.get("/sub/token-101")
+    assert response.status_code == 200
+    assert response.headers.get("support-url") == only
+    assert response.headers.get("profile-web-page-url") == only
+    assert int(response.headers.get("X-Subscription-Remaining-Seconds", 0)) > 0
+
+
+@pytest.mark.asyncio
+async def test_subscription_inactive_returns_200_empty_body_with_headers(
+    quart_app_with_routes: Quart, db
+):
+    """Истёкшая подписка: 200, пустой base64, метаданные и X-Subscription-State (не 403)."""
+    set_ctx(
+        AppContext(
+            subscription_manager=_FakeSubscriptionManager(),
+            server_manager=None,
+            vpn_brand_name="Daralla VPN",
+        )
+    )
+    client = quart_app_with_routes.test_client()
+    past = 1000000000
+    with patch(
+        "daralla_backend.services.subscription_route_service.get_subscription_by_token",
+        return_value={"id": 102, "status": "expired", "expires_at": past},
+    ), patch(
+        "daralla_backend.services.subscription_route_service.get_subscription_servers",
+        return_value=[],
+    ), patch(
+        "daralla_backend.services.subscription_route_service.is_subscription_active",
+        return_value=False,
+    ):
+        response = await client.get("/sub/token-expired")
+    assert response.status_code == 200
+    body = await response.get_data(as_text=True)
+    assert base64.b64decode(body) == b""
+    assert response.headers.get("subscription-userinfo")
+    assert response.headers.get("profile-title")
+    assert response.headers.get("X-Subscription-State") == "expired"
+    assert response.headers.get("announce", "").startswith("base64:")
 
 
 @pytest.mark.asyncio

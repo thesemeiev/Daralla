@@ -64,9 +64,17 @@ class X3:
             return None
         up = cls._to_int(payload.get("up", payload.get("upload", 0)))
         down = cls._to_int(payload.get("down", payload.get("download", 0)))
-        total = cls._to_int(payload.get("total", payload.get("used", 0)))
-        if total <= 0 and (up > 0 or down > 0):
-            total = up + down
+        # total в панели — лимит трафика; 0 часто значит «безлимит». Не подменять на up+down,
+        # иначе в subscription-userinfo лимит становится равным использованию и клиенты рисуют 100%.
+        raw_total = payload.get("total")
+        if raw_total is None:
+            raw_total = payload.get("Total")
+        if raw_total is None:
+            total = cls._to_int(payload.get("used", 0))
+            if total <= 0 and (up > 0 or down > 0):
+                total = up + down
+        else:
+            total = cls._to_int(raw_total)
         # Возвращаем структуру даже с нулями — это валидное состояние для нового клиента.
         return {"upload": up, "download": down, "total": total}
 

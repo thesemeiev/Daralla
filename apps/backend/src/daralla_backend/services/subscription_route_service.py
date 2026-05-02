@@ -19,6 +19,10 @@ from daralla_backend.utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
 
+# В subscription-userinfo поле total=0 у части клиентов даёт деление used/0 или «100%».
+# При безлимите в панели (total=0) подставляем большой лимит — отображение «до безлимита».
+SUBSCRIPTION_UNLIMITED_TOTAL_BYTES = 1 << 50
+
 
 def _cors_headers():
     return {
@@ -36,6 +40,225 @@ def _format_bytes(bytes_value):
             return f"{bytes_value:.2f} {unit}"
         bytes_value /= 1024.0
     return f"{bytes_value:.2f} PB"
+
+
+def _classify_inactive_subscription(sub: dict, now_ts: int) -> str:
+    """deleted | expired | inactive (не активна по статусу, срок ещё не прошёл)."""
+    if sub.get("status") == "deleted":
+        return "deleted"
+    if int(sub.get("expires_at") or 0) < now_ts:
+        return "expired"
+    return "inactive"
+
+
+def _inactive_announce_text(reason: str) -> str:
+    if reason == "deleted":
+        return "Подписка удалена. Оформите новую в приложении или боте."
+    if reason == "expired":
+        return "Подписка истекла. Продлите в приложении или боте."
+    return "Подписка неактивна. Откройте приложение или бота."
+
+
+def _announce_header_value(text: str) -> str:
+    b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    return f"base64:{b64}"
+
+
+def _looks_like_telegram_url(url: str) -> bool:
+    if not url:
+        return False
+    u = url.lower()
+    return (
+        "t.me/" in u
+        or "telegram.me/" in u
+        or "telegram.dog/" in u
+        or u.startswith("tg:")
+    )
+
+
+def _resolve_button_urls() -> tuple[str, str]:
+    """
+    Две кнопки в клиентах: сайт и поддержка.
+
+    Сайт: WEBSITE_URL → WEBAPP_URL. Поддержка: SUPPORT_URL → TELEGRAM_URL (legacy).
+    Если задана только одна сторона — дублируем во вторую (или подставляем WEBAPP),
+    чтобы оба заголовка (profile-web-page-url и support-url) были заполнены.
+    """
+    webapp = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
+    site = (os.getenv("WEBSITE_URL") or "").strip()
+    support = (os.getenv("SUPPORT_URL") or "").strip()
+    legacy_tg = (os.getenv("TELEGRAM_URL") or "").strip()
+
+    support_btn = support or legacy_tg
+    site_btn = site or webapp
+
+    if support_btn and not site_btn:
+        site_btn = webapp or support_btn
+    if site_btn and not support_btn:
+        support_btn = legacy_tg or support or site_btn
+
+    return site_btn, support_btn
+
+
+def _build_subscription_headers(
+    *,
+    vpn_brand_name: str,
+    expire_timestamp_seconds: int,
+    total_upload: int,
+    total_download: int,
+    total_traffic: int,
+    is_happ_client: bool,
+    user_agent: str,
+    inactive_reason: str | None,
+    now_ts: int,
+) -> dict:
+    """Общие заголовки для 200-ответа /sub (активная и неактивная подписка)."""
+    expire_timestamp_ms = expire_timestamp_seconds * 1000
+    expire_datetime = datetime.datetime.fromtimestamp(expire_timestamp_seconds)
+    expire_str = expire_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    total_used = total_upload + total_download
+
+    quota_total = (
+        total_traffic if total_traffic > 0 else SUBSCRIPTION_UNLIMITED_TOTAL_BYTES
+    )
+    subscription_userinfo_happ = (
+        f"upload={total_upload}; "
+        f"download={total_download}; "
+        f"total={quota_total}; "
+        f"expire={expire_timestamp_seconds}"
+    )
+
+    if inactive_reason:
+        remaining_seconds = 0
+    else:
+        remaining_seconds = max(0, int(expire_timestamp_seconds) - int(now_ts))
+
+    clean_name_for_header = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip()
+    if not clean_name_for_header:
+        clean_name_for_header = os.getenv("VPN_BRAND_NAME", "Daralla VPN").strip()
+    if len(clean_name_for_header) > 25:
+        clean_name_for_header = clean_name_for_header[:25]
+        logger.warning("profile-title обрезан до 25 символов: '%s'", clean_name_for_header)
+
+    clean_name = re.sub(r"[^\w\s-]", "", vpn_brand_name)
+    domain_name = re.sub(r"\s+", "-", clean_name.strip()).lower()
+    if not domain_name or len(domain_name) > 63:
+        domain_name = re.sub(
+            r"\s+", "-", os.getenv("VPN_BRAND_NAME", "daralla-vpn").strip().lower()
+        )
+        if not domain_name or len(domain_name) > 63:
+            domain_name = "daralla-vpn"
+
+    site_btn, support_btn = _resolve_button_urls()
+    is_telegram_like = _looks_like_telegram_url(support_btn)
+
+    clean_filename = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip().replace(" ", "-").lower()
+    if not clean_filename:
+        clean_filename = re.sub(
+            r"\s+", "-", os.getenv("VPN_BRAND_NAME", "daralla-vpn").strip().lower()
+        )
+        if not clean_filename:
+            clean_filename = "daralla-vpn"
+
+    response_headers = {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "subscription-userinfo": subscription_userinfo_happ,
+        "Content-Disposition": f'attachment; filename="{clean_filename}"',
+        "new-domain": domain_name,
+        "X-Subscription-Name": clean_name_for_header,
+        "profile-title": clean_name_for_header,
+        "profile-update-interval": "1",
+        "expire": str(expire_timestamp_seconds),
+        "expiryTime": str(expire_timestamp_ms),
+        "expire-date": expire_str,
+        "upload": str(total_upload),
+        "download": str(total_download),
+        "total": str(quota_total),
+        "used": str(total_used),
+        "upload-formatted": _format_bytes(total_upload),
+        "download-formatted": _format_bytes(total_download),
+        "total-formatted": _format_bytes(total_traffic) if total_traffic > 0 else "Unlimited",
+        "used-formatted": _format_bytes(total_used),
+        "X-Subscription-Remaining-Seconds": str(remaining_seconds),
+        "remaining-seconds": str(remaining_seconds),
+    }
+
+    logger.debug(
+        "subscription buttons: site=%s support=%s telegram_like=%s",
+        "set" if site_btn else "",
+        "set" if support_btn else "",
+        is_telegram_like,
+    )
+
+    if inactive_reason:
+        response_headers["X-Subscription-State"] = inactive_reason
+        ann_text = _inactive_announce_text(inactive_reason)
+        response_headers["announce"] = _announce_header_value(ann_text)
+        if support_btn:
+            response_headers["announce-url"] = support_btn
+        elif site_btn:
+            response_headers["announce-url"] = site_btn
+
+    if site_btn:
+        response_headers["profile-web-page-url"] = site_btn
+        response_headers["website"] = site_btn
+
+    if support_btn:
+        response_headers["support-url"] = support_btn
+        if is_telegram_like:
+            response_headers["telegram-url"] = support_btn
+            response_headers["telegram"] = support_btn
+            response_headers["tg"] = support_btn
+
+    if not inactive_reason and not is_happ_client and support_btn:
+        if is_telegram_like:
+            announce_text = "#0088cc📱 Telegram"
+        else:
+            announce_text = "Поддержка"
+        announce_base64 = base64.b64encode(announce_text.encode("utf-8")).decode("utf-8")
+        response_headers["announce"] = f"base64:{announce_base64}"
+        response_headers["announce-url"] = support_btn
+        logger.debug(
+            "Добавлен announce в заголовках для V2RayTun (клиент: %s)",
+            user_agent[:50] if user_agent else "unknown",
+        )
+    elif not inactive_reason and is_happ_client:
+        logger.debug(
+            "Пропущен announce в заголовках для Happ клиента (используются кнопки через заголовки)"
+        )
+
+    return response_headers
+
+
+async def _sum_traffic_from_servers(subscription_id: int, servers: list) -> tuple[int, int, int]:
+    total_upload = 0
+    total_download = 0
+    total_traffic = 0
+    server_manager = get_ctx().server_manager
+    if not server_manager or not servers:
+        return total_upload, total_download, total_traffic
+    for server in servers:
+        server_name = server["server_name"]
+        client_email = server["client_email"]
+        try:
+            xui, _ = server_manager.get_server_by_name(server_name)
+            if xui:
+                traffic_stats = await xui.get_client_traffic(client_email)
+                if traffic_stats:
+                    total_upload += traffic_stats.get("upload", 0)
+                    total_download += traffic_stats.get("download", 0)
+                    total_traffic = max(total_traffic, traffic_stats.get("total", 0))
+        except Exception as exc:
+            logger.warning(
+                "Не удалось получить статистику трафика для %s на %s: %s",
+                client_email,
+                server_name,
+                exc,
+            )
+    return total_upload, total_download, total_traffic
 
 
 async def handle_subscription_request(token: str, method: str, headers: dict):
@@ -83,16 +306,53 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             expires_at = int(sub.get("expires_at") or 0)
             expires_str = datetime.datetime.fromtimestamp(expires_at).strftime("%Y-%m-%d %H:%M:%S")
             current_str = datetime.datetime.fromtimestamp(now_ts).strftime("%Y-%m-%d %H:%M:%S")
+            inactive_reason = _classify_inactive_subscription(sub, now_ts)
             logger.warning(
-                "Подписка с токеном %s не активна: status=%s, expires_at=%s, current=%s",
+                "Подписка с токеном %s не активна (%s): status=%s, expires_at=%s, current=%s",
                 token_masked,
+                inactive_reason,
                 sub.get("status"),
                 expires_str,
                 current_str,
             )
-            if expires_at < now_ts:
-                return "Подписка просрочена", 403, None
-            return "Подписка неактивна", 403, None
+            servers = await get_subscription_servers(sub["id"])
+            if inactive_reason == "deleted":
+                total_upload, total_download, total_traffic = 0, 0, 0
+            else:
+                total_upload, total_download, total_traffic = await _sum_traffic_from_servers(
+                    sub["id"], servers
+                )
+                logger.info(
+                    "Неактивная подписка %s: трафик upload=%s download=%s total=%s",
+                    sub["id"],
+                    total_upload,
+                    total_download,
+                    total_traffic,
+                )
+
+            expire_ts = int(sub.get("expires_at") or 0)
+            if expire_ts <= 0:
+                expire_ts = now_ts
+
+            vpn_brand_name = get_ctx().vpn_brand_name
+            response_headers = _build_subscription_headers(
+                vpn_brand_name=vpn_brand_name,
+                expire_timestamp_seconds=expire_ts,
+                total_upload=total_upload,
+                total_download=total_download,
+                total_traffic=total_traffic,
+                is_happ_client=is_happ_client,
+                user_agent=user_agent,
+                inactive_reason=inactive_reason,
+                now_ts=now_ts,
+            )
+            empty_b64 = base64.b64encode(b"").decode("ascii")
+            logger.info(
+                "Возвращаем пустую подписку 200 для token=%s state=%s",
+                token_masked,
+                inactive_reason,
+            )
+            return empty_b64, 200, response_headers
 
         logger.info("Подписка %s валидна, генерируем ссылки...", sub["id"])
 
@@ -108,23 +368,7 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
 
         vpn_brand_name = get_ctx().vpn_brand_name
 
-        clean_name = re.sub(r"[^\w\s-]", "", vpn_brand_name)
-        domain_name = re.sub(r"\s+", "-", clean_name.strip()).lower()
-        if not domain_name or len(domain_name) > 63:
-            domain_name = re.sub(
-                r"\s+", "-", os.getenv("VPN_BRAND_NAME", "daralla-vpn").strip().lower()
-            )
-            if not domain_name or len(domain_name) > 63:
-                domain_name = "daralla-vpn"
-
-        website_url = os.getenv("WEBSITE_URL", "").strip()
-        telegram_url = os.getenv("TELEGRAM_URL", "").strip()
-
         expire_timestamp_seconds = sub["expires_at"]
-
-        total_upload = 0
-        total_download = 0
-        total_traffic = 0
 
         logger.info(
             "Начало получения статистики трафика для подписки %s с %s серверами",
@@ -132,65 +376,19 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             len(servers),
         )
 
-        try:
-            server_manager = get_ctx().server_manager
-            if server_manager and servers:
-                for server in servers:
-                    server_name = server["server_name"]
-                    client_email = server["client_email"]
-                    try:
-                        xui, _ = server_manager.get_server_by_name(server_name)
-                        if xui:
-                            traffic_stats = await xui.get_client_traffic(client_email)
-                            if traffic_stats:
-                                total_upload += traffic_stats.get("upload", 0)
-                                total_download += traffic_stats.get("download", 0)
-                                total_traffic = max(total_traffic, traffic_stats.get("total", 0))
-                                logger.debug(
-                                    "Статистика трафика для %s на %s: upload=%s, download=%s, total=%s",
-                                    client_email,
-                                    server_name,
-                                    traffic_stats.get("upload", 0),
-                                    traffic_stats.get("download", 0),
-                                    traffic_stats.get("total", 0),
-                                )
-                    except Exception as exc:
-                        logger.warning(
-                            "Не удалось получить статистику трафика для %s на %s: %s",
-                            client_email,
-                            server_name,
-                            exc,
-                        )
-            logger.info(
-                "Общая статистика трафика подписки: upload=%s, download=%s, total=%s",
-                total_upload,
-                total_download,
-                total_traffic,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Ошибка получения статистики трафика: %s, используем значения по умолчанию",
-                exc,
-            )
-
-        expire_timestamp_ms = expire_timestamp_seconds * 1000
-        expire_datetime = datetime.datetime.fromtimestamp(expire_timestamp_seconds)
-        expire_str = expire_datetime.strftime("%Y-%m-%d %H:%M:%S")
-        total_used = total_upload + total_download
-
-        subscription_userinfo_happ = (
-            f"upload={total_upload}; "
-            f"download={total_download}; "
-            f"total={total_traffic if total_traffic > 0 else 0}; "
-            f"expire={expire_timestamp_seconds}"
+        total_upload, total_download, total_traffic = await _sum_traffic_from_servers(
+            sub["id"], servers
+        )
+        logger.info(
+            "Общая статистика трафика подписки: upload=%s, download=%s, total=%s",
+            total_upload,
+            total_download,
+            total_traffic,
         )
 
-        clean_name_for_header = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip()
-        if not clean_name_for_header:
-            clean_name_for_header = os.getenv("VPN_BRAND_NAME", "Daralla VPN").strip()
-        if len(clean_name_for_header) > 25:
-            clean_name_for_header = clean_name_for_header[:25]
-            logger.warning("profile-title обрезан до 25 символов: '%s'", clean_name_for_header)
+        expire_str = datetime.datetime.fromtimestamp(expire_timestamp_seconds).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
         links_plain = "\n".join(links)
         response_text = base64.b64encode(links_plain.encode("utf-8")).decode("ascii")
@@ -217,8 +415,11 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             expire_timestamp_seconds,
         )
         logger.info(
-            "subscription-userinfo (строковый формат для Happ и V2RayTun): %s",
-            subscription_userinfo_happ,
+            "subscription-userinfo (строковый формат для Happ и V2RayTun): upload=%s; download=%s; total=%s; expire=%s",
+            total_upload,
+            total_download,
+            total_traffic,
+            expire_timestamp_seconds,
         )
         logger.info(
             "Устанавливаем название группы подписки (Remarks для V2RayTun): '%s'",
@@ -229,65 +430,28 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             expire_str,
             sub["expires_at"],
         )
+        clean_name = re.sub(r"[^\w\s-]", "", vpn_brand_name)
+        domain_name = re.sub(r"\s+", "-", clean_name.strip()).lower()
         logger.info("Домен для Happ клиента: '%s' (из '%s')", domain_name, vpn_brand_name)
-        if website_url:
-            logger.info("Ссылка на сайт: %s", website_url)
-        if telegram_url:
-            logger.info("Ссылка на Telegram: %s", telegram_url)
-
-        clean_filename = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip().replace(" ", "-").lower()
-        if not clean_filename:
-            clean_filename = re.sub(
-                r"\s+", "-", os.getenv("VPN_BRAND_NAME", "daralla-vpn").strip().lower()
+        site_b, sup_b = _resolve_button_urls()
+        if sup_b or site_b:
+            logger.info(
+                "Подписка /sub: поддержка=%s сайт=%s",
+                (sup_b or "")[:80],
+                (site_b or "")[:80],
             )
-            if not clean_filename:
-                clean_filename = "daralla-vpn"
 
-        response_headers = {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "subscription-userinfo": subscription_userinfo_happ,
-            "Content-Disposition": f'attachment; filename="{clean_filename}"',
-            "new-domain": domain_name,
-            "X-Subscription-Name": clean_name_for_header,
-            "profile-title": clean_name_for_header,
-            "profile-update-interval": "1",
-            "expire": str(expire_timestamp_seconds),
-            "expiryTime": str(expire_timestamp_ms),
-            "expire-date": expire_str,
-            "upload": str(total_upload),
-            "download": str(total_download),
-            "total": str(total_traffic if total_traffic > 0 else 0),
-            "used": str(total_used),
-            "upload-formatted": _format_bytes(total_upload),
-            "download-formatted": _format_bytes(total_download),
-            "total-formatted": _format_bytes(total_traffic) if total_traffic > 0 else "Unlimited",
-            "used-formatted": _format_bytes(total_used),
-        }
-        if website_url:
-            response_headers["profile-web-page-url"] = website_url
-            response_headers["website"] = website_url
-            response_headers["support-url"] = website_url
-        if telegram_url:
-            response_headers["support-url"] = telegram_url
-            response_headers["telegram-url"] = telegram_url
-            response_headers["telegram"] = telegram_url
-            response_headers["tg"] = telegram_url
-            if not is_happ_client:
-                announce_text = "#0088cc📱 Telegram"
-                announce_base64 = base64.b64encode(announce_text.encode("utf-8")).decode("utf-8")
-                response_headers["announce"] = f"base64:{announce_base64}"
-                response_headers["announce-url"] = telegram_url
-                logger.debug(
-                    "Добавлен announce в заголовках для V2RayTun (клиент: %s)",
-                    user_agent[:50] if user_agent else "unknown",
-                )
-            else:
-                logger.debug(
-                    "Пропущен announce в заголовках для Happ клиента (используются кнопки через заголовки)"
-                )
+        response_headers = _build_subscription_headers(
+            vpn_brand_name=vpn_brand_name,
+            expire_timestamp_seconds=expire_timestamp_seconds,
+            total_upload=total_upload,
+            total_download=total_download,
+            total_traffic=total_traffic,
+            is_happ_client=is_happ_client,
+            user_agent=user_agent,
+            inactive_reason=None,
+            now_ts=int(time.time()),
+        )
 
         return response_text, 200, response_headers
     except Exception as exc:
