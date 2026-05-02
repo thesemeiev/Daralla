@@ -547,42 +547,36 @@ class X3:
             X3._client_set(c, "id", uuid_val)
         return c
 
-    @staticmethod
-    def _resolve_client_identifier_from_settings(
-        settings_obj: Any,
-        *,
-        email: Optional[str],
-        auth: Optional[str],
-        password: Optional[str],
-    ) -> Optional[str]:
-        email_norm = str(email or "").strip()
-        auth_norm = str(auth or "").strip()
-        password_norm = str(password or "").strip()
-        groups: list[list[Any]]
-        if isinstance(settings_obj, dict):
-            groups = [list(settings_obj.get("clients") or []), list(settings_obj.get("users") or [])]
-        else:
-            groups = [
-                list(getattr(settings_obj, "clients", None) or []),
-                list(getattr(settings_obj, "users", None) or []),
-            ]
-        for group in groups:
-            for cl in group:
-                cl_email = str(X3._client_get(cl, "email", "") or "").strip()
-                cl_auth = str(X3._client_get(cl, "auth", "") or "").strip()
-                cl_password = str(X3._client_get(cl, "password", "") or "").strip()
-                if not (
-                    (email_norm and cl_email == email_norm)
-                    or (auth_norm and cl_auth == auth_norm)
-                    or (password_norm and cl_password == password_norm)
-                ):
-                    continue
-                cl_id = str(X3._client_get(cl, "id", "") or "").strip()
-                cl_uuid = str(X3._client_get(cl, "uuid", "") or "").strip()
-                resolved = cl_id or cl_uuid
-                if resolved:
-                    return resolved
-        return None
+    @classmethod
+    def _client_url_id_for_protocol(cls, protocol: str, c: Any) -> Optional[str]:
+        """
+        Возвращает идентификатор клиента, который 3x-ui ожидает в URL
+        ручек /updateClient/:clientId и /:inboundId/delClient/:clientId.
+
+        Источник правил — `web/service/inbound.go` 3x-ui:
+            vmess/vless        -> client.id (UUID)
+            trojan/tuic        -> client.password
+            shadowsocks        -> client.email
+            hysteria/hysteria2 -> client.auth
+        """
+        protocol_norm = cls._normalize_protocol_name((protocol or "").strip().lower(), None)
+
+        def _get(key: str) -> str:
+            return str(cls._client_get(c, key, "") or "").strip()
+
+        if protocol_norm in ("vmess", "vless"):
+            uuid_val = _get("uuid")
+            id_val = _get("id")
+            return id_val or uuid_val or None
+        if protocol_norm in ("trojan", "tuic"):
+            return _get("password") or None
+        if protocol_norm == "shadowsocks":
+            return _get("email") or None
+        if protocol_norm == "hysteria2":
+            return _get("auth") or None
+        # Неизвестный протокол: используем стандартный путь VLESS-подобного UUID,
+        # затем падает с понятной ошибкой выше по стеку.
+        return _get("id") or _get("uuid") or None
 
     async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
         """addClient: как py3xui, но flow всегда в JSON (см. panel_client_settings_dict)."""
@@ -643,66 +637,38 @@ class X3:
                 pass
         self._ensure_client_id_for_update(c)
         api = self._api.client
-        client_identifier = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
         email = self._client_get(c, "email", None)
-        auth = self._client_get(c, "auth", None)
-        password = self._client_get(c, "password", None)
         enable_override = self._coerce_optional_bool(self._client_get(c, "enable", None))
-        uuid_for_url = str(client_identifier).strip() if client_identifier is not None else None
-        if not uuid_for_url:
-            uuid_for_url = None
 
-        if not uuid_for_url:
-            if email:
-                resolved = None
-                try:
-                    resolved = await self._api.client.get_by_email(str(email))
-                except ValueError as exc:
-                    if not _value_error_client_absent_on_panel(exc):
-                        raise
-                if resolved is not None:
-                    resolved.expiry_time = self._client_get(c, "expiry_time", getattr(resolved, "expiry_time", None))
-                    resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
-                    if flow_override is not None:
-                        resolved.flow = flow_override
-                    self._ensure_client_id_for_update(resolved)
-                    resolved_identifier = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
-                    uuid_for_url = str(resolved_identifier).strip() if resolved_identifier is not None else None
-                    if not uuid_for_url:
-                        uuid_for_url = None
-                    c = resolved
-                    inbound_id = (
-                        int(inbound_id_override)
-                        if inbound_id_override is not None
-                        else getattr(resolved, "inbound_id", inbound_id)
-                    )
-            if not uuid_for_url and inbound_id is not None:
-                try:
-                    inv = await self._api.inbound.get_by_id(int(inbound_id))
-                    resolved_identifier = self._resolve_client_identifier_from_settings(
-                        getattr(inv, "settings", None),
-                        email=(str(email) if email else None),
-                        auth=(str(auth) if auth else None),
-                        password=(str(password) if password else None),
-                    )
-                    if resolved_identifier:
-                        uuid_for_url = str(resolved_identifier).strip() or None
-                        if uuid_for_url:
-                            self._client_set(c, "id", uuid_for_url)
-                except Exception:
-                    logger.debug(
-                        "updateClient: resolve identifier from inbound settings failed "
-                        "(inbound_id=%s email=%s)",
-                        inbound_id,
-                        email or "-",
-                        exc_info=True,
-                    )
-        if not uuid_for_url:
+        client_url_id: Optional[str] = self._client_url_id_for_protocol(protocol_norm, c)
+
+        if not client_url_id and email:
+            resolved = None
+            try:
+                resolved = await self._api.client.get_by_email(str(email))
+            except ValueError as exc:
+                if not _value_error_client_absent_on_panel(exc):
+                    raise
+            if resolved is not None:
+                resolved.expiry_time = self._client_get(c, "expiry_time", getattr(resolved, "expiry_time", None))
+                resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
+                if flow_override is not None:
+                    resolved.flow = flow_override
+                self._ensure_client_id_for_update(resolved)
+                c = resolved
+                inbound_id = (
+                    int(inbound_id_override)
+                    if inbound_id_override is not None
+                    else getattr(resolved, "inbound_id", inbound_id)
+                )
+                client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+
+        if not client_url_id:
             raise ValueError(
                 f"updateClient: empty client id for protocol={protocol_norm or 'unknown'} "
                 f"email={self._client_get(c, 'email', None)} inbound_id={inbound_id}"
             )
-        endpoint = f"panel/api/inbounds/updateClient/{uuid_for_url}"
+        endpoint = f"panel/api/inbounds/updateClient/{client_url_id}"
         settings = {
             "clients": [
                 panel_client_settings_dict(
@@ -927,6 +893,16 @@ class X3:
         # Успех — отсутствие исключения
         return True
 
+    async def _post_inbound_del_client_by_email(self, inbound_id: int, email: str) -> None:
+        """Штатный клиентский эндпоинт 3x-ui: удалить клиента по email
+        внутри inbound, без перезаписи всего инбаунда.
+        """
+        await self._ensure_login()
+        api = self._api.client
+        endpoint = f"panel/api/inbounds/{int(inbound_id)}/delClientByEmail/{quote(str(email), safe='')}"
+        url = api._url(endpoint)
+        await api._post(url, {"Accept": "application/json"}, {})
+
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def deleteClient(self, user_email: str, timeout: int = 15) -> bool:
         await self._ensure_login()
@@ -951,11 +927,50 @@ class X3:
         if inbound_id is None:
             logger.warning("Не удалось определить inbound_id для клиента %s", user_email)
             return False
-        # Панель 3x-ui при delete ожидает client id в том же формате, что и при update (UUID для VLESS)
+
+        # Определяем протокол inbound, чтобы выбрать правильный clientId для URL.
+        protocol_norm: str = ""
+        try:
+            inv = await self._api.inbound.get_by_id(int(inbound_id))
+            protocol_norm = self._extract_protocol(inv)
+        except Exception:
+            logger.debug(
+                "deleteClient: не удалось получить protocol для inbound_id=%s",
+                inbound_id,
+                exc_info=True,
+            )
+
         self._ensure_client_id_for_update(c)
-        await self._api.client.delete(int(inbound_id), c.id)
-        logger.info("Клиент удалён: %s (inbound_id=%s)", user_email, inbound_id)
-        # True — один клиент с таким email был удалён
+        client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+
+        if client_url_id:
+            try:
+                await self._api.client.delete(int(inbound_id), str(client_url_id))
+                logger.info(
+                    "Клиент удалён: %s (inbound_id=%s, protocol=%s)",
+                    user_email,
+                    inbound_id,
+                    protocol_norm or "?",
+                )
+                return True
+            except Exception as exc:
+                logger.warning(
+                    "deleteClient API failed for %s (inbound_id=%s, protocol=%s): %s; "
+                    "trying delClientByEmail",
+                    user_email,
+                    inbound_id,
+                    protocol_norm or "?",
+                    exc,
+                )
+
+        # Fallback (без перезаписи inbound): штатная клиентская ручка delClientByEmail.
+        await self._post_inbound_del_client_by_email(int(inbound_id), str(user_email))
+        logger.info(
+            "Клиент удалён через delClientByEmail: %s (inbound_id=%s, protocol=%s)",
+            user_email,
+            inbound_id,
+            protocol_norm or "?",
+        )
         return True
 
     async def get_online_clients_ids(self, timeout: int = 15) -> tuple:
