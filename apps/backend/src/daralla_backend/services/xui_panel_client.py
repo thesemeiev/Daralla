@@ -80,11 +80,17 @@ class XUiPanelClient:
         # Дальше пути endpoint'ов добавляем относительно него.
         if verify_tls is None:
             verify_tls = self.host.startswith("https://")
+        self._verify_tls = bool(verify_tls)
         timeout_total = max(5.0, _float_env("XUI_HTTP_TIMEOUT_TOTAL", 30.0))
         timeout_connect = max(3.0, _float_env("XUI_HTTP_TIMEOUT_CONNECT", 15.0))
         timeout_pool = max(2.0, _float_env("XUI_HTTP_TIMEOUT_POOL", 10.0))
         self._timeout = httpx.Timeout(timeout_total, connect=timeout_connect, pool=timeout_pool)
-        self._client = httpx.AsyncClient(verify=verify_tls, timeout=self._timeout)
+        # Не создаём httpx.AsyncClient в __init__: один экземпляр X3 живёт и в фоне бота,
+        # и в HTTP-воркере Quart/Hypercorn — у них разные event loop'ы; общий AsyncClient
+        # даёт RuntimeError (connection pool Event/ Lock привязан к другому циклу).
+        self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._login_lock: Optional[asyncio.Lock] = None
         self._max_retries = self._coerce_retries(max_retries)
         self._session_ttl = float(
             session_ttl_sec
@@ -93,7 +99,37 @@ class XUiPanelClient:
         )
         self._logged_in: bool = False
         self._login_ts: float = 0.0
+
+    async def _ensure_http_client_for_loop(self) -> None:
+        """Создаёт/пересоздаёт AsyncClient и Lock для текущего event loop."""
+        loop = asyncio.get_running_loop()
+
+        if self._client is not None:
+            if self._client_loop is loop:
+                if self._login_lock is None:
+                    self._login_lock = asyncio.Lock()
+                return
+            if self._client_loop is None:
+                # Тесты подменяют _client до первого await — привязываем к текущему циклу.
+                self._client_loop = loop
+                if self._login_lock is None:
+                    self._login_lock = asyncio.Lock()
+                return
+            try:
+                await self._client.aclose()
+            except Exception:
+                logger.debug("XUiPanelClient: aclose before loop switch failed", exc_info=True)
+            self._client = None
+            self._client_loop = None
+            self._login_lock = None
+            self._logged_in = False
+            self._login_ts = 0.0
+
+        self._client = httpx.AsyncClient(verify=self._verify_tls, timeout=self._timeout)
+        self._client_loop = loop
         self._login_lock = asyncio.Lock()
+        self._logged_in = False
+        self._login_ts = 0.0
 
     @staticmethod
     def _coerce_retries(max_retries: Optional[int]) -> int:
@@ -114,10 +150,19 @@ class XUiPanelClient:
         return f"{self.host}/{path}"
 
     async def aclose(self) -> None:
+        if self._client is None:
+            self._client_loop = None
+            self._login_lock = None
+            return
         try:
             await self._client.aclose()
         except Exception:
             logger.debug("XUiPanelClient: aclose failed", exc_info=True)
+        finally:
+            self._client = None
+            self._client_loop = None
+            self._login_lock = None
+            self._logged_in = False
 
     async def __aenter__(self) -> "XUiPanelClient":
         return self
@@ -126,6 +171,8 @@ class XUiPanelClient:
         await self.aclose()
 
     async def _ensure_login(self) -> None:
+        await self._ensure_http_client_for_loop()
+        assert self._login_lock is not None
         now = time.monotonic()
         if self._logged_in and (now - self._login_ts) < self._session_ttl:
             return
@@ -136,10 +183,13 @@ class XUiPanelClient:
             await self._do_login()
 
     async def _relogin(self) -> None:
+        await self._ensure_http_client_for_loop()
+        assert self._login_lock is not None
         async with self._login_lock:
             await self._do_login()
 
     async def _do_login(self) -> None:
+        assert self._client is not None
         url = self._url("login")
         logger.debug("XUiPanelClient: login at %s", _mask_host(self.host))
         resp = await self._client.post(
@@ -168,6 +218,7 @@ class XUiPanelClient:
         Возвращает распарсенный JSON-объект (`obj` поле или весь body, см. ниже).
         """
         await self._ensure_login()
+        assert self._client is not None
         attempts = self._max_retries if retries is None else max(1, int(retries))
         last_exc: Optional[Exception] = None
         url = self._url(path)
