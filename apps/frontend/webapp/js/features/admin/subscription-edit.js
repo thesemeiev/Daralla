@@ -448,17 +448,32 @@
             var html = buckets.map(function (b) {
                 var id = String(b.id);
                 var isUnlimited = !!b.is_unlimited;
-                var used = Number(b.used_bytes_window || 0);
-                var limit = Number(b.limit_bytes || 0);
+                var usesPeriodQuota = !!b.uses_period_quota;
+                var hasDisplayMetrics = !isUnlimited && b.display_used_bytes !== undefined && b.display_used_bytes !== null;
+                var windowUsed = Number(b.used_bytes_window || 0);
+                var used = hasDisplayMetrics ? Number(b.display_used_bytes) : windowUsed;
+                var rawLimit = Number(b.limit_bytes || 0);
+                var limitForDisplay = !isUnlimited && hasDisplayMetrics ? Number(b.display_limit_bytes || 0) : rawLimit;
                 var winDays = Number(b.window_days || 30);
                 var creditTotal = Number(b.credit_periods_total || 1);
-                var exhausted = !!b.is_exhausted;
+                var exhausted = isUnlimited ? false : (hasDisplayMetrics ? !!b.display_exhausted : !!b.is_exhausted);
                 var statusText = exhausted ? 'Лимит исчерпан' : 'В пределах лимита';
                 var statusClass = exhausted ? 'traffic-status-exhausted' : 'traffic-status-active';
                 var typeRu = isUnlimited ? 'Без лимита' : 'Лимит по трафику';
-                var limitRu = isUnlimited ? '—' : _formatBytes(limit);
-                var remainRu = isUnlimited ? '—' : _formatBytes(Math.max(0, limit - used));
-                var gibVal = isUnlimited ? '' : _gibFromBytes(limit);
+                var limitRu = isUnlimited ? '—' : _formatBytes(limitForDisplay);
+                var remainRu = isUnlimited ? '—' : (hasDisplayMetrics
+                    ? _formatBytes(Number(b.display_remaining_bytes || 0))
+                    : _formatBytes(Math.max(0, rawLimit - windowUsed)));
+                var limLabel = usesPeriodQuota && !isUnlimited ? 'Эффективный лимит' : 'Лимит пакета';
+                var usedLabel = usesPeriodQuota && !isUnlimited ? 'Учтено (период)' : 'Использовано';
+                var remLabel = usesPeriodQuota && !isUnlimited ? 'Доступно сейчас' : 'Остаток';
+                var gibVal = isUnlimited ? '' : _gibFromBytes(rawLimit);
+                var quotaHintHtml = (usesPeriodQuota && !isUnlimited)
+                    ? '  <p class="hint traffic-period-quota-bucket-hint">Сводка совпадает с <strong>периодной квотой подписки</strong> (включённый объём на оплаченный период и докупка). Ниже «Лимит, ГиБ» — параметр пакета для шаблона/синка; жёсткий учёт для лимитных нод идёт по этим числам и блоку «Квота оплаченного периода».</p>\n'
+                    : '';
+                var adjustHintHtml = (usesPeriodQuota && !isUnlimited)
+                    ? '    <p class="hint traffic-adjust-quota-hint">Дельта меняет дневной учёт и строку периодной квоты для этого пакета.</p>\n'
+                    : '';
                 var canDeleteBucket = buckets.length > 1 && !isUnlimited;
                 var limitFieldHtml = isUnlimited
                     ? ''
@@ -496,13 +511,14 @@
                     + '    <h4 class="traffic-bucket-title">' + _deps.escapeHtml(b.name || ('Пакет #' + id)) + '</h4>'
                     + '    <span class="traffic-bucket-status ' + statusClass + '" role="status">' + statusText + '</span>'
                     + '  </header>'
+                    + quotaHintHtml
                     + '  <div class="traffic-metric-grid" aria-label="Сводка по трафику">'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">Окно учёта</span><span class="traffic-metric-value">' + winDays + ' дн.</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">Слотов кредита</span><span class="traffic-metric-value">' + creditTotal + '</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">Тип</span><span class="traffic-metric-value">' + typeRu + '</span></div>'
-                    + '    <div class="traffic-metric"><span class="traffic-metric-label">Лимит пакета</span><span class="traffic-metric-value">' + limitRu + '</span></div>'
-                    + '    <div class="traffic-metric"><span class="traffic-metric-label">Использовано</span><span class="traffic-metric-value">' + _formatBytes(used) + '</span></div>'
-                    + '    <div class="traffic-metric"><span class="traffic-metric-label">Остаток</span><span class="traffic-metric-value">' + remainRu + '</span></div>'
+                    + '    <div class="traffic-metric"><span class="traffic-metric-label">' + limLabel + '</span><span class="traffic-metric-value">' + limitRu + '</span></div>'
+                    + '    <div class="traffic-metric"><span class="traffic-metric-label">' + usedLabel + '</span><span class="traffic-metric-value">' + _formatBytes(used) + '</span></div>'
+                    + '    <div class="traffic-metric"><span class="traffic-metric-label">' + remLabel + '</span><span class="traffic-metric-value">' + remainRu + '</span></div>'
                     + '  </div>'
                     + '  <section class="traffic-bucket-block" aria-labelledby="bucket-params-' + id + '">'
                     + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Настройки пакета</h5>'
@@ -529,6 +545,7 @@
                     + '  </section>'
                     + '  <section class="traffic-bucket-block traffic-bucket-block--adjust" aria-labelledby="bucket-adjust-' + id + '">'
                     + '    <h5 class="traffic-bucket-block-title" id="bucket-adjust-' + id + '">Корректировка учёта</h5>'
+                    + adjustHintHtml
                     + '    <div class="traffic-bucket-adjust-fields">'
                     + '      <label class="traffic-field">'
                     + '        <span class="traffic-field-label">Дельта, ГиБ (+ или −)</span>'

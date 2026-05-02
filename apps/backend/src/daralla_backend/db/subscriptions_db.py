@@ -866,6 +866,37 @@ async def upsert_subscription_traffic_quota_row(
         await db.commit()
 
 
+async def adjust_subscription_traffic_quota_for_bucket_usage(subscription_id: int, bucket_id: int, delta: int) -> None:
+    """
+    Синхронизирует строку периодной квоты с админской корректировкой учёта bucket (тот же bucket_id, что limited_bucket_id).
+    Положительная дельта — как списание трафика; отрицательная — возврат (сначала уменьшаем included_used, остаток в докупку).
+    """
+    if delta == 0:
+        return
+    row = await get_subscription_traffic_quota(int(subscription_id))
+    if not row or int(row["limited_bucket_id"]) != int(bucket_id):
+        return
+    if delta > 0:
+        await allocate_subscription_traffic_quota_delta(subscription_id, bucket_id, delta)
+        return
+    rem = -int(delta)
+    allowance = max(0, int(row["included_allowance_bytes"]))
+    used = max(0, int(row["included_used_bytes"]))
+    purchased = max(0, int(row["purchased_remaining_bytes"]))
+    dec_used = min(rem, used)
+    new_used = used - dec_used
+    refund = rem - dec_used
+    new_purchased = purchased + refund
+    await upsert_subscription_traffic_quota_row(
+        int(subscription_id),
+        int(bucket_id),
+        included_allowance_bytes=allowance,
+        included_used_bytes=new_used,
+        purchased_remaining_bytes=new_purchased,
+        bump_period_version=False,
+    )
+
+
 async def allocate_subscription_traffic_quota_delta(subscription_id: int, bucket_id: int, delta: int) -> None:
     """Списание дельты: сначала included_used до allowance, затем purchased_remaining."""
     if delta <= 0:

@@ -10,6 +10,7 @@ import os
 from daralla_backend.db.notifications_db import clear_subscription_notifications
 from daralla_backend.db.subscriptions_db import (
     add_subscription_purchased_traffic_bytes,
+    adjust_subscription_traffic_quota_for_bucket_usage,
     apply_bucket_usage_adjustment,
     create_subscription_traffic_bucket,
     delete_all_subscription_traffic_data,
@@ -130,6 +131,20 @@ async def _traffic_bucket_snapshot(sub_id: int) -> dict:
         bucket["used_bytes_window"] = int(usage_map.get(bucket_id, 0))
     qrow = await get_subscription_traffic_quota(sub_id)
     traffic_quota = dict(qrow) if qrow else None
+
+    service = get_traffic_bucket_service()
+    states = await service.compute_bucket_states(sub_id)
+    for bucket in buckets:
+        bid = int(bucket["id"])
+        st = states.get(bid)
+        if not st:
+            continue
+        bucket["display_used_bytes"] = int(st.get("used_bytes") or 0)
+        bucket["display_limit_bytes"] = int(st.get("limit_bytes") or 0)
+        bucket["display_remaining_bytes"] = int(st.get("remaining_bytes") or 0)
+        bucket["display_exhausted"] = bool(st.get("is_exhausted"))
+        bucket["uses_period_quota"] = st.get("traffic_quota") is not None
+
     return {
         "buckets": buckets,
         "server_bucket_map": mapping,
@@ -277,6 +292,7 @@ async def adjust_subscription_bucket_usage_payload(sub_id: int, bucket_id: int, 
     if not bucket or int(bucket.get("subscription_id") or 0) != int(sub_id):
         return None, {"error": "Bucket not found"}, 404
     await apply_bucket_usage_adjustment(bucket_id, int(bytes_delta), reason=reason or "admin_adjust")
+    await adjust_subscription_traffic_quota_for_bucket_usage(sub_id, int(bucket_id), int(bytes_delta))
     service = get_traffic_bucket_service()
     await service.enqueue_enforcement_if_needed(sub_id)
     snap = await _traffic_bucket_snapshot(sub_id)

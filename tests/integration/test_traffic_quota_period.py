@@ -6,7 +6,9 @@ import uuid
 import pytest
 
 from daralla_backend.db.subscriptions_db import (
+    adjust_subscription_traffic_quota_for_bucket_usage,
     allocate_subscription_traffic_quota_delta,
+    apply_bucket_usage_adjustment,
     create_subscription,
     create_subscription_traffic_bucket,
     ensure_default_unlimited_bucket,
@@ -249,3 +251,115 @@ async def test_quota_ui_false_when_quota_points_at_unlimited_bucket_no_mapping(d
 
     q = await get_subscription_traffic_quota(sub_id)
     assert await subscription_should_show_user_traffic_quota(sub_id, dict(q)) is False
+
+
+@pytest.mark.asyncio
+async def test_quota_adjust_positive_syncs_with_bucket_adjust(db, monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    subscriber_id = await get_or_create_subscriber(f"u_tqadj_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=None,
+    )
+    bid = await create_subscription_traffic_bucket(
+        sub_id,
+        f"lim_adj_{suffix}",
+        limit_bytes=10 * 1024**3,
+        is_unlimited=False,
+    )
+    await upsert_subscription_traffic_quota_row(
+        sub_id,
+        bid,
+        included_allowance_bytes=1000,
+        included_used_bytes=100,
+        purchased_remaining_bytes=400,
+    )
+    delta = 50
+    await apply_bucket_usage_adjustment(bid, delta, reason="test")
+    await adjust_subscription_traffic_quota_for_bucket_usage(sub_id, bid, delta)
+
+    row = await get_subscription_traffic_quota(sub_id)
+    assert int(row["included_used_bytes"]) == 150
+    assert int(row["purchased_remaining_bytes"]) == 400
+
+
+@pytest.mark.asyncio
+async def test_quota_adjust_negative_returns_to_purchased(db, monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    subscriber_id = await get_or_create_subscriber(f"u_tqadjn_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=None,
+    )
+    bid = await create_subscription_traffic_bucket(
+        sub_id,
+        f"lim_adjn_{suffix}",
+        limit_bytes=10 * 1024**3,
+        is_unlimited=False,
+    )
+    await upsert_subscription_traffic_quota_row(
+        sub_id,
+        bid,
+        included_allowance_bytes=1000,
+        included_used_bytes=80,
+        purchased_remaining_bytes=10,
+    )
+    await adjust_subscription_traffic_quota_for_bucket_usage(sub_id, bid, -50)
+
+    row = await get_subscription_traffic_quota(sub_id)
+    assert int(row["included_used_bytes"]) == 30
+    assert int(row["purchased_remaining_bytes"]) == 10
+
+    await adjust_subscription_traffic_quota_for_bucket_usage(sub_id, bid, -50)
+    row = await get_subscription_traffic_quota(sub_id)
+    assert int(row["included_used_bytes"]) == 0
+    # 30 байт снято с included_used, оставшиеся 20 из дельты возвращаются в докупку: 10 + 20 = 30
+    assert int(row["purchased_remaining_bytes"]) == 30
+
+
+@pytest.mark.asyncio
+async def test_reset_included_quota_after_payment_without_group_uses_bucket_limit(db, monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    subscriber_id = await get_or_create_subscriber(f"u_tqnogrp_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=None,
+    )
+    bid = await create_subscription_traffic_bucket(
+        sub_id,
+        f"lim_ngrp_{suffix}",
+        limit_bytes=int(1024**3),
+        is_unlimited=False,
+    )
+    await upsert_subscription_traffic_quota_row(
+        sub_id,
+        bid,
+        included_allowance_bytes=int(1024**3),
+        included_used_bytes=500,
+        purchased_remaining_bytes=100,
+    )
+    await reset_included_quota_after_payment(sub_id, paid_period_key="month", payment_days=30)
+
+    row = await get_subscription_traffic_quota(sub_id)
+    assert int(row["included_used_bytes"]) == 0
+    assert int(row["purchased_remaining_bytes"]) == 100
+    assert int(row["included_allowance_bytes"]) == int(1024**3)
+    assert int(row["traffic_period_version"]) >= 1

@@ -128,8 +128,8 @@ cp .env.example apps/backend/src/.env
 | `WEBSITE_URL` | опционально: лендинг (`profile-web-page-url` / `website` в ответе VPN subscription URL `/sub`) |
 | `SUPPORT_URL` | поддержка для `/sub` (`support-url`), редирект `/support`; вместе с сайтом/каналом — две разные кнопки. Fallback: `TELEGRAM_URL` (устар.) |
 | `TELEGRAM_CHANNEL_URL` | опционально: кнопка «канал/новости» в `/sub` (`profile-web-page-url`), если нет `WEBSITE_URL` / `WEBAPP_URL` |
-| `DARALLA_TRAFFIC_BUCKETS_ENABLED` | включает per-node traffic bucket лимиты и hard enforcement (фильтрация нод в `/sub` + outbox-применение на панелях) |
-| `DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS` | интервал фонового пересчета usage/exhausted для bucket |
+| `DARALLA_TRAFFIC_BUCKETS_ENABLED` | включает **пакеты трафика по нодам** (bucket map), синхронизацию расхода с панелей и enforcement на X-UI; для лимитных нод с шаблоном группы дополнительно ведётся **периодная квота подписки** (`subscription_traffic_quota`: включённый объём на оплаченный период × длительность тарифа + отдельный остаток докупки; сброс включённого при успешной оплате продления через webhook) |
+| `DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS` | интервал фонового пересчёта usage и статуса «исчерпан» для bucket |
 | `DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB` | опционально пересчитывает usage прямо в запросе `/sub` (дороже, но ближе к real-time) |
 
 <details>

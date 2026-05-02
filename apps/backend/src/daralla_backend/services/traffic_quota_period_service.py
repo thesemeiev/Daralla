@@ -7,6 +7,7 @@ import logging
 from daralla_backend.db.servers_db import get_server_group_traffic_template
 from daralla_backend.db.subscriptions_db import (
     get_subscription_by_id_only,
+    get_subscription_traffic_bucket,
     get_subscription_traffic_quota,
     list_subscription_traffic_buckets,
     upsert_subscription_traffic_quota_row,
@@ -71,13 +72,26 @@ async def reset_included_quota_after_payment(
     sub = await get_subscription_by_id_only(int(subscription_id))
     if not sub:
         return
+    bid: int | None = None
+    base_monthly = 0
     gid = sub.get("group_id")
-    if gid is None:
-        return
+    if gid is not None:
+        bid, base_monthly = await _resolve_group_limited_bucket_id(int(subscription_id), int(gid))
 
-    bid, base_monthly = await _resolve_group_limited_bucket_id(int(subscription_id), int(gid))
+    # Подписка без group_id (или без включённого шаблона): пересчитываем период по строке квоты и лимиту bucket.
     if bid is None or base_monthly <= 0:
-        return
+        existing_row = await get_subscription_traffic_quota(int(subscription_id))
+        if not existing_row:
+            return
+        bid = int(existing_row["limited_bucket_id"])
+        bucket = await get_subscription_traffic_bucket(int(bid))
+        if not bucket or int(bucket.get("subscription_id") or 0) != int(subscription_id):
+            return
+        if bool(int(bucket.get("is_unlimited") or 0)):
+            return
+        base_monthly = max(0, int(bucket.get("limit_bytes") or 0))
+        if base_monthly <= 0:
+            return
 
     mult = tariff_month_multiplier_for_period(paid_period_key, payment_days=payment_days)
     allowance = base_monthly * mult
