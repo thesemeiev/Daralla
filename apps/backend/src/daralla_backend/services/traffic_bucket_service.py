@@ -9,12 +9,14 @@ import time
 
 from daralla_backend.db import (
     add_bucket_usage_delta,
+    allocate_subscription_traffic_quota_delta,
     ensure_default_unlimited_bucket,
     get_bucket_used_bytes_for_window,
     get_buckets_for_subscription_servers,
     get_subscription_bucket_states,
     get_subscription_by_id_only,
     get_subscription_servers,
+    get_subscription_traffic_quota,
     get_subscription_traffic_snapshot,
     get_subscriptions_to_sync,
     set_subscription_server_bucket,
@@ -70,14 +72,33 @@ class TrafficBucketService:
 
     async def compute_bucket_states(self, subscription_id: int) -> dict[int, dict]:
         states = await get_subscription_bucket_states(subscription_id)
+        quota = await get_subscription_traffic_quota(subscription_id)
+        q_bucket_id = int(quota["limited_bucket_id"]) if quota else None
         result: dict[int, dict] = {}
         for bucket in states:
             bucket_id = int(bucket["id"])
             window_days = int(bucket.get("window_days") or 30)
-            used = await get_bucket_used_bytes_for_window(bucket_id, window_days=window_days)
             limit = int(bucket.get("limit_bytes") or 0)
             unlimited = bool(bucket.get("is_unlimited"))
-            exhausted = False if unlimited else (limit > 0 and used >= limit)
+            used_window = await get_bucket_used_bytes_for_window(bucket_id, window_days=window_days)
+
+            if unlimited:
+                exhausted = False
+                used = used_window
+                remaining = 0
+            elif quota and q_bucket_id == bucket_id:
+                allowance = max(0, int(quota.get("included_allowance_bytes") or 0))
+                inc_used = max(0, int(quota.get("included_used_bytes") or 0))
+                purchased = max(0, int(quota.get("purchased_remaining_bytes") or 0))
+                remaining = max(0, allowance - inc_used) + purchased
+                exhausted = remaining <= 0
+                used = inc_used
+                limit = allowance if allowance > 0 else limit
+            else:
+                used = used_window
+                exhausted = False if limit <= 0 else (used >= limit)
+                remaining = 0 if unlimited else max(0, limit - used)
+
             await upsert_bucket_enforcement_state(bucket_id, exhausted)
             result[bucket_id] = {
                 "bucket": bucket,
@@ -85,7 +106,9 @@ class TrafficBucketService:
                 "limit_bytes": limit,
                 "is_unlimited": unlimited,
                 "is_exhausted": exhausted,
-                "remaining_bytes": (0 if unlimited else max(0, limit - used)),
+                "remaining_bytes": remaining if not unlimited else 0,
+                "traffic_quota": quota if (quota and q_bucket_id == bucket_id) else None,
+                "used_bytes_window_legacy": used_window,
             }
         return result
 
@@ -117,6 +140,11 @@ class TrafficBucketService:
                 used_b = int(st.get("used_bytes") or 0)
                 lim_b = int(st.get("limit_bytes") or 0)
                 ratio = f"[{_fmt_compact(used_b)}/{_fmt_compact(lim_b)}]"
+                tq = st.get("traffic_quota") if isinstance(st.get("traffic_quota"), dict) else None
+                if tq:
+                    purchased_b = max(0, int(tq.get("purchased_remaining_bytes") or 0))
+                    if purchased_b > 0:
+                        ratio += f" [куп:{_fmt_compact(purchased_b)}]"
                 if st["is_exhausted"]:
                     ratio += " [лимит]"
                 suffixes[server_name] = ratio
@@ -187,7 +215,9 @@ class TrafficBucketService:
                 # Панель могла сбросить счетчики после рестарта/reinstall.
                 delta = 0
             if delta > 0:
-                await add_bucket_usage_delta(int(bucket["id"]), delta)
+                bid = int(bucket["id"])
+                await add_bucket_usage_delta(bid, delta)
+                await allocate_subscription_traffic_quota_delta(subscription_id, bid, delta)
                 total_delta += delta
             await upsert_subscription_traffic_snapshot(
                 subscription_id,

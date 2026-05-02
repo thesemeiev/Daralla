@@ -9,8 +9,10 @@ import os
 
 from daralla_backend.db.notifications_db import clear_subscription_notifications
 from daralla_backend.db.subscriptions_db import (
+    add_subscription_purchased_traffic_bytes,
     apply_bucket_usage_adjustment,
     create_subscription_traffic_bucket,
+    delete_all_subscription_traffic_data,
     delete_bucket_server_assignments,
     delete_subscription_traffic_bucket,
     ensure_default_unlimited_bucket,
@@ -20,6 +22,7 @@ from daralla_backend.db.subscriptions_db import (
     get_subscription_server_bucket_map,
     get_subscription_servers,
     get_subscription_traffic_bucket,
+    get_subscription_traffic_quota,
     get_subscriptions_page,
     remove_subscription_server,
     set_subscription_servers_bucket,
@@ -125,9 +128,12 @@ async def _traffic_bucket_snapshot(sub_id: int) -> dict:
     for bucket in buckets:
         bucket_id = int(bucket["id"])
         bucket["used_bytes_window"] = int(usage_map.get(bucket_id, 0))
+    qrow = await get_subscription_traffic_quota(sub_id)
+    traffic_quota = dict(qrow) if qrow else None
     return {
         "buckets": buckets,
         "server_bucket_map": mapping,
+        "traffic_quota": traffic_quota,
     }
 
 
@@ -275,6 +281,25 @@ async def adjust_subscription_bucket_usage_payload(sub_id: int, bucket_id: int, 
     await service.enqueue_enforcement_if_needed(sub_id)
     snap = await _traffic_bucket_snapshot(sub_id)
     return {"success": True, "bucket_id": bucket_id, **snap}, None, None
+
+
+async def add_subscription_purchased_traffic_payload(sub_id: int, add_bytes: int):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    try:
+        ab = int(add_bytes)
+    except (TypeError, ValueError):
+        ab = 0
+    if ab <= 0:
+        return None, {"error": "add_bytes must be positive"}, 400
+    updated = await add_subscription_purchased_traffic_bytes(sub_id, ab)
+    if updated is None:
+        return None, {"error": "Нет строки квоты трафика для этой подписки"}, 400
+    service = get_traffic_bucket_service()
+    await service.enqueue_enforcement_if_needed(sub_id)
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, **snap}, None, None
 
 
 async def delete_subscription_traffic_bucket_payload(sub_id: int, bucket_id: int):
@@ -570,6 +595,7 @@ async def delete_subscription_payload(sub_id: int):
         except Exception:
             pass
 
+    await delete_all_subscription_traffic_data(sub_id)
     await delete_subscription_record(sub_id)
     return {
         "success": True,

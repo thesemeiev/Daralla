@@ -7,6 +7,7 @@ from quart import Blueprint, request, jsonify
 
 from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
 from daralla_backend.services.admin_subscriptions_flow_service import (
+    add_subscription_purchased_traffic_payload,
     adjust_subscription_bucket_usage_payload,
     assign_subscription_servers_bucket_payload,
     clear_subscription_bucket_servers_payload,
@@ -155,6 +156,12 @@ def create_blueprint(bot_app):
                 bytes_delta,
                 reason=reason,
             )
+        elif action == "add_purchased_bytes":
+            try:
+                add_bytes = int(data.get("add_bytes") or data.get("bytes") or 0)
+            except (TypeError, ValueError):
+                add_bytes = 0
+            payload, err_body, err_code = await add_subscription_purchased_traffic_payload(sub_id, add_bytes)
         elif action == "delete":
             bucket_id = int(data.get("bucket_id") or 0)
             if bucket_id <= 0:

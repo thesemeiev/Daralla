@@ -339,7 +339,7 @@
                 return buckets.map(function (b) {
                     var sel = String(b.id) === String(selectedId) ? ' selected' : '';
                     var label = _deps.escapeHtml(b.name || ('Пакет #' + b.id));
-                    var suffix = b.is_unlimited ? ' (без лимита)' : '';
+                    var suffix = b.is_unlimited ? ' — без лимита' : '';
                     return '<option value="' + String(b.id) + '"' + sel + '>' + label + suffix + '</option>';
                 }).join('');
             }
@@ -349,16 +349,60 @@
                 var cur = mapping[name];
                 if (cur == null || cur === '') cur = defaultBid;
                 cur = String(cur);
-                return ''
-                    + '<div class="traffic-assign-row" data-server-name="' + _deps.escapeHtml(name) + '">'
-                    + '  <span class="traffic-assign-server">' + _deps.escapeHtml(name) + '</span>'
-                    + '  <select class="traffic-assign-select form-control" aria-label="Пакет для ноды ' + _deps.escapeHtml(name) + '">'
+                var esc = _deps.escapeHtml(name);
+                return '<tr class="traffic-assign-row" data-server-name="' + esc + '">'
+                    + '<th scope="row" class="traffic-assign-server">' + esc + '</th>'
+                    + '<td class="traffic-assign-cell-packet"><select class="traffic-assign-select" aria-label="Пакет для ноды ' + esc + '">'
                     + optionsForServer(cur)
-                    + '  </select>'
-                    + '</div>';
+                    + '</select></td></tr>';
             }).join('');
 
-            host.innerHTML = '<div class="traffic-assign-matrix-table">' + rows + '</div>';
+            host.innerHTML = ''
+                + '<div class="traffic-assign-matrix-shell">'
+                + '<table class="traffic-assign-table" aria-label="Назначение нод на пакеты трафика">'
+                + '<thead><tr><th scope="col">Нода</th><th scope="col">Пакет трафика</th></tr></thead>'
+                + '<tbody>' + rows + '</tbody>'
+                + '</table></div>';
+        }
+
+        function _renderTrafficPeriodQuota(snapshot) {
+            var host = document.getElementById('subscription-traffic-period-quota');
+            if (!host) return;
+            var q = snapshot && snapshot.traffic_quota;
+            if (!q) {
+                host.setAttribute('hidden', '');
+                host.innerHTML = '';
+                return;
+            }
+            host.removeAttribute('hidden');
+            var allowance = Number(q.included_allowance_bytes || 0);
+            var incUsed = Number(q.included_used_bytes || 0);
+            var purchased = Number(q.purchased_remaining_bytes || 0);
+            var incRemain = Math.max(0, allowance - incUsed);
+            var ver = Number(q.traffic_period_version || 0);
+            host.innerHTML = ''
+                + '<h3 id="traffic-quota-title" class="traffic-panel-title">Квота оплаченного периода</h3>'
+                + '<p class="traffic-panel-hint">Включённый объём пересчитывается при успешной оплате продления; докупленный не сгорает при продлении.</p>'
+                + '<div class="traffic-metric-grid" role="region" aria-label="Периодная квота">'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Включено на период</span><span class="traffic-metric-value">' + _formatBytes(allowance) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Из включённого израсходовано</span><span class="traffic-metric-value">' + _formatBytes(incUsed) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Остаток включённого</span><span class="traffic-metric-value">' + _formatBytes(incRemain) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Докупленный остаток</span><span class="traffic-metric-value">' + _formatBytes(purchased) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Версия периода</span><span class="traffic-metric-value">' + ver + '</span></div>'
+                + '</div>'
+                + '<div class="traffic-quota-admin-actions">'
+                + '  <label class="traffic-field">'
+                + '    <span class="traffic-field-label">Начислить докупку, ГиБ</span>'
+                + '    <input type="number" min="0.001" step="0.001" id="traffic-quota-add-gib-input" value="">'
+                + '  </label>'
+                + '  <button type="button" class="btn-secondary" id="traffic-quota-add-btn">Начислить докупку</button>'
+                + '</div>';
+            var qBtn = document.getElementById('traffic-quota-add-btn');
+            if (qBtn) {
+                qBtn.addEventListener('click', function () {
+                    addPurchasedTrafficBytes();
+                });
+            }
         }
 
         function _bindTrafficBucketActions() {
@@ -393,6 +437,7 @@
         function renderTrafficBuckets(snapshot) {
             _currentBucketSnapshot = snapshot || { buckets: [], server_bucket_map: {} };
             _renderTrafficAssignmentMatrix(_currentBucketSnapshot);
+            _renderTrafficPeriodQuota(_currentBucketSnapshot);
             var root = document.getElementById('subscription-traffic-buckets-list');
             if (!root) return;
             var buckets = _currentBucketSnapshot.buckets || [];
@@ -512,6 +557,11 @@
                 renderTrafficBuckets(data);
             } catch (error) {
                 console.error('Ошибка загрузки buckets:', error);
+                var qh = document.getElementById('subscription-traffic-period-quota');
+                if (qh) {
+                    qh.setAttribute('hidden', '');
+                    qh.innerHTML = '';
+                }
                 var mh = document.getElementById('subscription-traffic-assignment-matrix');
                 if (mh) mh.innerHTML = '<p class="hint">Не удалось загрузить назначения нод: ' + _deps.escapeHtml(error.message) + '</p>';
                 if (root) root.innerHTML = '<div class="empty-state"><p>Не удалось загрузить настройки трафика: ' + _deps.escapeHtml(error.message) + '</p></div>';
@@ -584,7 +634,7 @@
                 var buckets = snap.buckets || [];
                 if (!buckets.length) throw new Error('Нет пакетов для назначения');
 
-                var rows = host.querySelectorAll('.traffic-assign-row');
+                var rows = host.querySelectorAll('tbody .traffic-assign-row[data-server-name]');
                 if (!rows.length) throw new Error('Нет строк назначения');
 
                 var bucketToServers = {};
@@ -635,6 +685,21 @@
                 await _deps.appShowAlert('Пакет удалён.', { title: 'Готово', variant: 'success' });
             } catch (error) {
                 await _deps.appShowAlert('Ошибка удаления: ' + error.message, { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function addPurchasedTrafficBytes() {
+            try {
+                var el = document.getElementById('traffic-quota-add-gib-input');
+                var gib = parseFloat((el && el.value) || '0');
+                var bytes = Math.round(gib * _GIB);
+                if (!bytes || bytes <= 0) throw new Error('Укажите положительный объём в ГиБ');
+                var data = await _trafficBucketApi('add_purchased_bytes', { add_bytes: bytes });
+                if (el) el.value = '';
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Докупленный трафик начислен.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 

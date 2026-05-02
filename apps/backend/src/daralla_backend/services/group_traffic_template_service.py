@@ -21,12 +21,13 @@ from daralla_backend.services.traffic_bucket_service import (
     get_traffic_bucket_service,
     traffic_buckets_enabled,
 )
+from daralla_backend.services.traffic_quota_period_service import (
+    ensure_subscription_traffic_quota_for_new_template_subscription,
+)
+
+from daralla_backend.services.group_traffic_bucket_names import group_limited_bucket_stable_name
 
 logger = logging.getLogger(__name__)
-
-
-def group_limited_bucket_stable_name(group_id: int) -> str:
-    return f"group:{int(group_id)}:limited"
 
 
 async def async_has_non_template_traffic_customization(subscription_id: int, group_id: int) -> bool:
@@ -167,6 +168,12 @@ async def apply_template_to_subscription(
 
     tbs = get_traffic_bucket_service()
     await tbs.enqueue_enforcement_if_needed(subscription_id)
+    if not is_unlimited_pack and limit_bytes > 0:
+        await ensure_subscription_traffic_quota_for_new_template_subscription(
+            subscription_id,
+            limited_bucket_id=limited_id,
+            monthly_base_bytes=max(0, limit_bytes),
+        )
     return {
         "ok": True,
         "applied": True,

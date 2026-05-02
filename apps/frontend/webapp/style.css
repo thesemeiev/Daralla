@@ -5496,61 +5496,90 @@ a.instruction-platform-btn {
     color: var(--text-secondary);
 }
 
+.traffic-panel--assign .traffic-panel-hint {
+    margin-top: 0;
+}
+
 .traffic-panel--assign .traffic-assign-actions {
     margin-top: 14px;
 }
 
 .traffic-assignment-matrix-host {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    margin-top: 10px;
 }
 
-.traffic-assign-matrix-table {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+/* Таблица вместо CSS Grid по строкам: пробелы между узлами не дают лишних grid-items и не ломают колонки */
+.traffic-assign-matrix-shell {
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
-    padding: 12px;
+    overflow: hidden;
     background: var(--surface-secondary);
 }
 
-.traffic-assign-row {
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) minmax(180px, 2fr);
-    gap: 12px;
-    align-items: center;
+.traffic-assign-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
 }
 
-@media (max-width: 520px) {
-    .traffic-assign-row {
-        grid-template-columns: 1fr;
-    }
+.traffic-assign-table thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--surface-secondary) 85%, var(--text-primary) 15%);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.traffic-assign-table tbody th,
+.traffic-assign-table tbody td {
+    padding: 12px 14px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.traffic-assign-table tbody tr:last-child th,
+.traffic-assign-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.traffic-assign-table .traffic-assign-server {
+    width: 38%;
 }
 
 .traffic-assign-server {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-primary);
     word-break: break-word;
+    hyphens: auto;
+}
+
+.traffic-assign-cell-packet {
+    min-width: 0;
 }
 
 .traffic-assign-select {
     width: 100%;
     max-width: 100%;
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--border-default);
-    background: var(--surface-primary);
-    color: var(--text-primary);
-    font-size: 14px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    min-height: 42px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--input-color);
+    font-size: 15px;
+    font-family: inherit;
 }
 
 .traffic-assign-select:focus {
     outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .traffic-unlimited-hint {

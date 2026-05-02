@@ -16,10 +16,10 @@ from daralla_backend.db import (
     replace_server_group_traffic_limited_servers,
     upsert_server_group_traffic_template,
 )
+from daralla_backend.services.group_traffic_bucket_names import group_limited_bucket_stable_name
 from daralla_backend.services.group_traffic_template_service import (
     apply_group_traffic_template_bulk,
     apply_template_to_subscription,
-    group_limited_bucket_stable_name,
 )
 
 

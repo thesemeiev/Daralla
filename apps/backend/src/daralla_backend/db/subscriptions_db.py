@@ -769,6 +769,163 @@ async def upsert_subscription_traffic_snapshot(
         await db.commit()
 
 
+async def get_subscription_traffic_quota(subscription_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM subscription_traffic_quota WHERE subscription_id = ? LIMIT 1",
+            (int(subscription_id),),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def delete_subscription_traffic_quota(subscription_id: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM subscription_traffic_quota WHERE subscription_id = ?",
+            (int(subscription_id),),
+        )
+        await db.commit()
+
+
+async def upsert_subscription_traffic_quota_row(
+    subscription_id: int,
+    limited_bucket_id: int,
+    *,
+    included_allowance_bytes: int,
+    included_used_bytes: int | None = None,
+    purchased_remaining_bytes: int | None = None,
+    bump_period_version: bool = False,
+) -> None:
+    """Создаёт или обновляет строку квоты; при bump_period_version инкрементирует traffic_period_version."""
+    now = int(time.time())
+    sid = int(subscription_id)
+    bid = int(limited_bucket_id)
+    allowance = max(0, int(included_allowance_bytes))
+    existing = await get_subscription_traffic_quota(sid)
+    if existing:
+        used = (
+            int(existing["included_used_bytes"])
+            if included_used_bytes is None
+            else max(0, int(included_used_bytes))
+        )
+        purchased = (
+            int(existing["purchased_remaining_bytes"])
+            if purchased_remaining_bytes is None
+            else max(0, int(purchased_remaining_bytes))
+        )
+        ver = int(existing.get("traffic_period_version") or 0)
+        if bump_period_version:
+            ver += 1
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                UPDATE subscription_traffic_quota SET
+                    limited_bucket_id = ?,
+                    included_allowance_bytes = ?,
+                    included_used_bytes = ?,
+                    purchased_remaining_bytes = ?,
+                    traffic_period_version = ?,
+                    period_started_at = ?,
+                    updated_at = ?
+                WHERE subscription_id = ?
+                """,
+                (bid, allowance, used, purchased, ver, now, now, sid),
+            )
+            await db.commit()
+        return
+    used_i = 0 if included_used_bytes is None else max(0, int(included_used_bytes))
+    purchased_i = 0 if purchased_remaining_bytes is None else max(0, int(purchased_remaining_bytes))
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_traffic_quota
+            (subscription_id, limited_bucket_id, included_allowance_bytes, included_used_bytes,
+             purchased_remaining_bytes, traffic_period_version, period_started_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+            """,
+            (sid, bid, allowance, used_i, purchased_i, now, now),
+        )
+        await db.commit()
+
+
+async def allocate_subscription_traffic_quota_delta(subscription_id: int, bucket_id: int, delta: int) -> None:
+    """Списание дельты: сначала included_used до allowance, затем purchased_remaining."""
+    if delta <= 0:
+        return
+    row = await get_subscription_traffic_quota(int(subscription_id))
+    if not row or int(row["limited_bucket_id"]) != int(bucket_id):
+        return
+    allowance = max(0, int(row["included_allowance_bytes"]))
+    used = max(0, int(row["included_used_bytes"]))
+    purchased = max(0, int(row["purchased_remaining_bytes"]))
+    remaining_inc = max(0, allowance - used)
+    take = min(delta, remaining_inc)
+    new_used = used + take
+    rest = delta - take
+    new_purchased = max(0, purchased - rest)
+    await upsert_subscription_traffic_quota_row(
+        subscription_id,
+        int(bucket_id),
+        included_allowance_bytes=allowance,
+        included_used_bytes=new_used,
+        purchased_remaining_bytes=new_purchased,
+        bump_period_version=False,
+    )
+
+
+async def add_subscription_purchased_traffic_bytes(subscription_id: int, add_bytes: int) -> dict | None:
+    """Увеличивает остаток купленного трафика (докупка). Возвращает обновлённую строку или None."""
+    add_b = max(0, int(add_bytes))
+    if add_b <= 0:
+        return await get_subscription_traffic_quota(subscription_id)
+    row = await get_subscription_traffic_quota(subscription_id)
+    if not row:
+        return None
+    bid = int(row["limited_bucket_id"])
+    allowance = max(0, int(row["included_allowance_bytes"]))
+    used = max(0, int(row["included_used_bytes"]))
+    purchased = max(0, int(row["purchased_remaining_bytes"]))
+    await upsert_subscription_traffic_quota_row(
+        subscription_id,
+        bid,
+        included_allowance_bytes=allowance,
+        included_used_bytes=used,
+        purchased_remaining_bytes=purchased + add_b,
+        bump_period_version=False,
+    )
+    return await get_subscription_traffic_quota(subscription_id)
+
+
+async def delete_all_subscription_traffic_data(subscription_id: int) -> None:
+    """Удаляет все данные traffic buckets/snapshots/quota для подписки."""
+    sid = int(subscription_id)
+    buckets = await list_subscription_traffic_buckets(sid)
+    bucket_ids = [int(b["id"]) for b in buckets]
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM subscription_traffic_quota WHERE subscription_id = ?", (sid,))
+        await db.execute(
+            "DELETE FROM subscription_server_traffic_snapshots WHERE subscription_id = ?",
+            (sid,),
+        )
+        await db.execute(
+            "DELETE FROM subscription_server_traffic_bucket_map WHERE subscription_id = ?",
+            (sid,),
+        )
+        for bid in bucket_ids:
+            await db.execute("DELETE FROM subscription_traffic_adjustments WHERE bucket_id = ?", (bid,))
+            await db.execute("DELETE FROM subscription_traffic_usage_daily WHERE bucket_id = ?", (bid,))
+            await db.execute("DELETE FROM subscription_traffic_enforcement_state WHERE bucket_id = ?", (bid,))
+        if bucket_ids:
+            placeholders = ",".join("?" * len(bucket_ids))
+            await db.execute(
+                f"DELETE FROM subscription_traffic_buckets WHERE id IN ({placeholders}) AND subscription_id = ?",
+                (*bucket_ids, sid),
+            )
+        await db.commit()
+
+
 async def delete_bucket_server_assignments(subscription_id: int, bucket_id: int) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
@@ -801,6 +958,10 @@ async def delete_subscription_traffic_bucket(subscription_id: int, bucket_id: in
     servers_for_bucket = [name for name, b_id in mapping.items() if int(b_id) == bid]
     default_id = await ensure_default_unlimited_bucket(sid)
     async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM subscription_traffic_quota WHERE subscription_id = ? AND limited_bucket_id = ?",
+            (sid, bid),
+        )
         await db.execute("DELETE FROM subscription_traffic_adjustments WHERE bucket_id = ?", (bid,))
         await db.execute("DELETE FROM subscription_traffic_usage_daily WHERE bucket_id = ?", (bid,))
         await db.execute("DELETE FROM subscription_traffic_enforcement_state WHERE bucket_id = ?", (bid,))
@@ -1442,6 +1603,10 @@ async def cleanup_deleted_subscriptions(days: int = 365, *, dry_run: bool = Fals
             )
             return len(candidate_ids)
 
+    for sid in candidate_ids:
+        await delete_all_subscription_traffic_data(int(sid))
+
+    async with aiosqlite.connect(DB_PATH) as db:
         placeholders = ",".join("?" for _ in candidate_ids)
         await db.execute(f"DELETE FROM subscription_servers WHERE subscription_id IN ({placeholders})", candidate_ids)
         await db.execute(f"DELETE FROM sent_notifications WHERE subscription_id IN ({placeholders})", candidate_ids)

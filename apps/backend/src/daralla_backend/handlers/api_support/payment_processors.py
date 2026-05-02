@@ -79,6 +79,10 @@ async def process_successful_payment(payment_id, user_id, meta):
     try:
         period = meta.get('type', 'month')
 
+        if meta.get('purchase_kind') == 'traffic_topup':
+            await process_traffic_topup_payment(payment_id, user_id, meta)
+            return
+
         # Проверяем, это продление или новая покупка
         is_extension = period.startswith('extend_')
         if is_extension:
@@ -233,6 +237,21 @@ async def process_extension_payment(payment_id, user_id, meta):
                 extension_subscription_id,
                 new_expires_at,
             )
+
+            try:
+                from daralla_backend.services.traffic_quota_period_service import reset_included_quota_after_payment
+
+                await reset_included_quota_after_payment(
+                    int(extension_subscription_id),
+                    paid_period_key=actual_period,
+                    payment_days=days,
+                )
+            except Exception as quota_e:
+                logger.warning(
+                    "traffic_quota reset after extension failed sub=%s: %s",
+                    extension_subscription_id,
+                    quota_e,
+                )
 
             # Проверяем, что синхронизация прошла на всех серверах
             if failed_extensions:
@@ -487,6 +506,21 @@ async def process_new_purchase_payment(payment_id, user_id, meta):
         await update_payment_activation(payment_id, 1)
 
         try:
+            from daralla_backend.services.traffic_quota_period_service import reset_included_quota_after_payment
+
+            await reset_included_quota_after_payment(
+                int(sub_dict["id"]),
+                paid_period_key=period,
+                payment_days=days,
+            )
+        except Exception as quota_e:
+            logger.warning(
+                "traffic_quota reset after new purchase failed sub=%s: %s",
+                sub_dict.get("id"),
+                quota_e,
+            )
+
+        try:
             from daralla_backend.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success
             if EVENTS_MODULE_ENABLED:
                 await events_on_payment_success(user_id, payment_id, meta)
@@ -564,6 +598,72 @@ async def process_new_purchase_payment(payment_id, user_id, meta):
     except (KeyError, TypeError, ValueError, RuntimeError) as e:
         logger.error(f"Ошибка обработки новой покупки {payment_id}: {e}")
         await update_payment_status(payment_id, 'failed')
+
+
+async def process_traffic_topup_payment(payment_id, user_id, meta):
+    """Успешная оплата докупки трафика: purchased_remaining_bytes += N (метаданные платежа)."""
+    try:
+        raw_sid = meta.get("extension_subscription_id") or meta.get("subscription_id")
+        try:
+            sub_id = int(raw_sid)
+        except (TypeError, ValueError):
+            sub_id = 0
+        try:
+            add_bytes = int(meta.get("traffic_topup_bytes") or meta.get("topup_bytes") or 0)
+        except (TypeError, ValueError):
+            add_bytes = 0
+        if sub_id <= 0 or add_bytes <= 0:
+            logger.error(
+                "traffic_topup: некорректные данные payment_id=%s sub_id=%s bytes=%s meta=%s",
+                payment_id,
+                raw_sid,
+                add_bytes,
+                meta,
+            )
+            await update_payment_status(payment_id, "failed")
+            return
+
+        from ...db.subscriptions_db import add_subscription_purchased_traffic_bytes, get_subscription_by_id
+
+        sub = await get_subscription_by_id(sub_id, str(user_id))
+        if not sub or sub.get("status") == "deleted":
+            logger.error(
+                "traffic_topup: подписка недоступна payment_id=%s sub_id=%s user_id=%s",
+                payment_id,
+                sub_id,
+                user_id,
+            )
+            await update_payment_status(payment_id, "failed")
+            return
+
+        updated = await add_subscription_purchased_traffic_bytes(sub_id, add_bytes)
+        if updated is None:
+            logger.error(
+                "traffic_topup: нет строки subscription_traffic_quota sub_id=%s payment_id=%s",
+                sub_id,
+                payment_id,
+            )
+            await update_payment_status(payment_id, "failed")
+            return
+
+        try:
+            from ...services.traffic_bucket_service import get_traffic_bucket_service
+
+            await get_traffic_bucket_service().enqueue_enforcement_if_needed(sub_id)
+        except Exception as enf_e:
+            logger.warning("traffic_topup: enqueue enforcement sub=%s: %s", sub_id, enf_e)
+
+        await update_payment_status(payment_id, "succeeded")
+        await update_payment_activation(payment_id, 1)
+        logger.info(
+            "traffic_topup: начислено %s байт подписке %s payment_id=%s",
+            add_bytes,
+            sub_id,
+            payment_id,
+        )
+    except (KeyError, TypeError, ValueError, RuntimeError) as e:
+        logger.error("Ошибка обработки traffic_topup payment_id=%s: %s", payment_id, e)
+        await update_payment_status(payment_id, "failed")
 
 
 async def process_canceled_payment(payment_id, user_id, status):
