@@ -26,6 +26,7 @@ from ..db.subscriptions_db import (
     update_subscription_name,
 )
 from .server_manager import MultiServerManager
+from .traffic_bucket_service import get_traffic_bucket_service, traffic_buckets_enabled
 from .xui_helpers import panel_snapshot_matches_desired
 from .subscription_helpers import (
     clients_by_email_from_xui_list_response,
@@ -646,6 +647,13 @@ class SubscriptionManager:
             sync_sub_ids = [s["id"] for s in subs_for_ensure if s.get("group_id") is not None]
             servers_by_sub = await get_subscription_servers_for_subscription_ids(sync_sub_ids)
 
+            exhausted_by_sub: Dict[int, set[str]] = {}
+            if traffic_buckets_enabled():
+                tbs = get_traffic_bucket_service()
+                for sub in subs_for_ensure:
+                    sid = int(sub["id"])
+                    exhausted_by_sub[sid] = await tbs.get_servers_with_exhausted_bucket(sid)
+
             ensure_tasks: List[dict] = []
             for sub in subs_for_ensure:
                 subscription_id = sub["id"]
@@ -661,7 +669,10 @@ class SubscriptionManager:
                     continue
                 cur = servers_by_sub.get(subscription_id, [])
                 client_email = cur[0]["client_email"] if cur else f"{user_id}_{subscription_id}"
+                skip_servers = exhausted_by_sub.get(int(subscription_id), set())
                 for server_name in group_servers:
+                    if server_name in skip_servers:
+                        continue
                     ensure_tasks.append(
                         {
                             "subscription_id": subscription_id,

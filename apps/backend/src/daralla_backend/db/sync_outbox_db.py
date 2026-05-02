@@ -113,6 +113,38 @@ async def enqueue_sync_job(
         return (cur.rowcount or 0) > 0
 
 
+async def delete_sync_outbox_jobs_for_slot(
+    *,
+    subscription_id: int,
+    server_name: str,
+    client_email: str,
+    op: str,
+    desired_revision: int,
+) -> None:
+    """Удаляет строки outbox с тем же слотом уникального индекса (любой status).
+
+    Нужно для op вроде `apply_bucket_enforcement`: payload меняется (вкл/выкл), а ключ
+    в индексе тот же — иначе INSERT OR IGNORE молча не вставляет новую задачу.
+    """
+    await ensure_sync_outbox_schema()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            DELETE FROM sync_outbox
+            WHERE subscription_id = ? AND server_name = ? AND client_email = ?
+              AND op = ? AND desired_revision = ?
+            """,
+            (
+                int(subscription_id),
+                str(server_name),
+                str(client_email),
+                str(op),
+                int(desired_revision),
+            ),
+        )
+        await db.commit()
+
+
 async def enqueue_sync_jobs_bulk(jobs: Iterable[dict]) -> int:
     inserted = 0
     for job in jobs:

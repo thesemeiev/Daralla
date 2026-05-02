@@ -615,6 +615,52 @@ class X3:
         return True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    async def set_client_enabled(self, user_email: str, enabled: bool, timeout: int = 15) -> bool:
+        """Включает/выключает клиента на панели через updateClient (поле enable в JSON клиента).
+
+        В 3x-ui отдельного REST «enableClient» нет: используется тот же endpoint, что и для
+        reconcile — POST /panel/api/inbounds/updateClient/{clientId}.
+        """
+        await self._ensure_login()
+        needle = str(user_email).strip()
+        data = await self.list(timeout=timeout)
+        work_items: List[Tuple[int, str, Dict[str, Any]]] = []
+        for inv in data.get("obj", []):
+            inv_id = inv.get("id")
+            if inv_id is None:
+                continue
+            inv_protocol = self._normalize_protocol_name(
+                str(inv.get("protocol") or "vless").strip().lower(), None
+            )
+            try:
+                settings = json.loads(inv.get("settings", "{}"))
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                continue
+            for cl in clients_from_settings_payload(settings):
+                em = cl.get("email")
+                if em is None:
+                    continue
+                if str(em).strip() == needle:
+                    work_items.append((int(inv_id), inv_protocol, cl))
+
+        if not work_items:
+            logger.debug(
+                "set_client_enabled: клиент %s не найден ни в одном inbound — идемпотентный no-op",
+                user_email,
+            )
+            return True
+
+        for inbound_id, inbound_protocol, c in work_items:
+            cd = dict(c)
+            self._client_set(cd, "enable", bool(enabled))
+            await self._post_inbound_update_client(
+                cd,
+                inbound_id_override=inbound_id,
+                protocol_hint=inbound_protocol,
+            )
+        return True
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def deleteClient(self, user_email: str, timeout: int = 15) -> bool:
         snap = await self._load_panel_client_snapshot(user_email)
         if snap is None:

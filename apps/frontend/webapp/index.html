@@ -1084,7 +1084,7 @@
                 <div class="tabs">
                     <button class="tab-button active" data-action="switchSubscriptionTab" data-arg="params">Параметры</button>
                     <button class="tab-button" data-action="switchSubscriptionTab" data-arg="keys">Ключи</button>
-                    <button class="tab-button" data-action="switchSubscriptionTab" data-arg="traffic">Traffic</button>
+                    <button class="tab-button" data-action="switchSubscriptionTab" data-arg="traffic">Трафик</button>
                 </div>
                 
                 <!-- Вкладка: Параметры -->
@@ -1145,34 +1145,45 @@
                     </div>
                 </div>
 
-                <!-- Вкладка: Traffic Buckets -->
+                <!-- Вкладка: лимиты трафика по нодам (buckets) -->
                 <div id="subscription-tab-traffic" class="tab-content">
+                    <div class="info-section traffic-buckets-intro">
+                        <h3 class="text-accent" style="margin-top: 0;">Лимиты трафика по нодам</h3>
+                        <p class="hint" style="margin-bottom: 12px;">
+                            Здесь задаются <strong>квоты трафика</strong> (отдельно от срока подписки): каждая запись — это «пакет» с лимитом за скользящее окно (по умолчанию 30 дней).
+                            Ноды назначаются чекбоксами; на исчерпании лимита доступ на соответствующих серверах в X-UI отключается, в подписке остаётся подпись с расходом.
+                        </p>
+                    </div>
                     <div class="info-section traffic-buckets-create">
-                        <h3 class="text-accent" style="margin-top: 0;">Создать bucket</h3>
+                        <h3 class="text-accent" style="margin-top: 0;">Новый лимит (bucket)</h3>
                         <div class="traffic-bucket-create-grid">
-                            <label>Название
-                                <input type="text" id="new-bucket-name" placeholder="EU Limited 10GB">
+                            <label>Название (для себя)
+                                <input type="text" id="new-bucket-name" placeholder="Например: Россия 50 ГБ">
                             </label>
-                            <label>Лимит (байт)
-                                <input type="number" id="new-bucket-limit-bytes" min="0" placeholder="10737418240">
+                            <label>Лимит, ГиБ
+                                <input type="number" id="new-bucket-limit-gib" min="0" step="0.001" placeholder="10">
                             </label>
-                            <label>Периодов кредита
-                                <input type="number" id="new-bucket-credit-periods" min="1" value="1">
+                            <label>Окно учёта, дней
+                                <input type="number" id="new-bucket-window-days" min="1" value="30" title="За сколько дней суммируется трафик (скользящее окно)">
+                            </label>
+                            <label>Слотов кредита
+                                <input type="number" id="new-bucket-credit-periods" min="1" value="1" title="Сколько «месяцев» кредита заложено при продлении (staged credit)">
                             </label>
                             <label class="inline-check">
                                 <input type="checkbox" id="new-bucket-unlimited">
-                                Unlimited bucket
+                                Без лимита трафика в этом пакете
                             </label>
                         </div>
+                        <p class="hint traffic-bucket-hint-small">ГиБ — двоичные гигабайты (1024³ байт). При снятой галочке «без лимита» укажите положительный лимит в ГиБ.</p>
                         <div class="form-actions">
-                            <button type="button" class="btn-secondary" data-action="loadTrafficBuckets">Обновить</button>
-                            <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать bucket</button>
+                            <button type="button" class="btn-secondary" data-action="loadTrafficBuckets">Обновить список</button>
+                            <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать</button>
                         </div>
                     </div>
                     <div id="subscription-traffic-buckets-list">
                         <div class="loading">
                             <div class="spinner"></div>
-                            <p>Загрузка bucket-ов...</p>
+                            <p>Загрузка настроек трафика...</p>
                         </div>
                     </div>
                 </div>

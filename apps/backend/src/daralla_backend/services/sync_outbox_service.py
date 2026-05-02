@@ -9,6 +9,7 @@ from typing import Any
 
 from daralla_backend.db import (
     claim_due_jobs,
+    delete_sync_outbox_jobs_for_slot,
     enqueue_sync_jobs_bulk,
     get_subscription_by_id_only,
     get_subscriptions_to_sync,
@@ -134,11 +135,19 @@ async def enqueue_bucket_enforcement_jobs(
         server_name = str(row["server_name"])
         if server_name not in allow:
             continue
+        email = str(row["client_email"])
+        await delete_sync_outbox_jobs_for_slot(
+            subscription_id=int(subscription_id),
+            server_name=server_name,
+            client_email=email,
+            op="apply_bucket_enforcement",
+            desired_revision=revision,
+        )
         jobs.append(
             {
                 "subscription_id": int(subscription_id),
                 "server_name": server_name,
-                "client_email": str(row["client_email"]),
+                "client_email": email,
                 "op": "apply_bucket_enforcement",
                 "desired_revision": revision,
                 "payload": {
@@ -207,7 +216,9 @@ async def _apply_outbox_job(job: dict, *, subscription_manager) -> tuple[bool, s
             if found is None or found[0] is None:
                 return False, f"server {server_name} not available", False
             xui, _ = found
-            _ = await xui.deleteClient(client_email)
+            # 3x-ui: вкл/выкл через updateClient(..., enable=false), не удаление — клиент
+            # остаётся в панели, ссылки в подписке могут показывать счётчик «лимит».
+            await xui.set_client_enabled(client_email, False)
         else:
             user_id = await get_user_id_from_subscription_id(sub_id)
             if not user_id:

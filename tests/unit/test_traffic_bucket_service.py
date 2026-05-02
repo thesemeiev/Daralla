@@ -4,7 +4,8 @@ from daralla_backend.services import traffic_bucket_service as tbs
 
 
 @pytest.mark.asyncio
-async def test_delivery_policy_hides_exhausted_servers(monkeypatch):
+async def test_delivery_policy_keeps_exhausted_servers_in_subscription(monkeypatch):
+    """Исчерпанный bucket: нода остаётся в /sub; суффикс used/limit + метка [лимит]."""
     monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
     svc = tbs.TrafficBucketService()
 
@@ -22,8 +23,20 @@ async def test_delivery_policy_hides_exhausted_servers(monkeypatch):
 
     async def _states(_sid):
         return {
-            10: {"is_exhausted": True, "is_unlimited": False, "remaining_bytes": 0, "limit_bytes": 100},
-            11: {"is_exhausted": False, "is_unlimited": True, "remaining_bytes": 0, "limit_bytes": 0},
+            10: {
+                "is_exhausted": True,
+                "is_unlimited": False,
+                "used_bytes": 100,
+                "remaining_bytes": 0,
+                "limit_bytes": 100,
+            },
+            11: {
+                "is_exhausted": False,
+                "is_unlimited": True,
+                "used_bytes": 0,
+                "remaining_bytes": 0,
+                "limit_bytes": 0,
+            },
         }
 
     monkeypatch.setattr(tbs, "get_subscription_by_id_only", _sub)
@@ -33,9 +46,10 @@ async def test_delivery_policy_hides_exhausted_servers(monkeypatch):
 
     policy = await svc.get_subscription_delivery_policy(1)
     assert policy["enabled"] is True
-    assert "de-1" not in policy["allowed_servers"]
+    assert "de-1" in policy["allowed_servers"]
     assert "fr-1" in policy["allowed_servers"]
     assert policy["name_suffix_by_server"]["fr-1"] == "[Unlimited]"
+    assert policy["name_suffix_by_server"]["de-1"] == "[100B/100B] [лимит]"
 
 
 @pytest.mark.asyncio
@@ -87,3 +101,31 @@ async def test_sync_usage_for_subscription_accumulates_delta(monkeypatch):
     assert calls["delta"] == 200
     assert calls["snapshots"] == 1
     assert summary["enforcement_jobs"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_servers_with_exhausted_bucket(monkeypatch):
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    svc = tbs.TrafficBucketService()
+
+    async def _ensure(_sid):
+        return None
+
+    async def _mapping(_sid):
+        return {
+            "de-1": {"id": 10, "is_unlimited": 0, "limit_bytes": 100},
+            "fr-1": {"id": 11, "is_unlimited": 1, "limit_bytes": 0},
+        }
+
+    async def _states(_sid):
+        return {
+            10: {"is_exhausted": True, "is_unlimited": False},
+            11: {"is_exhausted": False, "is_unlimited": True},
+        }
+
+    monkeypatch.setattr(svc, "ensure_default_mapping", _ensure)
+    monkeypatch.setattr(tbs, "get_buckets_for_subscription_servers", _mapping)
+    monkeypatch.setattr(svc, "compute_bucket_states", _states)
+
+    exhausted = await svc.get_servers_with_exhausted_bucket(1)
+    assert exhausted == {"de-1"}

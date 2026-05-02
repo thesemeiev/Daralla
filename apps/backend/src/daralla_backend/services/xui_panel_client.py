@@ -10,7 +10,7 @@
     GET  /panel/api/inbounds/list
     GET  /panel/api/inbounds/get/{id}
     POST /panel/api/inbounds/addClient
-    POST /panel/api/inbounds/updateClient/{clientId}
+    POST /panel/api/inbounds/updateClient/{clientId}  # тело clients[0] включает поле enable (вкл/выкл клиента)
     POST /panel/api/inbounds/{id}/delClient/{clientId}
     POST /panel/api/inbounds/{id}/delClientByEmail/{email}
     POST /panel/api/inbounds/onlines

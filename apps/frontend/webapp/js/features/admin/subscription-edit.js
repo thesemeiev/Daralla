@@ -2,6 +2,34 @@
     function createAdminSubscriptionEditFeature(deps) {
         var _deps = deps || {};
         var _currentBucketSnapshot = null;
+        var _trafficCreateFormBound = false;
+        var _GIB = Math.pow(1024, 3);
+
+        function _bytesFromGib(gib) {
+            var g = parseFloat(gib);
+            if (isNaN(g) || g < 0) return 0;
+            return Math.round(g * _GIB);
+        }
+
+        function _gibFromBytes(bytes) {
+            var b = Number(bytes) || 0;
+            if (b <= 0) return '';
+            var g = b / _GIB;
+            return (Math.round(g * 1000) / 1000).toString();
+        }
+
+        function _ensureTrafficCreateFormBinding() {
+            if (_trafficCreateFormBound) return;
+            var u = document.getElementById('new-bucket-unlimited');
+            var lim = document.getElementById('new-bucket-limit-gib');
+            if (!u || !lim) return;
+            _trafficCreateFormBound = true;
+            function sync() {
+                lim.disabled = !!u.checked;
+            }
+            u.addEventListener('change', sync);
+            sync();
+        }
 
         async function showAdminSubscriptionEdit(subId) {
             try {
@@ -77,6 +105,7 @@
 
                 loadSubscriptionKeys(servers);
                 await loadTrafficBuckets();
+                _ensureTrafficCreateFormBinding();
             } catch (error) {
                 console.error('Ошибка загрузки подписки:', error);
                 document.getElementById('admin-subscription-edit-loading').style.display = 'none';
@@ -254,6 +283,7 @@
                 if (trafficBtn) trafficBtn.classList.add('active');
                 var trafficContent = document.getElementById('subscription-tab-traffic');
                 if (trafficContent) trafficContent.classList.add('active');
+                _ensureTrafficCreateFormBinding();
                 loadTrafficBuckets();
             }
         }
@@ -326,6 +356,14 @@
                     clearTrafficBucketServers(bucketId);
                 });
             });
+            document.querySelectorAll('.traffic-bucket-card .traffic-bucket-unlimited-cb').forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    var id = cb.getAttribute('data-bucket-id');
+                    if (!id) return;
+                    var lim = document.getElementById('bucket-limit-gib-' + id);
+                    if (lim) lim.disabled = !!cb.checked;
+                });
+            });
         }
 
         function renderTrafficBuckets(snapshot) {
@@ -334,7 +372,7 @@
             if (!root) return;
             var buckets = _currentBucketSnapshot.buckets || [];
             if (!buckets.length) {
-                root.innerHTML = '<div class="empty-state"><p>Bucket-ы пока не созданы.</p></div>';
+                root.innerHTML = '<div class="empty-state"><p>Пакеты трафика ещё не созданы. Заполните форму выше или нажмите «Обновить список».</p></div>';
                 return;
             }
             var html = buckets.map(function (b) {
@@ -342,40 +380,50 @@
                 var isUnlimited = !!b.is_unlimited;
                 var used = Number(b.used_bytes_window || 0);
                 var limit = Number(b.limit_bytes || 0);
+                var winDays = Number(b.window_days || 30);
+                var creditTotal = Number(b.credit_periods_total || 1);
                 var exhausted = !!b.is_exhausted;
-                var statusText = exhausted ? 'Исчерпан' : 'Активен';
+                var statusText = exhausted ? 'Лимит исчерпан' : 'В пределах лимита';
                 var statusClass = exhausted ? 'traffic-status-exhausted' : 'traffic-status-active';
+                var typeRu = isUnlimited ? 'Без лимита' : 'Лимит по трафику';
+                var limitRu = isUnlimited ? '—' : _formatBytes(limit);
+                var remainRu = isUnlimited ? '—' : _formatBytes(Math.max(0, limit - used));
+                var gibVal = isUnlimited ? '' : _gibFromBytes(limit);
                 return ''
                     + '<div class="traffic-bucket-card">'
                     + '  <div class="traffic-bucket-head">'
-                    + '    <div class="traffic-bucket-title">' + _deps.escapeHtml(b.name || ('Bucket ' + id)) + '</div>'
+                    + '    <div class="traffic-bucket-title">' + _deps.escapeHtml(b.name || ('Пакет #' + id)) + '</div>'
                     + '    <div class="traffic-bucket-status ' + statusClass + '">' + statusText + '</div>'
                     + '  </div>'
                     + '  <div class="traffic-bucket-meta">'
-                    + '    <span>Тип: ' + (isUnlimited ? 'Unlimited' : 'Limited') + '</span>'
-                    + '    <span>Лимит: ' + (isUnlimited ? 'Unlimited' : _formatBytes(limit)) + '</span>'
-                    + '    <span>Использовано (30d): ' + _formatBytes(used) + '</span>'
-                    + '    <span>Остаток: ' + (isUnlimited ? 'Unlimited' : _formatBytes(Math.max(0, limit - used))) + '</span>'
+                    + '    <span>Окно учёта: ' + winDays + ' дн.</span>'
+                    + '    <span>Слотов кредита: ' + creditTotal + '</span>'
+                    + '    <span>Тип: ' + typeRu + '</span>'
+                    + '    <span>Лимит пакета: ' + limitRu + '</span>'
+                    + '    <span>Использовано за окно: ' + _formatBytes(used) + '</span>'
+                    + '    <span>Остаток: ' + remainRu + '</span>'
                     + '  </div>'
                     + '  <div class="traffic-bucket-inline-form">'
                     + '    <label>Название <input type="text" id="bucket-name-' + id + '" value="' + _deps.escapeHtml(b.name || '') + '"></label>'
-                    + '    <label>Лимит (байт) <input type="number" id="bucket-limit-' + id + '" min="0" value="' + (limit || 0) + '"' + (isUnlimited ? ' disabled' : '') + '></label>'
-                    + '    <label class="inline-check"><input type="checkbox" id="bucket-unlimited-' + id + '" ' + (isUnlimited ? 'checked' : '') + '> Unlimited</label>'
-                    + '    <label class="inline-check"><input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '> Enabled</label>'
-                    + '    <button type="button" class="btn-secondary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить bucket</button>'
+                    + '    <label>Лимит, ГиБ <input type="number" class="bucket-limit-gib-input" id="bucket-limit-gib-' + id + '" min="0" step="0.001" value="' + _deps.escapeHtml(gibVal) + '"' + (isUnlimited ? ' disabled' : '') + '></label>'
+                    + '    <label>Окно, дн. <input type="number" id="bucket-window-' + id + '" min="1" value="' + winDays + '"></label>'
+                    + '    <label>Слотов кредита <input type="number" id="bucket-credit-' + id + '" min="1" value="' + creditTotal + '"></label>'
+                    + '    <label class="inline-check"><input type="checkbox" class="traffic-bucket-unlimited-cb" data-bucket-id="' + id + '" id="bucket-unlimited-' + id + '" ' + (isUnlimited ? 'checked' : '') + '> Без лимита трафика</label>'
+                    + '    <label class="inline-check"><input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '> Учёт включён</label>'
+                    + '    <button type="button" class="btn-secondary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить параметры</button>'
                     + '  </div>'
                     + '  <div class="traffic-bucket-assignments">'
-                    + '    <div class="traffic-bucket-subtitle">Назначение серверов</div>'
+                    + '    <div class="traffic-bucket-subtitle">Ноды в этом пакете</div>'
                     + '    <div class="traffic-bucket-servers">' + _buildServerChecksHtml(id) + '</div>'
                     + '    <div class="traffic-bucket-actions">'
                     + '      <button type="button" class="btn-secondary" data-action="saveBucketServerAssignments" data-bucket-id="' + id + '">Сохранить ноды</button>'
-                    + '      <button type="button" class="btn-secondary" data-action="clearTrafficBucketServers" data-bucket-id="' + id + '">Снять все ноды</button>'
+                    + '      <button type="button" class="btn-secondary" data-action="clearTrafficBucketServers" data-bucket-id="' + id + '">Снять все ноды с пакета</button>'
                     + '    </div>'
                     + '  </div>'
                     + '  <div class="traffic-bucket-adjust">'
-                    + '    <label>Корректировка (байт) <input type="number" id="bucket-adjust-delta-' + id + '" value="0"></label>'
-                    + '    <label>Причина <input type="text" id="bucket-adjust-reason-' + id + '" placeholder="manual correction"></label>'
-                    + '    <button type="button" class="btn-secondary" data-action="adjustTrafficBucketUsage" data-bucket-id="' + id + '">Применить корректировку</button>'
+                    + '    <label>Корректировка, ГиБ (+ или −) <input type="number" step="0.001" id="bucket-adjust-gib-' + id + '" value="0"></label>'
+                    + '    <label>Комментарий <input type="text" id="bucket-adjust-reason-' + id + '" placeholder="например: компенсация"></label>'
+                    + '    <button type="button" class="btn-secondary" data-action="adjustTrafficBucketUsage" data-bucket-id="' + id + '">Применить корректировку учёта</button>'
                     + '  </div>'
                     + '</div>';
             }).join('');
@@ -385,13 +433,13 @@
 
         async function loadTrafficBuckets() {
             var root = document.getElementById('subscription-traffic-buckets-list');
-            if (root) root.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка bucket-ов...</p></div>';
+            if (root) root.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка настроек трафика...</p></div>';
             try {
                 var data = await _trafficBucketApi('list');
                 renderTrafficBuckets(data);
             } catch (error) {
                 console.error('Ошибка загрузки buckets:', error);
-                if (root) root.innerHTML = '<div class="empty-state"><p>Не удалось загрузить bucket-ы: ' + _deps.escapeHtml(error.message) + '</p></div>';
+                if (root) root.innerHTML = '<div class="empty-state"><p>Не удалось загрузить настройки трафика: ' + _deps.escapeHtml(error.message) + '</p></div>';
             }
         }
 
@@ -399,23 +447,28 @@
             try {
                 var name = (document.getElementById('new-bucket-name').value || '').trim();
                 var isUnlimited = !!document.getElementById('new-bucket-unlimited').checked;
-                var limitBytes = parseInt(document.getElementById('new-bucket-limit-bytes').value || '0', 10);
+                var gib = parseFloat(document.getElementById('new-bucket-limit-gib').value || '0');
+                var limitBytes = isUnlimited ? 0 : _bytesFromGib(gib);
                 var creditPeriods = parseInt(document.getElementById('new-bucket-credit-periods').value || '1', 10);
-                if (!name) throw new Error('Укажите название bucket');
-                if (!isUnlimited && (!limitBytes || limitBytes <= 0)) throw new Error('Для limited bucket нужен положительный лимит');
+                var windowDays = parseInt(document.getElementById('new-bucket-window-days').value || '30', 10);
+                if (!name) throw new Error('Укажите название пакета');
+                if (!isUnlimited && (!limitBytes || limitBytes <= 0)) throw new Error('Укажите положительный лимит в ГиБ или включите «без лимита»');
                 var data = await _trafficBucketApi('create', {
                     name: name,
                     is_unlimited: isUnlimited,
-                    limit_bytes: isUnlimited ? 0 : limitBytes,
+                    limit_bytes: limitBytes,
+                    window_days: Math.max(1, windowDays),
                     credit_periods_total: Math.max(1, creditPeriods)
                 });
                 document.getElementById('new-bucket-name').value = '';
-                document.getElementById('new-bucket-limit-bytes').value = '';
+                document.getElementById('new-bucket-limit-gib').value = '';
                 document.getElementById('new-bucket-credit-periods').value = '1';
+                var wd = document.getElementById('new-bucket-window-days');
+                if (wd) wd.value = '30';
                 renderTrafficBuckets(data);
-                await _deps.appShowAlert('Bucket создан.', { title: 'Готово', variant: 'success' });
+                await _deps.appShowAlert('Пакет трафика создан.', { title: 'Готово', variant: 'success' });
             } catch (error) {
-                await _deps.appShowAlert('Ошибка создания bucket: ' + error.message, { title: 'Ошибка', variant: 'error' });
+                await _deps.appShowAlert('Ошибка создания пакета: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 
@@ -423,20 +476,28 @@
             try {
                 var id = String(bucketId);
                 var nameEl = document.getElementById('bucket-name-' + id);
-                var limitEl = document.getElementById('bucket-limit-' + id);
+                var limitGibEl = document.getElementById('bucket-limit-gib-' + id);
+                var windowEl = document.getElementById('bucket-window-' + id);
+                var creditEl = document.getElementById('bucket-credit-' + id);
                 var unlimitedEl = document.getElementById('bucket-unlimited-' + id);
                 var enabledEl = document.getElementById('bucket-enabled-' + id);
+                var isUnl = !!(unlimitedEl && unlimitedEl.checked);
+                var gib = parseFloat((limitGibEl && limitGibEl.value) || '0');
+                var limitBytes = isUnl ? 0 : _bytesFromGib(gib);
+                if (!isUnl && (!limitBytes || limitBytes <= 0)) throw new Error('Укажите положительный лимит в ГиБ или отметьте «без лимита»');
                 var payload = {
                     name: (nameEl && nameEl.value || '').trim(),
-                    is_unlimited: !!(unlimitedEl && unlimitedEl.checked),
+                    is_unlimited: isUnl,
                     is_enabled: !!(enabledEl && enabledEl.checked),
-                    limit_bytes: parseInt((limitEl && limitEl.value) || '0', 10)
+                    limit_bytes: limitBytes,
+                    window_days: Math.max(1, parseInt((windowEl && windowEl.value) || '30', 10)),
+                    credit_periods_total: Math.max(1, parseInt((creditEl && creditEl.value) || '1', 10))
                 };
                 var data = await _trafficBucketApi('update', { bucket_id: Number(id), ...payload });
                 renderTrafficBuckets(data);
-                await _deps.appShowAlert('Bucket обновлен.', { title: 'Готово', variant: 'success' });
+                await _deps.appShowAlert('Параметры пакета сохранены.', { title: 'Готово', variant: 'success' });
             } catch (error) {
-                await _deps.appShowAlert('Ошибка обновления bucket: ' + error.message, { title: 'Ошибка', variant: 'error' });
+                await _deps.appShowAlert('Ошибка сохранения: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 
@@ -476,18 +537,21 @@
         async function adjustTrafficBucketUsage(bucketId) {
             try {
                 var id = String(bucketId);
-                var delta = parseInt((document.getElementById('bucket-adjust-delta-' + id).value || '0'), 10);
+                var gibRaw = document.getElementById('bucket-adjust-gib-' + id);
+                var gib = parseFloat((gibRaw && gibRaw.value) || '0');
+                var delta = Math.round(gib * _GIB);
                 var reason = (document.getElementById('bucket-adjust-reason-' + id).value || '').trim();
-                if (!delta) throw new Error('Укажите ненулевую корректировку');
+                if (!delta) throw new Error('Укажите ненулевую корректировку в ГиБ (можно с дробью)');
                 var data = await _trafficBucketApi('adjust_usage', {
                     bucket_id: Number(id),
                     bytes_delta: delta,
                     reason: reason || 'admin_adjust'
                 });
+                if (gibRaw) gibRaw.value = '0';
                 renderTrafficBuckets(data);
-                await _deps.appShowAlert('Корректировка применена.', { title: 'Готово', variant: 'success' });
+                await _deps.appShowAlert('Корректировка учёта применена.', { title: 'Готово', variant: 'success' });
             } catch (error) {
-                await _deps.appShowAlert('Ошибка корректировки usage: ' + error.message, { title: 'Ошибка', variant: 'error' });
+                await _deps.appShowAlert('Ошибка корректировки: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 

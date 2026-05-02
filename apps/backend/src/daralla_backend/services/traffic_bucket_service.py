@@ -108,12 +108,18 @@ class TrafficBucketService:
             if not st:
                 allowed_servers.add(server_name)
                 continue
-            if not st["is_exhausted"]:
-                allowed_servers.add(server_name)
+            # Всегда включаем ноду в подписку: при исчерпании клиент снимается на панели (outbox),
+            # но ссылка остаётся в списке с понятной подписью used/limit — пользователь видит «полный» счётчик.
+            allowed_servers.add(server_name)
             if st["is_unlimited"]:
                 suffixes[server_name] = "[Unlimited]"
             else:
-                suffixes[server_name] = f"[{_fmt_compact(st['remaining_bytes'])}/{_fmt_compact(st['limit_bytes'])}]"
+                used_b = int(st.get("used_bytes") or 0)
+                lim_b = int(st.get("limit_bytes") or 0)
+                ratio = f"[{_fmt_compact(used_b)}/{_fmt_compact(lim_b)}]"
+                if st["is_exhausted"]:
+                    ratio += " [лимит]"
+                suffixes[server_name] = ratio
 
         return {
             "enabled": True,
@@ -121,6 +127,26 @@ class TrafficBucketService:
             "name_suffix_by_server": suffixes,
             "bucket_states": bucket_states,
         }
+
+    async def get_servers_with_exhausted_bucket(self, subscription_id: int) -> set[str]:
+        """Имена серверов подписки, у которых лимит bucket исчерпан (жёсткое отключение на панели)."""
+        if not traffic_buckets_enabled():
+            return set()
+        await self.ensure_default_mapping(subscription_id)
+        mapping = await get_buckets_for_subscription_servers(subscription_id)
+        if not mapping:
+            return set()
+        states = await self.compute_bucket_states(subscription_id)
+        out: set[str] = set()
+        for server_name, bucket in mapping.items():
+            st = states.get(int(bucket["id"]))
+            if not st:
+                continue
+            if st["is_unlimited"]:
+                continue
+            if st["is_exhausted"]:
+                out.add(str(server_name))
+        return out
 
     async def sync_usage_for_subscription(self, subscription_id: int, *, server_manager) -> dict:
         if not traffic_buckets_enabled():

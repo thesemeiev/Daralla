@@ -5366,6 +5366,17 @@ a.instruction-platform-btn {
     display: block;
 }
 
+.traffic-buckets-intro {
+    margin-bottom: 12px;
+}
+
+.traffic-bucket-hint-small {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 8px 0;
+    line-height: 1.45;
+}
+
 .traffic-buckets-create {
     margin-bottom: 16px;
 }

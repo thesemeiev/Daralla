@@ -110,6 +110,7 @@ from .subscriptions_db import (
 from .sync_outbox_db import (
     enqueue_sync_job,
     enqueue_sync_jobs_bulk,
+    delete_sync_outbox_jobs_for_slot,
     claim_due_jobs,
     mark_job_done,
     mark_job_retry,
@@ -217,7 +218,7 @@ __all__ = [
     'get_default_group_id', 'resolve_group_id',
     'add_server_group', 'add_server_config', 'update_server_group', 'update_server_config',
     'delete_server_config', 'SERVER_CONFIG_UPDATE_KEYS',
-    'enqueue_sync_job', 'enqueue_sync_jobs_bulk',
+    'enqueue_sync_job', 'enqueue_sync_jobs_bulk', 'delete_sync_outbox_jobs_for_slot',
     'claim_due_jobs', 'mark_job_done', 'mark_job_retry', 'mark_job_dead',
     'get_sync_outbox_stats', 'list_sync_outbox_jobs', 'retry_dead_jobs',
     'get_table_row_counts', 'cleanup_old_daily_aggregates',
