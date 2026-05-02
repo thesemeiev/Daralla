@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import datetime
 import logging
 import os
 import re
 import time
+
+import httpx
 
 from daralla_backend.app_context import get_ctx
 from daralla_backend.db.subscriptions_db import (
@@ -19,6 +22,7 @@ from daralla_backend.services.traffic_bucket_service import (
     get_traffic_bucket_service,
     traffic_buckets_enabled,
 )
+from daralla_backend.services.xui_panel_client import XUiPanelError
 from daralla_backend.utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
@@ -369,15 +373,35 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             except Exception as bucket_policy_exc:
                 logger.warning("bucket delivery policy failed for sub=%s: %s", sub["id"], bucket_policy_exc)
 
-        try:
-            links = await subscription_manager.build_links_for_subscription(
-                sub["id"],
-                allowed_server_names=bucket_policy.get("allowed_servers"),
-                server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
-            )
-        except TypeError:
-            # Совместимость с тестовыми/legacy менеджерами без новых kwargs.
-            links = await subscription_manager.build_links_for_subscription(sub["id"])
+        links = None
+        for attempt in range(3):
+            try:
+                try:
+                    links = await subscription_manager.build_links_for_subscription(
+                        sub["id"],
+                        allowed_server_names=bucket_policy.get("allowed_servers"),
+                        server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
+                    )
+                except TypeError:
+                    # Совместимость с тестовыми/legacy менеджерами без новых kwargs.
+                    links = await subscription_manager.build_links_for_subscription(sub["id"])
+                break
+            except (httpx.HTTPError, XUiPanelError, OSError, ConnectionError) as panel_exc:
+                logger.warning(
+                    "Сбор ссылок подписки: попытка %s/3 не удалась (sub=%s): %s",
+                    attempt + 1,
+                    sub["id"],
+                    panel_exc,
+                )
+                if attempt < 2:
+                    await asyncio.sleep(0.4 * (attempt + 1))
+                    continue
+                logger.error(
+                    "Сбор ссылок подписки: исчерпаны повторы (sub=%s)",
+                    sub["id"],
+                    exc_info=True,
+                )
+                return "Service temporarily unavailable", 503, _cors_headers()
         servers = await get_subscription_servers(sub["id"])
         allowed_servers = bucket_policy.get("allowed_servers")
         if allowed_servers is not None:

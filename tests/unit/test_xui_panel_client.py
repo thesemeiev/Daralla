@@ -1,7 +1,9 @@
 """Unit tests for the standalone XUiPanelClient (no py3xui)."""
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -18,7 +20,7 @@ class _Recorder:
         self.bodies: List[Optional[Dict[str, Any]]] = []
 
 
-def _make_client(
+async def _make_client(
     handler,
     host: str = "https://panel.example.com:2053/secret",
     *,
@@ -36,9 +38,9 @@ def _make_client(
         session_ttl_sec=3600.0,
     )
     transport = httpx.MockTransport(handler)
-    # Replace the underlying client with one wired to MockTransport.
-    new_async = httpx.AsyncClient(transport=transport, timeout=client._timeout)
-    client._client = new_async
+    st = client._loop_http_state()
+    st.client = httpx.AsyncClient(transport=transport, timeout=client._timeout)
+    st.login_lock = asyncio.Lock()
     return client
 
 
@@ -54,6 +56,40 @@ def _fail(msg: str, status: int = 200) -> httpx.Response:
 
 
 @pytest.mark.asyncio
+async def test_per_event_loop_has_isolated_httpx_client():
+    """Quart (отдельный поток + asyncio.run) и бот не должны шарить один AsyncClient."""
+    client = XUiPanelClient(
+        host="https://panel.example.com:2053/secret",
+        login="admin",
+        password="pw",
+        verify_tls=False,
+    )
+    st_main = client._loop_http_state()
+    await client._ensure_http_client(st_main)
+    assert st_main.client is not None
+    main_client_id = id(st_main.client)
+
+    other_ids: List[int] = []
+
+    def run_in_thread() -> None:
+        async def inner() -> None:
+            st = client._loop_http_state()
+            await client._ensure_http_client(st)
+            assert st.client is not None
+            other_ids.append(id(st.client))
+            await client.aclose()
+
+        asyncio.run(inner())
+
+    t = threading.Thread(target=run_in_thread)
+    t.start()
+    t.join()
+    assert len(other_ids) == 1
+    assert other_ids[0] != main_client_id
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_login_then_list_inbounds_calls_correct_paths():
     rec = _Recorder()
 
@@ -65,7 +101,7 @@ async def test_login_then_list_inbounds_calls_correct_paths():
             return _ok([{"id": 1, "protocol": "vless"}])
         return httpx.Response(404, json={"success": False, "msg": "nope"})
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         inbounds = await client.list_inbounds()
     finally:
@@ -92,7 +128,7 @@ async def test_get_inbound_returns_dict_obj():
             return _ok(inv_obj)
         return _fail("unexpected", status=404)
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         inv = await client.get_inbound(10)
     finally:
@@ -114,7 +150,7 @@ async def test_add_client_sends_settings_with_one_client():
         return _fail("unexpected", status=404)
 
     payload = {"email": "u1", "auth": "secret-auth", "enable": True}
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         await client.add_client(7, payload)
     finally:
@@ -139,7 +175,7 @@ async def test_update_client_uses_url_id_and_inbound_id_in_body():
             return _ok()
         return _fail("unexpected", status=404)
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         await client.update_client(
             client_url_id="hy2-auth-token",
@@ -163,7 +199,7 @@ async def test_delete_client_and_delete_client_by_email_paths():
         seen_paths.append(request.url.path)
         return _ok()
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         await client.delete_client(5, "uuid-1234")
         await client.delete_client_by_email(5, "user@example.com")
@@ -190,7 +226,7 @@ async def test_relogin_on_401_then_succeeds():
             return httpx.Response(401, json={"success": False, "msg": "session expired"})
         return _ok([])
 
-    client = _make_client(handler, max_retries=3)
+    client = await _make_client(handler, max_retries=3)
     try:
         result = await client.list_inbounds()
     finally:
@@ -208,7 +244,7 @@ async def test_panel_success_false_raises_xui_panel_error():
             return httpx.Response(200, json={"success": True})
         return _fail("Inbound Not Found For Email")
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         with pytest.raises(XUiPanelError) as ei:
             await client.delete_client_by_email(1, "absent@example.com")
@@ -225,7 +261,7 @@ async def test_login_failure_raises_panel_error():
             return httpx.Response(200, json={"success": False, "msg": "bad credentials"})
         return _fail("should-not-reach")
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         with pytest.raises(XUiPanelError) as ei:
             await client.list_inbounds()
@@ -244,7 +280,7 @@ async def test_online_emails_returns_list():
             return _ok(["u1", "u2"])
         return _fail("unexpected", status=404)
 
-    client = _make_client(handler)
+    client = await _make_client(handler)
     try:
         emails = await client.online_emails()
     finally:
