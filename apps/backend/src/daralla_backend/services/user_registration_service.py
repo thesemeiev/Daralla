@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import aiosqlite
+import logging
 import time
 
 from daralla_backend.app_context import get_ctx
@@ -24,6 +25,10 @@ from daralla_backend.db.users_db import (
 )
 from daralla_backend.services.user_account_service import create_telegram_binding
 from daralla_backend.prices_config import get_default_device_limit_async
+from daralla_backend.services.group_traffic_template_service import apply_template_to_subscription
+from daralla_backend.services.traffic_bucket_service import traffic_buckets_enabled
+
+logger = logging.getLogger(__name__)
 
 
 async def resolve_or_create_user_from_telegram(telegram_id: str):
@@ -89,6 +94,15 @@ async def try_create_trial_subscription(user_id: str, trial_device_limit: int, e
         expires_at=expires_at,
         name="Пробная подписка",
     )
+    if traffic_buckets_enabled():
+        try:
+            await apply_template_to_subscription(int(subscription_id), force=False, dry_run=False)
+        except Exception as exc:
+            logger.warning(
+                "Шаблон трафика группы не применён к пробной подписке %s: %s",
+                subscription_id,
+                exc,
+            )
     return subscription_id, token
 
 

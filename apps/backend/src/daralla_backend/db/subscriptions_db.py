@@ -311,6 +311,17 @@ async def get_subscription_by_id_only(sub_id: int):
             return dict(row) if row else None
 
 
+async def list_subscription_ids_for_group(group_id: int) -> list[int]:
+    """ID подписок с данной группой серверов (не удалённые)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id FROM subscriptions WHERE group_id = ? AND status != 'deleted' ORDER BY id",
+            (int(group_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [int(r[0]) for r in rows]
+
+
 async def get_subscription_servers(subscription_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row

@@ -148,3 +148,29 @@ async def test_ensure_client_on_server_handles_protocol_unsupported_gracefully(
     )
 
     assert result == (False, False)
+
+
+@pytest.mark.asyncio
+async def test_ensure_client_on_server_disables_when_traffic_bucket_exhausted(
+    server_manager_for_ensure, mock_xui_for_ensure, monkeypatch
+):
+    """Исчерпан лимит на ноде: только set_client_enabled(False), без reconcile/addClient."""
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    mock_xui_for_ensure.set_client_enabled = AsyncMock(return_value=True)
+    subscription_manager = SubscriptionManager(server_manager_for_ensure)
+
+    result = await subscription_manager.ensure_client_on_server(
+        subscription_id=1,
+        server_name="srv1",
+        client_email="user@test",
+        user_id="123",
+        expires_at=2000000000,
+        token="sub_token",
+        device_limit=1,
+        exhausted_server_names={"srv1"},
+    )
+
+    assert result == (True, False)
+    mock_xui_for_ensure.set_client_enabled.assert_awaited_once_with("user@test", False)
+    mock_xui_for_ensure.addClient.assert_not_awaited()
+    mock_xui_for_ensure.reconcile_client.assert_not_awaited()

@@ -8,6 +8,7 @@ from daralla_backend.services.admin_servers_service import (
     handle_server_config_delete,
     handle_server_config_sync_flow,
     handle_server_config_update,
+    handle_server_group_traffic_template,
     handle_server_group_update,
     handle_server_groups,
     handle_sync_outbox,
@@ -32,6 +33,13 @@ def create_blueprint(bot_app):
     async def api_admin_server_group_update(request, admin_id):
         data = await request.get_json(silent=True) or {}
         payload, status = await handle_server_group_update(data)
+        return jsonify(payload), status, _cors_headers()
+
+    @bp.route("/api/admin/server-group/traffic-template", methods=["POST", "OPTIONS"])
+    @admin_route
+    async def api_admin_server_group_traffic_template(request, admin_id):
+        data = await request.get_json(silent=True) or {}
+        payload, status = await handle_server_group_traffic_template(data)
         return jsonify(payload), status, _cors_headers()
 
     @bp.route("/api/admin/servers-config", methods=["POST", "OPTIONS"])

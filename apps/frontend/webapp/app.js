@@ -3121,7 +3121,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             adjustTrafficBucketUsage: adjustTrafficBucketUsage,
             saveAdminCommerce: saveAdminCommerce,
             saveServerGroup: saveServerGroup,
-            saveServerConfig: saveServerConfig
+            saveServerConfig: saveServerConfig,
+            saveGroupTrafficTemplate: saveGroupTrafficTemplate,
+            previewGroupTrafficTemplate: previewGroupTrafficTemplate,
+            applyGroupTrafficTemplate: applyGroupTrafficTemplate,
+            applyGroupTrafficTemplateForce: applyGroupTrafficTemplateForce
         });
     }
     window.addEventListener('hashchange', function () {
@@ -3300,7 +3304,11 @@ var adminServerActions = appActions.bindFeature(adminServersFeature, [
     'deleteServerConfig',
     'syncAllServers',
     'showSyncOutboxStatus',
-    'runSyncAllServers'
+    'runSyncAllServers',
+    'saveGroupTrafficTemplate',
+    'previewGroupTrafficTemplate',
+    'applyGroupTrafficTemplate',
+    'applyGroupTrafficTemplateForce'
 ]);
 var loadServerManagement = adminServerActions.loadServerManagement;
 var loadServerGroups = adminServerActions.loadServerGroups;
@@ -3324,6 +3332,10 @@ var deleteServerConfig = adminServerActions.deleteServerConfig;
 var syncAllServers = adminServerActions.syncAllServers;
 var showSyncOutboxStatus = adminServerActions.showSyncOutboxStatus;
 var runSyncAllServers = adminServerActions.runSyncAllServers;
+var saveGroupTrafficTemplate = adminServerActions.saveGroupTrafficTemplate;
+var previewGroupTrafficTemplate = adminServerActions.previewGroupTrafficTemplate;
+var applyGroupTrafficTemplate = adminServerActions.applyGroupTrafficTemplate;
+var applyGroupTrafficTemplateForce = adminServerActions.applyGroupTrafficTemplateForce;
 
 // Public UI API: whitelisted globals used by inline handlers in index.html
 var PUBLIC_UI_API_NAMES = [

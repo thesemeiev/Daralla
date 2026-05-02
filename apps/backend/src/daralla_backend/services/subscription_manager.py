@@ -26,6 +26,7 @@ from ..db.subscriptions_db import (
     update_subscription_name,
 )
 from .server_manager import MultiServerManager
+from .group_traffic_template_service import apply_template_to_subscription
 from .traffic_bucket_service import get_traffic_bucket_service, traffic_buckets_enabled
 from .xui_helpers import panel_snapshot_matches_desired
 from .subscription_helpers import (
@@ -126,7 +127,17 @@ class SubscriptionManager:
         # 5. Получаем созданную подписку
         from ..db.subscriptions_db import get_subscription_by_id_only
         sub_dict = await get_subscription_by_id_only(subscription_id)
-        
+
+        if traffic_buckets_enabled():
+            try:
+                await apply_template_to_subscription(int(subscription_id), force=False, dry_run=False)
+            except Exception as exc:
+                logger.warning(
+                    "Шаблон трафика группы не применён к подписке %s: %s",
+                    subscription_id,
+                    exc,
+                )
+
         logger.info(
             "Подписка создана: subscription_id=%s, token=%s, user_id=%s, group_id=%s",
             subscription_id,
@@ -172,6 +183,7 @@ class SubscriptionManager:
         token: str,
         device_limit: int = None,
         panel_entry: Optional[dict] = None,
+        exhausted_server_names: Optional[set[str]] = None,
     ) -> Tuple[bool, bool]:
         """
         Гарантирует наличие клиента на сервере.
@@ -181,6 +193,10 @@ class SubscriptionManager:
         
         panel_entry: снимок с панели из одного list() на сервер. None — как раньше (client_exists + get_*).
         dict при on_panel True: expiry_sec, limit_ip, flow, protocol (для reconcile без лишних запросов).
+
+        exhausted_server_names: имена нод с исчерпанным bucket для этой подписки; если None и включены
+        traffic buckets — подтягивается из БД. Для таких нод только disable на панели (reconcile иначе
+        снова включает клиента — см. reconcile_client).
         
         Returns:
             Tuple[bool, bool]:
@@ -207,6 +223,27 @@ class SubscriptionManager:
             if xui is None:
                 logger.error(f"Сервер {server_name} недоступен")
                 return False, False
+
+            sn = str(server_name).strip()
+            exhausted_norm: set[str] = set()
+            if traffic_buckets_enabled():
+                if exhausted_server_names is not None:
+                    exhausted_norm = {str(x).strip() for x in exhausted_server_names}
+                else:
+                    tbs = get_traffic_bucket_service()
+                    raw = await tbs.get_servers_with_exhausted_bucket(subscription_id)
+                    exhausted_norm = {str(x).strip() for x in raw}
+            if sn in exhausted_norm:
+                try:
+                    await xui.set_client_enabled(client_email, False)
+                except Exception as ex:
+                    logger.warning(
+                        "ensure_client_on_server: не удалось отключить клиента при лимите трафика %s@%s: %s",
+                        client_email,
+                        server_name,
+                        ex,
+                    )
+                return True, False
             
             # Flow из конфига сервера — передаём при любом обновлении клиента, чтобы не слетал в X-UI
             server_config = self.server_manager.get_server_config(server_name)
@@ -682,6 +719,7 @@ class SubscriptionManager:
                             "expires_at": expires_at,
                             "token": token,
                             "device_limit": device_limit,
+                            "exhausted_servers": skip_servers,
                         }
                     )
 
@@ -740,6 +778,7 @@ class SubscriptionManager:
                                 token=t["token"],
                                 device_limit=t["device_limit"],
                                 panel_entry=pe,
+                                exhausted_server_names=t.get("exhausted_servers"),
                             )
                             return (t, r)
                         except Exception as e:
@@ -778,6 +817,7 @@ class SubscriptionManager:
                                     token=t["token"],
                                     device_limit=t["device_limit"],
                                     panel_entry=None,
+                                    exhausted_server_names=t.get("exhausted_servers"),
                                 )
                                 return (t, r)
                             except Exception as e:

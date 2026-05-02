@@ -2,6 +2,7 @@
     function createAdminServersFeature(deps) {
         var _deps = deps || {};
         var SERVER_CLIENT_FLOW_VALUE = 'xtls-rprx-vision';
+        var _GIB = Math.pow(1024, 3);
 
         function getGroups() { return _deps.getCurrentAdminGroups(); }
         function setGroups(v) { _deps.setCurrentAdminGroups(v); }
@@ -223,12 +224,176 @@
                 if (result.success) {
                     setServers(result.servers);
                     renderServersInGroup(result.servers);
+                    await loadGroupTrafficTemplateForm();
                 } else {
                     listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
                 }
             } catch (err) {
                 console.error('Ошибка загрузки серверов:', err);
                 listEl.innerHTML = '<p class="error-text">Ошибка загрузки</p>';
+            }
+        }
+
+        function _bytesFromGib(gib) {
+            var g = parseFloat(gib);
+            if (isNaN(g) || g < 0) return 0;
+            return Math.round(g * _GIB);
+        }
+
+        function _gibFromBytes(bytes) {
+            var b = Number(bytes) || 0;
+            if (b <= 0) return '';
+            return (Math.round((b / _GIB) * 1000) / 1000).toString();
+        }
+
+        function renderTrafficLimitedServerChecks(servers, selectedSet) {
+            var wrap = document.getElementById('sg-traffic-limited-servers');
+            if (!wrap) return;
+            var sel = selectedSet || {};
+            if (!servers || !servers.length) {
+                wrap.innerHTML = '<p class="hint">В группе пока нет серверов.</p>';
+                return;
+            }
+            var sorted = sortAdminServersByClientOrder(servers.slice());
+            wrap.innerHTML = sorted.map(function (s) {
+                var name = s.name || '';
+                var checked = sel[name] ? 'checked' : '';
+                return ''
+                    + '<label class="traffic-template-server-pill">'
+                    + '<input type="checkbox" class="sg-traffic-lim-cb" value="' + _deps.escapeHtml(name) + '" ' + checked + '>'
+                    + '<span>' + _deps.escapeHtml(name) + '</span>'
+                    + '</label>';
+            }).join('');
+        }
+
+        async function loadGroupTrafficTemplateForm() {
+            var gid = getGroupId();
+            var wrap = document.getElementById('sg-traffic-limited-servers');
+            if (!gid || !wrap) return;
+            try {
+                var response = await _deps.apiFetch('/api/admin/server-group/traffic-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'get', group_id: gid })
+                });
+                var result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Ошибка');
+                var tpl = result.template;
+                var limited = result.limited_server_names || [];
+                var sel = {};
+                limited.forEach(function (n) { sel[n] = true; });
+                document.getElementById('sg-traffic-enabled').checked = !!(tpl && tpl.enabled);
+                document.getElementById('sg-traffic-bucket-name').value = (tpl && tpl.limited_bucket_name) ? tpl.limited_bucket_name : 'Лимитированные ноды';
+                document.getElementById('sg-traffic-limit-gib').value = tpl ? _gibFromBytes(tpl.limit_bytes) : '';
+                document.getElementById('sg-traffic-window-days').value = (tpl && tpl.window_days) ? String(tpl.window_days) : '30';
+                document.getElementById('sg-traffic-credit').value = (tpl && tpl.credit_periods_total) ? String(tpl.credit_periods_total) : '1';
+                document.getElementById('sg-traffic-unlimited').checked = !!(tpl && tpl.is_unlimited);
+                renderTrafficLimitedServerChecks(getServers() || [], sel);
+            } catch (e) {
+                console.error('loadGroupTrafficTemplateForm', e);
+                wrap.innerHTML = '<p class="error-text">Не удалось загрузить шаблон трафика.</p>';
+            }
+        }
+
+        function _collectGroupTrafficTemplatePayload() {
+            var gid = getGroupId();
+            var lim = [];
+            document.querySelectorAll('.sg-traffic-lim-cb:checked').forEach(function (cb) {
+                if (cb.value) lim.push(cb.value);
+            });
+            return {
+                action: 'save',
+                group_id: gid,
+                enabled: !!document.getElementById('sg-traffic-enabled').checked,
+                limited_bucket_name: (document.getElementById('sg-traffic-bucket-name').value || '').trim() || 'Лимитированные ноды',
+                limit_bytes: _bytesFromGib(document.getElementById('sg-traffic-limit-gib').value || '0'),
+                is_unlimited: !!document.getElementById('sg-traffic-unlimited').checked,
+                window_days: parseInt(document.getElementById('sg-traffic-window-days').value || '30', 10),
+                credit_periods_total: parseInt(document.getElementById('sg-traffic-credit').value || '1', 10),
+                limited_server_names: lim
+            };
+        }
+
+        async function saveGroupTrafficTemplate() {
+            try {
+                var body = _collectGroupTrafficTemplatePayload();
+                var response = await _deps.apiFetch('/api/admin/server-group/traffic-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                var result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Ошибка');
+                showAdminToast('Шаблон трафика сохранён');
+                await loadGroupTrafficTemplateForm();
+            } catch (e) {
+                await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function previewGroupTrafficTemplate() {
+            try {
+                var gid = getGroupId();
+                if (!gid) return;
+                var response = await _deps.apiFetch('/api/admin/server-group/traffic-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'apply', group_id: gid, dry_run: true, force: false })
+                });
+                var result = await response.json();
+                if (result.ok === false) throw new Error(result.error || 'Ошибка');
+                var t = result.total != null ? result.total : 0;
+                var a = result.applied != null ? result.applied : 0;
+                var s = result.skipped != null ? result.skipped : 0;
+                var e = (result.errors && result.errors.length) ? (' Ошибок: ' + result.errors.length + '.') : '';
+                await _deps.appShowAlert(
+                    'Dry-run: подписок ' + t + ', будет применено ' + a + ', пропущено ' + s + '.' + e,
+                    { title: 'Проверка', variant: 'success' }
+                );
+            } catch (e) {
+                await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function applyGroupTrafficTemplate() {
+            var ok = await _deps.appShowConfirm(
+                'Применить шаблон ко всем подпискам этой группы? Подписки с ручной настройкой трафика будут пропущены.',
+                { title: 'Применить шаблон', confirmText: 'Применить' }
+            );
+            if (!ok) return;
+            try {
+                var gid = getGroupId();
+                var response = await _deps.apiFetch('/api/admin/server-group/traffic-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'apply', group_id: gid, dry_run: false, force: false })
+                });
+                var result = await response.json();
+                if (result.ok === false) throw new Error(result.error || 'Ошибка');
+                showAdminToast('Готово: применено ' + (result.applied || 0) + ', пропущено ' + (result.skipped || 0));
+            } catch (e) {
+                await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function applyGroupTrafficTemplateForce() {
+            var ok = await _deps.appShowConfirm(
+                'Перезаписать настройки трафика по шаблону для всех подписок группы, включая те, где уже есть кастомные пакеты? Это опасная операция.',
+                { title: 'Force', confirmText: 'Перезаписать' }
+            );
+            if (!ok) return;
+            try {
+                var gid = getGroupId();
+                var response = await _deps.apiFetch('/api/admin/server-group/traffic-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'apply', group_id: gid, dry_run: false, force: true })
+                });
+                var result = await response.json();
+                if (result.ok === false) throw new Error(result.error || 'Ошибка');
+                showAdminToast('Force: применено ' + (result.applied || 0) + ', пропущено ' + (result.skipped || 0));
+            } catch (e) {
+                await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
             }
         }
 
@@ -310,6 +475,7 @@
                 if (result.success) {
                     setServers(result.servers);
                     renderServersInGroup(result.servers);
+                    await loadGroupTrafficTemplateForm();
                 }
             } catch (err) {
                 console.error('refreshAdminServersInGroup:', err);
@@ -644,7 +810,11 @@
             deleteServerConfig: deleteServerConfig,
             syncAllServers: syncAllServers,
             showSyncOutboxStatus: showSyncOutboxStatus,
-            runSyncAllServers: runSyncAllServers
+            runSyncAllServers: runSyncAllServers,
+            saveGroupTrafficTemplate: saveGroupTrafficTemplate,
+            previewGroupTrafficTemplate: previewGroupTrafficTemplate,
+            applyGroupTrafficTemplate: applyGroupTrafficTemplate,
+            applyGroupTrafficTemplateForce: applyGroupTrafficTemplateForce
         };
     }
 

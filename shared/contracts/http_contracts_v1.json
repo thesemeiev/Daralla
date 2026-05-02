@@ -123,6 +123,12 @@
       "response_error_keys": ["error"]
     },
     {
+      "path": "/api/admin/server-group/traffic-template",
+      "method": "POST",
+      "response_success_keys": ["success"],
+      "response_error_keys": ["error"]
+    },
+    {
       "path": "/api/admin/servers-config",
       "method": "POST",
       "response_success_keys": ["success"],

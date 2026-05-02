@@ -1146,40 +1146,48 @@
                 </div>
 
                 <!-- Вкладка: лимиты трафика по нодам (buckets) -->
-                <div id="subscription-tab-traffic" class="tab-content">
-                    <div class="info-section traffic-buckets-intro">
-                        <h3 class="text-accent" style="margin-top: 0;">Лимиты трафика по нодам</h3>
-                        <p class="hint" style="margin-bottom: 12px;">
-                            Здесь задаются <strong>квоты трафика</strong> (отдельно от срока подписки): каждая запись — это «пакет» с лимитом за скользящее окно (по умолчанию 30 дней).
-                            Ноды назначаются чекбоксами; на исчерпании лимита доступ на соответствующих серверах в X-UI отключается, в подписке остаётся подпись с расходом.
+                <div id="subscription-tab-traffic" class="tab-content traffic-tab-layout">
+                    <section class="traffic-panel traffic-panel--intro" aria-labelledby="traffic-intro-title">
+                        <h3 id="traffic-intro-title" class="traffic-panel-title">Лимиты трафика по нодам</h3>
+                        <p class="traffic-panel-lead">
+                            Здесь задаются <strong>квоты трафика</strong> (отдельно от срока подписки): каждая запись — это пакет с лимитом за скользящее окно (по умолчанию 30 дней).
+                            Ноды назначаются чекбоксами; при исчерпании лимита доступ на соответствующих серверах в X-UI отключается, в подписке остаётся подпись с расходом.
                         </p>
-                    </div>
-                    <div class="info-section traffic-buckets-create">
-                        <h3 class="text-accent" style="margin-top: 0;">Новый лимит (bucket)</h3>
-                        <div class="traffic-bucket-create-grid">
-                            <label>Название (для себя)
-                                <input type="text" id="new-bucket-name" placeholder="Например: Россия 50 ГБ">
-                            </label>
-                            <label>Лимит, ГиБ
-                                <input type="number" id="new-bucket-limit-gib" min="0" step="0.001" placeholder="10">
-                            </label>
-                            <label>Окно учёта, дней
-                                <input type="number" id="new-bucket-window-days" min="1" value="30" title="За сколько дней суммируется трафик (скользящее окно)">
-                            </label>
-                            <label>Слотов кредита
-                                <input type="number" id="new-bucket-credit-periods" min="1" value="1" title="Сколько «месяцев» кредита заложено при продлении (staged credit)">
-                            </label>
-                            <label class="inline-check">
+                    </section>
+                    <section class="traffic-panel traffic-panel--create" aria-labelledby="traffic-create-title">
+                        <h3 id="traffic-create-title" class="traffic-panel-title">Новый пакет трафика</h3>
+                        <div class="traffic-create-form">
+                            <div class="traffic-create-row traffic-create-row--name">
+                                <label class="traffic-field">
+                                    <span class="traffic-field-label">Название</span>
+                                    <input type="text" id="new-bucket-name" placeholder="Например: Россия 50 ГБ" autocomplete="off">
+                                </label>
+                            </div>
+                            <div class="traffic-create-row traffic-create-row--nums">
+                                <label class="traffic-field">
+                                    <span class="traffic-field-label">Лимит, ГиБ</span>
+                                    <input type="number" id="new-bucket-limit-gib" min="0" step="0.001" placeholder="10">
+                                </label>
+                                <label class="traffic-field">
+                                    <span class="traffic-field-label">Окно учёта, дней</span>
+                                    <input type="number" id="new-bucket-window-days" min="1" value="30" title="За сколько дней суммируется трафик (скользящее окно)">
+                                </label>
+                                <label class="traffic-field">
+                                    <span class="traffic-field-label">Слотов кредита</span>
+                                    <input type="number" id="new-bucket-credit-periods" min="1" value="1" title="Кредит при продлении (staged credit)">
+                                </label>
+                            </div>
+                            <label class="traffic-toggle traffic-toggle--full">
                                 <input type="checkbox" id="new-bucket-unlimited">
-                                Без лимита трафика в этом пакете
+                                <span>Без лимита трафика в этом пакете</span>
                             </label>
                         </div>
-                        <p class="hint traffic-bucket-hint-small">ГиБ — двоичные гигабайты (1024³ байт). При снятой галочке «без лимита» укажите положительный лимит в ГиБ.</p>
-                        <div class="form-actions">
+                        <p class="traffic-panel-hint">ГиБ — двоичные гигабайты (1024³ байт). Если лимит включён, укажите положительное значение в поле «Лимит».</p>
+                        <div class="traffic-create-actions">
                             <button type="button" class="btn-secondary" data-action="loadTrafficBuckets">Обновить список</button>
-                            <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать</button>
+                            <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать пакет</button>
                         </div>
-                    </div>
+                    </section>
                     <div id="subscription-traffic-buckets-list">
                         <div class="loading">
                             <div class="spinner"></div>
@@ -1235,6 +1243,38 @@
                     <summary class="group-detail-hint-summary">Про порядок в подписке</summary>
                     <p class="group-detail-hint-body">Порядок строк совпадает с мини-приложением и ключами VPN. Включите режим «Порядок» и меняйте позицию стрелками ↑ ↓.</p>
                 </details>
+                <section class="traffic-template-panel" id="admin-group-traffic-template-section" aria-labelledby="admin-group-traffic-heading">
+                    <h3 id="admin-group-traffic-heading" class="traffic-template-panel-title">Шаблон трафика</h3>
+                    <p class="hint traffic-template-panel-lead">Отдельный учёт расхода на каждую подписку. Отметьте ноды с лимитом; остальные идут в безлимитный пакет. Новые подписки в группе получают шаблон автоматически (если включено и включён учёт трафика на сервере).</p>
+                    <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-enabled"> <span>Включить шаблон для этой группы</span></label>
+                    <div class="traffic-template-fields">
+                        <label class="form-group traffic-template-field">
+                            <span>Название лимитированного пакета</span>
+                            <input type="text" id="sg-traffic-bucket-name" placeholder="Лимитированные ноды" autocomplete="off">
+                        </label>
+                        <label class="form-group traffic-template-field">
+                            <span>Лимит, ГиБ (двоичных)</span>
+                            <input type="number" id="sg-traffic-limit-gib" min="0" step="0.001" placeholder="50">
+                        </label>
+                        <label class="form-group traffic-template-field">
+                            <span>Окно учёта, дней</span>
+                            <input type="number" id="sg-traffic-window-days" min="1" value="30">
+                        </label>
+                        <label class="form-group traffic-template-field">
+                            <span>Слотов кредита</span>
+                            <input type="number" id="sg-traffic-credit" min="1" value="1">
+                        </label>
+                    </div>
+                    <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-unlimited"> <span>Без лимита трафика для отмеченных нод (отдельный пакет)</span></label>
+                    <p class="hint traffic-template-hint-small">Ноды с лимитом (чекбоксы):</p>
+                    <div id="sg-traffic-limited-servers" class="traffic-template-server-checks"></div>
+                    <div class="traffic-template-actions">
+                        <button type="button" class="btn-primary" data-action="saveGroupTrafficTemplate">Сохранить шаблон</button>
+                        <button type="button" class="btn-secondary" data-action="previewGroupTrafficTemplate">Проверить применение (dry-run)</button>
+                        <button type="button" class="btn-secondary" data-action="applyGroupTrafficTemplate">Применить ко всем подпискам группы</button>
+                        <button type="button" class="btn-danger traffic-template-btn-danger" data-action="applyGroupTrafficTemplateForce">Перезаписать по шаблону (force)</button>
+                    </div>
+                </section>
                 <div id="admin-servers-in-group-list" class="admin-servers-in-group-list"></div>
             </div>
         </div>

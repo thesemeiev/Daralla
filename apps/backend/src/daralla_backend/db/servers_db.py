@@ -5,6 +5,7 @@
 import aiosqlite
 import datetime
 import logging
+import time
 from . import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -561,6 +562,98 @@ async def delete_server_config(server_id: int):
         await db.execute("DELETE FROM servers_config WHERE id = ?", (server_id,))
         await db.commit()
         return True
+
+
+# --- Шаблоны трафика для группы серверов (см. миграция 009) ---
+
+
+async def get_server_group_traffic_template(group_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM server_group_traffic_templates WHERE group_id = ? LIMIT 1",
+            (int(group_id),),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def upsert_server_group_traffic_template(
+    group_id: int,
+    *,
+    enabled: bool,
+    limited_bucket_name: str,
+    limit_bytes: int,
+    is_unlimited: bool,
+    window_days: int,
+    credit_periods_total: int,
+) -> None:
+    now = int(time.time())
+    name = (limited_bucket_name or "").strip() or "Лимитированные ноды"
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO server_group_traffic_templates
+            (group_id, enabled, limited_bucket_name, limit_bytes, is_unlimited, window_days, credit_periods_total, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(group_id) DO UPDATE SET
+                enabled = excluded.enabled,
+                limited_bucket_name = excluded.limited_bucket_name,
+                limit_bytes = excluded.limit_bytes,
+                is_unlimited = excluded.is_unlimited,
+                window_days = excluded.window_days,
+                credit_periods_total = excluded.credit_periods_total,
+                updated_at = excluded.updated_at
+            """,
+            (
+                int(group_id),
+                1 if enabled else 0,
+                name,
+                max(0, int(limit_bytes)),
+                1 if is_unlimited else 0,
+                max(1, int(window_days)),
+                max(1, int(credit_periods_total)),
+                now,
+            ),
+        )
+        await db.commit()
+
+
+async def replace_server_group_traffic_limited_servers(group_id: int, server_names: list[str]) -> None:
+    cleaned = [str(s).strip() for s in (server_names or []) if str(s).strip()]
+    gid = int(group_id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM server_group_traffic_limited_servers WHERE group_id = ?", (gid,))
+        for sn in cleaned:
+            await db.execute(
+                "INSERT OR REPLACE INTO server_group_traffic_limited_servers (group_id, server_name) VALUES (?, ?)",
+                (gid, sn),
+            )
+        await db.commit()
+
+
+async def get_server_group_traffic_limited_servers(group_id: int) -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT server_name FROM server_group_traffic_limited_servers WHERE group_id = ? ORDER BY server_name",
+            (int(group_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [str(r[0]) for r in rows]
+
+
+async def get_active_server_names_for_group(group_id: int) -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT name FROM servers_config
+            WHERE group_id = ? AND is_active = 1
+            ORDER BY client_sort_order ASC, id ASC
+            """,
+            (int(group_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [str(r[0]) for r in rows]
 
 
 async def get_group_load_statistics():

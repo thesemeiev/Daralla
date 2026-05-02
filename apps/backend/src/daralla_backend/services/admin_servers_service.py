@@ -14,13 +14,20 @@ from daralla_backend.db.servers_db import (
     delete_server_config,
     get_group_load_statistics,
     get_server_by_id,
+    get_server_group_traffic_limited_servers,
+    get_server_group_traffic_template,
     get_server_groups,
     get_servers_config,
     reorder_servers_in_group,
+    replace_server_group_traffic_limited_servers,
     update_server_config,
     update_server_group,
+    upsert_server_group_traffic_template,
 )
 from daralla_backend.db.subscriptions_db import sync_subscription_statuses
+from daralla_backend.services.group_traffic_template_service import (
+    apply_group_traffic_template_bulk,
+)
 from daralla_backend.services.server_provider import ServerProvider
 from daralla_backend.services.sync_outbox_service import (
     enqueue_group_sync_jobs,
@@ -371,6 +378,82 @@ async def handle_server_config_delete(data: dict):
     if sync_debounced:
         payload["sync_debounced"] = True
     return payload, 200
+
+
+async def handle_server_group_traffic_template(data: dict):
+    """action: get | save | apply — шаблон трафика для группы серверов."""
+    data = data or {}
+    action = str(data.get("action") or "get").strip().lower()
+    group_id = data.get("group_id")
+    if group_id is None or group_id == "":
+        return {"error": "group_id is required"}, 400
+    try:
+        gid = int(group_id)
+    except (TypeError, ValueError):
+        return {"error": "Invalid group_id"}, 400
+
+    if action == "get":
+        row = await get_server_group_traffic_template(gid)
+        limited = await get_server_group_traffic_limited_servers(gid)
+        tpl = dict(row) if row else None
+        return {"success": True, "template": tpl, "limited_server_names": limited}, 200
+
+    if action == "save":
+        enabled = bool(data.get("enabled"))
+        limited_bucket_name = str(data.get("limited_bucket_name") or "Лимитированные ноды").strip()
+        limit_bytes = int(data.get("limit_bytes") or 0)
+        is_unlimited = bool(data.get("is_unlimited"))
+        window_days = int(data.get("window_days") or 30)
+        credit_periods_total = int(data.get("credit_periods_total") or 1)
+        raw_names = data.get("limited_server_names")
+        if raw_names is None:
+            raw_names = []
+        if not isinstance(raw_names, list):
+            return {"error": "limited_server_names must be a list"}, 400
+        cleaned = [str(s).strip() for s in raw_names if str(s).strip()]
+
+        servers = await get_servers_config(group_id=gid, only_active=False)
+        valid = {str(s["name"]) for s in (servers or [])}
+        for name in cleaned:
+            if name not in valid:
+                return {"error": f"Сервер не в группе: {name}"}, 400
+
+        if cleaned and not is_unlimited and limit_bytes <= 0:
+            return {"error": "Укажите limit_bytes > 0 или включите is_unlimited"}, 400
+
+        await upsert_server_group_traffic_template(
+            gid,
+            enabled=enabled,
+            limited_bucket_name=limited_bucket_name,
+            limit_bytes=max(0, limit_bytes),
+            is_unlimited=is_unlimited,
+            window_days=max(1, window_days),
+            credit_periods_total=max(1, credit_periods_total),
+        )
+        await replace_server_group_traffic_limited_servers(gid, cleaned)
+        return {"success": True}, 200
+
+    if action == "apply":
+        force = bool(data.get("force"))
+        dry_run = bool(data.get("dry_run"))
+        raw_subs = data.get("subscription_ids")
+        sub_ids = None
+        if raw_subs is not None:
+            if not isinstance(raw_subs, list):
+                return {"error": "subscription_ids must be a list"}, 400
+            try:
+                sub_ids = [int(x) for x in raw_subs]
+            except (TypeError, ValueError):
+                return {"error": "Invalid subscription_ids"}, 400
+        result = await apply_group_traffic_template_bulk(
+            gid,
+            subscription_ids=sub_ids,
+            force=force,
+            dry_run=dry_run,
+        )
+        return result, 200
+
+    return {"error": "Invalid action"}, 400
 
 
 async def handle_sync_all():
