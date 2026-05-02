@@ -4341,6 +4341,9 @@ a.instruction-platform-btn {
     color: var(--text-primary);
     line-height: 1.25;
     margin: 0 0 14px 0;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
 }
 .admin-content-page-title.admin-server-group-header-title {
     font-size: 17px;
