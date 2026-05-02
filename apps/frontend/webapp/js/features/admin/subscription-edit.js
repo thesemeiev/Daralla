@@ -356,6 +356,12 @@
                     clearTrafficBucketServers(bucketId);
                 });
             });
+            document.querySelectorAll('[data-action="deleteTrafficBucket"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var bucketId = btn.getAttribute('data-bucket-id');
+                    deleteTrafficBucket(bucketId);
+                });
+            });
             document.querySelectorAll('.traffic-bucket-card .traffic-bucket-unlimited-cb').forEach(function (cb) {
                 cb.addEventListener('change', function () {
                     var id = cb.getAttribute('data-bucket-id');
@@ -389,6 +395,13 @@
                 var limitRu = isUnlimited ? '—' : _formatBytes(limit);
                 var remainRu = isUnlimited ? '—' : _formatBytes(Math.max(0, limit - used));
                 var gibVal = isUnlimited ? '' : _gibFromBytes(limit);
+                var canDeleteBucket = buckets.length > 1 && !isUnlimited;
+                var deleteBucketTitle = '';
+                if (!canDeleteBucket) {
+                    deleteBucketTitle = isUnlimited
+                        ? 'Безлимитный пакет нельзя удалить'
+                        : (buckets.length <= 1 ? 'Нельзя удалить единственный пакет' : '');
+                }
                 return ''
                     + '<article class="traffic-bucket-card" data-bucket-id="' + id + '">'
                     + '  <header class="traffic-bucket-head">'
@@ -404,7 +417,7 @@
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">Остаток</span><span class="traffic-metric-value">' + remainRu + '</span></div>'
                     + '  </div>'
                     + '  <section class="traffic-bucket-block" aria-labelledby="bucket-params-' + id + '">'
-                    + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Параметры</h5>'
+                    + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Настройки пакета</h5>'
                     + '    <div class="traffic-bucket-fields">'
                     + '      <label class="traffic-field traffic-field--span2">'
                     + '        <span class="traffic-field-label">Название</span>'
@@ -434,7 +447,11 @@
                     + '      </label>'
                     + '    </div>'
                     + '    <div class="traffic-bucket-block-actions">'
-                    + '      <button type="button" class="btn-primary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить параметры</button>'
+                    + '      <button type="button" class="btn-primary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить настройки</button>'
+                    + '      <button type="button" class="btn-danger" data-action="deleteTrafficBucket" data-bucket-id="' + id + '"'
+                    + (canDeleteBucket ? '' : ' disabled')
+                    + (deleteBucketTitle ? ' title="' + _deps.escapeHtml(deleteBucketTitle) + '"' : '')
+                    + '>Удалить пакет</button>'
                     + '    </div>'
                     + '  </section>'
                     + '  <section class="traffic-bucket-block traffic-bucket-block--nodes" aria-labelledby="bucket-nodes-' + id + '">'
@@ -567,6 +584,22 @@
                 await _deps.appShowAlert('Назначения нод очищены.', { title: 'Готово', variant: 'success' });
             } catch (error) {
                 await _deps.appShowAlert('Ошибка очистки назначений: ' + error.message, { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function deleteTrafficBucket(bucketId) {
+            var id = String(bucketId);
+            var ok = await _deps.appShowConfirm(
+                'Удалить этот пакет трафика? Ноды из него будут переназначены на безлимитный пакет по умолчанию. Данные учёта по удаляемому пакету будут удалены.',
+                { title: 'Удаление пакета', confirmText: 'Удалить' }
+            );
+            if (!ok) return;
+            try {
+                var data = await _trafficBucketApi('delete', { bucket_id: Number(id) });
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Пакет удалён.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка удаления: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 

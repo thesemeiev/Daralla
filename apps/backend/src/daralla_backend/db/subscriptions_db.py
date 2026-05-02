@@ -776,6 +776,44 @@ async def delete_bucket_server_assignments(subscription_id: int, bucket_id: int)
         return int(cur.rowcount or 0)
 
 
+async def delete_subscription_traffic_bucket(subscription_id: int, bucket_id: int) -> tuple[bool, str | None]:
+    """Удаляет лимитированный пакет; ноды с этим пакетом переносятся на безлимитный по умолчанию.
+
+    Возвращает (True, None) или (False, код): not_found | protected_unlimited | last_bucket
+    """
+    bid = int(bucket_id)
+    sid = int(subscription_id)
+    bucket = await get_subscription_traffic_bucket(bid)
+    if not bucket or int(bucket.get("subscription_id") or 0) != sid:
+        return False, "not_found"
+    if int(bucket.get("is_unlimited") or 0) == 1:
+        return False, "protected_unlimited"
+    all_b = await list_subscription_traffic_buckets(sid)
+    if len(all_b) <= 1:
+        return False, "last_bucket"
+    mapping = await get_subscription_server_bucket_map(sid)
+    servers_for_bucket = [name for name, b_id in mapping.items() if int(b_id) == bid]
+    default_id = await ensure_default_unlimited_bucket(sid)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM subscription_traffic_adjustments WHERE bucket_id = ?", (bid,))
+        await db.execute("DELETE FROM subscription_traffic_usage_daily WHERE bucket_id = ?", (bid,))
+        await db.execute("DELETE FROM subscription_traffic_enforcement_state WHERE bucket_id = ?", (bid,))
+        await db.execute(
+            "DELETE FROM subscription_server_traffic_bucket_map WHERE subscription_id = ? AND bucket_id = ?",
+            (sid, bid),
+        )
+        cur = await db.execute(
+            "DELETE FROM subscription_traffic_buckets WHERE id = ? AND subscription_id = ?",
+            (bid, sid),
+        )
+        await db.commit()
+        if int(cur.rowcount or 0) < 1:
+            return False, "not_found"
+    for server_name in servers_for_bucket:
+        await set_subscription_server_bucket(sid, server_name, default_id)
+    return True, None
+
+
 async def get_subscription_statistics():
     """Возвращает статистику по подпискам и пользователям"""
     async with aiosqlite.connect(DB_PATH) as db:

@@ -1154,6 +1154,13 @@
                             Ноды назначаются чекбоксами; при исчерпании лимита доступ на соответствующих серверах в X-UI отключается, в подписке остаётся подпись с расходом.
                         </p>
                     </section>
+                    <!-- Список пакетов выше формы создания: сразу видны unlimited / limited, а не внизу вкладки -->
+                    <div id="subscription-traffic-buckets-list" class="traffic-buckets-list-host">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Загрузка настроек трафика...</p>
+                        </div>
+                    </div>
                     <section class="traffic-panel traffic-panel--create" aria-labelledby="traffic-create-title">
                         <h3 id="traffic-create-title" class="traffic-panel-title">Новый пакет трафика</h3>
                         <div class="traffic-create-form">
@@ -1188,12 +1195,6 @@
                             <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать пакет</button>
                         </div>
                     </section>
-                    <div id="subscription-traffic-buckets-list">
-                        <div class="loading">
-                            <div class="spinner"></div>
-                            <p>Загрузка настроек трафика...</p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

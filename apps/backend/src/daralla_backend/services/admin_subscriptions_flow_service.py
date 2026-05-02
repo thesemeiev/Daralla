@@ -12,6 +12,7 @@ from daralla_backend.db.subscriptions_db import (
     apply_bucket_usage_adjustment,
     create_subscription_traffic_bucket,
     delete_bucket_server_assignments,
+    delete_subscription_traffic_bucket,
     ensure_default_unlimited_bucket,
     get_bucket_usage_map_for_subscription,
     get_subscription_by_id_only,
@@ -225,6 +226,25 @@ async def adjust_subscription_bucket_usage_payload(sub_id: int, bucket_id: int, 
     await service.enqueue_enforcement_if_needed(sub_id)
     snap = await _traffic_bucket_snapshot(sub_id)
     return {"success": True, "bucket_id": bucket_id, **snap}, None, None
+
+
+async def delete_subscription_traffic_bucket_payload(sub_id: int, bucket_id: int):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    ok, err = await delete_subscription_traffic_bucket(sub_id, bucket_id)
+    if not ok:
+        if err == "not_found":
+            return None, {"error": "Bucket not found"}, 404
+        if err == "protected_unlimited":
+            return None, {"error": "Нельзя удалить пакет без лимита трафика"}, 400
+        if err == "last_bucket":
+            return None, {"error": "Нельзя удалить последний пакет трафика"}, 400
+        return None, {"error": "Не удалось удалить пакет"}, 400
+    service = get_traffic_bucket_service()
+    await service.enqueue_enforcement_if_needed(sub_id)
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, **snap}, None, None
 
 
 def _validate_status_transition(old_status: str, new_status: str):

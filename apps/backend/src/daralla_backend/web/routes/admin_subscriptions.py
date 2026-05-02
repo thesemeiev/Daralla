@@ -12,6 +12,7 @@ from daralla_backend.services.admin_subscriptions_flow_service import (
     clear_subscription_bucket_servers_payload,
     create_subscription_traffic_bucket_payload,
     delete_subscription_payload,
+    delete_subscription_traffic_bucket_payload,
     list_subscriptions_payload,
     manual_sync_payload,
     subscription_traffic_buckets_payload,
@@ -154,6 +155,11 @@ def create_blueprint(bot_app):
                 bytes_delta,
                 reason=reason,
             )
+        elif action == "delete":
+            bucket_id = int(data.get("bucket_id") or 0)
+            if bucket_id <= 0:
+                return jsonify({"error": "bucket_id is required"}), 400, _cors_headers()
+            payload, err_body, err_code = await delete_subscription_traffic_bucket_payload(sub_id, bucket_id)
         else:
             return jsonify({"error": "Invalid action"}), 400, _cors_headers()
         if err_body:
