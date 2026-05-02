@@ -314,21 +314,51 @@
             return data;
         }
 
-        function _buildServerChecksHtml(bucketId) {
+        function _renderTrafficAssignmentMatrix(snapshot) {
+            var host = document.getElementById('subscription-traffic-assignment-matrix');
+            if (!host) return;
             var servers = _deps.getCurrentSubscriptionServers() || [];
-            var mapping = (_currentBucketSnapshot && _currentBucketSnapshot.server_bucket_map) || {};
-            if (!servers.length) {
-                return '<div class="hint">Нет привязанных серверов для этой подписки.</div>';
+            var buckets = (snapshot && snapshot.buckets) || [];
+            var mapping = (snapshot && snapshot.server_bucket_map) || {};
+            var defaultBid = '';
+            buckets.forEach(function (b) {
+                if (b.is_unlimited) defaultBid = String(b.id);
+            });
+            if (!defaultBid && buckets.length) defaultBid = String(buckets[0].id);
+
+            if (!buckets.length) {
+                host.innerHTML = '<p class="hint">Сначала создайте хотя бы один пакет трафика.</p>';
+                return;
             }
-            return servers.map(function (s) {
-                var name = s.server_name || '';
-                var checked = String(mapping[name]) === String(bucketId) ? 'checked' : '';
+            if (!servers.length) {
+                host.innerHTML = '<p class="hint">Нет привязанных серверов к этой подписке — назначение нод недоступно.</p>';
+                return;
+            }
+
+            function optionsForServer(selectedId) {
+                return buckets.map(function (b) {
+                    var sel = String(b.id) === String(selectedId) ? ' selected' : '';
+                    var label = _deps.escapeHtml(b.name || ('Пакет #' + b.id));
+                    var suffix = b.is_unlimited ? ' (без лимита)' : '';
+                    return '<option value="' + String(b.id) + '"' + sel + '>' + label + suffix + '</option>';
+                }).join('');
+            }
+
+            var rows = servers.map(function (s) {
+                var name = String(s.server_name || '');
+                var cur = mapping[name];
+                if (cur == null || cur === '') cur = defaultBid;
+                cur = String(cur);
                 return ''
-                    + '<label class="traffic-server-pill">'
-                    + '<input type="checkbox" data-role="bucket-server" value="' + _deps.escapeHtml(name) + '" ' + checked + '>'
-                    + '<span class="traffic-server-pill-text">' + _deps.escapeHtml(name) + '</span>'
-                    + '</label>';
+                    + '<div class="traffic-assign-row" data-server-name="' + _deps.escapeHtml(name) + '">'
+                    + '  <span class="traffic-assign-server">' + _deps.escapeHtml(name) + '</span>'
+                    + '  <select class="traffic-assign-select form-control" aria-label="Пакет для ноды ' + _deps.escapeHtml(name) + '">'
+                    + optionsForServer(cur)
+                    + '  </select>'
+                    + '</div>';
             }).join('');
+
+            host.innerHTML = '<div class="traffic-assign-matrix-table">' + rows + '</div>';
         }
 
         function _bindTrafficBucketActions() {
@@ -338,22 +368,10 @@
                     saveTrafficBucketUpdate(bucketId);
                 });
             });
-            document.querySelectorAll('[data-action="saveBucketServerAssignments"]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var bucketId = btn.getAttribute('data-bucket-id');
-                    saveBucketServerAssignments(bucketId);
-                });
-            });
             document.querySelectorAll('[data-action="adjustTrafficBucketUsage"]').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var bucketId = btn.getAttribute('data-bucket-id');
                     adjustTrafficBucketUsage(bucketId);
-                });
-            });
-            document.querySelectorAll('[data-action="clearTrafficBucketServers"]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var bucketId = btn.getAttribute('data-bucket-id');
-                    clearTrafficBucketServers(bucketId);
                 });
             });
             document.querySelectorAll('[data-action="deleteTrafficBucket"]').forEach(function (btn) {
@@ -374,6 +392,7 @@
 
         function renderTrafficBuckets(snapshot) {
             _currentBucketSnapshot = snapshot || { buckets: [], server_bucket_map: {} };
+            _renderTrafficAssignmentMatrix(_currentBucketSnapshot);
             var root = document.getElementById('subscription-traffic-buckets-list');
             if (!root) return;
             var buckets = _currentBucketSnapshot.buckets || [];
@@ -396,12 +415,36 @@
                 var remainRu = isUnlimited ? '—' : _formatBytes(Math.max(0, limit - used));
                 var gibVal = isUnlimited ? '' : _gibFromBytes(limit);
                 var canDeleteBucket = buckets.length > 1 && !isUnlimited;
-                var deleteBucketTitle = '';
-                if (!canDeleteBucket) {
-                    deleteBucketTitle = isUnlimited
-                        ? 'Безлимитный пакет нельзя удалить'
-                        : (buckets.length <= 1 ? 'Нельзя удалить единственный пакет' : '');
-                }
+                var limitFieldHtml = isUnlimited
+                    ? ''
+                    : ''
+                    + '      <label class="traffic-field">'
+                    + '        <span class="traffic-field-label">Лимит, ГиБ</span>'
+                    + '        <input type="number" class="bucket-limit-gib-input" id="bucket-limit-gib-' + id + '" min="0" step="0.001" value="' + _deps.escapeHtml(gibVal) + '">'
+                    + '      </label>';
+                var toggleBlockHtml = isUnlimited
+                    ? ''
+                    + '    <div class="traffic-bucket-toggles">'
+                    + '      <p class="hint traffic-unlimited-hint">Безлимитный пакет.</p>'
+                    + '      <label class="traffic-toggle">'
+                    + '        <input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '>'
+                    + '        <span>Учёт включён</span>'
+                    + '      </label>'
+                    + '    </div>'
+                    : ''
+                    + '    <div class="traffic-bucket-toggles">'
+                    + '      <label class="traffic-toggle">'
+                    + '        <input type="checkbox" class="traffic-bucket-unlimited-cb" data-bucket-id="' + id + '" id="bucket-unlimited-' + id + '" ' + (isUnlimited ? 'checked' : '') + '>'
+                    + '        <span>Без лимита трафика</span>'
+                    + '      </label>'
+                    + '      <label class="traffic-toggle">'
+                    + '        <input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '>'
+                    + '        <span>Учёт включён</span>'
+                    + '      </label>'
+                    + '    </div>';
+                var deleteBtnHtml = canDeleteBucket
+                    ? '      <button type="button" class="btn-danger" data-action="deleteTrafficBucket" data-bucket-id="' + id + '">Удалить пакет</button>'
+                    : '';
                 return ''
                     + '<article class="traffic-bucket-card" data-bucket-id="' + id + '">'
                     + '  <header class="traffic-bucket-head">'
@@ -423,10 +466,7 @@
                     + '        <span class="traffic-field-label">Название</span>'
                     + '        <input type="text" id="bucket-name-' + id + '" value="' + _deps.escapeHtml(b.name || '') + '">'
                     + '      </label>'
-                    + '      <label class="traffic-field">'
-                    + '        <span class="traffic-field-label">Лимит, ГиБ</span>'
-                    + '        <input type="number" class="bucket-limit-gib-input" id="bucket-limit-gib-' + id + '" min="0" step="0.001" value="' + _deps.escapeHtml(gibVal) + '"' + (isUnlimited ? ' disabled' : '') + '>'
-                    + '      </label>'
+                    + limitFieldHtml
                     + '      <label class="traffic-field">'
                     + '        <span class="traffic-field-label">Окно, дн.</span>'
                     + '        <input type="number" id="bucket-window-' + id + '" min="1" value="' + winDays + '">'
@@ -436,30 +476,10 @@
                     + '        <input type="number" id="bucket-credit-' + id + '" min="1" value="' + creditTotal + '">'
                     + '      </label>'
                     + '    </div>'
-                    + '    <div class="traffic-bucket-toggles">'
-                    + '      <label class="traffic-toggle">'
-                    + '        <input type="checkbox" class="traffic-bucket-unlimited-cb" data-bucket-id="' + id + '" id="bucket-unlimited-' + id + '" ' + (isUnlimited ? 'checked' : '') + '>'
-                    + '        <span>Без лимита трафика</span>'
-                    + '      </label>'
-                    + '      <label class="traffic-toggle">'
-                    + '        <input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '>'
-                    + '        <span>Учёт включён</span>'
-                    + '      </label>'
-                    + '    </div>'
+                    + toggleBlockHtml
                     + '    <div class="traffic-bucket-block-actions">'
                     + '      <button type="button" class="btn-primary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить настройки</button>'
-                    + '      <button type="button" class="btn-danger" data-action="deleteTrafficBucket" data-bucket-id="' + id + '"'
-                    + (canDeleteBucket ? '' : ' disabled')
-                    + (deleteBucketTitle ? ' title="' + _deps.escapeHtml(deleteBucketTitle) + '"' : '')
-                    + '>Удалить пакет</button>'
-                    + '    </div>'
-                    + '  </section>'
-                    + '  <section class="traffic-bucket-block traffic-bucket-block--nodes" aria-labelledby="bucket-nodes-' + id + '">'
-                    + '    <h5 class="traffic-bucket-block-title" id="bucket-nodes-' + id + '">Ноды в пакете</h5>'
-                    + '    <div class="traffic-bucket-servers">' + _buildServerChecksHtml(id) + '</div>'
-                    + '    <div class="traffic-bucket-actions">'
-                    + '      <button type="button" class="btn-secondary" data-action="saveBucketServerAssignments" data-bucket-id="' + id + '">Сохранить ноды</button>'
-                    + '      <button type="button" class="btn-secondary traffic-btn-quiet" data-action="clearTrafficBucketServers" data-bucket-id="' + id + '">Снять все</button>'
+                    + deleteBtnHtml
                     + '    </div>'
                     + '  </section>'
                     + '  <section class="traffic-bucket-block traffic-bucket-block--adjust" aria-labelledby="bucket-adjust-' + id + '">'
@@ -492,6 +512,8 @@
                 renderTrafficBuckets(data);
             } catch (error) {
                 console.error('Ошибка загрузки buckets:', error);
+                var mh = document.getElementById('subscription-traffic-assignment-matrix');
+                if (mh) mh.innerHTML = '<p class="hint">Не удалось загрузить назначения нод: ' + _deps.escapeHtml(error.message) + '</p>';
                 if (root) root.innerHTML = '<div class="empty-state"><p>Не удалось загрузить настройки трафика: ' + _deps.escapeHtml(error.message) + '</p></div>';
             }
         }
@@ -534,7 +556,7 @@
                 var creditEl = document.getElementById('bucket-credit-' + id);
                 var unlimitedEl = document.getElementById('bucket-unlimited-' + id);
                 var enabledEl = document.getElementById('bucket-enabled-' + id);
-                var isUnl = !!(unlimitedEl && unlimitedEl.checked);
+                var isUnl = unlimitedEl ? !!unlimitedEl.checked : true;
                 var gib = parseFloat((limitGibEl && limitGibEl.value) || '0');
                 var limitBytes = isUnl ? 0 : _bytesFromGib(gib);
                 if (!isUnl && (!limitBytes || limitBytes <= 0)) throw new Error('Укажите положительный лимит в ГиБ или отметьте «без лимита»');
@@ -546,7 +568,7 @@
                     window_days: Math.max(1, parseInt((windowEl && windowEl.value) || '30', 10)),
                     credit_periods_total: Math.max(1, parseInt((creditEl && creditEl.value) || '1', 10))
                 };
-                var data = await _trafficBucketApi('update', { bucket_id: Number(id), ...payload });
+                var data = await _trafficBucketApi('update', Object.assign({ bucket_id: Number(id) }, payload));
                 renderTrafficBuckets(data);
                 await _deps.appShowAlert('Параметры пакета сохранены.', { title: 'Готово', variant: 'success' });
             } catch (error) {
@@ -554,36 +576,49 @@
             }
         }
 
-        async function saveBucketServerAssignments(bucketId) {
+        async function saveAllTrafficAssignments() {
             try {
-                var id = String(bucketId);
-                var checked = Array.from(document.querySelectorAll('.traffic-bucket-card input[data-role="bucket-server"]:checked'))
-                    .filter(function (el) {
-                        var card = el.closest('.traffic-bucket-card');
-                        if (!card) return false;
-                        var btn = card.querySelector('[data-action="saveBucketServerAssignments"]');
-                        return btn && String(btn.getAttribute('data-bucket-id')) === id;
-                    })
-                    .map(function (el) { return el.value; });
-                var data = await _trafficBucketApi('assign_servers', {
-                    bucket_id: Number(id),
-                    server_names: checked
-                });
-                renderTrafficBuckets(data);
-                await _deps.appShowAlert('Ноды назначены.', { title: 'Готово', variant: 'success' });
-            } catch (error) {
-                await _deps.appShowAlert('Ошибка назначения нод: ' + error.message, { title: 'Ошибка', variant: 'error' });
-            }
-        }
+                var host = document.getElementById('subscription-traffic-assignment-matrix');
+                if (!host) return;
+                var snap = _currentBucketSnapshot || { buckets: [] };
+                var buckets = snap.buckets || [];
+                if (!buckets.length) throw new Error('Нет пакетов для назначения');
 
-        async function clearTrafficBucketServers(bucketId) {
-            try {
-                var id = String(bucketId);
-                var data = await _trafficBucketApi('clear_servers', { bucket_id: Number(id) });
-                renderTrafficBuckets(data);
-                await _deps.appShowAlert('Назначения нод очищены.', { title: 'Готово', variant: 'success' });
+                var rows = host.querySelectorAll('.traffic-assign-row');
+                if (!rows.length) throw new Error('Нет строк назначения');
+
+                var bucketToServers = {};
+                rows.forEach(function (row) {
+                    var serverName = row.getAttribute('data-server-name');
+                    var sel = row.querySelector('.traffic-assign-select');
+                    if (!serverName || !sel) return;
+                    var bid = String(sel.value);
+                    if (!bucketToServers[bid]) bucketToServers[bid] = [];
+                    bucketToServers[bid].push(serverName);
+                });
+
+                var ordered = buckets.slice().sort(function (a, b) {
+                    return (a.is_unlimited ? 1 : 0) - (b.is_unlimited ? 1 : 0);
+                });
+
+                var lastData = null;
+                for (var i = 0; i < ordered.length; i++) {
+                    var b = ordered[i];
+                    var bid = String(b.id);
+                    var names = bucketToServers[bid] || [];
+                    if (names.length > 0) {
+                        lastData = await _trafficBucketApi('assign_servers', {
+                            bucket_id: Number(b.id),
+                            server_names: names
+                        });
+                    } else if (!b.is_unlimited) {
+                        lastData = await _trafficBucketApi('clear_servers', { bucket_id: Number(b.id) });
+                    }
+                }
+                if (lastData) renderTrafficBuckets(lastData);
+                await _deps.appShowAlert('Назначения нод сохранены.', { title: 'Готово', variant: 'success' });
             } catch (error) {
-                await _deps.appShowAlert('Ошибка очистки назначений: ' + error.message, { title: 'Ошибка', variant: 'error' });
+                await _deps.appShowAlert('Ошибка сохранения назначений: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 
@@ -754,8 +789,7 @@
             loadTrafficBuckets: loadTrafficBuckets,
             createTrafficBucket: createTrafficBucket,
             saveTrafficBucketUpdate: saveTrafficBucketUpdate,
-            saveBucketServerAssignments: saveBucketServerAssignments,
-            clearTrafficBucketServers: clearTrafficBucketServers,
+            saveAllTrafficAssignments: saveAllTrafficAssignments,
             adjustTrafficBucketUsage: adjustTrafficBucketUsage,
             copyToClipboard: copyToClipboard,
             goBackFromSubscriptionEdit: goBackFromSubscriptionEdit,

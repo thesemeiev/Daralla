@@ -484,7 +484,13 @@ async def update_subscription_traffic_bucket(bucket_id: int, updates: dict) -> b
     for key, value in updates.items():
         if key not in allowed:
             continue
-        if key in ("limit_bytes", "window_days", "credit_periods_total", "credit_periods_remaining"):
+        if key == "limit_bytes":
+            value = max(0, int(value))
+        if key == "window_days":
+            value = max(1, int(value))
+        if key == "credit_periods_total":
+            value = max(1, int(value))
+        if key == "credit_periods_remaining":
             value = max(0, int(value))
         if key in ("is_unlimited", "is_enabled"):
             value = 1 if bool(value) else 0

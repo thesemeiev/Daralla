@@ -2860,8 +2860,7 @@ var loadSubscriptionKeys = adminSubscriptionEditFeature.loadSubscriptionKeys.bin
 var loadTrafficBuckets = adminSubscriptionEditFeature.loadTrafficBuckets.bind(adminSubscriptionEditFeature);
 var createTrafficBucket = adminSubscriptionEditFeature.createTrafficBucket.bind(adminSubscriptionEditFeature);
 var saveTrafficBucketUpdate = adminSubscriptionEditFeature.saveTrafficBucketUpdate.bind(adminSubscriptionEditFeature);
-var saveBucketServerAssignments = adminSubscriptionEditFeature.saveBucketServerAssignments.bind(adminSubscriptionEditFeature);
-var clearTrafficBucketServers = adminSubscriptionEditFeature.clearTrafficBucketServers.bind(adminSubscriptionEditFeature);
+var saveAllTrafficAssignments = adminSubscriptionEditFeature.saveAllTrafficAssignments.bind(adminSubscriptionEditFeature);
 var adjustTrafficBucketUsage = adminSubscriptionEditFeature.adjustTrafficBucketUsage.bind(adminSubscriptionEditFeature);
 // Функция копирования в буфер обмена (админка)
 var copyToClipboard = adminSubscriptionEditFeature.copyToClipboard.bind(adminSubscriptionEditFeature);
@@ -3116,8 +3115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadTrafficBuckets: loadTrafficBuckets,
             createTrafficBucket: createTrafficBucket,
             saveTrafficBucketUpdate: saveTrafficBucketUpdate,
-            saveBucketServerAssignments: saveBucketServerAssignments,
-            clearTrafficBucketServers: clearTrafficBucketServers,
+            saveAllTrafficAssignments: saveAllTrafficAssignments,
             adjustTrafficBucketUsage: adjustTrafficBucketUsage,
             saveAdminCommerce: saveAdminCommerce,
             saveServerGroup: saveServerGroup,

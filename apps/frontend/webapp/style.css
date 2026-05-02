@@ -5445,8 +5445,8 @@ a.instruction-platform-btn {
     display: block;
 }
 
-/* ——— Вкладка «Трафик» (подписка, админка) ——— */
-.traffic-tab-layout {
+/* Вкладка «Трафик» (подписка, админка): flex только при .active — иначе .traffic-tab-layout перебивает display:none у .tab-content и блок трафика виден на всех вкладках */
+.tab-content.traffic-tab-layout.active {
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -5494,6 +5494,68 @@ a.instruction-platform-btn {
     font-size: 12px;
     line-height: 1.45;
     color: var(--text-secondary);
+}
+
+.traffic-panel--assign .traffic-assign-actions {
+    margin-top: 14px;
+}
+
+.traffic-assignment-matrix-host {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.traffic-assign-matrix-table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--surface-secondary);
+}
+
+.traffic-assign-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(180px, 2fr);
+    gap: 12px;
+    align-items: center;
+}
+
+@media (max-width: 520px) {
+    .traffic-assign-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.traffic-assign-server {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.traffic-assign-select {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    background: var(--surface-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.traffic-assign-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+}
+
+.traffic-unlimited-hint {
+    margin: 0;
+    grid-column: 1 / -1;
 }
 
 .traffic-create-form {

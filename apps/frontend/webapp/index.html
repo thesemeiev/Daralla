@@ -1151,8 +1151,17 @@
                         <h3 id="traffic-intro-title" class="traffic-panel-title">Лимиты трафика по нодам</h3>
                         <p class="traffic-panel-lead">
                             Здесь задаются <strong>квоты трафика</strong> (отдельно от срока подписки): каждая запись — это пакет с лимитом за скользящее окно (по умолчанию 30 дней).
-                            Ноды назначаются чекбоксами; при исчерпании лимита доступ на соответствующих серверах в X-UI отключается, в подписке остаётся подпись с расходом.
+                            <strong>Правило:</strong> каждая нода подписки относится ровно к одному пакету — назначение выбирается в таблице ниже и сохраняется кнопкой «Сохранить назначения».
+                            При исчерпании лимита доступ на соответствующих серверах в X-UI отключается, в подписке остаётся подпись с расходом.
                         </p>
+                    </section>
+                    <section class="traffic-panel traffic-panel--assign" aria-labelledby="traffic-assign-title">
+                        <h3 id="traffic-assign-title" class="traffic-panel-title">Назначение нод на пакеты</h3>
+                        <p class="traffic-panel-hint" style="margin-top: 0;">Для каждой ноды выберите пакет. Сохранение независимо от настроек отдельных пакетов.</p>
+                        <div id="subscription-traffic-assignment-matrix" class="traffic-assignment-matrix-host" aria-live="polite"></div>
+                        <div class="traffic-assign-actions">
+                            <button type="button" class="btn-primary" data-action="saveAllTrafficAssignments">Сохранить назначения</button>
+                        </div>
                     </section>
                     <!-- Список пакетов выше формы создания: сразу видны unlimited / limited, а не внизу вкладки -->
                     <div id="subscription-traffic-buckets-list" class="traffic-buckets-list-host">
