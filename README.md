@@ -8,49 +8,42 @@
 
 # Daralla VPN
 
-Платформа для продажи и управления VPN-подписками через **Telegram Mini App**, **веб-клиент** и **админ-панель**. Проект покрывает основной цикл: от оплаты до создания/обновления клиентов на серверах [3x-ui](https://github.com/MHSanaei/3x-ui) (при корректной настройке окружения и интеграций).
+Платформа для продажи и управления VPN-подписками: **Telegram Mini App**, **веб-клиент** и **веб-админка**. От приёма платежей до выдачи доступа — синхронизация клиентов с панелями [3x-ui](https://github.com/MHSanaei/3x-ui) при настроенных интеграциях и окружении.
 
 ---
 
 ## Возможности
 
-> Ниже перечислены возможности, реализованные в кодовой базе. Фактическая доступность отдельных сценариев зависит от конфигурации окружения, внешних сервисов и флагов модулей.
+Ниже — то, что реализовано в коде. Реальная доступность сценариев зависит от переменных в `.env`, внешних сервисов и флагов опциональных модулей.
 
-### Клиентская часть
+### Клиент
 
-- **Telegram Mini App** — покупка, продление и управление подписками прямо в Telegram
-- **Веб-клиент** — SPA-интерфейс с авторизацией по логину/паролю
-- **Два шлюза оплаты** — YooKassa (карты, СБП) и CryptoCloud (USDT, BTC, ETH, TON, SOL и др.)
-- **Подписочные ссылки** — `/sub/{token}` для подключения через любой VLESS-клиент
+- **Telegram Mini App** — оформление и продление подписок, управление в Telegram
+- **Веб-клиент** — одностраничное приложение, вход по логину и паролю; при необходимости единая сессия на нескольких доменах через `AUTH_COOKIE_DOMAIN`
+- **Оплата** — **YooKassa** (карты, СБП), **CryptoCloud** (криптовалюты), **Platega** (режим: СБП, карта или крипта — задаётся `PLATEGA_PAYMENT_METHOD`, см. `.env.example`)
+- **Ссылка подписки** — `GET /sub/{token}` для VLESS-клиентов
 
-### Серверная часть
+### Инфраструктура и синхронизация
 
-- **Мультисервер** — группы серверов по локациям, одна подписка = доступ ко всем серверам группы
-- **Синхронизация клиентов** — создание, обновление и удаление клиентов на панелях 3x-ui
-- **Распределение по группам** — выбор целевой группы серверов по правилам backend-логики
-- **Мониторинг нагрузки** — сбор статистики онлайн-клиентов по каждому серверу
+- **Несколько серверов** — группы по локациям; подписка открывает доступ ко всем серверам выбранной группы
+- **Связь с 3x-ui** — создание, обновление и удаление клиентов на панелях
+- **Очередь outbox** — фоновая обработка задач синхронизации (префикс `DARALLA_SYNC_OUTBOX_`); при необходимости параллельно со старым путём синхронизации
+- **Нагрузка** — учёт онлайн по серверам
 
-### Уведомления
+### Уведомления пользователям
 
-- **Гибкие правила** — настройка через админ-панель: тип события, время срабатывания, шаблон сообщения
-- **Повторная отправка** — настраиваемый интервал и максимум повторов
-- **Типы событий** — предупреждение об истечении подписки, напоминание пользователям без подписки
+- Правила в админке: событие, задержка, шаблон текста, повторы с лимитом
 
 ### Админ-панель
 
-- **Дашборд** — KPI и графики по пользователям/подпискам/платежам, а также метрики по серверам
-- **Пользователи** — поиск, просмотр деталей, привязка подписок, удаление
-- **Подписки** — фильтры по статусу, ручная синхронизация с серверами, изменение параметров
-- **Серверы** — CRUD групп и серверов, настройка подключений к 3x-ui
-- **Рассылка** — отправка сообщений всем пользователям с rate-limiting
-- **Управление уведомлениями** — создание правил, тестовая отправка, превью сообщений
+- Сводка и графики, пользователи, подписки, серверы и группы
+- Рассылка в Telegram с ограничением частоты
+- Правила уведомлений (см. выше) и тестовая отправка
+- **Коммерция** — тарифы и лимит устройств по умолчанию, API `GET/POST /api/admin/commerce`
 
 ### Модуль событий (опционально)
 
-- **Реферальные конкурсы** — создание событий с датами и конфигом наград (места и дни в данных события)
-- **Уникальные коды** — автогенерация реферальных кодов для участников
-- **Лидерборд** — рейтинг по учтённым оплатам с реферальным кодом; засчёт баллов при успешной оплате
-- **Награды** — правила хранятся в событии
+Включается `EVENTS_MODULE_ENABLED`: реферальные события, коды участников, лидерборд, награды в данных события.
 
 ---
 
@@ -60,11 +53,11 @@
 flowchart LR
   user[User]
   fe[apps/frontend/webapp]
-  routes[apps/backend/src/daralla_backend/web/routes]
-  services[apps/backend/src/daralla_backend/services]
-  db[apps/backend/src/daralla_backend/db]
-  xui[3x-ui panels]
-  pay[Payment gateways]
+  routes[web/routes]
+  services[services]
+  db[db]
+  xui[3x-ui]
+  pay[YooKassa / CryptoCloud / Platega]
 
   user --> fe
   fe --> routes
@@ -74,157 +67,184 @@ flowchart LR
   routes --> pay
 ```
 
+Один процесс: **long polling** бота Telegram и **ASGI-сервер** (Quart, Hypercorn) на порту `WEBHOOK_PORT`. API, вебхуки оплаты и раздача статики фронтенда идут через тот же runtime.
+
 ---
 
 ## Быстрый старт
 
 ### Требования
 
-- Python 3.11+
-- Доступ к API панели 3x-ui на VPN-серверах
+- Python **3.11+**
+- Доступ к HTTP API 3x-ui на VPN-серверах, если нужна выдача ключей
 
 ### Установка
 
 ```bash
 git clone <repo-url> && cd Daralla
 python -m venv venv
-venv/Scripts/activate        # Windows
-# source venv/bin/activate   # Linux/macOS
+source venv/bin/activate   # Linux, macOS
+# venv\Scripts\activate    # Windows
 pip install -r requirements.txt
 ```
 
-### Конфигурация
+### Переменные окружения
+
+В корне лежит **`.env.example`** — шаблон с комментариями.
+
+| Сценарий | Рабочий `.env` |
+|----------|----------------|
+| Локальный запуск `python -m daralla_backend` | Файл **`apps/backend/src/.env`** — его подхватывает `python-dotenv` (путь относительно пакета `daralla_backend`) |
+| Docker Compose | Файл **в корне репозитория** рядом с `docker-compose.yml` — переменные попадают в контейнер через секцию `environment:` |
+
+У **`docker run --env-file`** путь к файлу произвольный: значения попадают в окружение процесса и не зависят от `load_dotenv`.
+
+Создание файла для локального запуска:
 
 ```bash
-cp .env.example .env
+cp .env.example apps/backend/src/.env
 ```
 
-Обязательные переменные:
+**Минимум для бота**
 
-| Переменная | Описание |
-|---|---|
-| `TELEGRAM_TOKEN` | Токен бота от [@BotFather](https://t.me/BotFather) |
-| `ADMIN_ID` | Telegram ID администратора(ов), через запятую |
-| `YOOKASSA_SHOP_ID` | ID магазина YooKassa |
-| `YOOKASSA_SECRET_KEY` | Секретный ключ YooKassa |
-| `WEBHOOK_URL` | HTTPS-URL для вебхуков (`https://домен/webhook/yookassa`) |
-| `WEBAPP_URL` | URL мини-приложения (`https://домен/`) |
+| Переменная | Назначение |
+|------------|------------|
+| `TELEGRAM_TOKEN` | токен от [@BotFather](https://t.me/BotFather) |
+| `ADMIN_ID` | числовой Telegram ID администраторов через запятую; допускается имя `ADMIN_IDS` (см. `bot.py`) |
+
+**Платёжные шлюзы** — настройте тот, который используете; допустимо несколько.
+
+| Шлюз | Переменные | Путь webhook на вашем домене (Daralla) |
+|------|------------|----------------------------------------|
+| YooKassa | `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, в кабинете — полный URL из `WEBHOOK_URL` | обычно `…/webhook/yookassa` |
+| CryptoCloud | `CRYPTOCLOUD_*` | `POST …/webhook/cryptocloud` (точный URL — в настройках проекта CryptoCloud) |
+| Platega | `PLATEGA_MERCHANT_ID`, `PLATEGA_SECRET`, при необходимости остальные `PLATEGA_*` | `POST …/webhook/platega` |
+
+**URL внешнего сервиса**
+
+| Переменная | Назначение |
+|------------|------------|
+| `WEBAPP_URL` | HTTPS мини-приложения: кнопки в боте, ссылки в уведомлениях |
+| `WEBSITE_URL` | опционально: «вернуться на сайт» |
 
 <details>
-<summary>Все переменные окружения</summary>
+<summary>Остальные группы переменных (сжато)</summary>
 
-| Переменная | По умолчанию | Описание |
-|---|---|---|
-| `VPN_BRAND_NAME` | `Daralla VPN` | Название бренда |
-| `BOT_USERNAME` | — | Username бота для ссылок |
-| `WEBHOOK_PORT` | `5000` | Порт веб-сервера |
-| `WEBSITE_URL` | — | URL сайта |
-| `AUTH_COOKIE_DOMAIN` | — | Домен cookie для SSO (`.daralla.ru`) |
-| `PRICE_MONTH` | `150` | Цена 1 месяц (RUB) |
-| `PRICE_3MONTH` | `350` | Цена 3 месяца (RUB) |
-| `CRYPTOCLOUD_API_TOKEN` | — | API-токен CryptoCloud (опционально) |
-| `CRYPTOCLOUD_SHOP_ID` | — | Shop ID CryptoCloud |
-| `CRYPTOCLOUD_WEBHOOK_SECRET` | — | JWT-секрет CryptoCloud |
-| `EVENTS_MODULE_ENABLED` | `0` | Включить модуль событий (`1`/`true`) |
-| `IMAGE_MAIN_MENU` | `images/main_menu.jpg` | Изображение главного меню |
-| `IMAGE_PAYMENT_SUCCESS` | `images/payment_success.jpg` | Изображение успешной оплаты |
-| `IMAGE_PAYMENT_FAILED` | `images/payment_failed.jpg` | Изображение ошибки оплаты |
-| `NGROK_AUTH_TOKEN` | — | Токен Ngrok для локальной разработки |
+| Группа | Примеры |
+|--------|---------|
+| Порт | `WEBHOOK_PORT` (по умолчанию `5000`) |
+| Cookie | `AUTH_COOKIE_DOMAIN` (например `.example.com`) |
+| Бренд | `VPN_BRAND_NAME`, `BOT_USERNAME`, `TELEGRAM_CHANNEL_URL`, `SUPPORT_URL` |
+| Стартовые цены | `PRICE_MONTH`, `PRICE_3MONTH`; детальные тарифы — в админке **Коммерция** |
+| Картинки бота | `IMAGE_MAIN_MENU`, `IMAGE_PAYMENT_SUCCESS`, `IMAGE_PAYMENT_FAILED` |
+| HTTP к 3x-ui | `XUI_HTTP_TIMEOUT_*`, `XUI_PANEL_MAX_RETRIES` |
+| Синхронизация | `DARALLA_SYNC_INTERVAL_SECONDS`, `DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS` |
+| Outbox | `DARALLA_SYNC_OUTBOX_WRITE_ENABLED`, `DARALLA_SYNC_OUTBOX_WORKER_ENABLED`, остальные `DARALLA_SYNC_OUTBOX_*` |
+| События | `EVENTS_MODULE_ENABLED`, `EVENTS_SUPPORT_URL` |
+| Retention | `RETENTION_DRY_RUN`, `PAYMENTS_RETENTION_DAYS`, `DELETED_SUBSCRIPTIONS_RETENTION_DAYS`, `AUTO_DELETE_INACTIVE_USERS_DAYS` и др. — см. `.env.example` |
+| Отладка | `NGROK_AUTH_TOKEN` |
+
+Полный список и значения по умолчанию — в **`.env.example`**.
 
 </details>
 
-### Запуск
+### Запуск локально
 
 ```bash
-# Linux/macOS
+# Linux, macOS
 PYTHONPATH=apps/backend/src python -m daralla_backend
 
 # Windows (PowerShell)
 $env:PYTHONPATH="apps/backend/src"; python -m daralla_backend
 ```
 
-Стартуют:
-- Telegram-бот (polling)
-- Quart/Hypercorn на порту `WEBHOOK_PORT` (вебхуки + веб-приложение)
+База **SQLite** и логи по умолчанию: **`apps/backend/src/data/`** (файл `daralla.db`, каталог `logs/`).
 
-Служебные endpoints:
-- `GET /health` — liveness
-- `GET /ready` — readiness (БД и runtime-контекст)
-- `GET /metrics` — базовые счетчики API/webhook/background-задач
+**Служебные HTTP-маршруты**
+
+- `GET /health` — процесс жив
+- `GET /ready` — готовность (БД и контекст)
+- `GET /metrics` — JSON со счётчиками запросов и обработки webhooks
 
 ---
 
 ## Docker
 
+В образе: `PYTHONPATH=/app/apps/backend/src:/app`, порт **5000**.
+
 ```bash
 docker build -t daralla .
-docker run --env-file .env -p 5000:5000 -v daralla_data:/app/data daralla
+docker run --env-file .env -p 5000:5000 \
+  -v daralla_data:/app/apps/backend/src/data \
+  daralla
 ```
 
-Или через Docker Compose:
+Удобнее **Docker Compose**: том `./data` → `/app/apps/backend/src/data`, проверка готовности по `GET /ready`, лимит памяти — в `docker-compose.yml`.
 
 ```bash
 docker compose up -d
-# или legacy:
-docker-compose up -d
 ```
 
-> HTTPS-терминацию (nginx, traefik, Caddy) настраивайте отдельно перед контейнером.
+Терминацию HTTPS (nginx, Caddy, Traefik и т.п.) размещают перед контейнером.
 
 ---
 
-## Структура проекта
+## Структура репозитория
 
 ```
 Daralla/
-├── apps/
-│   ├── backend/            # Backend runtime и ownership zone
-│   └── frontend/           # Frontend runtime и ownership zone
 ├── apps/backend/src/daralla_backend/
-│   ├── __main__.py         # Entry point для `python -m daralla_backend`
-│   ├── bot.py              # Runtime bootstrap (инициализация приложения)
-│   ├── handlers/           # Команды и callback Telegram
-│   ├── services/           # X-UI API, подписки, синхронизация, уведомления
-│   ├── db/                 # Модули работы с БД (users, subscriptions, servers, notifications, payments)
+│   ├── __main__.py              # точка входа: python -m daralla_backend
+│   ├── bot.py                   # бот + веб
+│   ├── app_context.py
+│   ├── core/                    # startup, retention, фоновые задачи
+│   ├── client_flow.py
+│   ├── handlers/                # команды и callback в Telegram
+│   ├── navigation/
+│   ├── services/                # 3x-ui, подписки, sync/outbox, платежи, админка
+│   ├── db/                      # SQLite, миграции
 │   ├── web/
-│   │   └── routes/         # Quart-маршруты: webhook, API, админка
-│   ├── events/             # Модуль реферальных событий (опционально)
-│   └── utils.py            # Утилиты и хелперы
+│   │   ├── app_quart.py
+│   │   ├── observability.py
+│   │   └── routes/              # API, webhooks, статика SPA
+│   ├── events/                  # опциональный модуль событий
+│   └── utils/
 ├── apps/frontend/webapp/
-│   ├── index.html          # SPA — Mini App и веб-клиент
-│   ├── app.js              # Thin-entry: bootstrap и init
-│   ├── js/app/             # Composition layer (state/actions/composition)
-│   └── style.css           # Стили
-├── shared/
-│   └── contracts/          # API-контракты и примеры payload для FE/BE
-├── images/                 # Изображения для меню бота
-├── scripts/                # Вспомогательные скрипты
-├── tests/                  # Тесты (pytest)
+│   ├── index.html, app.js, style.css
+│   ├── sw.js, offline.html      # PWA / офлайн-заглушка
+│   ├── manifest.json
+│   ├── icons/
+│   ├── legal/                   # terms, privacy
+│   └── js/
+│       ├── app/
+│       ├── api/
+│       ├── auth/
+│       ├── features/
+│       ├── platform/
+│       └── shared/, ui/
+├── shared/contracts/            # контракты HTTP и примеры JSON
+├── scripts/                     # архитектура, смоук фронта, контракты
+├── tests/
+├── images/                      # изображения для бота
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-└── .env.example
+├── .env.example
+├── README.md
+└── LICENSE
 ```
 
-> Примечание: проект остается единым runtime-сервисом. Runtime-код расположен в `apps/backend/src/daralla_backend/` и `apps/frontend/webapp/`, при этом deploy остается единым.
-
-Архитектурная модель на текущем этапе — **modular monolith**: единый деплой, но явные модульные границы по слоям и фичам. Детали и правила:
-- `docs/architecture/ADR_0001_MODULAR_MONOLITH_BOUNDARIES.md`
-- `docs/architecture/ARCHITECTURE_RULES.md`
-
-После завершения architecture refactor действует freeze-политика: структурные изменения выполняются только через ADR; без ADR допускаются только feature/fix изменения в существующих границах.
+Один деплой: API и статика фронтенда с одного процесса (условно **modular monolith**). Проверка модульных границ: `python scripts/check_arch_rules.py`.
 
 ---
 
-## Тесты
+## Тесты и проверки
 
 ```bash
 pytest
 ```
 
-Unit- и integration-тесты для БД, Quart-маршрутов и платежей (`pytest` + `pytest-asyncio`).
-
-Архитектурные проверки:
+Дополнительные скрипты:
 
 ```bash
 python scripts/check_arch_rules.py
@@ -232,34 +252,31 @@ python scripts/check_frontend_smoke.py
 python scripts/check_http_contracts.py
 ```
 
-Контракты API между frontend/backend:
+Контракты: `shared/contracts/http_contracts_v1.json` и каталог `shared/contracts/examples/`.
 
-```bash
-shared/contracts/http_contracts_v1.json
-```
+Размер «горячих» файлов (для разработки): `python scripts/collect_baseline_metrics.py`.
 
 ---
 
 ## Технологии
 
-| Компонент | Технология |
-|---|---|
+| Область | Стек |
+|---------|------|
 | Бот | python-telegram-bot 20.7 |
-| Веб-сервер | Quart + Hypercorn (ASGI) |
-| База данных | SQLite через aiosqlite |
-| Оплата | YooKassa SDK, CryptoCloud API |
-| VPN-панели | 3x-ui REST API (собственный httpx-клиент) |
-| HTTP-клиент | httpx, requests |
-| Деплой | Docker, docker-compose |
+| Веб | Quart, Hypercorn |
+| БД | SQLite, aiosqlite |
+| HTTP | httpx, requests |
+| Оплата | YooKassa SDK; CryptoCloud (проверка JWT); Platega (HTTP API + webhook) |
+| Утилиты | python-dotenv, tenacity, PyJWT |
 
 ---
 
 ## Лицензия
 
-Проект распространяется на условиях **PolyForm Noncommercial License 1.0.0** ([текст](https://polyformproject.org/licenses/noncommercial/1.0.0/), полный файл — [`LICENSE`](LICENSE)).
+**PolyForm Noncommercial License 1.0.0** — [текст на сайте PolyForm](https://polyformproject.org/licenses/noncommercial/1.0.0/), полный текст в файле [`LICENSE`](LICENSE).
 
-Кратко: **некоммерческое** использование, изучение и распространение с сохранением условий разрешены; **коммерческое** использование — только с отдельного разрешения правообладателя. Это не «классический» open source по определению OSI, но исходный код может быть публичным.
+Разрешены некоммерческое использование и изучение; коммерческое использование — только с отдельного разрешения правообладателя.
 
-Строка для уведомлений (см. раздел Notices в лицензии):
+Строка для уведомлений по лицензии (раздел *Notices*):
 
 `Required Notice: Copyright (c) 2025 thesemeiev`

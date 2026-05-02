@@ -37,7 +37,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Callb
 from telegram.request import HTTPXRequest
 from yookassa import Configuration
 
-Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
+Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")  # noqa
 Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
 
 from .db import DATA_DIR
@@ -50,8 +50,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_IDS_STR = os.getenv("ADMIN_ID", os.getenv("ADMIN_IDS", ""))
 ADMIN_IDS = [int(admin_id.strip()) for admin_id in ADMIN_IDS_STR.split(",") if admin_id.strip()] if ADMIN_IDS_STR else []
 
-# WEBHOOK_URL — только для приёма webhook YooKassa (например https://daralla.ru/webhook/yookassa).
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+# WEBHOOK_URL для YooKassa читается там, где создаётся платёж (например payment_processors), через os.getenv.
 
 # URL мини-приложения для кнопок «Открыть в приложении» (меню, уведомления, рассылка).
 # Задаётся отдельно в .env как WEBAPP_URL (например https://daralla.ru/). Не выводится из WEBHOOK_URL.
@@ -253,7 +252,7 @@ def run():
         from hypercorn.config import Config
         from hypercorn.asyncio import serve
         config = Config()
-        config.bind = [f"0.0.0.0:{webhook_port}"]
+        config.bind = [f"0.0.0.0:{webhook_port}"]  # noqa
         # shutdown_trigger prevents Hypercorn from installing signal handlers (which only work in main thread)
         shutdown_trigger = lambda: asyncio.Future()
         asyncio.run(serve(quart_app, config, shutdown_trigger=shutdown_trigger))

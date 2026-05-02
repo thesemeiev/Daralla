@@ -27,7 +27,6 @@ from ..db import (
     get_last_notification_send_time,
 )
 from ..core.retention_policy import get_retention_policy
-from ..utils import calculate_time_remaining
 from ..db.notifications_db import render_structured_template
 
 logger = logging.getLogger(__name__)

@@ -194,21 +194,3 @@ async def check_admin_access_async(user_id: str) -> bool:
         )
         logger.debug("admin_access_check_failed_traceback", exc_info=True)
         return False
-
-
-def get_server_manager():
-    """Возвращает server_manager из AppContext или None."""
-    try:
-        from ...app_context import get_ctx
-        return get_ctx().server_manager
-    except RuntimeError:
-        return None
-
-
-def get_subscription_manager():
-    """Возвращает subscription_manager из AppContext или None."""
-    try:
-        from ...app_context import get_ctx
-        return get_ctx().subscription_manager
-    except RuntimeError:
-        return None

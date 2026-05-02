@@ -4,7 +4,5 @@
 
 
 class MenuTypes:
-    """Типы меню для изображений в чате (main_menu, success, error)"""
+    """Типы меню для изображений в чате (сейчас используется main_menu)."""
     MAIN_MENU = 'main_menu'
-    PAYMENT_SUCCESS = 'payment_success'
-    PAYMENT_FAILED = 'payment_failed'

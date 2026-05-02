@@ -33,6 +33,9 @@ services:
       - PLATEGA_CURRENCY=${PLATEGA_CURRENCY:-RUB}
       - PLATEGA_RETURN_URL=${PLATEGA_RETURN_URL:-}
       - PLATEGA_FAILED_URL=${PLATEGA_FAILED_URL:-}
+      # Модуль событий (рефералки): без этой строки в environment значение из .env не попадает в контейнер
+      - EVENTS_MODULE_ENABLED=${EVENTS_MODULE_ENABLED:-0}
+      - EVENTS_SUPPORT_URL=${EVENTS_SUPPORT_URL:-}
     dns:
       - 1.1.1.1
       - 8.8.8.8

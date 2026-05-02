@@ -18,9 +18,16 @@ from daralla_backend.services.events_route_service import (
 from daralla_backend.web.routes.admin_common import CORS_HEADERS
 from daralla_backend.web.routes.transport import auth_error_payload, error_response
 
+try:
+    from daralla_backend.events.config import EVENTS_MODULE_ENABLED
+except ImportError:
+    EVENTS_MODULE_ENABLED = False
+
 logger = logging.getLogger(__name__)
 
 _CORS = CORS_HEADERS
+
+_EMPTY_PUBLIC = {"events": [], "active": [], "upcoming": [], "ended": [], "module_enabled": False}
 
 
 def create_blueprint():
@@ -29,23 +36,41 @@ def create_blueprint():
 
     @bp.route("/health", methods=["GET"])
     async def health():
-        return jsonify({"status": "ok", "module": "events"}), 200
+        return jsonify({"status": "ok", "module": "events", "enabled": bool(EVENTS_MODULE_ENABLED)}), 200
 
     @bp.route("/", methods=["GET"])
     @bp.route("", methods=["GET"])
     async def public_list():
         """GET /api/events — активные и предстоящие события (кеш 60 сек)."""
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify(_EMPTY_PUBLIC), 200, _CORS
         try:
             payload = await get_public_events_payload()
-            return jsonify(payload), 200, _CORS
+            out = dict(payload)
+            out["module_enabled"] = True
+            return jsonify(out), 200, _CORS
         except Exception as e:
             logger.warning("events public list: %s", e)
-            return jsonify({"events": [], "active": [], "upcoming": [], "ended": []}), 200, _CORS
+            return (
+                jsonify(
+                    {
+                        "events": [],
+                        "active": [],
+                        "upcoming": [],
+                        "ended": [],
+                        "module_enabled": True,
+                    }
+                ),
+                200,
+                _CORS,
+            )
 
     @bp.route("/admin/list", methods=["GET", "OPTIONS"])
     async def admin_list():
         if request.method == "OPTIONS":
             return "", 200, _CORS
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"error": "Events module is disabled"}), 503, _CORS
         body = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
@@ -62,6 +87,8 @@ def create_blueprint():
     async def admin_create():
         if request.method == "OPTIONS":
             return "", 200, _CORS
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"error": "Events module is disabled"}), 503, _CORS
         body = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
@@ -91,6 +118,8 @@ def create_blueprint():
     async def admin_update(event_id):
         if request.method == "OPTIONS":
             return "", 200, _CORS
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"error": "Events module is disabled"}), 503, _CORS
         data = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, data, request.cookies)
         if err:
@@ -118,6 +147,8 @@ def create_blueprint():
     async def admin_delete(event_id):
         if request.method == "OPTIONS":
             return "", 200, _CORS
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"error": "Events module is disabled"}), 503, _CORS
         body = await request.get_json(silent=True) or {}
         user_id, err = await require_admin_user(request.headers, request.args if request.args else {}, body, request.cookies)
         if err:
@@ -134,6 +165,8 @@ def create_blueprint():
 
     @bp.route("/my-code", methods=["GET"])
     async def public_my_code():
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"code": ""}), 200, _CORS
         body = await request.get_json(silent=True) or {}
         user_id = await require_authenticated_user(request.headers, request.args or {}, body, request.cookies)
         if not user_id:
@@ -147,6 +180,8 @@ def create_blueprint():
 
     @bp.route("/<int:event_id>", methods=["GET"])
     async def public_event_detail(event_id):
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"error": "Not found"}), 404
         try:
             from daralla_backend.events.services.event_service import get_event
             from daralla_backend.events.config import EVENTS_SUPPORT_URL
@@ -161,6 +196,8 @@ def create_blueprint():
 
     @bp.route("/<int:event_id>/leaderboard", methods=["GET"])
     async def public_leaderboard(event_id):
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"leaderboard": []}), 200, _CORS
         try:
             limit_arg = request.args.get("limit", 10)
             limit = min(100, max(1, int(limit_arg)))
@@ -175,6 +212,8 @@ def create_blueprint():
 
     @bp.route("/<int:event_id>/my-place", methods=["GET"])
     async def public_my_place(event_id):
+        if not EVENTS_MODULE_ENABLED:
+            return jsonify({"place": None}), 200, _CORS
         body = await request.get_json(silent=True) or {}
         user_id = await require_authenticated_user(request.headers, request.args or {}, body, request.cookies)
         if not user_id:

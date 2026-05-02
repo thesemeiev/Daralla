@@ -524,10 +524,6 @@ class SubscriptionManager:
         logger.info(f"Сгенерировано {len(links)} уникальных ссылок для подписки {subscription_id}")
         return links
 
-    async def build_vless_links_for_subscription(self, subscription_id: int) -> List[str]:
-        """Backward-compatible alias for old call sites."""
-        return await self.build_links_for_subscription(subscription_id)
-
     async def sync_servers_with_config(self, auto_create_clients: bool = True) -> dict:
         """
         Синхронизирует подписки с серверами (БД → Серверы).

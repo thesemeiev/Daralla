@@ -123,6 +123,8 @@ async def init_all_db():
     applied = await run_migrations()
     if applied:
         logger.info("Применено %d миграций", applied)
+    await init_payments_db()
+    await init_notifications_db()
     if await ensure_servers_config_client_sort_order_column():
         logger.info("Схема восстановлена: servers_config.client_sort_order")
     try:

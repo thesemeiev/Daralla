@@ -167,7 +167,7 @@ class XUiPanelClient:
     async def __aenter__(self) -> "XUiPanelClient":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(self, _exc_type, exc, _tb) -> None:
         await self.aclose()
 
     async def _ensure_login(self) -> None:

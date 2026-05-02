@@ -82,10 +82,9 @@ def create_quart_app(bot_app=None) -> Quart:
 
             app.register_blueprint(create_payment_blueprint(bot_app))
             try:
-                from daralla_backend.events import EVENTS_MODULE_ENABLED
-                if EVENTS_MODULE_ENABLED:
-                    from daralla_backend.web.routes.events import create_blueprint as create_events_blueprint
-                    app.register_blueprint(create_events_blueprint())
+                from daralla_backend.web.routes.events import create_blueprint as create_events_blueprint
+
+                app.register_blueprint(create_events_blueprint())
             except ImportError:
                 pass
             app.register_blueprint(create_subscription_blueprint(bot_app))

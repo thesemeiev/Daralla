@@ -65,22 +65,6 @@ async def get_user_id_by_code(code: str) -> str | None:
         return row[0] if row else None
 
 
-async def get_user_first_seen(user_id: str) -> int | None:
-    """Возвращает first_seen (unix timestamp) пользователя из users или None."""
-    if not user_id:
-        return None
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            cursor = await db.execute(
-                "SELECT first_seen FROM users WHERE user_id = ?",
-                (user_id,),
-            )
-            row = await cursor.fetchone()
-            return row[0] if row else None
-    except Exception:
-        return None
-
-
 # --- CRUD событий ---
 
 async def create_event(name: str, description: str, start_at: str, end_at: str, rewards_json: str | None = None, status: str = "active") -> int:
@@ -275,62 +259,6 @@ async def get_leaderboard(event_id: int, limit: int = 10) -> list:
                 "place": i
             })
         return result
-
-
-async def get_leaderboard_with_places(event_id: int, limit: int = 100) -> list:
-    """
-    Топ рефереров с учётом ничьих: одинаковый count = одинаковое place.
-    """
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """
-            SELECT ecp.referrer_user_id, MAX(u.username) AS username, COUNT(ecp.id) AS cnt
-            FROM event_counted_payments ecp
-            LEFT JOIN users u ON u.user_id = ecp.referrer_user_id
-            WHERE ecp.event_id = ?
-            GROUP BY ecp.referrer_user_id
-            ORDER BY cnt DESC
-            LIMIT ?
-            """,
-            (event_id, limit),
-        )
-        rows = await cursor.fetchall()
-        result = []
-        place = 1
-        prev_count = None
-        for r in rows:
-            cnt = r["cnt"]
-            uid = r["referrer_user_id"] or ""
-            if prev_count is not None and cnt < prev_count:
-                place = len(result) + 1
-            prev_count = cnt
-            result.append({
-                "referrer_user_id": uid,
-                "account_id": _display_name(dict(r)),
-                "count": cnt,
-                "place": place
-            })
-        return result
-
-
-async def is_rewards_granted(event_id: int) -> bool:
-    """Проверяет, выданы ли уже награды по событию."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT 1 FROM event_rewards_granted WHERE event_id = ?", (event_id,))
-        row = await cursor.fetchone()
-        return row is not None
-
-
-async def set_rewards_granted(event_id: int) -> None:
-    """Отмечает, что награды по событию выданы."""
-    now = _now_iso()
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO event_rewards_granted (event_id, granted_at) VALUES (?, ?)",
-            (event_id, now),
-        )
-        await db.commit()
 
 
 async def get_my_place(event_id: int, user_id: str) -> dict | None:

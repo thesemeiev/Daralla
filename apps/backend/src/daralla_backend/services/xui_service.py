@@ -102,40 +102,6 @@ class X3:
         cls._client_set(c, "limit_ip", val)
         cls._client_set(c, "limitIp", val)
 
-    @staticmethod
-    def _coerce_optional_bool(v: Any) -> Optional[bool]:
-        if v is None:
-            return None
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, (int, float)):
-            return int(v) != 0
-        s = str(v).strip().lower()
-        if s in {"1", "true", "on", "yes", "enabled"}:
-            return True
-        if s in {"0", "false", "off", "no", "disabled"}:
-            return False
-        return None
-
-    @staticmethod
-    def _extract_hysteria_version(inv: Any) -> Optional[int]:
-        settings = X3._client_get(inv, "settings", None)
-        if settings is None:
-            return None
-        if isinstance(settings, str):
-            try:
-                settings = json.loads(settings)
-            except (json.JSONDecodeError, TypeError):
-                return None
-        if isinstance(settings, dict):
-            raw = settings.get("version")
-        else:
-            raw = getattr(settings, "version", None)
-        try:
-            return int(raw) if raw is not None else None
-        except (TypeError, ValueError):
-            return None
-
     @classmethod
     def _normalize_protocol_name(cls, protocol: Optional[str], inv: Any = None) -> str:
         p = (protocol or "vless").strip().lower()
@@ -194,10 +160,6 @@ class X3:
         """Принудительный повторный логин (при 401/session expired)."""
         await self._panel._relogin()
 
-    async def _ensure_connected(self) -> None:
-        """Алиас для совместимости с прежним кодом."""
-        await self._ensure_login()
-
     async def list(self, timeout: int = 15) -> dict:
         """Возвращает {success: True, obj: [inbound_dict, ...]} в формате 3x-ui API.
 
@@ -229,16 +191,6 @@ class X3:
                     return True
         return False
 
-    async def get_client_expiry_time(self, user_email: str, timeout: int = 15) -> Optional[int]:
-        snap = await self._load_panel_client_snapshot(user_email)
-        if snap is None:
-            return None
-        _, _, panel_client = snap
-        expiry_ms = panel_client.get("expiryTime") or 0
-        if not expiry_ms or int(expiry_ms) <= 0:
-            return None
-        return int(expiry_ms) // 1000
-
     async def get_client_info(self, user_email: str, timeout: int = 15) -> Optional[dict]:
         snap = await self._load_panel_client_snapshot(user_email)
         if snap is None:
@@ -249,40 +201,6 @@ class X3:
             "inbound_id": inbound_id,
             "protocol": protocol.lower(),
         }
-
-    async def get_clients_by_tg_id(self, tg_id: str, timeout: int = 15) -> list:
-        await self._ensure_login()
-        data = await self.list(timeout=timeout)
-        result = []
-        for inbound in data.get("obj", []):
-            try:
-                settings = json.loads(inbound.get("settings", "{}"))
-            except (json.JSONDecodeError, TypeError):
-                continue
-            for client in clients_from_settings_payload(settings):
-                if str(client.get("tgId", "")) == str(tg_id):
-                    result.append({
-                        "email": client.get("email"),
-                        "client": client,
-                        "inbound_id": inbound.get("id"),
-                        "protocol": (inbound.get("protocol") or "vless").lower(),
-                    })
-        return result
-
-    async def _find_inbound_id_for_client(self, user_email: str) -> Optional[int]:
-        inbounds = await self._panel.list_inbounds()
-        target = str(user_email).strip()
-        for inv in inbounds:
-            try:
-                settings = json.loads(inv.get("settings") or "{}")
-            except (json.JSONDecodeError, TypeError):
-                continue
-            for c in clients_from_settings_payload(settings):
-                if str(c.get("email", "")).strip() == target:
-                    inv_id = inv.get("id")
-                    if inv_id is not None:
-                        return int(inv_id)
-        return None
 
     @staticmethod
     def _build_protocol_client_payload(
@@ -671,72 +589,6 @@ class X3:
                     return int(inv_id), protocol, cl
         return None
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    async def extendClient(
-        self,
-        user_email: str,
-        extend_days: int,
-        timeout: int = 15,
-        flow: Optional[str] = None,
-    ) -> Optional[Any]:
-        snap = await self._load_panel_client_snapshot(user_email)
-        if snap is None:
-            raise Exception(f"Клиент с email {user_email} не найден")
-        inbound_id, protocol, panel_client = snap
-        current_ms = int(panel_client.get("expiryTime") or 0)
-        if current_ms == 0:
-            current_ms = int(datetime.datetime.now().timestamp() * 1000)
-        new_ms = current_ms + (extend_days * 86400000)
-        c = dict(panel_client)
-        self._client_set_expiry_ms(c, new_ms)
-        if flow is not None:
-            c["flow"] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
-        await self._post_inbound_update_client(
-            c, inbound_id_override=inbound_id, protocol_hint=protocol,
-        )
-        return True
-
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    async def setClientExpiry(
-        self,
-        user_email: str,
-        expiry_timestamp: int,
-        timeout: int = 15,
-        flow: Optional[str] = None,
-    ) -> Optional[Any]:
-        snap = await self._load_panel_client_snapshot(user_email)
-        if snap is None:
-            return False
-        inbound_id, protocol, panel_client = snap
-        c = dict(panel_client)
-        self._client_set_expiry_ms(c, expiry_timestamp * 1000)
-        if flow is not None:
-            c["flow"] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
-        await self._post_inbound_update_client(
-            c, inbound_id_override=inbound_id, protocol_hint=protocol,
-        )
-        return True
-
-    async def updateClientLimitIp(
-        self,
-        user_email: str,
-        limit_ip: int,
-        timeout: int = 15,
-        flow: Optional[str] = None,
-    ) -> Optional[Any]:
-        snap = await self._load_panel_client_snapshot(user_email)
-        if snap is None:
-            return False
-        inbound_id, protocol, panel_client = snap
-        c = dict(panel_client)
-        self._client_set_limit_ip(c, limit_ip)
-        if flow is not None:
-            c["flow"] = (flow.strip() if isinstance(flow, str) else str(flow)).strip() or ""
-        await self._post_inbound_update_client(
-            c, inbound_id_override=inbound_id, protocol_hint=protocol,
-        )
-        return True
-
     async def updateClientName(
         self,
         user_email: str,
@@ -807,7 +659,7 @@ class X3:
             inbounds = data["obj"]
             if not inbounds:
                 return 0, 0, 0
-            online_emails, api_ok = await self.get_online_clients_ids(timeout=timeout)
+            online_emails, _ = await self.get_online_clients_ids(timeout=timeout)
             current_ms = int(datetime.datetime.now().timestamp() * 1000)
             total_active = 0
             online_count = 0
@@ -876,38 +728,6 @@ class X3:
             return None
         return self._extract_traffic_from_mapping(stats)
 
-    async def get_client_count(self, timeout: int = 15) -> int:
-        data = await self.list(timeout=timeout)
-        n = 0
-        for inv in data.get("obj", []):
-            try:
-                settings = json.loads(inv.get("settings", "{}"))
-                n += len(clients_from_settings_payload(settings))
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return n
-
-    async def get_clients_status_count(self, timeout: int = 15) -> tuple:
-        """Возвращает (total, active, expired)."""
-        data = await self.list(timeout=timeout)
-        now_ms = int(datetime.datetime.now().timestamp() * 1000)
-        total = 0
-        active = 0
-        expired = 0
-        for inv in data.get("obj", []):
-            try:
-                settings = json.loads(inv.get("settings", "{}"))
-                for c in clients_from_settings_payload(settings):
-                    total += 1
-                    exp = c.get("expiryTime", 0) or 0
-                    if exp == 0 or now_ms < exp:
-                        active += 1
-                    else:
-                        expired += 1
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return total, active, expired
-
     async def sync_flow_for_all_clients(self, flow_value: str, timeout: int = 15) -> tuple:
         """
         Массово выставляет flow для всех клиентов по inbound (протокол задаётся панелью).
@@ -971,96 +791,6 @@ class X3:
         skipped = sum(1 for status, _ in results if status == "skip")
         errors = [msg for status, msg in results if status == "err" and msg]
         return updated, skipped, errors
-
-    async def link(self, user_id: str, server_name: Optional[str] = None) -> str:
-        """Генерирует VLESS или TROJAN ссылку для клиента."""
-        await self._ensure_login()
-        data = await self.list()
-        for inbounds in data.get("obj", []):
-            try:
-                settings = json.loads(inbounds.get("settings", "{}"))
-            except (json.JSONDecodeError, TypeError):
-                continue
-            stream = inbounds.get("streamSettings") or {}
-            if isinstance(stream, str):
-                try:
-                    stream = json.loads(stream)
-                except (json.JSONDecodeError, TypeError):
-                    stream = {}
-            client = next((c for c in clients_from_settings_payload(settings) if c.get("email") == user_id), None)
-            if not client:
-                continue
-            protocol = (inbounds.get("protocol") or "vless").lower()
-            if self.vpn_host:
-                host_part = self.vpn_host.split("//")[-1] if "//" in self.vpn_host else self.vpn_host
-                host = host_part.split(":")[0] if ":" in host_part else host_part
-            else:
-                host_part = self.host.split("//")[-1]
-                host = host_part.split(":")[0] if ":" in host_part else host_part
-            port = inbounds.get("port", 443)
-            network = stream.get("network", "tcp")
-            security = stream.get("security", "reality")
-            xhttp_settings = stream.get("xhttpSettings", {}) or {}
-            reality = stream.get("realitySettings", {}) or {}
-            if isinstance(reality, dict) and "settings" in reality:
-                reality = reality.get("settings", reality) or reality
-            path = xhttp_settings.get("path", "/")
-            xhttp_host = xhttp_settings.get("host", "")
-            mode = xhttp_settings.get("mode", "auto")
-            pbk = reality.get("publicKey", "")
-            fingerprint = reality.get("fingerprint", "chrome")
-            spx = reality.get("spiderX", "/") or "/"
-            if network == "xhttp" and xhttp_host:
-                sni = xhttp_host
-            else:
-                sni = reality.get("serverName") or (reality.get("target", "") or "").split(":")[0] or "google.com"
-            short_ids = reality.get("shortIds", [""])
-            sid = short_ids[0] if isinstance(short_ids, list) and short_ids else (short_ids if isinstance(short_ids, str) else "")
-            tag = quote(server_name, safe="") if server_name else f"{os.getenv('VPN_BRAND_NAME', 'Daralla')}-{user_id}"
-            if protocol == "trojan":
-                password = client.get("password") or client.get("id", "")
-                params = [("type", network), ("security", security), ("pbk", pbk), ("fp", fingerprint), ("sni", sni), ("sid", sid), ("spx", quote(spx))]
-                query = "&".join(f"{k}={v}" for k, v in params if v)
-                return f"trojan://{quote(password)}@{host}:{port}?{query}#{tag}"
-            params = [("type", network)]
-            client_flow = (client.get("flow") or "").strip() or None
-            if client_flow:
-                params.append(("flow", quote(client_flow, safe="")))
-            if network == "xhttp":
-                params.append(("encryption", "none"))
-                if path:
-                    params.append(("path", quote(path)))
-                if xhttp_host:
-                    params.append(("host", xhttp_host))
-                if mode:
-                    params.append(("mode", mode))
-            params.extend([("security", security), ("pbk", pbk), ("fp", fingerprint), ("sni", sni), ("sid", sid), ("spx", quote(spx))])
-            query = "&".join(f"{k}={v}" for k, v in params)
-            return f"vless://{client.get('id', '')}@{host}:{port}?{query}#{tag}"
-        return "Клиент не найден."
-
-    async def get_subscription_link(self, user_email: str) -> str:
-        await self._ensure_login()
-        data = await self.list()
-        if not data.get("success"):
-            return ""
-        for inv in data.get("obj", []):
-            try:
-                settings = json.loads(inv.get("settings", "{}"))
-            except (json.JSONDecodeError, TypeError):
-                continue
-            for client in clients_from_settings_payload(settings):
-                if client.get("email") == user_email:
-                    sub_id = client.get("subId", "")
-                    if sub_id:
-                        if self.subscription_url:
-                            return f"{self.subscription_url.rstrip('/')}/{sub_id}"
-                        host_part = self.host.split("//")[-1]
-                        if "/panel" in host_part:
-                            host_part = host_part.split("/panel")[0]
-                        return f"{self.host.split('//')[0]}//{host_part}/sub/{sub_id}"
-                    return ""
-        return ""
 
     async def get_subscription_links(
         self,
@@ -1165,7 +895,7 @@ class X3:
                     except Exception:
                         pass
                 if server_name and "#" in line:
-                    pre, _, frag = line.partition("#")
+                    pre = line.split("#", 1)[0]
                     line = f"{pre}#{quote(server_name, safe='')}"
                 links.append(line)
             if not links and raw:

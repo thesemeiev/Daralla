@@ -245,6 +245,8 @@ async def server_load_snapshot_loop(server_manager):
             
             if servers_saved > 0:
                 logger.info(f"📊 Сохранено {servers_saved} снимков нагрузки на серверы")
+            if servers_failed > 0:
+                logger.warning("Не удалось сохранить снимки нагрузки для %s серверов (см. логи выше)", servers_failed)
             
             # Периодически очищаем старую историю (раз в 24 часа)
             import time

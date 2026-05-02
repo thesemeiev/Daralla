@@ -1,0 +1,6 @@
+[tool.vulture]
+paths = ["apps/backend/src/daralla_backend"]
+exclude = ["**/db/migrations/*.py"]
+min_confidence = 85
+ignore_decorators = ["@*.route", "@*.before_request", "@*.after_request"]
+ignore_names = ["row_factory"]
