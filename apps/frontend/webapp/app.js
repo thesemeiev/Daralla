@@ -2856,6 +2856,13 @@ var switchSubscriptionTab = adminSubscriptionEditFeature.switchSubscriptionTab.b
 
 // Загрузка и отображение ключей подписки
 var loadSubscriptionKeys = adminSubscriptionEditFeature.loadSubscriptionKeys.bind(adminSubscriptionEditFeature);
+// Traffic buckets вкладка
+var loadTrafficBuckets = adminSubscriptionEditFeature.loadTrafficBuckets.bind(adminSubscriptionEditFeature);
+var createTrafficBucket = adminSubscriptionEditFeature.createTrafficBucket.bind(adminSubscriptionEditFeature);
+var saveTrafficBucketUpdate = adminSubscriptionEditFeature.saveTrafficBucketUpdate.bind(adminSubscriptionEditFeature);
+var saveBucketServerAssignments = adminSubscriptionEditFeature.saveBucketServerAssignments.bind(adminSubscriptionEditFeature);
+var clearTrafficBucketServers = adminSubscriptionEditFeature.clearTrafficBucketServers.bind(adminSubscriptionEditFeature);
+var adjustTrafficBucketUsage = adminSubscriptionEditFeature.adjustTrafficBucketUsage.bind(adminSubscriptionEditFeature);
 // Функция копирования в буфер обмена (админка)
 var copyToClipboard = adminSubscriptionEditFeature.copyToClipboard.bind(adminSubscriptionEditFeature);
 // Возврат назад из редактирования подписки
@@ -3106,6 +3113,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             submitAdminEventForm: submitAdminEventForm,
             createSubscription: createSubscription,
             saveSubscriptionChanges: saveSubscriptionChanges,
+            loadTrafficBuckets: loadTrafficBuckets,
+            createTrafficBucket: createTrafficBucket,
+            saveTrafficBucketUpdate: saveTrafficBucketUpdate,
+            saveBucketServerAssignments: saveBucketServerAssignments,
+            clearTrafficBucketServers: clearTrafficBucketServers,
+            adjustTrafficBucketUsage: adjustTrafficBucketUsage,
             saveAdminCommerce: saveAdminCommerce,
             saveServerGroup: saveServerGroup,
             saveServerConfig: saveServerConfig

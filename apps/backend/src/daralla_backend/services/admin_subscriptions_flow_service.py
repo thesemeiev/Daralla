@@ -9,10 +9,20 @@ import os
 
 from daralla_backend.db.notifications_db import clear_subscription_notifications
 from daralla_backend.db.subscriptions_db import (
+    apply_bucket_usage_adjustment,
+    create_subscription_traffic_bucket,
+    delete_bucket_server_assignments,
+    ensure_default_unlimited_bucket,
+    get_bucket_usage_map_for_subscription,
     get_subscription_by_id_only,
+    get_subscription_bucket_states,
+    get_subscription_server_bucket_map,
     get_subscription_servers,
+    get_subscription_traffic_bucket,
     get_subscriptions_page,
     remove_subscription_server,
+    set_subscription_servers_bucket,
+    update_subscription_traffic_bucket,
     update_subscription_device_limit,
     update_subscription_expiry,
     update_subscription_name,
@@ -25,6 +35,7 @@ from daralla_backend.services.admin_subscriptions_service import (
     get_user_id_from_subscription_id,
 )
 from daralla_backend.services.sync_outbox_service import enqueue_subscription_sync_jobs, outbox_write_enabled
+from daralla_backend.services.traffic_bucket_service import get_traffic_bucket_service
 
 
 def serialize_subscription(sub: dict) -> dict:
@@ -103,6 +114,117 @@ async def subscription_info_payload(sub_id: int):
         "subscription": serialize_subscription(sub),
         "servers": servers,
     }
+
+
+async def _traffic_bucket_snapshot(sub_id: int) -> dict:
+    await ensure_default_unlimited_bucket(sub_id)
+    buckets = await get_subscription_bucket_states(sub_id)
+    usage_map = await get_bucket_usage_map_for_subscription(sub_id)
+    mapping = await get_subscription_server_bucket_map(sub_id)
+    for bucket in buckets:
+        bucket_id = int(bucket["id"])
+        bucket["used_bytes_window"] = int(usage_map.get(bucket_id, 0))
+    return {
+        "buckets": buckets,
+        "server_bucket_map": mapping,
+    }
+
+
+async def subscription_traffic_buckets_payload(sub_id: int):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, **snap}, None, None
+
+
+async def create_subscription_traffic_bucket_payload(sub_id: int, data: dict):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    name = str((data or {}).get("name") or "").strip()
+    if not name:
+        return None, {"error": "Bucket name is required"}, 400
+    limit_bytes = int((data or {}).get("limit_bytes") or 0)
+    is_unlimited = bool((data or {}).get("is_unlimited", False))
+    if not is_unlimited and limit_bytes <= 0:
+        return None, {"error": "limit_bytes must be > 0 for limited bucket"}, 400
+    window_days = int((data or {}).get("window_days") or 30)
+    credit_periods_total = int((data or {}).get("credit_periods_total") or 1)
+    bucket_id = await create_subscription_traffic_bucket(
+        sub_id,
+        name=name,
+        limit_bytes=limit_bytes,
+        is_unlimited=is_unlimited,
+        window_days=max(1, window_days),
+        credit_periods_total=max(1, credit_periods_total),
+    )
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, "bucket_id": bucket_id, **snap}, None, None
+
+
+async def update_subscription_traffic_bucket_payload(sub_id: int, bucket_id: int, data: dict):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    bucket = await get_subscription_traffic_bucket(bucket_id)
+    if not bucket or int(bucket.get("subscription_id") or 0) != int(sub_id):
+        return None, {"error": "Bucket not found"}, 404
+    await update_subscription_traffic_bucket(bucket_id, data or {})
+    service = get_traffic_bucket_service()
+    await service.enqueue_enforcement_if_needed(sub_id)
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, "bucket_id": bucket_id, **snap}, None, None
+
+
+async def assign_subscription_servers_bucket_payload(sub_id: int, bucket_id: int, server_names: list[str]):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    bucket = await get_subscription_traffic_bucket(bucket_id)
+    if not bucket or int(bucket.get("subscription_id") or 0) != int(sub_id):
+        return None, {"error": "Bucket not found"}, 404
+    cleaned = [str(s).strip() for s in (server_names or []) if str(s).strip()]
+    await set_subscription_servers_bucket(sub_id, cleaned, bucket_id)
+    service = get_traffic_bucket_service()
+    await service.enqueue_enforcement_if_needed(sub_id)
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, "assigned": len(cleaned), **snap}, None, None
+
+
+async def clear_subscription_bucket_servers_payload(sub_id: int, bucket_id: int):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    bucket = await get_subscription_traffic_bucket(bucket_id)
+    if not bucket or int(bucket.get("subscription_id") or 0) != int(sub_id):
+        return None, {"error": "Bucket not found"}, 404
+    deleted = await delete_bucket_server_assignments(sub_id, bucket_id)
+    default_id = await ensure_default_unlimited_bucket(sub_id)
+    servers = await get_subscription_servers(sub_id)
+    mapping = await get_subscription_server_bucket_map(sub_id)
+    for server in servers:
+        server_name = str(server["server_name"])
+        if server_name not in mapping:
+            await set_subscription_servers_bucket(sub_id, [server_name], default_id)
+    service = get_traffic_bucket_service()
+    await service.enqueue_enforcement_if_needed(sub_id)
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, "unassigned": deleted, **snap}, None, None
+
+
+async def adjust_subscription_bucket_usage_payload(sub_id: int, bucket_id: int, bytes_delta: int, reason: str = ""):
+    sub = await get_subscription_by_id_only(sub_id)
+    if not sub:
+        return None, {"error": "Subscription not found"}, 404
+    bucket = await get_subscription_traffic_bucket(bucket_id)
+    if not bucket or int(bucket.get("subscription_id") or 0) != int(sub_id):
+        return None, {"error": "Bucket not found"}, 404
+    await apply_bucket_usage_adjustment(bucket_id, int(bytes_delta), reason=reason or "admin_adjust")
+    service = get_traffic_bucket_service()
+    await service.enqueue_enforcement_if_needed(sub_id)
+    snap = await _traffic_bucket_snapshot(sub_id)
+    return {"success": True, "bucket_id": bucket_id, **snap}, None, None
 
 
 def _validate_status_transition(old_status: str, new_status: str):

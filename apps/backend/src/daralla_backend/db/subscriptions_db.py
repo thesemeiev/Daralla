@@ -8,6 +8,7 @@ import json
 import logging
 import time
 import uuid
+from collections import defaultdict
 from . import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -377,6 +378,391 @@ async def remove_subscription_server(subscription_id: int, server_name: str):
         await db.execute("DELETE FROM subscription_servers WHERE subscription_id = ? AND server_name = ?", (subscription_id, server_name))
         await db.commit()
         return True
+
+
+def _utc_day(ts: int | None = None) -> str:
+    return datetime.datetime.utcfromtimestamp(int(ts or time.time())).strftime("%Y-%m-%d")
+
+
+async def ensure_default_unlimited_bucket(subscription_id: int, name: str = "unlimited") -> int:
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT id FROM subscription_traffic_buckets
+            WHERE subscription_id = ? AND name = ?
+            LIMIT 1
+            """,
+            (int(subscription_id), str(name)),
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return int(row[0])
+        async with db.execute(
+            """
+            INSERT INTO subscription_traffic_buckets
+            (subscription_id, name, limit_bytes, is_unlimited, is_enabled, window_days,
+             credit_periods_total, credit_periods_remaining, period_started_at, period_ends_at, created_at, updated_at)
+            VALUES (?, ?, 0, 1, 1, 30, 1, 1, ?, ?, ?, ?)
+            """,
+            (int(subscription_id), str(name), now, now + 30 * 86400, now, now),
+        ) as cur:
+            bucket_id = int(cur.lastrowid)
+        await db.commit()
+        return bucket_id
+
+
+async def create_subscription_traffic_bucket(
+    subscription_id: int,
+    name: str,
+    limit_bytes: int = 0,
+    *,
+    is_unlimited: bool = False,
+    is_enabled: bool = True,
+    window_days: int = 30,
+    credit_periods_total: int = 1,
+    period_started_at: int | None = None,
+) -> int:
+    now = int(time.time())
+    started = int(period_started_at or now)
+    ends = started + max(1, int(window_days)) * 86400
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            INSERT INTO subscription_traffic_buckets
+            (subscription_id, name, limit_bytes, is_unlimited, is_enabled, window_days,
+             credit_periods_total, credit_periods_remaining, period_started_at, period_ends_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(subscription_id),
+                str(name),
+                max(0, int(limit_bytes)),
+                1 if is_unlimited else 0,
+                1 if is_enabled else 0,
+                max(1, int(window_days)),
+                max(1, int(credit_periods_total)),
+                max(1, int(credit_periods_total)),
+                started,
+                ends,
+                now,
+                now,
+            ),
+        ) as cur:
+            bucket_id = int(cur.lastrowid)
+        await db.commit()
+        return bucket_id
+
+
+async def update_subscription_traffic_bucket(bucket_id: int, updates: dict) -> bool:
+    if not updates:
+        return False
+    allowed = {
+        "name",
+        "limit_bytes",
+        "is_unlimited",
+        "is_enabled",
+        "window_days",
+        "credit_periods_total",
+        "credit_periods_remaining",
+        "period_started_at",
+        "period_ends_at",
+    }
+    parts: list[str] = []
+    vals: list[object] = []
+    for key, value in updates.items():
+        if key not in allowed:
+            continue
+        if key in ("limit_bytes", "window_days", "credit_periods_total", "credit_periods_remaining"):
+            value = max(0, int(value))
+        if key in ("is_unlimited", "is_enabled"):
+            value = 1 if bool(value) else 0
+        parts.append(f"{key} = ?")
+        vals.append(value)
+    if not parts:
+        return False
+    parts.append("updated_at = ?")
+    vals.append(int(time.time()))
+    vals.append(int(bucket_id))
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            f"UPDATE subscription_traffic_buckets SET {', '.join(parts)} WHERE id = ?",
+            tuple(vals),
+        )
+        await db.commit()
+        return True
+
+
+async def list_subscription_traffic_buckets(subscription_id: int) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT * FROM subscription_traffic_buckets
+            WHERE subscription_id = ?
+            ORDER BY is_unlimited DESC, id ASC
+            """,
+            (int(subscription_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_subscription_traffic_bucket(bucket_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM subscription_traffic_buckets WHERE id = ? LIMIT 1",
+            (int(bucket_id),),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def set_subscription_server_bucket(subscription_id: int, server_name: str, bucket_id: int) -> None:
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_server_traffic_bucket_map (subscription_id, server_name, bucket_id, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(subscription_id, server_name) DO UPDATE SET
+                bucket_id = excluded.bucket_id,
+                updated_at = excluded.updated_at
+            """,
+            (int(subscription_id), str(server_name), int(bucket_id), now),
+        )
+        await db.commit()
+
+
+async def set_subscription_servers_bucket(subscription_id: int, server_names: list[str], bucket_id: int) -> int:
+    changed = 0
+    for server_name in server_names:
+        await set_subscription_server_bucket(subscription_id, server_name, bucket_id)
+        changed += 1
+    return changed
+
+
+async def get_subscription_server_bucket_map(subscription_id: int) -> dict[str, int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT server_name, bucket_id
+            FROM subscription_server_traffic_bucket_map
+            WHERE subscription_id = ?
+            """,
+            (int(subscription_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            return {str(r[0]): int(r[1]) for r in rows}
+
+
+async def get_buckets_for_subscription_servers(subscription_id: int) -> dict[str, dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT m.server_name, b.*
+            FROM subscription_server_traffic_bucket_map m
+            JOIN subscription_traffic_buckets b ON b.id = m.bucket_id
+            WHERE m.subscription_id = ?
+            """,
+            (int(subscription_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            out: dict[str, dict] = {}
+            for row in rows:
+                d = dict(row)
+                server_name = str(d.pop("server_name"))
+                out[server_name] = d
+            return out
+
+
+async def add_bucket_usage_delta(bucket_id: int, bytes_delta: int, *, day_utc: str | None = None) -> None:
+    day = day_utc or _utc_day()
+    now = int(time.time())
+    delta = int(bytes_delta)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_traffic_usage_daily (bucket_id, day_utc, bytes_used, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(bucket_id, day_utc) DO UPDATE SET
+                bytes_used = bytes_used + excluded.bytes_used,
+                updated_at = excluded.updated_at
+            """,
+            (int(bucket_id), str(day), delta, now),
+        )
+        await db.commit()
+
+
+async def apply_bucket_usage_adjustment(bucket_id: int, bytes_delta: int, reason: str = "") -> None:
+    day = _utc_day()
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_traffic_adjustments (bucket_id, day_utc, bytes_delta, reason, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (int(bucket_id), day, int(bytes_delta), str(reason or "")[:500], now),
+        )
+        await db.execute(
+            """
+            INSERT INTO subscription_traffic_usage_daily (bucket_id, day_utc, bytes_used, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(bucket_id, day_utc) DO UPDATE SET
+                bytes_used = bytes_used + excluded.bytes_used,
+                updated_at = excluded.updated_at
+            """,
+            (int(bucket_id), day, int(bytes_delta), now),
+        )
+        await db.commit()
+
+
+async def get_bucket_used_bytes_for_window(bucket_id: int, window_days: int = 30) -> int:
+    start = (datetime.datetime.utcnow() - datetime.timedelta(days=max(1, int(window_days)) - 1)).strftime("%Y-%m-%d")
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT COALESCE(SUM(bytes_used), 0)
+            FROM subscription_traffic_usage_daily
+            WHERE bucket_id = ? AND day_utc >= ?
+            """,
+            (int(bucket_id), start),
+        ) as cur:
+            row = await cur.fetchone()
+            return int((row[0] if row else 0) or 0)
+
+
+async def upsert_bucket_enforcement_state(bucket_id: int, is_exhausted: bool) -> None:
+    now = int(time.time())
+    exhausted_int = 1 if is_exhausted else 0
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_traffic_enforcement_state
+            (bucket_id, is_exhausted, last_checked_at, updated_at, version)
+            VALUES (?, ?, ?, ?, 1)
+            ON CONFLICT(bucket_id) DO UPDATE SET
+                is_exhausted = excluded.is_exhausted,
+                last_checked_at = excluded.last_checked_at,
+                updated_at = excluded.updated_at,
+                version = subscription_traffic_enforcement_state.version + 1
+            """,
+            (int(bucket_id), exhausted_int, now, now),
+        )
+        await db.commit()
+
+
+async def mark_bucket_enforced(bucket_id: int) -> None:
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            UPDATE subscription_traffic_enforcement_state
+            SET last_enforced_at = ?, updated_at = ?
+            WHERE bucket_id = ?
+            """,
+            (now, now, int(bucket_id)),
+        )
+        await db.commit()
+
+
+async def get_subscription_bucket_states(subscription_id: int) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT b.*,
+                   COALESCE(s.is_exhausted, 0) AS is_exhausted,
+                   s.last_checked_at,
+                   s.last_enforced_at,
+                   COALESCE(s.version, 0) AS state_version
+            FROM subscription_traffic_buckets b
+            LEFT JOIN subscription_traffic_enforcement_state s ON s.bucket_id = b.id
+            WHERE b.subscription_id = ?
+            ORDER BY b.is_unlimited DESC, b.id ASC
+            """,
+            (int(subscription_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_bucket_usage_map_for_subscription(subscription_id: int) -> dict[int, int]:
+    buckets = await list_subscription_traffic_buckets(subscription_id)
+    out: dict[int, int] = {}
+    for bucket in buckets:
+        out[int(bucket["id"])] = await get_bucket_used_bytes_for_window(
+            int(bucket["id"]),
+            int(bucket.get("window_days") or 30),
+        )
+    return out
+
+
+async def get_subscription_traffic_snapshot(
+    subscription_id: int,
+    server_name: str,
+    client_email: str,
+) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT * FROM subscription_server_traffic_snapshots
+            WHERE subscription_id = ? AND server_name = ? AND client_email = ?
+            LIMIT 1
+            """,
+            (int(subscription_id), str(server_name), str(client_email)),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def upsert_subscription_traffic_snapshot(
+    subscription_id: int,
+    server_name: str,
+    client_email: str,
+    *,
+    up: int,
+    down: int,
+) -> None:
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_server_traffic_snapshots
+            (subscription_id, server_name, client_email, last_up, last_down, captured_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(subscription_id, server_name, client_email) DO UPDATE SET
+                last_up = excluded.last_up,
+                last_down = excluded.last_down,
+                captured_at = excluded.captured_at
+            """,
+            (
+                int(subscription_id),
+                str(server_name),
+                str(client_email),
+                max(0, int(up)),
+                max(0, int(down)),
+                now,
+            ),
+        )
+        await db.commit()
+
+
+async def delete_bucket_server_assignments(subscription_id: int, bucket_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            DELETE FROM subscription_server_traffic_bucket_map
+            WHERE subscription_id = ? AND bucket_id = ?
+            """,
+            (int(subscription_id), int(bucket_id)),
+        )
+        await db.commit()
+        return int(cur.rowcount or 0)
 
 
 async def get_subscription_statistics():

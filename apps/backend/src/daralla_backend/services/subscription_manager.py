@@ -416,7 +416,11 @@ class SubscriptionManager:
             return False, False
 
     async def build_links_for_subscription(
-        self, subscription_id: int
+        self,
+        subscription_id: int,
+        *,
+        allowed_server_names: set[str] | None = None,
+        server_tag_suffix_by_name: dict[str, str] | None = None,
     ) -> List[str]:
         """
         Собирает набор ссылок подписки для всех серверов подписки.
@@ -433,9 +437,18 @@ class SubscriptionManager:
         links: List[str] = []
         seen_links = set()  # Для дедупликации ссылок (без tag)
 
+        allowed_servers = (
+            {str(s) for s in allowed_server_names}
+            if allowed_server_names is not None
+            else None
+        )
+        tag_suffix_map = {str(k): str(v) for k, v in (server_tag_suffix_by_name or {}).items()}
+
         for s in servers:
             server_name = s["server_name"]
             client_email = s["client_email"]
+            if allowed_servers is not None and str(server_name) not in allowed_servers:
+                continue
 
             try:
                 found = self.server_manager.find_server_by_name(server_name)
@@ -471,6 +484,9 @@ class SubscriptionManager:
                 # VPN клиент будет группировать серверы по главному названию из subscription URL
                 # Главное название задается через VPN_BRAND_NAME, но в tag используем только название сервера
                 display_name = server_display_name
+                suffix = tag_suffix_map.get(str(server_name), "").strip()
+                if suffix:
+                    display_name = f"{display_name} {suffix}"
                 logger.info(f"Формируем название для VPN клиента: '{display_name}' (server='{server_display_name}')")
                 
                 # Используем готовый subscription endpoint X-UI вместо ручной генерации.

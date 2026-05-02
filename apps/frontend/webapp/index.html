@@ -1084,6 +1084,7 @@
                 <div class="tabs">
                     <button class="tab-button active" data-action="switchSubscriptionTab" data-arg="params">Параметры</button>
                     <button class="tab-button" data-action="switchSubscriptionTab" data-arg="keys">Ключи</button>
+                    <button class="tab-button" data-action="switchSubscriptionTab" data-arg="traffic">Traffic</button>
                 </div>
                 
                 <!-- Вкладка: Параметры -->
@@ -1140,6 +1141,38 @@
                         <div class="loading">
                             <div class="spinner"></div>
                             <p>Загрузка ключей...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Вкладка: Traffic Buckets -->
+                <div id="subscription-tab-traffic" class="tab-content">
+                    <div class="info-section traffic-buckets-create">
+                        <h3 class="text-accent" style="margin-top: 0;">Создать bucket</h3>
+                        <div class="traffic-bucket-create-grid">
+                            <label>Название
+                                <input type="text" id="new-bucket-name" placeholder="EU Limited 10GB">
+                            </label>
+                            <label>Лимит (байт)
+                                <input type="number" id="new-bucket-limit-bytes" min="0" placeholder="10737418240">
+                            </label>
+                            <label>Периодов кредита
+                                <input type="number" id="new-bucket-credit-periods" min="1" value="1">
+                            </label>
+                            <label class="inline-check">
+                                <input type="checkbox" id="new-bucket-unlimited">
+                                Unlimited bucket
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" data-action="loadTrafficBuckets">Обновить</button>
+                            <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать bucket</button>
+                        </div>
+                    </div>
+                    <div id="subscription-traffic-buckets-list">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Загрузка bucket-ов...</p>
                         </div>
                     </div>
                 </div>

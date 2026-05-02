@@ -10,6 +10,11 @@ from daralla_backend.services.sync_outbox_service import (
     outbox_worker_enabled,
     process_outbox_once,
 )
+from daralla_backend.services.traffic_bucket_service import (
+    get_traffic_bucket_service,
+    traffic_buckets_enabled,
+    traffic_bucket_sync_interval_seconds,
+)
 from daralla_backend.utils.logging_helpers import log_event
 from daralla_backend.web.observability import inc_metric
 
@@ -51,6 +56,12 @@ async def start_background_tasks(sync_manager, subscription_manager, notificatio
         logger.info("Outbox worker: включён (DARALLA_SYNC_OUTBOX_WORKER_ENABLED=1)")
     else:
         logger.info("Outbox worker выключен (DARALLA_SYNC_OUTBOX_WORKER_ENABLED=0)")
+
+    if traffic_buckets_enabled():
+        asyncio.create_task(traffic_bucket_usage_loop(server_manager))
+        logger.info("Traffic buckets sync loop: включён (DARALLA_TRAFFIC_BUCKETS_ENABLED=1)")
+    else:
+        logger.info("Traffic buckets sync loop выключен (DARALLA_TRAFFIC_BUCKETS_ENABLED=0)")
     
     # 2. Задача проверки истекающих подписок для уведомлений (каждые 30 минут)
     asyncio.create_task(notifications_task_loop(notification_manager))
@@ -377,4 +388,30 @@ async def sync_outbox_worker_loop(subscription_manager):
         except Exception as e:
             logger.error("Ошибка outbox worker loop: %s", e, exc_info=True)
             inc_metric("background_task_error_total", task="sync_outbox_worker")
+        await asyncio.sleep(interval)
+
+
+async def traffic_bucket_usage_loop(server_manager):
+    interval = traffic_bucket_sync_interval_seconds()
+    service = get_traffic_bucket_service()
+    await asyncio.sleep(15)
+    while True:
+        try:
+            summary = await service.sync_usage_for_all_subscriptions(server_manager=server_manager)
+            if summary.get("enabled"):
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "traffic_bucket_sync_completed",
+                    subscriptions=summary.get("subscriptions"),
+                    servers=summary.get("servers"),
+                    delta_bytes=summary.get("delta_bytes"),
+                    jobs=summary.get("jobs"),
+                )
+            inc_metric("background_task_success_total", task="traffic_bucket_sync")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Ошибка traffic bucket usage loop: %s", exc, exc_info=True)
+            inc_metric("background_task_error_total", task="traffic_bucket_sync")
         await asyncio.sleep(interval)

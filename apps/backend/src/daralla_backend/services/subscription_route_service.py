@@ -15,6 +15,10 @@ from daralla_backend.db.subscriptions_db import (
     get_subscription_servers,
     is_subscription_active,
 )
+from daralla_backend.services.traffic_bucket_service import (
+    get_traffic_bucket_service,
+    traffic_buckets_enabled,
+)
 from daralla_backend.utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
@@ -48,10 +52,10 @@ def _classify_inactive_subscription(sub: dict, now_ts: int) -> str:
 
 def _inactive_announce_text(reason: str) -> str:
     if reason == "deleted":
-        return "Подписка удалена. Оформите новую в приложении или боте."
+        return "Подписка удалена. Оформите новую на сайте или в боте."
     if reason == "expired":
-        return "Подписка истекла. Продлите в приложении или боте."
-    return "Подписка неактивна. Откройте приложение или бота."
+        return "Подписка истекла. Продлите на сайте или в боте."
+    return "Подписка неактивна. Откройте сайт или бота."
 
 
 def _announce_header_value(text: str) -> str:
@@ -348,8 +352,36 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
 
         logger.info("Подписка %s валидна, генерируем ссылки...", sub["id"])
 
-        links = await subscription_manager.build_links_for_subscription(sub["id"])
+        bucket_policy = {"enabled": False, "allowed_servers": None, "name_suffix_by_server": {}}
+        if traffic_buckets_enabled():
+            bucket_service = get_traffic_bucket_service()
+            sync_on_sub = (os.getenv("DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB", "0").strip().lower() in ("1", "true", "yes", "on"))
+            if sync_on_sub:
+                try:
+                    await bucket_service.sync_usage_for_subscription(
+                        int(sub["id"]),
+                        server_manager=get_ctx().server_manager,
+                    )
+                except Exception as bucket_sync_exc:
+                    logger.warning("sync_usage_for_subscription failed for sub=%s: %s", sub["id"], bucket_sync_exc)
+            try:
+                bucket_policy = await bucket_service.get_subscription_delivery_policy(int(sub["id"]))
+            except Exception as bucket_policy_exc:
+                logger.warning("bucket delivery policy failed for sub=%s: %s", sub["id"], bucket_policy_exc)
+
+        try:
+            links = await subscription_manager.build_links_for_subscription(
+                sub["id"],
+                allowed_server_names=bucket_policy.get("allowed_servers"),
+                server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
+            )
+        except TypeError:
+            # Совместимость с тестовыми/legacy менеджерами без новых kwargs.
+            links = await subscription_manager.build_links_for_subscription(sub["id"])
         servers = await get_subscription_servers(sub["id"])
+        allowed_servers = bucket_policy.get("allowed_servers")
+        if allowed_servers is not None:
+            servers = [s for s in servers if str(s.get("server_name")) in allowed_servers]
         logger.info("Сгенерировано %s ссылок для подписки %s", len(links), sub["id"])
 
         if not links:

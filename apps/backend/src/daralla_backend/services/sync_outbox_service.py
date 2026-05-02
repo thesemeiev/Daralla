@@ -18,6 +18,7 @@ from daralla_backend.db import (
     mark_job_dead,
     mark_job_done,
     mark_job_retry,
+    mark_bucket_enforced,
     retry_dead_jobs,
 )
 from daralla_backend.services.admin_subscriptions_service import get_user_id_from_subscription_id
@@ -112,6 +113,46 @@ async def enqueue_group_sync_jobs(group_id: int, *, reason: str = "") -> int:
     return total
 
 
+async def enqueue_bucket_enforcement_jobs(
+    *,
+    subscription_id: int,
+    bucket_id: int,
+    is_exhausted: bool,
+    server_names: list[str],
+    reason: str = "",
+) -> int:
+    if not outbox_write_enabled():
+        return 0
+    sub = await get_subscription_by_id_only(int(subscription_id))
+    if not sub:
+        return 0
+    revision = int(sub.get("sync_revision") or 0)
+    rows = await get_subscription_servers(int(subscription_id))
+    allow = {str(s) for s in server_names}
+    jobs = []
+    for row in rows:
+        server_name = str(row["server_name"])
+        if server_name not in allow:
+            continue
+        jobs.append(
+            {
+                "subscription_id": int(subscription_id),
+                "server_name": server_name,
+                "client_email": str(row["client_email"]),
+                "op": "apply_bucket_enforcement",
+                "desired_revision": revision,
+                "payload": {
+                    "bucket_id": int(bucket_id),
+                    "is_exhausted": bool(is_exhausted),
+                    "reason": reason or "bucket_check",
+                },
+            }
+        )
+    if not jobs:
+        return 0
+    return await enqueue_sync_jobs_bulk(jobs)
+
+
 def _backoff_delay_sec(attempts: int) -> int:
     # 5s, 10s, 20s, ... cap 10min
     a = max(1, int(attempts))
@@ -130,6 +171,15 @@ async def _apply_outbox_job(job: dict, *, subscription_manager) -> tuple[bool, s
     client_email = str(job["client_email"])
     desired_rev = int(job.get("desired_revision") or 0)
     op = str(job.get("op") or "ensure_client")
+    payload = job.get("payload_json")
+    payload_obj: dict[str, Any] = {}
+    if isinstance(payload, str) and payload:
+        import json
+
+        try:
+            payload_obj = json.loads(payload)
+        except Exception:
+            payload_obj = {}
 
     sub = await get_subscription_by_id_only(sub_id)
     if not sub:
@@ -147,6 +197,38 @@ async def _apply_outbox_job(job: dict, *, subscription_manager) -> tuple[bool, s
         if not deleted:
             # Idempotent: if already absent we treat as success.
             return True, None, False
+        return True, None, False
+
+    if op == "apply_bucket_enforcement":
+        is_exhausted = bool(payload_obj.get("is_exhausted"))
+        bucket_id = int(payload_obj.get("bucket_id") or 0)
+        if is_exhausted:
+            found = subscription_manager.server_manager.find_server_by_name(server_name)
+            if found is None or found[0] is None:
+                return False, f"server {server_name} not available", False
+            xui, _ = found
+            _ = await xui.deleteClient(client_email)
+        else:
+            user_id = await get_user_id_from_subscription_id(sub_id)
+            if not user_id:
+                return False, "user_id not found for subscription", False
+            ok, _created = await subscription_manager.ensure_client_on_server(
+                subscription_id=sub_id,
+                server_name=server_name,
+                client_email=client_email,
+                user_id=user_id,
+                expires_at=int(sub["expires_at"]),
+                token=str(sub["subscription_token"]),
+                device_limit=int(sub.get("device_limit") or 1),
+                panel_entry=None,
+            )
+            if not ok:
+                return False, "ensure_client returned client_exists=False", False
+        if bucket_id > 0:
+            try:
+                await mark_bucket_enforced(bucket_id)
+            except Exception:
+                pass
         return True, None, False
 
     user_id = await get_user_id_from_subscription_id(sub_id)

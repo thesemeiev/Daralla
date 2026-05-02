@@ -1,6 +1,7 @@
 (function () {
     function createAdminSubscriptionEditFeature(deps) {
         var _deps = deps || {};
+        var _currentBucketSnapshot = null;
 
         async function showAdminSubscriptionEdit(subId) {
             try {
@@ -75,6 +76,7 @@
                 document.getElementById('sub-expires-at').value = year + '-' + month + '-' + day + 'T' + hours + ':' + minutes;
 
                 loadSubscriptionKeys(servers);
+                await loadTrafficBuckets();
             } catch (error) {
                 console.error('Ошибка загрузки подписки:', error);
                 document.getElementById('admin-subscription-edit-loading').style.display = 'none';
@@ -247,6 +249,245 @@
                 if (currentSubscriptionServers && currentSubscriptionServers.length >= 0) {
                     loadSubscriptionKeys(currentSubscriptionServers);
                 }
+            } else if (tabName === 'traffic') {
+                var trafficBtn = document.querySelector('#page-admin-subscription-edit .tab-button[data-arg="traffic"]');
+                if (trafficBtn) trafficBtn.classList.add('active');
+                var trafficContent = document.getElementById('subscription-tab-traffic');
+                if (trafficContent) trafficContent.classList.add('active');
+                loadTrafficBuckets();
+            }
+        }
+
+        function _formatBytes(num) {
+            var n = Number(num || 0);
+            if (!isFinite(n) || n <= 0) return '0 B';
+            var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var i = 0;
+            while (n >= 1024 && i < units.length - 1) {
+                n /= 1024;
+                i++;
+            }
+            return (i === 0 ? Math.round(n) : n.toFixed(2)) + ' ' + units[i];
+        }
+
+        async function _trafficBucketApi(action, payload) {
+            var currentEditingSubscriptionId = _deps.getCurrentEditingSubscriptionId();
+            if (!currentEditingSubscriptionId) throw new Error('ID подписки не найден');
+            var body = Object.assign({ action: action }, payload || {});
+            var response = await _deps.apiFetch('/api/admin/subscription/' + currentEditingSubscriptionId + '/traffic-buckets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            var data = await response.json().catch(function () { return {}; });
+            if (!response.ok) throw new Error(data.error || 'Ошибка запроса buckets');
+            return data;
+        }
+
+        function _buildServerChecksHtml(bucketId) {
+            var servers = _deps.getCurrentSubscriptionServers() || [];
+            var mapping = (_currentBucketSnapshot && _currentBucketSnapshot.server_bucket_map) || {};
+            if (!servers.length) {
+                return '<div class="hint">Нет привязанных серверов для этой подписки.</div>';
+            }
+            return servers.map(function (s) {
+                var name = s.server_name || '';
+                var checked = String(mapping[name]) === String(bucketId) ? 'checked' : '';
+                return ''
+                    + '<label class="traffic-bucket-server-item">'
+                    + '<input type="checkbox" data-role="bucket-server" value="' + _deps.escapeHtml(name) + '" ' + checked + '>'
+                    + '<span>' + _deps.escapeHtml(name) + '</span>'
+                    + '</label>';
+            }).join('');
+        }
+
+        function _bindTrafficBucketActions() {
+            document.querySelectorAll('[data-action="saveTrafficBucketUpdate"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var bucketId = btn.getAttribute('data-bucket-id');
+                    saveTrafficBucketUpdate(bucketId);
+                });
+            });
+            document.querySelectorAll('[data-action="saveBucketServerAssignments"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var bucketId = btn.getAttribute('data-bucket-id');
+                    saveBucketServerAssignments(bucketId);
+                });
+            });
+            document.querySelectorAll('[data-action="adjustTrafficBucketUsage"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var bucketId = btn.getAttribute('data-bucket-id');
+                    adjustTrafficBucketUsage(bucketId);
+                });
+            });
+            document.querySelectorAll('[data-action="clearTrafficBucketServers"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var bucketId = btn.getAttribute('data-bucket-id');
+                    clearTrafficBucketServers(bucketId);
+                });
+            });
+        }
+
+        function renderTrafficBuckets(snapshot) {
+            _currentBucketSnapshot = snapshot || { buckets: [], server_bucket_map: {} };
+            var root = document.getElementById('subscription-traffic-buckets-list');
+            if (!root) return;
+            var buckets = _currentBucketSnapshot.buckets || [];
+            if (!buckets.length) {
+                root.innerHTML = '<div class="empty-state"><p>Bucket-ы пока не созданы.</p></div>';
+                return;
+            }
+            var html = buckets.map(function (b) {
+                var id = String(b.id);
+                var isUnlimited = !!b.is_unlimited;
+                var used = Number(b.used_bytes_window || 0);
+                var limit = Number(b.limit_bytes || 0);
+                var exhausted = !!b.is_exhausted;
+                var statusText = exhausted ? 'Исчерпан' : 'Активен';
+                var statusClass = exhausted ? 'traffic-status-exhausted' : 'traffic-status-active';
+                return ''
+                    + '<div class="traffic-bucket-card">'
+                    + '  <div class="traffic-bucket-head">'
+                    + '    <div class="traffic-bucket-title">' + _deps.escapeHtml(b.name || ('Bucket ' + id)) + '</div>'
+                    + '    <div class="traffic-bucket-status ' + statusClass + '">' + statusText + '</div>'
+                    + '  </div>'
+                    + '  <div class="traffic-bucket-meta">'
+                    + '    <span>Тип: ' + (isUnlimited ? 'Unlimited' : 'Limited') + '</span>'
+                    + '    <span>Лимит: ' + (isUnlimited ? 'Unlimited' : _formatBytes(limit)) + '</span>'
+                    + '    <span>Использовано (30d): ' + _formatBytes(used) + '</span>'
+                    + '    <span>Остаток: ' + (isUnlimited ? 'Unlimited' : _formatBytes(Math.max(0, limit - used))) + '</span>'
+                    + '  </div>'
+                    + '  <div class="traffic-bucket-inline-form">'
+                    + '    <label>Название <input type="text" id="bucket-name-' + id + '" value="' + _deps.escapeHtml(b.name || '') + '"></label>'
+                    + '    <label>Лимит (байт) <input type="number" id="bucket-limit-' + id + '" min="0" value="' + (limit || 0) + '"' + (isUnlimited ? ' disabled' : '') + '></label>'
+                    + '    <label class="inline-check"><input type="checkbox" id="bucket-unlimited-' + id + '" ' + (isUnlimited ? 'checked' : '') + '> Unlimited</label>'
+                    + '    <label class="inline-check"><input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '> Enabled</label>'
+                    + '    <button type="button" class="btn-secondary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить bucket</button>'
+                    + '  </div>'
+                    + '  <div class="traffic-bucket-assignments">'
+                    + '    <div class="traffic-bucket-subtitle">Назначение серверов</div>'
+                    + '    <div class="traffic-bucket-servers">' + _buildServerChecksHtml(id) + '</div>'
+                    + '    <div class="traffic-bucket-actions">'
+                    + '      <button type="button" class="btn-secondary" data-action="saveBucketServerAssignments" data-bucket-id="' + id + '">Сохранить ноды</button>'
+                    + '      <button type="button" class="btn-secondary" data-action="clearTrafficBucketServers" data-bucket-id="' + id + '">Снять все ноды</button>'
+                    + '    </div>'
+                    + '  </div>'
+                    + '  <div class="traffic-bucket-adjust">'
+                    + '    <label>Корректировка (байт) <input type="number" id="bucket-adjust-delta-' + id + '" value="0"></label>'
+                    + '    <label>Причина <input type="text" id="bucket-adjust-reason-' + id + '" placeholder="manual correction"></label>'
+                    + '    <button type="button" class="btn-secondary" data-action="adjustTrafficBucketUsage" data-bucket-id="' + id + '">Применить корректировку</button>'
+                    + '  </div>'
+                    + '</div>';
+            }).join('');
+            root.innerHTML = html;
+            _bindTrafficBucketActions();
+        }
+
+        async function loadTrafficBuckets() {
+            var root = document.getElementById('subscription-traffic-buckets-list');
+            if (root) root.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка bucket-ов...</p></div>';
+            try {
+                var data = await _trafficBucketApi('list');
+                renderTrafficBuckets(data);
+            } catch (error) {
+                console.error('Ошибка загрузки buckets:', error);
+                if (root) root.innerHTML = '<div class="empty-state"><p>Не удалось загрузить bucket-ы: ' + _deps.escapeHtml(error.message) + '</p></div>';
+            }
+        }
+
+        async function createTrafficBucket() {
+            try {
+                var name = (document.getElementById('new-bucket-name').value || '').trim();
+                var isUnlimited = !!document.getElementById('new-bucket-unlimited').checked;
+                var limitBytes = parseInt(document.getElementById('new-bucket-limit-bytes').value || '0', 10);
+                var creditPeriods = parseInt(document.getElementById('new-bucket-credit-periods').value || '1', 10);
+                if (!name) throw new Error('Укажите название bucket');
+                if (!isUnlimited && (!limitBytes || limitBytes <= 0)) throw new Error('Для limited bucket нужен положительный лимит');
+                var data = await _trafficBucketApi('create', {
+                    name: name,
+                    is_unlimited: isUnlimited,
+                    limit_bytes: isUnlimited ? 0 : limitBytes,
+                    credit_periods_total: Math.max(1, creditPeriods)
+                });
+                document.getElementById('new-bucket-name').value = '';
+                document.getElementById('new-bucket-limit-bytes').value = '';
+                document.getElementById('new-bucket-credit-periods').value = '1';
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Bucket создан.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка создания bucket: ' + error.message, { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function saveTrafficBucketUpdate(bucketId) {
+            try {
+                var id = String(bucketId);
+                var nameEl = document.getElementById('bucket-name-' + id);
+                var limitEl = document.getElementById('bucket-limit-' + id);
+                var unlimitedEl = document.getElementById('bucket-unlimited-' + id);
+                var enabledEl = document.getElementById('bucket-enabled-' + id);
+                var payload = {
+                    name: (nameEl && nameEl.value || '').trim(),
+                    is_unlimited: !!(unlimitedEl && unlimitedEl.checked),
+                    is_enabled: !!(enabledEl && enabledEl.checked),
+                    limit_bytes: parseInt((limitEl && limitEl.value) || '0', 10)
+                };
+                var data = await _trafficBucketApi('update', { bucket_id: Number(id), ...payload });
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Bucket обновлен.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка обновления bucket: ' + error.message, { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function saveBucketServerAssignments(bucketId) {
+            try {
+                var id = String(bucketId);
+                var checked = Array.from(document.querySelectorAll('.traffic-bucket-card input[data-role="bucket-server"]:checked'))
+                    .filter(function (el) {
+                        var card = el.closest('.traffic-bucket-card');
+                        if (!card) return false;
+                        var btn = card.querySelector('[data-action="saveBucketServerAssignments"]');
+                        return btn && String(btn.getAttribute('data-bucket-id')) === id;
+                    })
+                    .map(function (el) { return el.value; });
+                var data = await _trafficBucketApi('assign_servers', {
+                    bucket_id: Number(id),
+                    server_names: checked
+                });
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Ноды назначены.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка назначения нод: ' + error.message, { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function clearTrafficBucketServers(bucketId) {
+            try {
+                var id = String(bucketId);
+                var data = await _trafficBucketApi('clear_servers', { bucket_id: Number(id) });
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Назначения нод очищены.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка очистки назначений: ' + error.message, { title: 'Ошибка', variant: 'error' });
+            }
+        }
+
+        async function adjustTrafficBucketUsage(bucketId) {
+            try {
+                var id = String(bucketId);
+                var delta = parseInt((document.getElementById('bucket-adjust-delta-' + id).value || '0'), 10);
+                var reason = (document.getElementById('bucket-adjust-reason-' + id).value || '').trim();
+                if (!delta) throw new Error('Укажите ненулевую корректировку');
+                var data = await _trafficBucketApi('adjust_usage', {
+                    bucket_id: Number(id),
+                    bytes_delta: delta,
+                    reason: reason || 'admin_adjust'
+                });
+                renderTrafficBuckets(data);
+                await _deps.appShowAlert('Корректировка применена.', { title: 'Готово', variant: 'success' });
+            } catch (error) {
+                await _deps.appShowAlert('Ошибка корректировки usage: ' + error.message, { title: 'Ошибка', variant: 'error' });
             }
         }
 
@@ -377,6 +618,12 @@
             syncSubscription: syncSubscription,
             switchSubscriptionTab: switchSubscriptionTab,
             loadSubscriptionKeys: loadSubscriptionKeys,
+            loadTrafficBuckets: loadTrafficBuckets,
+            createTrafficBucket: createTrafficBucket,
+            saveTrafficBucketUpdate: saveTrafficBucketUpdate,
+            saveBucketServerAssignments: saveBucketServerAssignments,
+            clearTrafficBucketServers: clearTrafficBucketServers,
+            adjustTrafficBucketUsage: adjustTrafficBucketUsage,
             copyToClipboard: copyToClipboard,
             goBackFromSubscriptionEdit: goBackFromSubscriptionEdit,
             confirmDeleteSubscription: confirmDeleteSubscription,

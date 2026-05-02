@@ -7,10 +7,16 @@ from quart import Blueprint, request, jsonify
 
 from daralla_backend.web.routes.admin_common import _cors_headers, admin_route
 from daralla_backend.services.admin_subscriptions_flow_service import (
+    adjust_subscription_bucket_usage_payload,
+    assign_subscription_servers_bucket_payload,
+    clear_subscription_bucket_servers_payload,
+    create_subscription_traffic_bucket_payload,
     delete_subscription_payload,
     list_subscriptions_payload,
     manual_sync_payload,
+    subscription_traffic_buckets_payload,
     subscription_info_payload,
+    update_subscription_traffic_bucket_payload,
     update_subscription_payload,
 )
 
@@ -94,6 +100,64 @@ def create_blueprint(bot_app):
         if err_body:
             return jsonify(err_body), err_code, _cors_headers()
         logger.info("Админ %s удалил подписку %s", admin_id, sub_id)
+        return jsonify(payload), 200, _cors_headers()
+
+    @bp.route("/api/admin/subscription/<int:sub_id>/traffic-buckets", methods=["POST", "OPTIONS"])
+    @admin_route
+    async def api_admin_subscription_traffic_buckets(request, admin_id, sub_id):
+        data = await request.get_json(silent=True) or {}
+        action = str(data.get("action") or "list").strip().lower()
+        if action == "list":
+            payload, err_body, err_code = await subscription_traffic_buckets_payload(sub_id)
+        elif action == "create":
+            payload, err_body, err_code = await create_subscription_traffic_bucket_payload(sub_id, data)
+        elif action == "update":
+            bucket_id = int(data.get("bucket_id") or 0)
+            if bucket_id <= 0:
+                return jsonify({"error": "bucket_id is required"}), 400, _cors_headers()
+            updates = {
+                k: data[k]
+                for k in (
+                    "name",
+                    "limit_bytes",
+                    "is_unlimited",
+                    "is_enabled",
+                    "window_days",
+                    "credit_periods_total",
+                    "credit_periods_remaining",
+                    "period_started_at",
+                    "period_ends_at",
+                )
+                if k in data
+            }
+            payload, err_body, err_code = await update_subscription_traffic_bucket_payload(sub_id, bucket_id, updates)
+        elif action == "assign_servers":
+            bucket_id = int(data.get("bucket_id") or 0)
+            servers = data.get("server_names") or []
+            if bucket_id <= 0:
+                return jsonify({"error": "bucket_id is required"}), 400, _cors_headers()
+            payload, err_body, err_code = await assign_subscription_servers_bucket_payload(sub_id, bucket_id, servers)
+        elif action == "clear_servers":
+            bucket_id = int(data.get("bucket_id") or 0)
+            if bucket_id <= 0:
+                return jsonify({"error": "bucket_id is required"}), 400, _cors_headers()
+            payload, err_body, err_code = await clear_subscription_bucket_servers_payload(sub_id, bucket_id)
+        elif action == "adjust_usage":
+            bucket_id = int(data.get("bucket_id") or 0)
+            bytes_delta = int(data.get("bytes_delta") or 0)
+            reason = str(data.get("reason") or "").strip()
+            if bucket_id <= 0:
+                return jsonify({"error": "bucket_id is required"}), 400, _cors_headers()
+            payload, err_body, err_code = await adjust_subscription_bucket_usage_payload(
+                sub_id,
+                bucket_id,
+                bytes_delta,
+                reason=reason,
+            )
+        else:
+            return jsonify({"error": "Invalid action"}), 400, _cors_headers()
+        if err_body:
+            return jsonify(err_body), err_code, _cors_headers()
         return jsonify(payload), 200, _cors_headers()
 
     return bp

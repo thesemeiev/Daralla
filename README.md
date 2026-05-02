@@ -128,6 +128,9 @@ cp .env.example apps/backend/src/.env
 | `WEBSITE_URL` | опционально: лендинг (`profile-web-page-url` / `website` в ответе VPN subscription URL `/sub`) |
 | `SUPPORT_URL` | поддержка для `/sub` (`support-url`), редирект `/support`; вместе с сайтом/каналом — две разные кнопки. Fallback: `TELEGRAM_URL` (устар.) |
 | `TELEGRAM_CHANNEL_URL` | опционально: кнопка «канал/новости» в `/sub` (`profile-web-page-url`), если нет `WEBSITE_URL` / `WEBAPP_URL` |
+| `DARALLA_TRAFFIC_BUCKETS_ENABLED` | включает per-node traffic bucket лимиты и hard enforcement (фильтрация нод в `/sub` + outbox-применение на панелях) |
+| `DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS` | интервал фонового пересчета usage/exhausted для bucket |
+| `DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB` | опционально пересчитывает usage прямо в запросе `/sub` (дороже, но ближе к real-time) |
 
 <details>
 <summary>Остальные группы переменных (сжато)</summary>
@@ -142,6 +145,7 @@ cp .env.example apps/backend/src/.env
 | HTTP к 3x-ui | `XUI_HTTP_TIMEOUT_*`, `XUI_PANEL_MAX_RETRIES` |
 | Синхронизация | `DARALLA_SYNC_INTERVAL_SECONDS`, `DARALLA_CLIENT_CATCHUP_INTERVAL_SECONDS` |
 | Outbox | `DARALLA_SYNC_OUTBOX_WRITE_ENABLED`, `DARALLA_SYNC_OUTBOX_WORKER_ENABLED`, остальные `DARALLA_SYNC_OUTBOX_*` |
+| Traffic buckets | `DARALLA_TRAFFIC_BUCKETS_ENABLED`, `DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS`, `DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB` |
 | События | `EVENTS_MODULE_ENABLED`, `EVENTS_SUPPORT_URL` |
 | Retention | `RETENTION_DRY_RUN`, `PAYMENTS_RETENTION_DAYS`, `DELETED_SUBSCRIPTIONS_RETENTION_DAYS`, `AUTO_DELETE_INACTIVE_USERS_DAYS` и др. — см. `.env.example` |
 | Отладка | `NGROK_AUTH_TOKEN` |
