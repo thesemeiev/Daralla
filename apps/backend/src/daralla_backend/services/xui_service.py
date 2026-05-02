@@ -291,6 +291,7 @@ class X3:
         self._logged_in = False
         self._login_ts: float = 0.0
         self._session_ttl: float = float(os.getenv("XUI_SESSION_TTL_SEC", "1800"))
+        self._hy2_raw_fallback_count: int = 0
         logger.debug("X3 (py3xui) создан для %s", host)
 
     async def _ensure_login(self) -> None:
@@ -451,10 +452,9 @@ class X3:
             "protocol": protocol_norm,
         }
         if protocol_norm == "hysteria2":
-            # Compatibility: different 3x-ui builds store hy2 secret in auth or password.
+            # Canonical hy2 payload uses auth only.
             hy2_secret = str(uuid.uuid4()).replace("-", "")
             payload["auth"] = hy2_secret
-            payload["password"] = hy2_secret
         elif protocol_norm in _PASSWORD_BASED_PROTOCOLS:
             payload["password"] = str(uuid.uuid4())
         else:
@@ -580,6 +580,17 @@ class X3:
         url = api._url("panel/api/inbounds/addClient")
         await api._post(url, {"Accept": "application/json"}, data)
 
+    async def _post_inbound_update_settings_raw(self, inbound_id: int, settings_payload: Dict[str, Any]) -> None:
+        """
+        Raw inbound settings update (id + settings JSON) to avoid py3xui model serialization quirks.
+        Used as hy2-safe fallback path.
+        """
+        await self._ensure_login()
+        api = self._api.inbound
+        data = {"id": int(inbound_id), "settings": json.dumps(settings_payload)}
+        url = api._url("panel/api/inbounds/update")
+        await api._post(url, {"Accept": "application/json"}, data)
+
     async def _post_inbound_update_client(
         self,
         c: Any,
@@ -639,9 +650,7 @@ class X3:
             if not secret_candidate:
                 secret_candidate = self._derive_hysteria_secret(str(email or ""), int(inbound_id))
                 self._client_set(c, "auth", secret_candidate)
-                self._client_set(c, "password", secret_candidate)
             auth = secret_candidate
-            password = secret_candidate
             # On many 3x-ui builds hy2 updateClient identifier is auth/password, not email.
             hy2_identifier = str(auth or password or email or "").strip()
             if hy2_identifier:
@@ -676,7 +685,6 @@ class X3:
                                 int(inbound_id),
                             )
                             self._client_set(resolved, "auth", resolved_secret)
-                            self._client_set(resolved, "password", resolved_secret)
                     if protocol_norm != "hysteria2":
                         self._ensure_client_id_for_update(resolved)
                     resolved_identifier = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
@@ -852,14 +860,41 @@ class X3:
                     inbound_id,
                     email_norm or "-",
                 )
-            # Keep both fields populated for compatibility between panel builds.
             self._client_set(target, "auth", normalized_secret)
-            self._client_set(target, "password", normalized_secret)
             if isinstance(target, dict):
+                target.pop("password", None)
                 target.pop("id", None)
                 target.pop("uuid", None)
                 target.pop("flow", None)
                 target.pop("method", None)
+            # Canonical raw rewrite for hy2: avoid model-based inbound.update which can
+            # reintroduce legacy fields on some 3x-ui builds.
+            normalized_clients: list[dict[str, str]] = []
+            seen_emails: set[str] = set()
+            for group in _groups_from_settings():
+                for cl in group:
+                    cl_email = str(self._client_get(cl, "email", "") or "").strip()
+                    if not cl_email or cl_email in seen_emails:
+                        continue
+                    cl_secret = str(
+                        self._client_get(cl, "auth", "") or self._client_get(cl, "password", "")
+                    ).strip()
+                    if not cl_secret:
+                        cl_secret = self._derive_hysteria_secret(cl_email, int(inbound_id))
+                    normalized_clients.append({"email": cl_email, "auth": cl_secret})
+                    seen_emails.add(cl_email)
+
+            raw_settings_payload = {"clients": normalized_clients, "version": 2}
+            await self._post_inbound_update_settings_raw(int(inbound_id), raw_settings_payload)
+            self._hy2_raw_fallback_count += 1
+            logger.info(
+                "hy2 fallback: raw inbound settings update applied "
+                "(inbound_id=%s, clients=%s, raw_fallback_count=%s)",
+                inbound_id,
+                len(normalized_clients),
+                self._hy2_raw_fallback_count,
+            )
+            return
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 

@@ -102,15 +102,15 @@ def panel_client_settings_dict(
     # (например hysteria2/tuic) не добавляем лишние поля.
     protocol = str(protocol_hint or d.get("protocol", "") or "").strip().lower()
     if protocol in ("hysteria2", "hysteria"):
-        # Compatibility mode for mixed 3x-ui builds:
-        # part of panels stores hy2 secret in auth, part in password.
-        # Keep both fields in sync to avoid panel-side empty password rewrites.
+        # Canonical hy2 payload: use auth only.
+        # Some panels still return legacy password on read; we only use it as
+        # fallback source for auth during normalization.
         auth_val = str(d.get("auth") or "").strip()
         password_val = str(d.get("password") or "").strip()
         secret_val = auth_val or password_val
         if secret_val:
             d["auth"] = secret_val
-            d["password"] = secret_val
+        d.pop("password", None)
         d.pop("id", None)
         d.pop("uuid", None)
         d.pop("flow", None)
@@ -177,8 +177,8 @@ def panel_snapshot_matches_desired(
         return False
     protocol = str(panel_snapshot.get("protocol") or "").strip().lower()
     if protocol in ("hysteria", "hysteria2", "hy2"):
-        # For hy2 clients, missing auth triggers 3x-ui UI update errors ("empty client ID"),
-        # so such rows must be treated as inconsistent and reconciled.
+        # For hy2 we write auth only, but tolerate legacy password on reads.
+        # Missing both means broken row and requires reconcile.
         auth_val = str(panel_snapshot.get("auth") or "").strip()
         password_val = str(panel_snapshot.get("password") or "").strip()
         if not (auth_val or password_val):
