@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/style.css?v=38">
+    <link rel="stylesheet" href="/style.css?v=39">
     <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <!-- Скрипт Telegram подгружается из app.js с таймаутом, чтобы страница открывалась даже при недоступности внешнего CDN -->
@@ -1206,20 +1206,28 @@
                     <div class="spinner"></div>
                     <p>Загрузка...</p>
                 </div>
-                <p id="admin-commerce-error" class="error-text admin-inline-hidden admin-mb-sm"></p>
-                <form id="admin-commerce-form" class="admin-inline-hidden">
-                    <p class="admin-commerce-lead">Тарифы используются в приложении и на экране оплаты. Для каждого тарифа можно задать цену, срок и бейдж (например, «Выгодно» или «Хит»).</p>
-                    <div id="admin-commerce-tariffs" class="admin-commerce-tariffs"></div>
-                    <button type="button" id="admin-commerce-add-tariff" class="btn-secondary admin-btn-full admin-commerce-add-tariff-btn">+ Добавить тариф</button>
-                    <div class="admin-commerce-grid">
+                <p id="admin-commerce-error" class="error-text admin-inline-hidden admin-commerce-page-error"></p>
+                <form id="admin-commerce-form" class="admin-commerce-form admin-inline-hidden">
+                    <section class="admin-commerce-card" aria-labelledby="admin-commerce-tariffs-heading">
+                        <h3 id="admin-commerce-tariffs-heading" class="admin-commerce-card-title">Тарифы</h3>
+                        <p class="admin-commerce-card-intro">Используются в мини-приложении и на экране оплаты. У каждого тарифа — свой ключ периода (например <code class="admin-commerce-code">month</code>), название для пользователя, длительность в днях, цена и опциональный бейдж.</p>
+                        <div id="admin-commerce-tariffs" class="admin-commerce-tariffs"></div>
+                        <button type="button" id="admin-commerce-add-tariff" class="btn-secondary admin-btn-full admin-commerce-add-tariff-btn">+ Добавить тариф</button>
+                    </section>
+
+                    <section class="admin-commerce-card" aria-labelledby="admin-commerce-devices-heading">
+                        <h3 id="admin-commerce-devices-heading" class="admin-commerce-card-title">Лимит устройств по умолчанию</h3>
+                        <p class="admin-commerce-card-intro admin-commerce-card-intro--subtle">Применяется к новым подпискам и пробному периоду. Уже оформленные подписки не меняются.</p>
                         <div class="form-group admin-commerce-field">
-                            <label for="admin-commerce-device-limit">Устройств по умолчанию</label>
-                            <input type="number" id="admin-commerce-device-limit" min="1" max="100" step="1" required inputmode="numeric">
-                            <span class="hint admin-hint-subtle admin-hint-inline-block">Не меняет уже оформленные подписки.</span>
+                            <label for="admin-commerce-device-limit">Устройств</label>
+                            <input type="number" id="admin-commerce-device-limit" name="default_device_limit" min="1" max="100" step="1" required inputmode="numeric" autocomplete="off">
                         </div>
+                    </section>
+
+                    <div class="admin-commerce-save-block">
+                        <div id="admin-commerce-form-message" class="form-message admin-inline-hidden" role="alert" aria-live="polite"></div>
+                        <button type="submit" class="btn-primary admin-btn-full">Сохранить изменения</button>
                     </div>
-                    <div id="admin-commerce-form-message" class="form-message admin-inline-hidden" role="alert" aria-live="polite"></div>
-                    <button type="submit" class="btn-primary admin-btn-full admin-mt-sm">Сохранить</button>
                 </form>
             </div>
         </div>
@@ -1579,7 +1587,7 @@
     <script src="/js/features/admin/subscription-create.js?v=1"></script>
     <script src="/js/features/admin/stats-dashboard.js?v=2"></script>
     <script src="/js/features/admin/broadcast.js?v=1"></script>
-    <script src="/js/features/admin/commerce.js?v=1"></script>
+    <script src="/js/features/admin/commerce.js?v=2"></script>
     <script src="/js/features/admin/servers.js?v=2"></script>
     <script src="/js/features/servers/list.js?v=1"></script>
     <script src="/js/features/events/core.js?v=1"></script>
