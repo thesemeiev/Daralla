@@ -588,7 +588,7 @@ class X3:
         await self._ensure_login()
         api = self._api.inbound
         data = {"id": int(inbound_id), "settings": json.dumps(settings_payload)}
-        url = api._url("panel/api/inbounds/update")
+        url = api._url(f"panel/api/inbounds/update/{int(inbound_id)}")
         await api._post(url, {"Accept": "application/json"}, data)
 
     async def _post_inbound_update_client(
