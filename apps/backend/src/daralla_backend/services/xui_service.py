@@ -5,7 +5,6 @@
 import asyncio
 import base64
 import datetime
-import hashlib
 import json
 import logging
 import os
@@ -206,20 +205,6 @@ class X3:
         return None
 
     @staticmethod
-    def _normalize_hysteria_secret(v: Any) -> str:
-        raw = str(v or "").strip()
-        if raw:
-            return raw
-        # Fallback token for panel-side client-id compatibility.
-        return str(uuid.uuid4()).replace("-", "")
-
-    @staticmethod
-    def _derive_hysteria_secret(email: str, inbound_id: int) -> str:
-        """Stable recovery secret for broken hy2 rows with empty auth/password."""
-        seed = f"{email.strip().lower()}|{int(inbound_id)}|daralla-hy2-secret-v1"
-        return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
-
-    @staticmethod
     def _settings_clients_obj(settings: Any) -> list[Any]:
         clients = list(getattr(settings, "clients", None) or [])
         users = list(getattr(settings, "users", None) or [])
@@ -291,7 +276,6 @@ class X3:
         self._logged_in = False
         self._login_ts: float = 0.0
         self._session_ttl: float = float(os.getenv("XUI_SESSION_TTL_SEC", "1800"))
-        self._hy2_raw_fallback_count: int = 0
         logger.debug("X3 (py3xui) создан для %s", host)
 
     async def _ensure_login(self) -> None:
@@ -563,6 +547,43 @@ class X3:
             X3._client_set(c, "id", uuid_val)
         return c
 
+    @staticmethod
+    def _resolve_client_identifier_from_settings(
+        settings_obj: Any,
+        *,
+        email: Optional[str],
+        auth: Optional[str],
+        password: Optional[str],
+    ) -> Optional[str]:
+        email_norm = str(email or "").strip()
+        auth_norm = str(auth or "").strip()
+        password_norm = str(password or "").strip()
+        groups: list[list[Any]]
+        if isinstance(settings_obj, dict):
+            groups = [list(settings_obj.get("clients") or []), list(settings_obj.get("users") or [])]
+        else:
+            groups = [
+                list(getattr(settings_obj, "clients", None) or []),
+                list(getattr(settings_obj, "users", None) or []),
+            ]
+        for group in groups:
+            for cl in group:
+                cl_email = str(X3._client_get(cl, "email", "") or "").strip()
+                cl_auth = str(X3._client_get(cl, "auth", "") or "").strip()
+                cl_password = str(X3._client_get(cl, "password", "") or "").strip()
+                if not (
+                    (email_norm and cl_email == email_norm)
+                    or (auth_norm and cl_auth == auth_norm)
+                    or (password_norm and cl_password == password_norm)
+                ):
+                    continue
+                cl_id = str(X3._client_get(cl, "id", "") or "").strip()
+                cl_uuid = str(X3._client_get(cl, "uuid", "") or "").strip()
+                resolved = cl_id or cl_uuid
+                if resolved:
+                    return resolved
+        return None
+
     async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
         """addClient: как py3xui, но flow всегда в JSON (см. panel_client_settings_dict)."""
         await self._ensure_login()
@@ -578,17 +599,6 @@ class X3:
         }
         data = {"id": int(inbound_id), "settings": json.dumps(settings)}
         url = api._url("panel/api/inbounds/addClient")
-        await api._post(url, {"Accept": "application/json"}, data)
-
-    async def _post_inbound_update_settings_raw(self, inbound_id: int, settings_payload: Dict[str, Any]) -> None:
-        """
-        Raw inbound settings update (id + settings JSON) to avoid py3xui model serialization quirks.
-        Used as hy2-safe fallback path.
-        """
-        await self._ensure_login()
-        api = self._api.inbound
-        data = {"id": int(inbound_id), "settings": json.dumps(settings_payload)}
-        url = api._url(f"panel/api/inbounds/update/{int(inbound_id)}")
         await api._post(url, {"Accept": "application/json"}, data)
 
     async def _post_inbound_update_client(
@@ -631,30 +641,13 @@ class X3:
                 protocol_norm = self._extract_protocol(inv)
             except Exception:
                 pass
-        # Для hysteria2 принудительно не трогаем id: панель не использует его как client key.
-        # Для остальных протоколов оставляем старую страховку against get_by_email integer id.
-        if protocol_norm != "hysteria2":
-            self._ensure_client_id_for_update(c)
+        self._ensure_client_id_for_update(c)
         api = self._api.client
         client_identifier = self._client_get(c, "id", None) or self._client_get(c, "uuid", None)
         email = self._client_get(c, "email", None)
         auth = self._client_get(c, "auth", None)
         password = self._client_get(c, "password", None)
         enable_override = self._coerce_optional_bool(self._client_get(c, "enable", None))
-        # Для hy2 чаще работает key по auth/password. Это уменьшает количество
-        # fallback-вызовов inbound.update, которые могут перетирать inbound settings.
-        if protocol_norm == "hysteria2":
-            # Никогда не отправляем пустой секрет в updateClient для hy2:
-            # это приводит к "битым" строкам clients[] (password="") на панели.
-            secret_candidate = str(auth or password or "").strip()
-            if not secret_candidate:
-                secret_candidate = self._derive_hysteria_secret(str(email or ""), int(inbound_id))
-                self._client_set(c, "auth", secret_candidate)
-            auth = secret_candidate
-            # On many 3x-ui builds hy2 updateClient identifier is auth/password, not email.
-            hy2_identifier = str(auth or password or email or "").strip()
-            if hy2_identifier:
-                client_identifier = hy2_identifier
         uuid_for_url = str(client_identifier).strip() if client_identifier is not None else None
         if not uuid_for_url:
             uuid_for_url = None
@@ -665,8 +658,6 @@ class X3:
                 try:
                     resolved = await self._api.client.get_by_email(str(email))
                 except ValueError as exc:
-                    # hy2/tuic панели нередко отвечают "Error getting traffics / Inbound Not Found"
-                    # даже для существующего клиента; в этом случае идем в inbound.update fallback.
                     if not _value_error_client_absent_on_panel(exc):
                         raise
                 if resolved is not None:
@@ -674,29 +665,8 @@ class X3:
                     resolved.limit_ip = self._client_get(c, "limit_ip", getattr(resolved, "limit_ip", None))
                     if flow_override is not None:
                         resolved.flow = flow_override
-                    if protocol_norm == "hysteria2":
-                        resolved_email = self._client_get(resolved, "email", None) or email
-                        resolved_auth = self._client_get(resolved, "auth", None)
-                        resolved_password = self._client_get(resolved, "password", None)
-                        resolved_secret = str(resolved_auth or resolved_password or "").strip()
-                        if not resolved_secret:
-                            resolved_secret = self._derive_hysteria_secret(
-                                str(resolved_email or ""),
-                                int(inbound_id),
-                            )
-                            self._client_set(resolved, "auth", resolved_secret)
-                    if protocol_norm != "hysteria2":
-                        self._ensure_client_id_for_update(resolved)
+                    self._ensure_client_id_for_update(resolved)
                     resolved_identifier = getattr(resolved, "id", None) or getattr(resolved, "uuid", None)
-                    if protocol_norm == "hysteria2":
-                        resolved_email = self._client_get(resolved, "email", None)
-                        resolved_auth = self._client_get(resolved, "auth", None)
-                        resolved_password = self._client_get(resolved, "password", None)
-                        resolved_secret = str(
-                            resolved_auth or resolved_password or resolved_email or auth or password or email or ""
-                        ).strip()
-                        if resolved_secret:
-                            resolved_identifier = resolved_secret
                     uuid_for_url = str(resolved_identifier).strip() if resolved_identifier is not None else None
                     if not uuid_for_url:
                         uuid_for_url = None
@@ -705,6 +675,27 @@ class X3:
                         int(inbound_id_override)
                         if inbound_id_override is not None
                         else getattr(resolved, "inbound_id", inbound_id)
+                    )
+            if not uuid_for_url and inbound_id is not None:
+                try:
+                    inv = await self._api.inbound.get_by_id(int(inbound_id))
+                    resolved_identifier = self._resolve_client_identifier_from_settings(
+                        getattr(inv, "settings", None),
+                        email=(str(email) if email else None),
+                        auth=(str(auth) if auth else None),
+                        password=(str(password) if password else None),
+                    )
+                    if resolved_identifier:
+                        uuid_for_url = str(resolved_identifier).strip() or None
+                        if uuid_for_url:
+                            self._client_set(c, "id", uuid_for_url)
+                except Exception:
+                    logger.debug(
+                        "updateClient: resolve identifier from inbound settings failed "
+                        "(inbound_id=%s email=%s)",
+                        inbound_id,
+                        email or "-",
+                        exc_info=True,
                     )
             if (
                 not uuid_for_url
@@ -843,58 +834,6 @@ class X3:
             if protocol_hint
             else ""
         )
-        if protocol_norm == "hysteria2":
-            # For hy2 fallback keep changes local to matched row only.
-            # Do not replace inv.settings / inv.stream_settings with dicts:
-            # py3xui inbound.update expects pydantic models there.
-            target_auth = str(self._client_get(target, "auth", "") or "").strip()
-            target_password = str(self._client_get(target, "password", "") or "").strip()
-            normalized_secret = str(target_auth or target_password or auth_norm or password_norm).strip()
-            if not normalized_secret:
-                # Self-heal: once panel row is broken (empty auth/password), derive a stable
-                # secret to stop endless reconcile loops and make client links usable again.
-                normalized_secret = self._derive_hysteria_secret(email_norm, int(inbound_id))
-                logger.warning(
-                    "inbound.update fallback: recovered empty hy2 secret "
-                    "(inbound_id=%s email=%s)",
-                    inbound_id,
-                    email_norm or "-",
-                )
-            self._client_set(target, "auth", normalized_secret)
-            if isinstance(target, dict):
-                target.pop("password", None)
-                target.pop("id", None)
-                target.pop("uuid", None)
-                target.pop("flow", None)
-                target.pop("method", None)
-            # Canonical raw rewrite for hy2: avoid model-based inbound.update which can
-            # reintroduce legacy fields on some 3x-ui builds.
-            normalized_clients: list[dict[str, str]] = []
-            seen_emails: set[str] = set()
-            for group in _groups_from_settings():
-                for cl in group:
-                    cl_email = str(self._client_get(cl, "email", "") or "").strip()
-                    if not cl_email or cl_email in seen_emails:
-                        continue
-                    cl_secret = str(
-                        self._client_get(cl, "auth", "") or self._client_get(cl, "password", "")
-                    ).strip()
-                    if not cl_secret:
-                        cl_secret = self._derive_hysteria_secret(cl_email, int(inbound_id))
-                    normalized_clients.append({"email": cl_email, "auth": cl_secret})
-                    seen_emails.add(cl_email)
-
-            raw_settings_payload = {"clients": normalized_clients, "version": 2}
-            await self._post_inbound_update_settings_raw(int(inbound_id), raw_settings_payload)
-            self._hy2_raw_fallback_count += 1
-            logger.info(
-                "hy2 fallback: raw inbound settings update applied "
-                "(inbound_id=%s, clients=%s, raw_fallback_count=%s)",
-                inbound_id,
-                len(normalized_clients),
-                self._hy2_raw_fallback_count,
-            )
-            return
         if protocol_norm == "vless" and flow_override is not None:
             self._client_set(target, "flow", flow_override)
 

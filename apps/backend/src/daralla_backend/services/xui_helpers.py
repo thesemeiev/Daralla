@@ -101,22 +101,6 @@ def panel_client_settings_dict(
     # flow релевантен только для VLESS/XTLS сценариев; для прочих протоколов
     # (например hysteria2/tuic) не добавляем лишние поля.
     protocol = str(protocol_hint or d.get("protocol", "") or "").strip().lower()
-    if protocol in ("hysteria2", "hysteria"):
-        # Canonical hy2 payload: use auth only.
-        # Some panels still return legacy password on read; we only use it as
-        # fallback source for auth during normalization.
-        auth_val = str(d.get("auth") or "").strip()
-        password_val = str(d.get("password") or "").strip()
-        secret_val = auth_val or password_val
-        if secret_val:
-            d["auth"] = secret_val
-        d.pop("password", None)
-        d.pop("id", None)
-        d.pop("uuid", None)
-        d.pop("flow", None)
-        if not str(d.get("method") or "").strip():
-            d.pop("method", None)
-        d.pop("protocol", None)
     supports_flow = protocol in ("", "vless")
     if flow_override is not None and supports_flow:
         d["flow"] = str(flow_override).strip() if str(flow_override).strip() else ""
