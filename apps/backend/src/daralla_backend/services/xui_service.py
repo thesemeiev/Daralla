@@ -578,6 +578,31 @@ class X3:
         # затем падает с понятной ошибкой выше по стеку.
         return _get("id") or _get("uuid") or None
 
+    @staticmethod
+    def _find_client_in_inbound_by_email(inv: Any, email: str) -> Optional[Any]:
+        """Ищем клиента в inbound.settings (clients/users) по email — без перезаписи инбаунда.
+        Используется как третий уровень резолва идентификатора клиента,
+        когда get_by_email возвращает объект без нужных полей (auth/password/id).
+        """
+        settings = getattr(inv, "settings", None)
+        groups: list[list[Any]]
+        if isinstance(settings, dict):
+            groups = [list(settings.get("clients") or []), list(settings.get("users") or [])]
+        else:
+            groups = [
+                list(getattr(settings, "clients", None) or []),
+                list(getattr(settings, "users", None) or []),
+            ]
+        email_norm = str(email or "").strip()
+        if not email_norm:
+            return None
+        for group in groups:
+            for cl in group:
+                cl_email = str(X3._client_get(cl, "email", "") or "").strip()
+                if cl_email == email_norm:
+                    return cl
+        return None
+
     async def _post_inbound_add_clients(self, inbound_id: int, clients: List[Any]) -> None:
         """addClient: как py3xui, но flow всегда в JSON (см. panel_client_settings_dict)."""
         await self._ensure_login()
@@ -662,6 +687,32 @@ class X3:
                     else getattr(resolved, "inbound_id", inbound_id)
                 )
                 client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+
+        # Третий уровень резолва: get_by_email на части протоколов (особенно hy2)
+        # не возвращает auth/password — читаем inbound напрямую и копируем нужные поля
+        # из его settings в наш объект клиента.
+        if not client_url_id and inbound_id is not None and email:
+            try:
+                inv = await self._api.inbound.get_by_id(int(inbound_id))
+                panel_client = self._find_client_in_inbound_by_email(inv, str(email))
+                if panel_client is not None:
+                    for key in ("auth", "password", "id", "uuid"):
+                        val = self._client_get(panel_client, key, None)
+                        if val is None:
+                            continue
+                        if str(val).strip() == "":
+                            continue
+                        self._client_set(c, key, val)
+                    self._ensure_client_id_for_update(c)
+                    client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+            except Exception:
+                logger.debug(
+                    "updateClient: не удалось дотянуть identifier из inbound.settings "
+                    "(inbound_id=%s, email=%s)",
+                    inbound_id,
+                    email or "-",
+                    exc_info=True,
+                )
 
         if not client_url_id:
             raise ValueError(
@@ -930,6 +981,7 @@ class X3:
 
         # Определяем протокол inbound, чтобы выбрать правильный clientId для URL.
         protocol_norm: str = ""
+        inv: Any = None
         try:
             inv = await self._api.inbound.get_by_id(int(inbound_id))
             protocol_norm = self._extract_protocol(inv)
@@ -942,6 +994,19 @@ class X3:
 
         self._ensure_client_id_for_update(c)
         client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
+
+        # Если у объекта клиента нет нужного для протокола поля (часто у hy2/trojan/tuic),
+        # дотягиваем его из inbound.settings — без перезаписи инбаунда.
+        if not client_url_id and inv is not None:
+            panel_client = self._find_client_in_inbound_by_email(inv, str(user_email))
+            if panel_client is not None:
+                for key in ("auth", "password", "id", "uuid"):
+                    val = self._client_get(panel_client, key, None)
+                    if val is None or str(val).strip() == "":
+                        continue
+                    self._client_set(c, key, val)
+                self._ensure_client_id_for_update(c)
+                client_url_id = self._client_url_id_for_protocol(protocol_norm, c)
 
         if client_url_id:
             try:
