@@ -19,11 +19,6 @@ from daralla_backend.utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
 
-# В subscription-userinfo поле total=0 у части клиентов даёт деление used/0 или «100%».
-# При безлимите в панели (total=0) подставляем большой лимит — отображение «до безлимита».
-SUBSCRIPTION_UNLIMITED_TOTAL_BYTES = 1 << 50
-
-
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
@@ -78,22 +73,23 @@ def _looks_like_telegram_url(url: str) -> bool:
 
 def _resolve_button_urls() -> tuple[str, str]:
     """
-    Две кнопки в клиентах: сайт и поддержка.
+    Две кнопки: «сайт/канал» и поддержка.
 
-    Сайт: WEBSITE_URL → WEBAPP_URL. Поддержка: SUPPORT_URL → TELEGRAM_URL (legacy).
-    Если задана только одна сторона — дублируем во вторую (или подставляем WEBAPP),
-    чтобы оба заголовка (profile-web-page-url и support-url) были заполнены.
+    Сайт: WEBSITE_URL → WEBAPP_URL → TELEGRAM_CHANNEL_URL (канал/новости — отдельно от поддержки).
+    Поддержка: SUPPORT_URL → TELEGRAM_URL (legacy).
+    Если не хватает одной стороны — дублируем (последний fallback).
     """
     webapp = (os.getenv("WEBAPP_URL") or "").strip().rstrip("/")
     site = (os.getenv("WEBSITE_URL") or "").strip()
+    channel = (os.getenv("TELEGRAM_CHANNEL_URL") or "").strip()
     support = (os.getenv("SUPPORT_URL") or "").strip()
     legacy_tg = (os.getenv("TELEGRAM_URL") or "").strip()
 
     support_btn = support or legacy_tg
-    site_btn = site or webapp
+    site_btn = site or webapp or channel
 
     if support_btn and not site_btn:
-        site_btn = webapp or support_btn
+        site_btn = webapp or channel or support_btn
     if site_btn and not support_btn:
         support_btn = legacy_tg or support or site_btn
 
@@ -107,7 +103,7 @@ def _build_subscription_headers(
     total_upload: int,
     total_download: int,
     total_traffic: int,
-    is_happ_client: bool,
+    is_v2raytun_client: bool,
     user_agent: str,
     inactive_reason: str | None,
     now_ts: int,
@@ -118,9 +114,8 @@ def _build_subscription_headers(
     expire_str = expire_datetime.strftime("%Y-%m-%d %H:%M:%S")
     total_used = total_upload + total_download
 
-    quota_total = (
-        total_traffic if total_traffic > 0 else SUBSCRIPTION_UNLIMITED_TOTAL_BYTES
-    )
+    # total=0 в панели и в userinfo — де-факто «безлимит»; без подстановки PiB (клиенты показывают нормальный текст).
+    quota_total = total_traffic
     subscription_userinfo_happ = (
         f"upload={total_upload}; "
         f"download={total_download}; "
@@ -213,7 +208,8 @@ def _build_subscription_headers(
             response_headers["telegram"] = support_btn
             response_headers["tg"] = support_btn
 
-    if not inactive_reason and not is_happ_client and support_btn:
+    # Баннер announce с эмодзи — только V2RayTun; Incy/Hiddify и др. не трогаем (иначе дубль с кнопками).
+    if not inactive_reason and is_v2raytun_client and support_btn:
         if is_telegram_like:
             announce_text = "#0088cc📱 Telegram"
         else:
@@ -222,12 +218,8 @@ def _build_subscription_headers(
         response_headers["announce"] = f"base64:{announce_base64}"
         response_headers["announce-url"] = support_btn
         logger.debug(
-            "Добавлен announce в заголовках для V2RayTun (клиент: %s)",
+            "Добавлен announce для V2RayTun (клиент: %s)",
             user_agent[:50] if user_agent else "unknown",
-        )
-    elif not inactive_reason and is_happ_client:
-        logger.debug(
-            "Пропущен announce в заголовках для Happ клиента (используются кнопки через заголовки)"
         )
 
     return response_headers
@@ -341,7 +333,7 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
                 total_upload=total_upload,
                 total_download=total_download,
                 total_traffic=total_traffic,
-                is_happ_client=is_happ_client,
+                is_v2raytun_client=is_v2raytun_client,
                 user_agent=user_agent,
                 inactive_reason=inactive_reason,
                 now_ts=now_ts,
@@ -447,7 +439,7 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             total_upload=total_upload,
             total_download=total_download,
             total_traffic=total_traffic,
-            is_happ_client=is_happ_client,
+            is_v2raytun_client=is_v2raytun_client,
             user_agent=user_agent,
             inactive_reason=None,
             now_ts=int(time.time()),

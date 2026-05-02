@@ -6,5 +6,5 @@
   "content_type": "text/plain; charset=utf-8",
   "body_encoding": "base64",
   "inactive_subscription_note": "При истёкшей/удалённой/неактивной подписке ответ также 200: body — base64 пустой строки; дополнительно X-Subscription-State (deleted|expired|inactive) и announce (base64, текст для пользователя).",
-  "support_links_note": "Сайт: WEBSITE_URL или WEBAPP_URL; поддержка: SUPPORT_URL (fallback TELEGRAM_URL). При одной ссылке вторая дублируется для двух кнопок. subscription-userinfo: при безлимите в панели total — большое число; total-formatted — Unlimited. Остаток: X-Subscription-Remaining-Seconds, remaining-seconds."
+  "support_links_note": "Сайт: WEBSITE_URL, WEBAPP_URL или TELEGRAM_CHANNEL_URL; поддержка: SUPPORT_URL (fallback TELEGRAM_URL). announce с эмодзи — только User-Agent V2RayTun. Безлимит: total=0 в subscription-userinfo, total-formatted Unlimited. Остаток: X-Subscription-Remaining-Seconds."
 }

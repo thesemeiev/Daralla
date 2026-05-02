@@ -126,7 +126,8 @@ cp .env.example apps/backend/src/.env
 |------------|------------|
 | `WEBAPP_URL` | HTTPS мини-приложения: кнопки в боте, уведомления; если `WEBSITE_URL` пуст — используется как «сайт» в заголовках `/sub` |
 | `WEBSITE_URL` | опционально: лендинг (`profile-web-page-url` / `website` в ответе VPN subscription URL `/sub`) |
-| `SUPPORT_URL` | поддержка для `/sub` (`support-url`, `announce-url`), редирект `/support`; вместе с сайтом даёт две кнопки. Fallback: `TELEGRAM_URL` (устар.); если задана только одна ссылка — вторая дублируется |
+| `SUPPORT_URL` | поддержка для `/sub` (`support-url`), редирект `/support`; вместе с сайтом/каналом — две разные кнопки. Fallback: `TELEGRAM_URL` (устар.) |
+| `TELEGRAM_CHANNEL_URL` | опционально: кнопка «канал/новости» в `/sub` (`profile-web-page-url`), если нет `WEBSITE_URL` / `WEBAPP_URL` |
 
 <details>
 <summary>Остальные группы переменных (сжато)</summary>

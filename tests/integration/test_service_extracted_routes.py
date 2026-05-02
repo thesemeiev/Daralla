@@ -333,7 +333,10 @@ async def test_subscription_support_url_prefers_support_env(
             "daralla_backend.services.subscription_route_service.is_subscription_active",
             return_value=True,
         ):
-            response = await client.get("/sub/token-101")
+            response = await client.get(
+                "/sub/token-101",
+                headers={"User-Agent": "V2RayTun/1.0 (test)"},
+            )
     assert response.status_code == 200
     assert response.headers.get("support-url") == "https://t.me/from_support"
     assert response.headers.get("profile-web-page-url") == "https://example.com"
@@ -375,6 +378,48 @@ async def test_subscription_single_support_url_dupes_site_for_two_buttons(
     assert response.headers.get("support-url") == only
     assert response.headers.get("profile-web-page-url") == only
     assert int(response.headers.get("X-Subscription-Remaining-Seconds", 0)) > 0
+
+
+@pytest.mark.asyncio
+async def test_subscription_site_prefers_channel_over_duplicating_support(
+    quart_app_with_routes: Quart, db
+):
+    """Без WEBSITE/WEBAPP: кнопка сайта = канал, поддержка = SUPPORT (разные URL)."""
+    set_ctx(
+        AppContext(
+            subscription_manager=_FakeSubscriptionManager(),
+            server_manager=None,
+            vpn_brand_name="Daralla VPN",
+        )
+    )
+    client = quart_app_with_routes.test_client()
+    sup = "https://t.me/DarallaSupport"
+    ch = "https://t.me/DarallaNews"
+    with patch.dict(
+        os.environ,
+        {
+            "SUPPORT_URL": sup,
+            "TELEGRAM_CHANNEL_URL": ch,
+            "WEBSITE_URL": "",
+            "WEBAPP_URL": "",
+            "TELEGRAM_URL": "",
+        },
+        clear=False,
+    ):
+        with patch(
+            "daralla_backend.services.subscription_route_service.get_subscription_by_token",
+            return_value={"id": 101, "status": "active", "expires_at": 1893456000},
+        ), patch(
+            "daralla_backend.services.subscription_route_service.get_subscription_servers",
+            return_value=[{"server_name": "srv-1", "client_email": "u1@example.com"}],
+        ), patch(
+            "daralla_backend.services.subscription_route_service.is_subscription_active",
+            return_value=True,
+        ):
+            response = await client.get("/sub/token-101")
+    assert response.status_code == 200
+    assert response.headers.get("support-url") == sup
+    assert response.headers.get("profile-web-page-url") == ch
 
 
 @pytest.mark.asyncio
