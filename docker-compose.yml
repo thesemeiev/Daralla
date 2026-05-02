@@ -39,6 +39,10 @@ services:
       # Модуль событий (рефералки): без этой строки в environment значение из .env не попадает в контейнер
       - EVENTS_MODULE_ENABLED=${EVENTS_MODULE_ENABLED:-0}
       - EVENTS_SUPPORT_URL=${EVENTS_SUPPORT_URL:-}
+      # Traffic buckets (per-node limits)
+      - DARALLA_TRAFFIC_BUCKETS_ENABLED=${DARALLA_TRAFFIC_BUCKETS_ENABLED:-0}
+      - DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS=${DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS:-300}
+      - DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB=${DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB:-0}
     dns:
       - 1.1.1.1
       - 8.8.8.8
