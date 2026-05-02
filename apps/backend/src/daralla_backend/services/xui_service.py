@@ -642,7 +642,8 @@ class X3:
                 self._client_set(c, "password", secret_candidate)
             auth = secret_candidate
             password = secret_candidate
-            hy2_identifier = str(email or auth or password or "").strip()
+            # On many 3x-ui builds hy2 updateClient identifier is auth/password, not email.
+            hy2_identifier = str(auth or password or email or "").strip()
             if hy2_identifier:
                 client_identifier = hy2_identifier
         uuid_for_url = str(client_identifier).strip() if client_identifier is not None else None
@@ -684,7 +685,7 @@ class X3:
                         resolved_auth = self._client_get(resolved, "auth", None)
                         resolved_password = self._client_get(resolved, "password", None)
                         resolved_secret = str(
-                            resolved_email or resolved_auth or resolved_password or email or auth or password or ""
+                            resolved_auth or resolved_password or resolved_email or auth or password or email or ""
                         ).strip()
                         if resolved_secret:
                             resolved_identifier = resolved_secret
@@ -851,9 +852,10 @@ class X3:
                     inbound_id,
                     email_norm or "-",
                 )
+            # Keep both fields populated for compatibility between panel builds.
             self._client_set(target, "auth", normalized_secret)
+            self._client_set(target, "password", normalized_secret)
             if isinstance(target, dict):
-                target.pop("password", None)
                 target.pop("id", None)
                 target.pop("uuid", None)
                 target.pop("flow", None)

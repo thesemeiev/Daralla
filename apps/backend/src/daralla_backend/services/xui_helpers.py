@@ -102,21 +102,20 @@ def panel_client_settings_dict(
     # (например hysteria2/tuic) не добавляем лишние поля.
     protocol = str(protocol_hint or d.get("protocol", "") or "").strip().lower()
     if protocol in ("hysteria2", "hysteria"):
-        # Keep canonical hy2 row shape expected by xray/3x-ui v2:
-        # settings.clients[] -> {"email": "...", "auth": "..."}.
-        # Sending password/id/flow/method here can make panel rewrite inbound
-        # into legacy/broken schema on some builds.
+        # Compatibility mode for mixed 3x-ui builds:
+        # part of panels stores hy2 secret in auth, part in password.
+        # Keep both fields in sync to avoid panel-side empty password rewrites.
         auth_val = str(d.get("auth") or "").strip()
         password_val = str(d.get("password") or "").strip()
         secret_val = auth_val or password_val
         if secret_val:
             d["auth"] = secret_val
-        # Drop non-canonical hy2 keys to avoid accidental schema downgrade.
-        d.pop("password", None)
+            d["password"] = secret_val
         d.pop("id", None)
         d.pop("uuid", None)
         d.pop("flow", None)
-        d.pop("method", None)
+        if not str(d.get("method") or "").strip():
+            d.pop("method", None)
         d.pop("protocol", None)
     supports_flow = protocol in ("", "vless")
     if flow_override is not None and supports_flow:
