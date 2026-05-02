@@ -379,7 +379,6 @@
             var incUsed = Number(q.included_used_bytes || 0);
             var purchased = Number(q.purchased_remaining_bytes || 0);
             var incRemain = Math.max(0, allowance - incUsed);
-            var ver = Number(q.traffic_period_version || 0);
             host.innerHTML = ''
                 + '<h3 id="traffic-quota-title" class="traffic-panel-title">Квота оплаченного периода</h3>'
                 + '<p class="traffic-panel-hint">Включённый объём пересчитывается при успешной оплате продления; докупленный не сгорает при продлении.</p>'
@@ -388,7 +387,6 @@
                 + '  <div class="traffic-metric"><span class="traffic-metric-label">Из включённого израсходовано</span><span class="traffic-metric-value">' + _formatBytes(incUsed) + '</span></div>'
                 + '  <div class="traffic-metric"><span class="traffic-metric-label">Остаток включённого</span><span class="traffic-metric-value">' + _formatBytes(incRemain) + '</span></div>'
                 + '  <div class="traffic-metric"><span class="traffic-metric-label">Докупленный остаток</span><span class="traffic-metric-value">' + _formatBytes(purchased) + '</span></div>'
-                + '  <div class="traffic-metric"><span class="traffic-metric-label">Версия периода</span><span class="traffic-metric-value">' + ver + '</span></div>'
                 + '</div>'
                 + '<div class="traffic-quota-admin-actions">'
                 + '  <label class="traffic-field">'
@@ -442,7 +440,7 @@
             if (!root) return;
             var buckets = _currentBucketSnapshot.buckets || [];
             if (!buckets.length) {
-                root.innerHTML = '<div class="empty-state"><p>Пакеты трафика ещё не созданы. Заполните форму выше или нажмите «Обновить список».</p></div>';
+                root.innerHTML = '<div class="empty-state"><p>Пакеты трафика ещё не созданы. Заполните форму «Новый пакет трафика» ниже или нажмите «Обновить список».</p></div>';
                 return;
             }
             var html = buckets.map(function (b) {
@@ -454,8 +452,6 @@
                 var used = hasDisplayMetrics ? Number(b.display_used_bytes) : windowUsed;
                 var rawLimit = Number(b.limit_bytes || 0);
                 var limitForDisplay = !isUnlimited && hasDisplayMetrics ? Number(b.display_limit_bytes || 0) : rawLimit;
-                var winDays = Number(b.window_days || 30);
-                var creditTotal = Number(b.credit_periods_total || 1);
                 var exhausted = isUnlimited ? false : (hasDisplayMetrics ? !!b.display_exhausted : !!b.is_exhausted);
                 var statusText = exhausted ? 'Лимит исчерпан' : 'В пределах лимита';
                 var statusClass = exhausted ? 'traffic-status-exhausted' : 'traffic-status-active';
@@ -469,7 +465,7 @@
                 var remLabel = usesPeriodQuota && !isUnlimited ? 'Доступно сейчас' : 'Остаток';
                 var gibVal = isUnlimited ? '' : _gibFromBytes(rawLimit);
                 var quotaHintHtml = (usesPeriodQuota && !isUnlimited)
-                    ? '  <p class="hint traffic-period-quota-bucket-hint">Сводка совпадает с <strong>периодной квотой подписки</strong> (включённый объём на оплаченный период и докупка). Ниже «Лимит, ГиБ» — параметр пакета для шаблона/синка; жёсткий учёт для лимитных нод идёт по этим числам и блоку «Квота оплаченного периода».</p>\n'
+                    ? '  <p class="hint traffic-period-quota-bucket-hint">Сводка совпадает с блоком «Квота оплаченного периода». Поле «Лимит, ГиБ» — база пакета (шаблон группы / синк); исчерпание по включённому и докупке считается там.</p>\n'
                     : '';
                 var adjustHintHtml = (usesPeriodQuota && !isUnlimited)
                     ? '    <p class="hint traffic-adjust-quota-hint">Дельта меняет дневной учёт и строку периодной квоты для этого пакета.</p>\n'
@@ -513,8 +509,6 @@
                     + '  </header>'
                     + quotaHintHtml
                     + '  <div class="traffic-metric-grid" aria-label="Сводка по трафику">'
-                    + '    <div class="traffic-metric"><span class="traffic-metric-label">Окно учёта</span><span class="traffic-metric-value">' + winDays + ' дн.</span></div>'
-                    + '    <div class="traffic-metric"><span class="traffic-metric-label">Слотов кредита</span><span class="traffic-metric-value">' + creditTotal + '</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">Тип</span><span class="traffic-metric-value">' + typeRu + '</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">' + limLabel + '</span><span class="traffic-metric-value">' + limitRu + '</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">' + usedLabel + '</span><span class="traffic-metric-value">' + _formatBytes(used) + '</span></div>'
@@ -528,14 +522,6 @@
                     + '        <input type="text" id="bucket-name-' + id + '" value="' + _deps.escapeHtml(b.name || '') + '">'
                     + '      </label>'
                     + limitFieldHtml
-                    + '      <label class="traffic-field">'
-                    + '        <span class="traffic-field-label">Окно, дн.</span>'
-                    + '        <input type="number" id="bucket-window-' + id + '" min="1" value="' + winDays + '">'
-                    + '      </label>'
-                    + '      <label class="traffic-field">'
-                    + '        <span class="traffic-field-label">Слотов кредита</span>'
-                    + '        <input type="number" id="bucket-credit-' + id + '" min="1" value="' + creditTotal + '">'
-                    + '      </label>'
                     + '    </div>'
                     + toggleBlockHtml
                     + '    <div class="traffic-bucket-block-actions">'
@@ -591,22 +577,15 @@
                 var isUnlimited = !!document.getElementById('new-bucket-unlimited').checked;
                 var gib = parseFloat(document.getElementById('new-bucket-limit-gib').value || '0');
                 var limitBytes = isUnlimited ? 0 : _bytesFromGib(gib);
-                var creditPeriods = parseInt(document.getElementById('new-bucket-credit-periods').value || '1', 10);
-                var windowDays = parseInt(document.getElementById('new-bucket-window-days').value || '30', 10);
                 if (!name) throw new Error('Укажите название пакета');
                 if (!isUnlimited && (!limitBytes || limitBytes <= 0)) throw new Error('Укажите положительный лимит в ГиБ или включите «без лимита»');
                 var data = await _trafficBucketApi('create', {
                     name: name,
                     is_unlimited: isUnlimited,
-                    limit_bytes: limitBytes,
-                    window_days: Math.max(1, windowDays),
-                    credit_periods_total: Math.max(1, creditPeriods)
+                    limit_bytes: limitBytes
                 });
                 document.getElementById('new-bucket-name').value = '';
                 document.getElementById('new-bucket-limit-gib').value = '';
-                document.getElementById('new-bucket-credit-periods').value = '1';
-                var wd = document.getElementById('new-bucket-window-days');
-                if (wd) wd.value = '30';
                 renderTrafficBuckets(data);
                 await _deps.appShowAlert('Пакет трафика создан.', { title: 'Готово', variant: 'success' });
             } catch (error) {
@@ -619,8 +598,6 @@
                 var id = String(bucketId);
                 var nameEl = document.getElementById('bucket-name-' + id);
                 var limitGibEl = document.getElementById('bucket-limit-gib-' + id);
-                var windowEl = document.getElementById('bucket-window-' + id);
-                var creditEl = document.getElementById('bucket-credit-' + id);
                 var unlimitedEl = document.getElementById('bucket-unlimited-' + id);
                 var enabledEl = document.getElementById('bucket-enabled-' + id);
                 var isUnl = unlimitedEl ? !!unlimitedEl.checked : true;
@@ -631,9 +608,7 @@
                     name: (nameEl && nameEl.value || '').trim(),
                     is_unlimited: isUnl,
                     is_enabled: !!(enabledEl && enabledEl.checked),
-                    limit_bytes: limitBytes,
-                    window_days: Math.max(1, parseInt((windowEl && windowEl.value) || '30', 10)),
-                    credit_periods_total: Math.max(1, parseInt((creditEl && creditEl.value) || '1', 10))
+                    limit_bytes: limitBytes
                 };
                 var data = await _trafficBucketApi('update', Object.assign({ bucket_id: Number(id) }, payload));
                 renderTrafficBuckets(data);

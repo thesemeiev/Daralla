@@ -285,8 +285,6 @@
                 document.getElementById('sg-traffic-enabled').checked = !!(tpl && tpl.enabled);
                 document.getElementById('sg-traffic-bucket-name').value = (tpl && tpl.limited_bucket_name) ? tpl.limited_bucket_name : 'Лимитированные ноды';
                 document.getElementById('sg-traffic-limit-gib').value = tpl ? _gibFromBytes(tpl.limit_bytes) : '';
-                document.getElementById('sg-traffic-window-days').value = (tpl && tpl.window_days) ? String(tpl.window_days) : '30';
-                document.getElementById('sg-traffic-credit').value = (tpl && tpl.credit_periods_total) ? String(tpl.credit_periods_total) : '1';
                 document.getElementById('sg-traffic-unlimited').checked = !!(tpl && tpl.is_unlimited);
                 renderTrafficLimitedServerChecks(getServers() || [], sel);
             } catch (e) {
@@ -308,8 +306,6 @@
                 limited_bucket_name: (document.getElementById('sg-traffic-bucket-name').value || '').trim() || 'Лимитированные ноды',
                 limit_bytes: _bytesFromGib(document.getElementById('sg-traffic-limit-gib').value || '0'),
                 is_unlimited: !!document.getElementById('sg-traffic-unlimited').checked,
-                window_days: parseInt(document.getElementById('sg-traffic-window-days').value || '30', 10),
-                credit_periods_total: parseInt(document.getElementById('sg-traffic-credit').value || '1', 10),
                 limited_server_names: lim
             };
         }

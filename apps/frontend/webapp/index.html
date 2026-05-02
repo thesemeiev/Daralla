@@ -1119,12 +1119,15 @@
                             <button type="submit" class="btn-primary">Сохранить</button>
                         </div>
                     </form>
+                    <p class="hint" style="margin-top: 16px; margin-bottom: 0;">
+                        Пакеты трафика по нодам, назначение нод на пакеты и квота оплаченного периода — на вкладке «Трафик».
+                    </p>
                     
                     <div class="info-section" style="margin-top: 24px; padding: 16px;">
                         <h3 class="text-accent" style="margin-top: 0;">Автоматическая синхронизация</h3>
                         <p class="hint" style="margin-bottom: 0;">
-                            При сохранении изменений подписка автоматически синхронизируется со всеми X-UI серверами. 
-                            Изменения статуса, даты истечения и лимита устройств применяются на всех серверах.
+                            При сохранении изменений подписка автоматически синхронизируется со всеми X-UI серверами.
+                            Поля этой вкладки (название, срок, лимит устройств) применяются на всех серверах; лимиты и учёт трафика настраиваются отдельно на вкладке «Трафик».
                         </p>
                     </div>
                     
@@ -1153,15 +1156,13 @@
                     <section class="traffic-panel traffic-panel--intro" aria-labelledby="traffic-intro-title">
                         <h3 id="traffic-intro-title" class="traffic-panel-title">Лимиты трафика по нодам</h3>
                         <p class="traffic-panel-lead">
-                            Здесь задаются <strong>пакеты трафика для нод</strong> (отдельно от срока подписки). Для лимитных нод с периодной квотой действует
-                            <strong>включённый трафик на оплаченный период</strong> (после успешной оплаты продления; тариф «месяц» — базовый объём ×1,
-                            «квартал» и т.п. — базовый месячный объём × число месяцев одним пулом; без группы у подписки период берётся из лимита лимитного пакета, к которому привязана квота)
-                            и при необходимости отдельный <strong>докупленный остаток</strong>
-                            (не сбрасывается при продлении; аннулируется при удалении подписки). Списание с панели идёт сначала из включённой квоты, затем из докупки.
-                            Пакеты ниже задают лимиты bucket и окно учёта для синка; блок «Квота оплаченного периода» показывает учёт по оплатам.
-                            <strong>Правило:</strong> каждая нода подписки относится ровно к одному пакету — назначение в таблице ниже. При исчерпании лимита доступ на соответствующих серверах в X-UI отключается.
+                            <strong>Пакеты</strong> — какая нода подписки на каком лимите (безлимитный или лимитный пакет).
+                            <strong>Включённый трафик на оплаченный период</strong> и докупка считаются в блоке «Квота оплаченного периода» (обновление после оплат; тариф задаёт множитель месяцев).
+                            С панелей списание идёт сначала из включённого объёма, затем из докупки.
+                            Каждая нода назначается ровно на один пакет; при исчерпании лимита клиент на этой ноде отключается в X-UI.
                         </p>
                     </section>
+                    <section id="subscription-traffic-period-quota" class="traffic-panel traffic-panel--quota" aria-labelledby="traffic-quota-title" hidden></section>
                     <section class="traffic-panel traffic-panel--assign" aria-labelledby="traffic-assign-title">
                         <h3 id="traffic-assign-title" class="traffic-panel-title">Назначение нод на пакеты</h3>
                         <p class="traffic-panel-hint">Для каждой строки выберите пакет; затем нажмите «Сохранить назначения» (отдельно от кнопок в карточках пакетов).</p>
@@ -1170,7 +1171,6 @@
                             <button type="button" class="btn-primary" data-action="saveAllTrafficAssignments">Сохранить назначения</button>
                         </div>
                     </section>
-                    <section id="subscription-traffic-period-quota" class="traffic-panel traffic-panel--quota" aria-labelledby="traffic-quota-title" hidden></section>
                     <!-- Список пакетов выше формы создания: сразу видны unlimited / limited, а не внизу вкладки -->
                     <div id="subscription-traffic-buckets-list" class="traffic-buckets-list-host">
                         <div class="loading">
@@ -1191,14 +1191,6 @@
                                 <label class="traffic-field">
                                     <span class="traffic-field-label">Лимит, ГиБ</span>
                                     <input type="number" id="new-bucket-limit-gib" min="0" step="0.001" placeholder="10">
-                                </label>
-                                <label class="traffic-field">
-                                    <span class="traffic-field-label">Окно учёта, дней</span>
-                                    <input type="number" id="new-bucket-window-days" min="1" value="30" title="За сколько дней суммируется трафик (скользящее окно)">
-                                </label>
-                                <label class="traffic-field">
-                                    <span class="traffic-field-label">Слотов кредита</span>
-                                    <input type="number" id="new-bucket-credit-periods" min="1" value="1" title="Кредит при продлении (staged credit)">
                                 </label>
                             </div>
                             <label class="traffic-toggle traffic-toggle--full">
@@ -1263,7 +1255,7 @@
                 </details>
                 <section class="traffic-template-panel" id="admin-group-traffic-template-section" aria-labelledby="admin-group-traffic-heading">
                     <h3 id="admin-group-traffic-heading" class="traffic-template-panel-title">Шаблон трафика</h3>
-                    <p class="hint traffic-template-panel-lead">Отдельный учёт расхода на каждую подписку. Отметьте ноды с лимитом; остальные идут в безлимитный пакет. Поле «Лимит, ГиБ» задаёт месячную базу для включённого трафика на оплаченный период (при продлении на квартал пользователь получает 3× этой базы одним пулом до следующей оплаты). Новые подписки в группе получают шаблон автоматически (если включено и включён учёт трафика на сервере).</p>
+                    <p class="hint traffic-template-panel-lead">Отметьте лимитные ноды; остальные получат безлимитный пакет. «Лимит, ГиБ» — месячная база <strong>включённого</strong> трафика на оплаченный период (множитель месяцев — по тарифам в коммерции). Шаблон подставляется при создании подписки, если включён ниже, задано <code>DARALLA_TRAFFIC_BUCKETS_ENABLED=1</code> и подписка в этой группе.</p>
                     <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-enabled"> <span>Включить шаблон для этой группы</span></label>
                     <div class="traffic-template-fields">
                         <label class="form-group traffic-template-field">
@@ -1273,14 +1265,6 @@
                         <label class="form-group traffic-template-field">
                             <span>Лимит, ГиБ (двоичных)</span>
                             <input type="number" id="sg-traffic-limit-gib" min="0" step="0.001" placeholder="50">
-                        </label>
-                        <label class="form-group traffic-template-field">
-                            <span>Окно учёта, дней</span>
-                            <input type="number" id="sg-traffic-window-days" min="1" value="30">
-                        </label>
-                        <label class="form-group traffic-template-field">
-                            <span>Слотов кредита</span>
-                            <input type="number" id="sg-traffic-credit" min="1" value="1">
                         </label>
                     </div>
                     <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-unlimited"> <span>Без лимита трафика для отмеченных нод (отдельный пакет)</span></label>

@@ -53,40 +53,6 @@ async def test_assign_servers_unknown_node_returns_400(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_bucket_window_days_zero_returns_400(db, monkeypatch):
-    suffix = uuid.uuid4().hex[:8]
-    subscriber_id = await get_or_create_subscriber(f"u_uw_{suffix}")
-    now = int(time.time())
-    sub_id, _ = await create_subscription(
-        subscriber_id=subscriber_id,
-        period="month",
-        device_limit=1,
-        price=1.0,
-        expires_at=now + 86400 * 30,
-        group_id=None,
-    )
-    await ensure_default_unlimited_bucket(sub_id)
-    limited_id = await create_subscription_traffic_bucket(
-        sub_id,
-        f"lim_{suffix}",
-        limit_bytes=1024**3,
-        is_unlimited=False,
-    )
-
-    svc = AsyncMock()
-    svc.enqueue_enforcement_if_needed = AsyncMock()
-    monkeypatch.setattr(flow, "get_traffic_bucket_service", lambda: svc)
-
-    _, err, code = await flow.update_subscription_traffic_bucket_payload(
-        sub_id,
-        limited_id,
-        {"window_days": 0},
-    )
-    assert code == 400
-    assert err and "Окно учёта" in err.get("error", "")
-
-
-@pytest.mark.asyncio
 async def test_update_limited_bucket_empty_name_returns_400(db, monkeypatch):
     suffix = uuid.uuid4().hex[:8]
     subscriber_id = await get_or_create_subscriber(f"u_nm_{suffix}")

@@ -403,8 +403,10 @@ async def handle_server_group_traffic_template(data: dict):
         limited_bucket_name = str(data.get("limited_bucket_name") or "Лимитированные ноды").strip()
         limit_bytes = int(data.get("limit_bytes") or 0)
         is_unlimited = bool(data.get("is_unlimited"))
-        window_days = int(data.get("window_days") or 30)
-        credit_periods_total = int(data.get("credit_periods_total") or 1)
+        # Включённый трафик привязан к оплаченному периоду подписки (квота), не к «окну» bucket.
+        # Поля window_days / credit в таблице buckets — наследие схемы; для шаблона фиксируем.
+        window_days = 30
+        credit_periods_total = 1
         raw_names = data.get("limited_server_names")
         if raw_names is None:
             raw_names = []

@@ -160,6 +160,21 @@ async def subscription_traffic_buckets_payload(sub_id: int):
     return {"success": True, **snap}, None, None
 
 
+_BUCKET_WINDOW_DAYS_FIXED = 30
+_BUCKET_CREDIT_PERIODS_FIXED = 1
+
+
+def _with_fixed_bucket_technical_fields(updates: dict) -> dict:
+    """Окно/кредит — служебные поля схемы; лимит по подписке задаётся квотой. Фиксируем и игнорируем ввод из API."""
+    out = dict(updates or {})
+    for k in ("window_days", "credit_periods_total", "credit_periods_remaining"):
+        out.pop(k, None)
+    out["window_days"] = _BUCKET_WINDOW_DAYS_FIXED
+    out["credit_periods_total"] = _BUCKET_CREDIT_PERIODS_FIXED
+    out["credit_periods_remaining"] = _BUCKET_CREDIT_PERIODS_FIXED
+    return out
+
+
 async def create_subscription_traffic_bucket_payload(sub_id: int, data: dict):
     sub = await get_subscription_by_id_only(sub_id)
     if not sub:
@@ -171,28 +186,22 @@ async def create_subscription_traffic_bucket_payload(sub_id: int, data: dict):
     is_unlimited = bool((data or {}).get("is_unlimited", False))
     if not is_unlimited and limit_bytes <= 0:
         return None, {"error": "limit_bytes must be > 0 for limited bucket"}, 400
-    window_days = int((data or {}).get("window_days") or 30)
-    credit_periods_total = int((data or {}).get("credit_periods_total") or 1)
     bucket_id = await create_subscription_traffic_bucket(
         sub_id,
         name=name,
         limit_bytes=limit_bytes,
         is_unlimited=is_unlimited,
-        window_days=max(1, window_days),
-        credit_periods_total=max(1, credit_periods_total),
+        window_days=_BUCKET_WINDOW_DAYS_FIXED,
+        credit_periods_total=_BUCKET_CREDIT_PERIODS_FIXED,
     )
     snap = await _traffic_bucket_snapshot(sub_id)
     return {"success": True, "bucket_id": bucket_id, **snap}, None, None
 
 
 def _validate_traffic_bucket_update_patch(bucket: dict, updates: dict) -> str | None:
-    """Возвращает текст ошибки на русском или None."""
+    """Возвращает текст ошибки на русском или None (название, лимит, безлимит, вкл/выкл учёта)."""
     eff_limit = int(bucket.get("limit_bytes") or 0)
     eff_unl = bool(int(bucket.get("is_unlimited") or 0))
-    eff_win = int(bucket.get("window_days") or 30)
-    eff_ct = int(bucket.get("credit_periods_total") or 1)
-    eff_cr = bucket.get("credit_periods_remaining")
-    eff_cr = int(eff_cr) if eff_cr is not None else None
 
     if "name" in updates:
         eff_name = str(updates.get("name") or "").strip()
@@ -202,24 +211,9 @@ def _validate_traffic_bucket_update_patch(bucket: dict, updates: dict) -> str | 
         eff_limit = max(0, int(updates.get("limit_bytes") or 0))
     if "is_unlimited" in updates:
         eff_unl = bool(updates.get("is_unlimited"))
-    if "window_days" in updates:
-        eff_win = int(updates.get("window_days") or 0)
-    if "credit_periods_total" in updates:
-        eff_ct = int(updates.get("credit_periods_total") or 0)
-    if "credit_periods_remaining" in updates:
-        eff_cr = int(updates.get("credit_periods_remaining") or 0)
 
     if not eff_unl and eff_limit <= 0:
         return "Для лимитированного пакета укажите положительный лимит трафика (байты)"
-    if eff_win < 1:
-        return "Окно учёта должно быть не менее 1 дня"
-    if eff_ct < 1:
-        return "Число слотов кредита должно быть не менее 1"
-    if eff_cr is not None:
-        if eff_cr < 0:
-            return "Остаток слотов кредита не может быть отрицательным"
-        if eff_cr > eff_ct:
-            return "Остаток слотов кредита не может превышать общее число слотов"
     return None
 
 
@@ -230,7 +224,7 @@ async def update_subscription_traffic_bucket_payload(sub_id: int, bucket_id: int
     bucket = await get_subscription_traffic_bucket(bucket_id)
     if not bucket or int(bucket.get("subscription_id") or 0) != int(sub_id):
         return None, {"error": "Bucket not found"}, 404
-    updates = dict(data or {})
+    updates = _with_fixed_bucket_technical_fields(dict(data or {}))
     err = _validate_traffic_bucket_update_patch(bucket, updates)
     if err:
         return None, {"error": err}, 400
