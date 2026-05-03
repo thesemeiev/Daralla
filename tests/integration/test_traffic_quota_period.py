@@ -3,8 +3,10 @@
 import time
 import uuid
 
+import aiosqlite
 import pytest
 
+from daralla_backend.db import DB_PATH
 from daralla_backend.db.subscriptions_db import (
     adjust_subscription_traffic_quota_for_bucket_usage,
     allocate_subscription_traffic_quota_delta,
@@ -20,6 +22,16 @@ from daralla_backend.db.subscriptions_db import (
 from daralla_backend.db.users_db import get_or_create_subscriber
 from daralla_backend.services import traffic_quota_period_service as tq_mod
 from daralla_backend.services.traffic_quota_period_service import reset_included_quota_after_payment
+
+
+async def _clear_subscription_group_id(subscription_id: int) -> None:
+    """create_subscription(group_id=None) всё равно резолвит группу через resolve_group_id; для сценария «без группы» обнуляем в БД."""
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await conn.execute(
+            "UPDATE subscriptions SET group_id = NULL WHERE id = ?",
+            (int(subscription_id),),
+        )
+        await conn.commit()
 
 
 @pytest.mark.asyncio
@@ -343,6 +355,7 @@ async def test_reset_included_quota_after_payment_without_group_uses_bucket_limi
         expires_at=now + 86400 * 30,
         group_id=None,
     )
+    await _clear_subscription_group_id(sub_id)
     bid = await create_subscription_traffic_bucket(
         sub_id,
         f"lim_ngrp_{suffix}",
