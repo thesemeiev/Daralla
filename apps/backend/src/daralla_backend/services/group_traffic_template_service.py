@@ -269,6 +269,8 @@ async def apply_group_traffic_template_bulk(
     skipped_by_reason: dict[str, int] = {}
     errors: list[dict] = []
     details: list[dict] = []
+    skipped_items: list[dict] = []
+    skipped_items_cap = 200
 
     for sid in ids:
         try:
@@ -280,6 +282,15 @@ async def apply_group_traffic_template_bulk(
                 skipped += 1
                 reason_key = str(r.get("reason") or "unknown")
                 skipped_by_reason[reason_key] = skipped_by_reason.get(reason_key, 0) + 1
+                if len(skipped_items) < skipped_items_cap:
+                    entry: dict = {"subscription_id": sid, "reason": reason_key}
+                    if reason_key == "custom_traffic":
+                        try:
+                            bks = await list_subscription_traffic_buckets(sid)
+                            entry["bucket_names"] = [str(b.get("name") or "") for b in bks]
+                        except Exception:
+                            pass
+                    skipped_items.append(entry)
             elif r.get("applied") or r.get("would_apply"):
                 applied += 1
             details.append({"subscription_id": sid, **{k: v for k, v in r.items() if k != "ok"}})
@@ -294,6 +305,8 @@ async def apply_group_traffic_template_bulk(
         "applied": applied,
         "skipped": skipped,
         "skipped_by_reason": skipped_by_reason,
+        "skipped_items": skipped_items,
+        "skipped_items_truncated": skipped > len(skipped_items),
         "errors": errors,
         "details": details if dry_run else None,
     }

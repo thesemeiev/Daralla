@@ -63,6 +63,27 @@
             return '\n\nПропуски по причинам:\n' + lines.join('\n');
         }
 
+        /** Список пропущенных подписок (одинаковый group_id ≠ автоматически «применится»: часто custom_traffic). */
+        function formatTrafficTemplateSkippedItems(items, truncatedFlag, totalSkipped) {
+            if (!items || !items.length) return '';
+            var maxShow = 45;
+            var lines = items.slice(0, maxShow).map(function (it) {
+                var id = it.subscription_id != null ? it.subscription_id : '?';
+                var r = it.reason ? String(it.reason) : '';
+                var bn = it.bucket_names && it.bucket_names.length
+                    ? ' — пакеты: ' + it.bucket_names.join(', ')
+                    : '';
+                return '#' + id + ' (' + r + ')' + bn;
+            });
+            var more = items.length > maxShow ? '\n… +' + (items.length - maxShow) + ' в ответе API' : '';
+            var tail = '';
+            if (truncatedFlag && totalSkipped != null && totalSkipped > items.length) {
+                tail = '\nВсего пропусков: ' + totalSkipped + ' (в списке первые ' + items.length + ').';
+            }
+            return '\n\nПропущенные подписки (при одинаковом group_id чаще всего «кастомные» пакеты — см. Force):\n'
+                + lines.join('\n') + more + tail;
+        }
+
         function adminSyncSubscriptionsAlertMessage(result) {
             var parts = [];
             if (result.sync_stats) {
@@ -377,6 +398,11 @@
                     + '\n\nВ массовый проход попадают только подписки, у которых в БД group_id = этой группе (не удалённые). Чужой group_id или NULL — шаблон на них не действует.'
                     + '\nОграничение в клиенте действует только на ноды, отмеченные в шаблоне как лимитные; остальные ноды группы остаются безлимитными по пакету unlimited.';
                 msg += formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
+                msg += formatTrafficTemplateSkippedItems(
+                    result.skipped_items,
+                    !!result.skipped_items_truncated,
+                    result.skipped
+                );
                 if (result.errors && result.errors.length) {
                     msg += formatTrafficTemplateApplyErrors(result.errors);
                 }
@@ -408,14 +434,19 @@
                 var skipped = result.skipped != null ? result.skipped : 0;
                 var errN = (result.errors && result.errors.length) ? result.errors.length : 0;
                 var skipExplain = formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
+                var skipList = formatTrafficTemplateSkippedItems(
+                    result.skipped_items,
+                    !!result.skipped_items_truncated,
+                    result.skipped
+                );
                 if (errN) {
                     await _deps.appShowAlert(
-                        'Применено ' + applied + ', пропущено ' + skipped + '.' + skipExplain + formatTrafficTemplateApplyErrors(result.errors),
+                        'Применено ' + applied + ', пропущено ' + skipped + '.' + skipExplain + skipList + formatTrafficTemplateApplyErrors(result.errors),
                         { title: 'Частичные ошибки', variant: 'error' }
                     );
                 } else if (skipped > 0 && skipExplain) {
                     await _deps.appShowAlert(
-                        'Применено ' + applied + ', пропущено ' + skipped + '.' + skipExplain,
+                        'Применено ' + applied + ', пропущено ' + skipped + '.' + skipExplain + skipList,
                         { title: 'Готово', variant: 'success' }
                     );
                 } else {
@@ -445,14 +476,19 @@
                 var skipped = result.skipped != null ? result.skipped : 0;
                 var errN = (result.errors && result.errors.length) ? result.errors.length : 0;
                 var skipExplainF = formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
+                var skipListF = formatTrafficTemplateSkippedItems(
+                    result.skipped_items,
+                    !!result.skipped_items_truncated,
+                    result.skipped
+                );
                 if (errN) {
                     await _deps.appShowAlert(
-                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + skipExplainF + formatTrafficTemplateApplyErrors(result.errors),
+                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + skipExplainF + skipListF + formatTrafficTemplateApplyErrors(result.errors),
                         { title: 'Частичные ошибки', variant: 'error' }
                     );
                 } else if (skipped > 0 && skipExplainF) {
                     await _deps.appShowAlert(
-                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + skipExplainF,
+                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + skipExplainF + skipListF,
                         { title: 'Готово', variant: 'success' }
                     );
                 } else {
