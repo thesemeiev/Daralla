@@ -252,8 +252,11 @@ async def apply_group_traffic_template_bulk(
 
     gid = int(group_id)
     tmpl = await get_server_group_traffic_template(gid)
-    if tmpl and int(tmpl.get("enabled") or 0):
-        limited = set(await get_server_group_traffic_limited_servers(gid))
+    template_enabled = bool(tmpl and int(tmpl.get("enabled") or 0))
+    template_limited_servers: list[str] = []
+    if template_enabled:
+        template_limited_servers = list(await get_server_group_traffic_limited_servers(gid))
+        limited = set(template_limited_servers)
         active = set(await get_active_server_names_for_group(gid))
         invalid = limited - active
         if invalid:
@@ -266,6 +269,8 @@ async def apply_group_traffic_template_bulk(
     ids = [int(x) for x in subscription_ids] if subscription_ids else await list_subscription_ids_for_group(gid)
     applied = 0
     skipped = 0
+    mode_split = 0
+    mode_all_unlimited = 0
     skipped_by_reason: dict[str, int] = {}
     errors: list[dict] = []
     details: list[dict] = []
@@ -293,6 +298,11 @@ async def apply_group_traffic_template_bulk(
                     skipped_items.append(entry)
             elif r.get("applied") or r.get("would_apply"):
                 applied += 1
+                md = r.get("mode")
+                if md == "split":
+                    mode_split += 1
+                elif md == "all_unlimited":
+                    mode_all_unlimited += 1
             details.append({"subscription_id": sid, **{k: v for k, v in r.items() if k != "ok"}})
         except Exception as exc:
             logger.exception("apply_template subscription_id=%s", sid)
@@ -309,4 +319,7 @@ async def apply_group_traffic_template_bulk(
         "skipped_items_truncated": skipped > len(skipped_items),
         "errors": errors,
         "details": details if dry_run else None,
+        "template_enabled": template_enabled,
+        "template_limited_servers": template_limited_servers,
+        "apply_mode_counts": {"split": mode_split, "all_unlimited": mode_all_unlimited},
     }

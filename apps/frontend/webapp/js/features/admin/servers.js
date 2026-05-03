@@ -394,9 +394,23 @@
                 var t = result.total != null ? result.total : 0;
                 var a = result.applied != null ? result.applied : 0;
                 var s = result.skipped != null ? result.skipped : 0;
-                var msg = 'Dry-run: подписок ' + t + ', будет применено ' + a + ', пропущено ' + s + '.'
-                    + '\n\nВ массовый проход попадают только подписки, у которых в БД group_id = этой группе (не удалённые). Чужой group_id или NULL — шаблон на них не действует.'
-                    + '\nОграничение в клиенте действует только на ноды, отмеченные в шаблоне как лимитные; остальные ноды группы остаются безлимитными по пакету unlimited.';
+                var msg = 'Dry-run: подписок ' + t + ', будет применено ' + a + ', пропущено ' + s + '.';
+                var mc = result.apply_mode_counts || {};
+                if (mc.split != null || mc.all_unlimited != null) {
+                    msg += '\n\nСводка режима: «разделение нод» (лимитный + безлимитные пакеты) — ' + (mc.split != null ? mc.split : 0)
+                        + '; «все ноды только unlimited» — ' + (mc.all_unlimited != null ? mc.all_unlimited : 0) + '.';
+                }
+                if (result.template_enabled && (!result.template_limited_servers || !result.template_limited_servers.length)) {
+                    msg += '\n\nВнимание: в сохранённом шаблоне не выбрано ни одной лимитной ноды (чекбоксы в блоке «Ноды с лимитом»). Тогда массовое применение вешает все серверы только на пакет unlimited — отдельного лимитного пакета (например 10 ГБ на Россию) не создаётся. Отметьте нужные ноды → «Сохранить шаблон» → снова «Применить ко всем подпискам группы».';
+                }
+                if (s === 0) {
+                    msg += '\n\nПропусков нет — шаблон можно применить ко всем подпискам этой группы в БД (нет отсечения по «кастомным» пакетам).'
+                        + '\n\nЛимит трафика в подписке распространяется только на ноды, отмеченные в шаблоне как лимитные; для остальных нод в названии ссылки будет Unlimited — это ожидаемо.'
+                        + '\nЕсли в логах /sub видно total=0 в subscription-userinfo: это лимит с панели X-UI; лимит Daralla по пакетам в названии узла на него не подменяется.';
+                } else {
+                    msg += '\n\nЧасть подписок будет пропущена — см. причины ниже. Учитываются подписки с group_id = этой группе (не удалённые).'
+                        + '\nЛимит в клиенте только на отмеченные лимитные ноды; остальные — безлимитный пакет в подписи к ссылке.';
+                }
                 msg += formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
                 msg += formatTrafficTemplateSkippedItems(
                     result.skipped_items,
@@ -406,10 +420,11 @@
                 if (result.errors && result.errors.length) {
                     msg += formatTrafficTemplateApplyErrors(result.errors);
                 }
-                await _deps.appShowAlert(
-                    msg,
-                    { title: 'Проверка', variant: (result.errors && result.errors.length) ? 'error' : 'success' }
-                );
+                var previewVariant = (result.errors && result.errors.length) ? 'error' : 'success';
+                if (previewVariant === 'success' && result.template_enabled && (!result.template_limited_servers || !result.template_limited_servers.length)) {
+                    previewVariant = 'warning';
+                }
+                await _deps.appShowAlert(msg, { title: 'Проверка', variant: previewVariant });
             } catch (e) {
                 await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
             }
