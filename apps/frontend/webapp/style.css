@@ -2440,11 +2440,11 @@ h1 {
     line-height: 1.35;
 }
 
-/* Страница подписки — редизайн (sub-sheet) */
+/* Страница подписки — редизайн (sub-sheet); по ширине вровень с «Назад» */
 #subscription-detail-content {
-    padding: 2px 12px 22px;
-    max-width: 640px;
-    margin: 0 auto;
+    padding: 2px 0 22px;
+    max-width: none;
+    margin: 0;
 }
 
 .sub-sheet {
@@ -3932,7 +3932,7 @@ a.instruction-platform-btn {
     }
 
     #subscription-detail-content {
-        padding: 0 8px 16px;
+        padding: 0 0 16px;
     }
 
     .traffic-topup-pack-grid {
