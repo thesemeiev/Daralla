@@ -683,91 +683,117 @@
                     <h2 id="admin-notification-form-title">Создать правило</h2>
                     <button type="button" class="modal-close-btn admin-notification-modal-close" data-action="closeNotificationRuleForm" aria-label="Закрыть">&times;</button>
                 </div>
-                <form id="admin-notification-form">
-                    <div class="form-group">
-                        <label for="notif-rule-event-type">Тип события</label>
-                        <select id="notif-rule-event-type" required>
-                            <option value="expiry_warning">Истекает подписка</option>
-                            <option value="no_subscription">Нет подписки</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Время срабатывания</label>
-                        <div class="notif-chips-row" id="notif-trigger-chips"></div>
-                        <div id="notif-trigger-custom-wrap" class="admin-inline-hidden admin-stack-gap-xs">
-                            <div class="admin-inline-row admin-inline-row-compact">
-                                <input type="number" id="notif-rule-trigger-value" min="1" placeholder="Число" class="admin-flex-1">
-                                <select id="notif-rule-trigger-unit" class="admin-field-unit">
-                                    <option value="hours">Часов</option>
-                                    <option value="days" selected>Дней</option>
+                <form id="admin-notification-form" class="notif-modal-form">
+                    <div class="notif-modal-scroll">
+                        <section class="notif-modal-section" aria-labelledby="notif-section-when-label">
+                            <div class="notif-modal-section__head">
+                                <h3 class="notif-modal-section__title" id="notif-section-when-label">Когда отправить</h3>
+                                <p class="notif-modal-section__lead">Тип события и момент первой отправки в Telegram</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="notif-rule-event-type">Тип события</label>
+                                <select id="notif-rule-event-type" required>
+                                    <option value="expiry_warning">Истекает подписка</option>
+                                    <option value="no_subscription">Нет подписки</option>
                                 </select>
                             </div>
-                        </div>
-                        <p class="hint admin-hint-subtle" id="notif-rule-trigger-hint">
-                            За сколько дней/часов ДО истечения подписки отправить уведомление
-                        </p>
-                    </div>
-                    <div class="form-group">
-                        <label for="notif-rule-title">Заголовок</label>
-                        <input type="text" id="notif-rule-title" placeholder="Ваша подписка истекает!" oninput="updateNotifPreview()" autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label for="notif-rule-body">Текст сообщения</label>
-                        <textarea id="notif-rule-body" rows="3" placeholder="Продлите подписку заранее, чтобы не прерывать использование VPN." oninput="updateNotifPreview()"></textarea>
-                        <p class="hint admin-hint-subtle">Нужен хотя бы заголовок или текст — оба поля необязательны по отдельности.</p>
-                    </div>
-                    <div class="form-group">
-                        <label class="admin-form-label-compact">Дополнительные блоки</label>
-                        <label class="notif-check-row">
-                            <input type="checkbox" id="notif-rule-show-time" checked>
-                            <span>Показать оставшееся время</span>
-                        </label>
-                        <label class="notif-check-row">
-                            <input type="checkbox" id="notif-rule-show-expiry" checked>
-                            <span>Показать дату истечения</span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>Превью сообщения</label>
-                        <div class="notif-preview-bubble" id="notif-preview-bubble"></div>
-                    </div>
-                    <div class="form-group admin-inline-row admin-inline-row-tight">
-                        <label for="notif-rule-active" class="admin-label-no-margin">Активно</label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="notif-rule-active" checked>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label class="notif-check-row">
-                            <input type="checkbox" id="notif-rule-repeat">
-                            <span>Повторять уведомление</span>
-                        </label>
-                        <div id="notif-repeat-fields" class="admin-inline-hidden admin-stack-gap-sm">
-                            <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
-                                <span class="admin-inline-text">Каждые</span>
-                                <input type="number" id="notif-rule-repeat-value" min="1" value="3" class="admin-field-xs">
-                                <select id="notif-rule-repeat-unit" class="admin-field-unit">
-                                    <option value="hours">Часов</option>
-                                    <option value="days" selected>Дней</option>
-                                </select>
+                            <div class="form-group">
+                                <label>Время срабатывания</label>
+                                <div class="notif-chips-row" id="notif-trigger-chips"></div>
+                                <div id="notif-trigger-custom-wrap" class="admin-inline-hidden admin-stack-gap-xs">
+                                    <div class="admin-inline-row admin-inline-row-compact">
+                                        <input type="number" id="notif-rule-trigger-value" min="1" placeholder="Число" class="admin-flex-1">
+                                        <select id="notif-rule-trigger-unit" class="admin-field-unit">
+                                            <option value="hours">Часов</option>
+                                            <option value="days" selected>Дней</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="notif-trigger-summary" id="notif-trigger-summary" aria-live="polite"></p>
+                                <p class="hint admin-hint-subtle" id="notif-rule-trigger-hint">
+                                    За сколько дней/часов ДО истечения подписки отправить уведомление
+                                </p>
                             </div>
-                            <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
-                                <span class="admin-inline-text">Макс. отправок</span>
-                                <input type="number" id="notif-rule-max-repeats" min="1" value="5" class="admin-field-xs">
+                        </section>
+
+                        <section class="notif-modal-section" aria-labelledby="notif-section-text-label">
+                            <div class="notif-modal-section__head">
+                                <h3 class="notif-modal-section__title" id="notif-section-text-label">Текст уведомления</h3>
+                                <p class="notif-modal-section__lead">Заголовок и тело — достаточно заполнить что-то одно или оба</p>
                             </div>
-                            <p class="hint admin-hint-subtle">
-                                Первая отправка по времени срабатывания, затем повтор с указанным интервалом до максимума.
-                            </p>
-                        </div>
+                            <div class="form-group">
+                                <label for="notif-rule-title">Заголовок</label>
+                                <input type="text" id="notif-rule-title" placeholder="Ваша подписка истекает!" oninput="updateNotifPreview()" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label for="notif-rule-body">Текст сообщения</label>
+                                <textarea id="notif-rule-body" rows="3" placeholder="Продлите подписку заранее, чтобы не прерывать использование VPN." oninput="updateNotifPreview()"></textarea>
+                            </div>
+                            <div class="form-group notif-modal-options">
+                                <span class="notif-modal-options__label">В сообщении показывать</span>
+                                <label class="notif-check-row">
+                                    <input type="checkbox" id="notif-rule-show-time" checked>
+                                    <span>Оставшееся время</span>
+                                </label>
+                                <label class="notif-check-row">
+                                    <input type="checkbox" id="notif-rule-show-expiry" checked>
+                                    <span>Дату истечения</span>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="notif-modal-section notif-modal-section--preview" aria-labelledby="notif-section-preview-label">
+                            <div class="notif-modal-section__head">
+                                <h3 class="notif-modal-section__title" id="notif-section-preview-label">Как увидит пользователь</h3>
+                                <p class="notif-modal-section__lead">Пример по текущим полям</p>
+                            </div>
+                            <div class="notif-preview-bubble" id="notif-preview-bubble"></div>
+                        </section>
+
+                        <section class="notif-modal-section notif-modal-section--compact" aria-labelledby="notif-section-more-label">
+                            <div class="notif-modal-section__head">
+                                <h3 class="notif-modal-section__title" id="notif-section-more-label">Статус и повторы</h3>
+                            </div>
+                            <div class="form-group notif-modal-active-row">
+                                <span class="notif-modal-active-row__label" id="notif-active-label">Правило активно</span>
+                                <label class="toggle-switch toggle-switch--notif" aria-labelledby="notif-active-label">
+                                    <input type="checkbox" id="notif-rule-active" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="notif-check-row">
+                                    <input type="checkbox" id="notif-rule-repeat">
+                                    <span>Повторять уведомление</span>
+                                </label>
+                                <div id="notif-repeat-fields" class="admin-inline-hidden admin-stack-gap-sm notif-repeat-panel">
+                                    <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
+                                        <span class="admin-inline-text">Каждые</span>
+                                        <input type="number" id="notif-rule-repeat-value" min="1" value="3" class="admin-field-xs">
+                                        <select id="notif-rule-repeat-unit" class="admin-field-unit">
+                                            <option value="hours">Часов</option>
+                                            <option value="days" selected>Дней</option>
+                                        </select>
+                                    </div>
+                                    <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
+                                        <span class="admin-inline-text">Макс. отправок</span>
+                                        <input type="number" id="notif-rule-max-repeats" min="1" value="5" class="admin-field-xs">
+                                    </div>
+                                    <p class="hint admin-hint-subtle">
+                                        Сначала срабатывание по времени выше, затем повтор с интервалом, не больше указанного числа раз.
+                                    </p>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                    <div class="admin-stack-gap-md admin-mt-lg">
-                        <button type="button" class="btn-outline" data-action="testSendNotificationRule">Отправить тест мне</button>
-                        <div class="admin-inline-row">
+
+                    <footer class="notif-modal-footer">
+                        <button type="button" class="btn-outline notif-modal-footer__test" data-action="testSendNotificationRule">Отправить тест мне</button>
+                        <div class="notif-modal-footer__actions">
                             <button type="button" class="btn-secondary" data-action="closeNotificationRuleForm">Отмена</button>
-                            <button type="submit" class="btn-primary admin-flex-1">Сохранить</button>
+                            <button type="submit" class="btn-primary notif-modal-footer__save">Сохранить</button>
                         </div>
-                    </div>
+                    </footer>
                 </form>
             </div>
         </div>
@@ -1704,7 +1730,7 @@
     <script src="/js/features/admin/servers.js?v=2"></script>
     <script src="/js/features/servers/list.js?v=1"></script>
     <script src="/js/features/events/core.js?v=1"></script>
-    <script src="/js/features/notifications/rules.js?v=3"></script>
+    <script src="/js/features/notifications/rules.js?v=4"></script>
     <script src="/js/features/payments/checkout.js?v=1"></script>
     <script src="/js/features/instructions/modal.js?v=1"></script>
     <script src="/js/features/instructions/setup.js?v=1"></script>

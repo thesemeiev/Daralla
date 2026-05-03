@@ -127,6 +127,7 @@
             }
 
             _deps.updateNotifPreview();
+            _deps.updateNotifTriggerSummary();
             _deps.showModal('admin-notification-form-modal');
         }
 

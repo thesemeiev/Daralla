@@ -23,6 +23,12 @@
         });
     }
 
+    function bindInputById(elementId, handler) {
+        var el = document.getElementById(elementId);
+        if (!el || typeof handler !== 'function') return;
+        el.addEventListener('input', function () { handler(); });
+    }
+
     function bindProxyCheckboxToggle(containerId, inputId) {
         var container = document.getElementById(containerId);
         var input = document.getElementById(inputId);
@@ -88,6 +94,8 @@
         bindChangeById('notif-rule-show-time', api.updateNotifPreview);
         bindChangeById('notif-rule-show-expiry', api.updateNotifPreview);
         bindChangeById('notif-rule-repeat', api.toggleRepeatFields);
+        bindInputById('notif-rule-trigger-value', api.updateNotifTriggerSummary);
+        bindChangeById('notif-rule-trigger-unit', api.updateNotifTriggerSummary);
         bindChangeById('admin-subscriptions-status', api.reloadAdminSubscriptionsWithFilters);
 
         document.querySelectorAll('.bottom-nav .nav-item[data-page]').forEach(function (item) {

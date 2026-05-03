@@ -249,6 +249,7 @@ var appFeatures = window.DarallaAppComposition.create({
     setNotifTriggerFromHours: function (hours, eventType) { return setNotifTriggerFromHours(hours, eventType); },
     onNotifRuleEventTypeChange: function () { return onNotifRuleEventTypeChange(); },
     updateNotifPreview: function () { return updateNotifPreview(); },
+    updateNotifTriggerSummary: function () { return updateNotifTriggerSummary(); },
     setNotifRuleEditingId: function (value) { notifRuleEditingId = value; },
     getNotifRuleEditingId: function () { return notifRuleEditingId; },
     setNotifSelectedTriggerHours: function (value) { notifSelectedTriggerHours = value; },
@@ -1190,6 +1191,7 @@ function selectNotifTriggerChip(btn, hours) {
     btn.classList.add('selected');
     document.getElementById('notif-trigger-custom-wrap').style.display = 'none';
     document.getElementById('notif-rule-trigger-value').removeAttribute('required');
+    updateNotifTriggerSummary();
 }
 
 function selectNotifTriggerCustom(btn) {
@@ -1200,6 +1202,7 @@ function selectNotifTriggerCustom(btn) {
     var inp = document.getElementById('notif-rule-trigger-value');
     inp.setAttribute('required', '');
     inp.focus();
+    updateNotifTriggerSummary();
 }
 
 function getNotifTriggerHours() {
@@ -1234,6 +1237,7 @@ function setNotifTriggerFromHours(absHours, eventType) {
             document.getElementById('notif-rule-trigger-unit').value = 'hours';
         }
     }
+    updateNotifTriggerSummary();
 }
 
 function onNotifRuleEventTypeChange() {
@@ -1254,6 +1258,30 @@ function onNotifRuleEventTypeChange() {
         }
     }
     updateNotifPreview();
+    updateNotifTriggerSummary();
+}
+
+function updateNotifTriggerSummary() {
+    var el = document.getElementById('notif-trigger-summary');
+    if (!el) return;
+    var etEl = document.getElementById('notif-rule-event-type');
+    if (!etEl) return;
+    var eventType = etEl.value;
+    var wrap = document.getElementById('notif-trigger-custom-wrap');
+    var customOpen = wrap && wrap.style.display === 'block';
+    var h = getNotifTriggerHours();
+    if (!h) {
+        el.textContent = customOpen
+            ? 'Введите число не меньше 1 и выберите дни или часы.'
+            : 'Выберите время срабатывания или вариант «Другое».';
+        return;
+    }
+    var when = notifFormatHours(h);
+    if (eventType === 'expiry_warning') {
+        el.textContent = 'Сработает за ' + when + ' до окончания подписки.';
+    } else {
+        el.textContent = 'Сработает через ' + when + ' после потери подписки.';
+    }
 }
 
 function updateNotifPreview() {
@@ -3129,6 +3157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             saveNotificationRule: saveNotificationRule,
             onNotifRuleEventTypeChange: onNotifRuleEventTypeChange,
             updateNotifPreview: updateNotifPreview,
+            updateNotifTriggerSummary: updateNotifTriggerSummary,
             toggleRepeatFields: toggleRepeatFields,
             reloadAdminSubscriptionsWithFilters: reloadAdminSubscriptionsWithFilters,
             getCurrentSelectedGroupId: function () { return currentSelectedGroupId; },
@@ -3418,7 +3447,8 @@ var PUBLIC_UI_API_NAMES = [
     'toggleAdminServerReorderMode',
     'toggleNotificationRule',
     'toggleRepeatFields',
-    'updateNotifPreview'
+    'updateNotifPreview',
+    'updateNotifTriggerSummary'
 ];
 
 PUBLIC_UI_API_NAMES.forEach(function (name) {

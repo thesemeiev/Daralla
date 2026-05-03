@@ -7415,6 +7415,158 @@ a.instruction-platform-btn {
     }
 }
 
+/* Модалка правила уведомления — секции, скролл, футер */
+.admin-notification-modal.modal-content {
+    max-height: min(92vh, 680px);
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-notification-modal .admin-notification-modal-head {
+    flex-shrink: 0;
+    margin-bottom: 12px;
+}
+
+#admin-notification-form.notif-modal-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+}
+
+.notif-modal-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+}
+
+.notif-modal-section {
+    padding: 14px 14px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--bg-page);
+}
+
+.notif-modal-section + .notif-modal-section {
+    margin-top: 12px;
+}
+
+.notif-modal-section__head {
+    margin-bottom: 12px;
+}
+
+.notif-modal-section__title {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    line-height: 1.25;
+}
+
+.notif-modal-section__lead {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.notif-modal-section--preview {
+    background: transparent;
+    border-style: dashed;
+}
+
+.notif-modal-section--preview .notif-modal-section__head {
+    margin-bottom: 10px;
+}
+
+.notif-modal-section--compact .notif-modal-section__head {
+    margin-bottom: 10px;
+}
+
+#admin-notification-form.notif-modal-form .notif-modal-section .form-group {
+    margin-bottom: 12px;
+}
+
+#admin-notification-form.notif-modal-form .notif-modal-section .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.notif-trigger-summary {
+    margin: 10px 0 6px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text-primary);
+    background: var(--accent-muted-subtle);
+    border: 1px solid var(--accent-line-soft);
+}
+
+.notif-modal-options__label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.notif-modal-options .notif-check-row {
+    padding: 6px 0;
+}
+
+.notif-modal-active-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.notif-modal-active-row__label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.notif-repeat-panel {
+    margin-top: 4px;
+}
+
+.notif-modal-footer {
+    flex-shrink: 0;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--card-border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.notif-modal-footer__test.btn-outline {
+    width: 100%;
+}
+
+.notif-modal-footer__actions {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.notif-modal-footer__actions .btn-secondary {
+    flex: 0 1 auto;
+}
+
+.notif-modal-footer__save.btn-primary {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
 .admin-notification-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);

@@ -154,6 +154,7 @@
             setNotifTriggerFromHours: ctx.setNotifTriggerFromHours,
             onNotifRuleEventTypeChange: ctx.onNotifRuleEventTypeChange,
             updateNotifPreview: ctx.updateNotifPreview,
+            updateNotifTriggerSummary: ctx.updateNotifTriggerSummary,
             showModal: ctx.showModal,
             setNotifRuleEditingId: ctx.setNotifRuleEditingId,
             getNotifRuleEditingId: ctx.getNotifRuleEditingId,
