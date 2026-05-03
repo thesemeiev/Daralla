@@ -32,7 +32,7 @@
                 if (p && p.enabled === false) return;
                 if (!added) {
                     rows.push('<div class="traffic-topup-actions">');
-                    rows.push('<span class="traffic-topup-actions-label">Докупить трафик</span>');
+                    rows.push('<span class="traffic-topup-actions-label">Дополнительный объём</span>');
                     rows.push('<div class="traffic-topup-pack-grid">');
                 }
                 added++;
@@ -78,7 +78,7 @@
             };
         }
 
-        var TRAFFIC_LEAD_COPY = 'Этот объём общий для серверов с лимитом в подписке. Через остальные серверы этот пакет не расходуется.';
+        var TRAFFIC_LEAD_COPY = 'Учёт ниже — только по серверам с лимитом. Остальные точки подключения этот пакет не расходуют.';
 
         function _trafficIncludedPercentUsed(quota) {
             var cap = Number(quota.included_allowance_bytes) || 0;
@@ -113,57 +113,62 @@
             var pctUsed = sub.traffic_quota ? _trafficIncludedPercentUsed(sub.traffic_quota) : 0;
             var allowanceBytes = sub.traffic_quota ? (Number(sub.traffic_quota.included_allowance_bytes) || 0) : 0;
             var usedBytes = sub.traffic_quota ? (Number(sub.traffic_quota.included_used_bytes) || 0) : 0;
-            var availableNow = sub.traffic_quota
-                ? Math.max(0, allowanceBytes - usedBytes) + (Number(sub.traffic_quota.purchased_remaining_bytes) || 0)
-                : 0;
+            var purchasedBytes = sub.traffic_quota ? (Number(sub.traffic_quota.purchased_remaining_bytes) || 0) : 0;
 
             var trafficPeriodBlock = '';
             if (sub.traffic_quota && allowanceBytes > 0) {
                 trafficPeriodBlock = '\n'
-                    + '                <div class="subscription-traffic-used-summary">\n'
-                    + '                    <span class="subscription-traffic-used-label">Использовано</span>\n'
-                    + '                    <span class="subscription-traffic-used-value">' + formatBinaryBytes(usedBytes) + ' из ' + formatBinaryBytes(allowanceBytes) + '</span>\n'
-                    + '                </div>\n'
-                    + '                <div class="subscription-traffic-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctUsed + '" aria-label="Доля израсходованного включённого трафика">\n'
-                    + '                    <div class="subscription-traffic-progress-fill" style="width: ' + pctUsed + '%"></div>\n'
-                    + '                </div>\n';
+                    + '                    <div class="sub-traffic__meter">\n'
+                    + '                        <div class="sub-traffic__meter-row">\n'
+                    + '                            <span class="sub-traffic__meter-label">Периодный пакет</span>\n'
+                    + '                            <span class="sub-traffic__meter-value">' + formatBinaryBytes(usedBytes) + ' / ' + formatBinaryBytes(allowanceBytes) + '</span>\n'
+                    + '                        </div>\n'
+                    + '                        <div class="sub-traffic__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctUsed + '" aria-label="Доля израсходованного периодного трафика">\n'
+                    + '                            <div class="sub-traffic__bar-fill" style="width: ' + pctUsed + '%"></div>\n'
+                    + '                        </div>\n'
+                    + '                    </div>\n';
+            } else if (sub.traffic_quota && purchasedBytes > 0) {
+                trafficPeriodBlock = '\n'
+                    + '                    <p class="sub-traffic__purchased">Остаток докупки: <strong>' + formatBinaryBytes(purchasedBytes) + '</strong></p>\n';
             }
 
             contentEl.innerHTML = '\n'
-                + '        <div class="subscription-detail-stack subscription-detail-stack--compact">\n'
-                + '        <div class="detail-card subscription-detail-hero">\n'
-                + '            <div class="subscription-detail-hero-head">\n'
-                + '                <h2 class="subscription-detail-title" id="subscription-name-display">' + _deps.escapeHtml(sub.name) + '</h2>\n'
-                + '                <div class="detail-status ' + statusClass + '">' + statusText + '</div>\n'
-                + '            </div>\n'
-                + '            <div class="detail-info-grid subscription-detail-meta">\n'
-                + '                <div class="detail-info-item"><div class="detail-info-label">Устройств</div><div class="detail-info-value">' + sub.device_limit + '</div></div>\n'
-                + '                <div class="detail-info-item"><div class="detail-info-label">Создана</div><div class="detail-info-value">' + sub.created_at_formatted + '</div></div>\n'
-                + '                <div class="detail-info-item full-width"><div class="detail-info-label">' + (isActive ? 'Истекает' : 'Истекла') + '</div><div class="detail-info-value">' + sub.expires_at_formatted + '</div></div>\n'
+                + '        <div class="sub-sheet">\n'
+                + '            <div class="sub-sheet__surface">\n'
+                + '                <header class="sub-sheet__header">\n'
+                + '                    <h2 class="sub-sheet__title" id="subscription-name-display">' + _deps.escapeHtml(sub.name) + '</h2>\n'
+                + '                    <span class="sub-sheet__status detail-status ' + statusClass + '">' + statusText + '</span>\n'
+                + '                </header>\n'
+                + '                <div class="sub-sheet__stats" role="list">\n'
+                + '                    <div class="sub-sheet__stat" role="listitem"><span class="sub-sheet__stat-label">Устройств</span><span class="sub-sheet__stat-value">' + sub.device_limit + '</span></div>\n'
+                + '                    <div class="sub-sheet__stat" role="listitem"><span class="sub-sheet__stat-label">Создана</span><span class="sub-sheet__stat-value">' + sub.created_at_formatted + '</span></div>\n'
+                + '                    <div class="sub-sheet__stat sub-sheet__stat--wide" role="listitem"><span class="sub-sheet__stat-label">' + (isActive ? 'Действует до' : 'Закончилась') + '</span><span class="sub-sheet__stat-value">' + sub.expires_at_formatted + '</span></div>\n'
                 + (isActive && sub.expires_at
-                    ? '                <div class="detail-info-item full-width"><div class="detail-info-label">Осталось</div><div class="detail-info-value">' + _deps.formatTimeRemaining(sub.expires_at) + '</div></div>\n'
+                    ? '                    <div class="sub-sheet__stat sub-sheet__stat--wide" role="listitem"><span class="sub-sheet__stat-label">Осталось</span><span class="sub-sheet__stat-value">' + _deps.formatTimeRemaining(sub.expires_at) + '</span></div>\n'
                     : '')
-                + '            </div>\n'
+                + '                </div>\n'
                 + (isActive
-                    ? '            <div class="subscription-detail-primary-action"><button type="button" class="btn-primary subscription-detail-copy-btn">Копировать ссылку подписки</button></div>\n'
+                    ? '                <div class="sub-sheet__primary"><button type="button" class="btn-primary subscription-detail-copy-btn sub-sheet__copy-btn">Скопировать ссылку</button></div>\n'
                     : '')
-                + '        </div>\n'
                 + (sub.traffic_quota
-                    ? '        <div class="detail-card subscription-traffic-card subscription-traffic-card--compact">\n'
-                    + '                <h4 class="subscription-traffic-heading">Трафик</h4>\n'
-                    + '                <p class="subscription-traffic-lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
+                    ? '                <section class="sub-traffic" aria-labelledby="sub-traffic-heading">\n'
+                    + '                    <div class="sub-traffic__head">\n'
+                    + '                        <span class="sub-traffic__glyph" aria-hidden="true"></span>\n'
+                    + '                        <h3 class="sub-traffic__title" id="sub-traffic-heading">Трафик</h3>\n'
+                    + '                    </div>\n'
+                    + '                    <p class="sub-traffic__lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
                     + trafficPeriodBlock
-                    + '                <p class="subscription-traffic-available-line">Доступно сейчас: <strong>' + formatBinaryBytes(availableNow) + '</strong></p>\n'
-                    + '                <p class="hint subscription-traffic-hint">Включённый объём обновляется при оплате продления. Докупка не сгорает при продлении и уже входит в «доступно».</p>\n'
-                    + _trafficTopupButtonsHtml(sub)
-                    + '            </div>\n'
+                    + '                    <p class="sub-traffic__hint">При продлении обновляется периодный объём. Докупка переносится и учитывается вместе с остатком периода.</p>\n'
+                    + '                    <div class="sub-traffic__topup">' + _trafficTopupButtonsHtml(sub) + '</div>\n'
+                    + '                </section>\n'
                     : '')
-                + '        <div class="detail-actions subscription-detail-secondary-actions">\n'
-                + '                <button type="button" class="action-button action-button--quiet" onclick="showRenameSubscriptionModal()">Переименовать подписку</button>\n'
+                + '                <footer class="sub-sheet__footer">\n'
+                + '                    <button type="button" class="sub-sheet__btn sub-sheet__btn--ghost" onclick="showRenameSubscriptionModal()">Переименовать</button>\n'
                 + ((sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial')
-                    ? '                <button type="button" class="action-button action-button--accent" onclick="showExtendSubscriptionModal(' + sub.id + ')">Продлить подписку</button>\n'
+                    ? '                    <button type="button" class="sub-sheet__btn sub-sheet__btn--accent" onclick="showExtendSubscriptionModal(' + sub.id + ')">Продлить</button>\n'
                     : '')
-                + '        </div>\n'
+                + '                </footer>\n'
+                + '            </div>\n'
                 + '        </div>\n';
 
             bindTrafficTopupButtons(contentEl);
@@ -194,12 +199,6 @@
                 + '        </div>\n'
                 + (isActive && sub.expires_at
                     ? '        <div class="days-badge"><span class="info-label">Осталось</span><span class="days-remaining">' + _deps.formatTimeRemaining(sub.expires_at) + '</span></div>\n'
-                    : '')
-                + (sub.traffic_quota
-                    ? '        <div class="subscription-traffic-teaser">'
-                    + '<span class="subscription-traffic-teaser-label">Трафик</span>'
-                    + '<span class="subscription-traffic-teaser-value">' + formatBinaryBytes(Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes) + sub.traffic_quota.purchased_remaining_bytes) + '</span>'
-                    + '<span class="subscription-traffic-teaser-note">доступно (лимитные серверы в подписке)</span></div>\n'
                     : '');
             return card;
         }
