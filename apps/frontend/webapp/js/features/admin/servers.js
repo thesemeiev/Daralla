@@ -31,6 +31,19 @@
             }, duration);
         }
 
+        /** Краткий список ошибок массового apply шаблона трафика (partial failures). */
+        function formatTrafficTemplateApplyErrors(errors, maxN) {
+            maxN = maxN || 10;
+            if (!errors || !errors.length) return '';
+            var parts = errors.slice(0, maxN).map(function (e) {
+                var id = e.subscription_id != null ? e.subscription_id : '?';
+                var err = e.error ? String(e.error) : '';
+                return '#' + id + (err ? ': ' + err : '');
+            });
+            var tail = errors.length > maxN ? ' … +' + (errors.length - maxN) + ' ещё' : '';
+            return '\n\nОшибки (' + errors.length + '): ' + parts.join('; ') + tail;
+        }
+
         function adminSyncSubscriptionsAlertMessage(result) {
             var parts = [];
             if (result.sync_stats) {
@@ -70,7 +83,7 @@
                     body: JSON.stringify({ action: 'list' })
                 });
                 if (!response.ok) throw new Error('Ошибка сети при получении групп');
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     setGroups(result.groups || []);
                     renderServerGroups(getGroups(), result.stats || []);
@@ -165,7 +178,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     _deps.closeModal('server-group-modal');
                     loadServerGroups();
@@ -220,7 +233,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'list', group_id: gid })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     setServers(result.servers);
                     renderServersInGroup(result.servers);
@@ -276,7 +289,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'get', group_id: gid })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (!result.success) throw new Error(result.error || 'Ошибка');
                 var tpl = result.template;
                 var limited = result.limited_server_names || [];
@@ -318,7 +331,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (!result.success) throw new Error(result.error || 'Ошибка');
                 showAdminToast('Шаблон трафика сохранён');
                 await loadGroupTrafficTemplateForm();
@@ -336,15 +349,19 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'apply', group_id: gid, dry_run: true, force: false })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.ok === false) throw new Error(result.error || 'Ошибка');
                 var t = result.total != null ? result.total : 0;
                 var a = result.applied != null ? result.applied : 0;
                 var s = result.skipped != null ? result.skipped : 0;
-                var e = (result.errors && result.errors.length) ? (' Ошибок: ' + result.errors.length + '.') : '';
+                var msg = 'Dry-run: подписок ' + t + ', будет применено ' + a + ', пропущено ' + s + '.'
+                    + '\n\nУчитываются только подписки с group_id этой группы (поле в БД). Подписки с ручными пакетами трафика при «Применить» без force будут пропущены — их число видно в «пропущено».';
+                if (result.errors && result.errors.length) {
+                    msg += formatTrafficTemplateApplyErrors(result.errors);
+                }
                 await _deps.appShowAlert(
-                    'Dry-run: подписок ' + t + ', будет применено ' + a + ', пропущено ' + s + '.' + e,
-                    { title: 'Проверка', variant: 'success' }
+                    msg,
+                    { title: 'Проверка', variant: (result.errors && result.errors.length) ? 'error' : 'success' }
                 );
             } catch (e) {
                 await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
@@ -364,9 +381,19 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'apply', group_id: gid, dry_run: false, force: false })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.ok === false) throw new Error(result.error || 'Ошибка');
-                showAdminToast('Готово: применено ' + (result.applied || 0) + ', пропущено ' + (result.skipped || 0));
+                var applied = result.applied != null ? result.applied : 0;
+                var skipped = result.skipped != null ? result.skipped : 0;
+                var errN = (result.errors && result.errors.length) ? result.errors.length : 0;
+                if (errN) {
+                    await _deps.appShowAlert(
+                        'Применено ' + applied + ', пропущено ' + skipped + '.' + formatTrafficTemplateApplyErrors(result.errors),
+                        { title: 'Частичные ошибки', variant: 'error' }
+                    );
+                } else {
+                    showAdminToast('Готово: применено ' + applied + ', пропущено ' + skipped);
+                }
             } catch (e) {
                 await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
             }
@@ -385,9 +412,19 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'apply', group_id: gid, dry_run: false, force: true })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.ok === false) throw new Error(result.error || 'Ошибка');
-                showAdminToast('Force: применено ' + (result.applied || 0) + ', пропущено ' + (result.skipped || 0));
+                var applied = result.applied != null ? result.applied : 0;
+                var skipped = result.skipped != null ? result.skipped : 0;
+                var errN = (result.errors && result.errors.length) ? result.errors.length : 0;
+                if (errN) {
+                    await _deps.appShowAlert(
+                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + formatTrafficTemplateApplyErrors(result.errors),
+                        { title: 'Частичные ошибки', variant: 'error' }
+                    );
+                } else {
+                    showAdminToast('Force: применено ' + applied + ', пропущено ' + skipped);
+                }
             } catch (e) {
                 await _deps.appShowAlert(e.message || String(e), { title: 'Ошибка', variant: 'error' });
             }
@@ -417,7 +454,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: serverId, is_active: makeActive ? 1 : 0 })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (!result.success) throw new Error(result.error || 'Ошибка');
                 var srv = getServers().find(function (s) { return s.id === serverId; });
                 if (srv) srv.is_active = makeActive ? 1 : 0;
@@ -467,7 +504,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'list', group_id: getGroupId() })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     setServers(result.servers);
                     renderServersInGroup(result.servers);
@@ -495,7 +532,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'reorder', group_id: getGroupId(), server_ids: ids })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (!result.success) throw new Error(result.error || 'Ошибка');
                 setServers(sorted);
                 sorted.forEach(function (s, i) { s.client_sort_order = i; });
@@ -627,7 +664,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     _deps.closeModal('server-config-modal');
                     await refreshAdminServersInGroup();
@@ -661,7 +698,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: serverId })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     await refreshAdminServersInGroup();
                     if (result.sync_stats || result.sync_error) {
@@ -689,7 +726,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'stats', limit: 30 })
                 });
-                var data = await resp.json();
+                var data = await window.DarallaApiClient.responseJson(resp);
                 if (!data || !data.success) throw new Error((data && data.error) || 'Ошибка outbox');
                 var s = data.stats || {};
                 var lines = [
@@ -710,7 +747,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ action: 'retry_dead', limit: 200 })
                         });
-                        var rd = await rr.json();
+                        var rd = await window.DarallaApiClient.responseJson(rr);
                         if (rd && rd.success) lines.push('Перезапущено: ' + (rd.retried || 0));
                     }
                 }
@@ -727,7 +764,7 @@
             _deps.platform.mainButton.disable();
             try {
                 var response = await _deps.apiFetch('/api/admin/sync-all', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     var st = result.stats || {};
                     var parts = [
@@ -745,7 +782,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ action: 'stats', limit: 30 })
                         });
-                        var outboxData = await outboxResp.json();
+                        var outboxData = await window.DarallaApiClient.responseJson(outboxResp);
                         if (outboxData && outboxData.success && outboxData.stats) {
                             var stOut = outboxData.stats;
                             parts.push('Outbox: pending=' + (stOut.pending || 0) + ', retry=' + (stOut.retry || 0) + ', dead=' + (stOut.dead || 0));
@@ -760,7 +797,7 @@
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ action: 'retry_dead', limit: 200 })
                                     });
-                                    var retryData = await retryResp.json();
+                                    var retryData = await window.DarallaApiClient.responseJson(retryResp);
                                     if (retryData && retryData.success) {
                                         parts.push('Outbox перезапущено: ' + (retryData.retried || 0));
                                     }

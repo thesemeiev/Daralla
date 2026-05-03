@@ -13,7 +13,7 @@
             try {
                 var response = await _deps.apiFetch('/api/admin/notification-rules', { method: 'GET' });
                 if (!response.ok) throw new Error('Ошибка загрузки');
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 loadingEl.style.display = 'none';
                 listEl.style.display = 'block';
 
@@ -72,7 +72,7 @@
             if (ruleId) {
                 try {
                     var resp = await _deps.apiFetch('/api/admin/notification-rules', { method: 'GET' });
-                    var data = await resp.json();
+                    var data = await window.DarallaApiClient.responseJson(resp);
                     var rule = (data.rules || []).find(function (r) { return r.id === ruleId; });
                     if (rule) {
                         eventTypeEl.value = rule.event_type;
@@ -144,7 +144,7 @@
                     _deps.closeNotificationRuleForm();
                     loadNotificationRules();
                 } else {
-                    var d = await resp.json().catch(function () { return {}; });
+                    var d = await window.DarallaApiClient.responseJson(resp).catch(function () { return {}; });
                     await _deps.appShowAlert(d.error || 'Ошибка сохранения', { title: 'Ошибка', variant: 'error' });
                 }
             } catch (err) { await _deps.appShowAlert('Ошибка сети', { variant: 'error' }); }
@@ -185,7 +185,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message_template: template })
                 });
-                var d = await resp.json().catch(function () { return {}; });
+                var d = await window.DarallaApiClient.responseJson(resp).catch(function () { return {}; });
                 if (resp.ok) {
                     if (btn) {
                         btn.textContent = 'Отправлено ✓';

@@ -50,7 +50,7 @@
                 });
                 if (!response.ok) throw new Error('Ошибка загрузки подписки');
 
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 var sub = data.subscription;
                 var servers = data.servers || [];
 
@@ -197,7 +197,7 @@
                     body: JSON.stringify(window.pendingSubscriptionUpdate)
                 });
                 if (!response.ok) {
-                    var error = await response.json();
+                    var error = await window.DarallaApiClient.responseJson(response);
                     throw new Error(error.error || 'Ошибка сохранения');
                 }
                 if (confirmBtn) {
@@ -232,7 +232,7 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (!response.ok) throw new Error('Ошибка синхронизации');
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 var resultsEl = document.getElementById('sync-results');
                 resultsEl.style.display = 'block';
                 resultsEl.innerHTML = '<h4>Результаты синхронизации:</h4>' + data.sync_results.map(function (result) {
@@ -309,7 +309,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-            var data = await response.json().catch(function () { return {}; });
+            var data = await window.DarallaApiClient.responseJson(response).catch(function () { return {}; });
             if (!response.ok) throw new Error(data.error || 'Ошибка запроса buckets');
             return data;
         }
@@ -819,7 +819,7 @@
                     body: JSON.stringify({ confirm: true })
                 });
                 if (!response.ok) {
-                    var error = await response.json();
+                    var error = await window.DarallaApiClient.responseJson(response);
                     throw new Error(error.error || 'Ошибка удаления');
                 }
                 await _deps.appShowAlert('Подписка успешно удалена.', { title: 'Готово', variant: 'success' });

@@ -270,7 +270,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ revenue_range: range })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (!result.success) throw new Error('API error');
 
                 applyDashboardPayload(result);
@@ -362,7 +362,7 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (!response.ok) throw new Error('Ошибка загрузки данных');
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (!result.success || !result.data) {
                     container.innerHTML = '<p class="empty-hint">Нет данных</p>';
                     return;

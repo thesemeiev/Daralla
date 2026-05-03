@@ -67,11 +67,11 @@
                 });
 
                 if (!response.ok) {
-                    var errorData = await response.json();
+                    var errorData = await window.DarallaApiClient.responseJson(response);
                     throw new Error(errorData.error || 'Ошибка удаления пользователя');
                 }
 
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 closeDeleteUserModal();
                 var successMsg = 'Пользователь удален:\n- Подписок: ' + data.stats.subscriptions_deleted
                     + '\n- Платежей: ' + data.stats.payments_deleted

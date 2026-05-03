@@ -349,7 +349,7 @@
             if (formEl) formEl.style.display = 'none';
             try {
                 var res = await _deps.apiFetch('/api/admin/commerce', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
-                var data = await res.json();
+                var data = await window.DarallaApiClient.responseJson(res);
                 if (!res.ok || !data.success) throw new Error(data.error || 'Не удалось загрузить настройки');
                 var dl = document.getElementById('admin-commerce-device-limit');
                 var tariffs = normalizeTariffList(data.tariffs);
@@ -400,7 +400,7 @@
                         default_device_limit: dl
                     })
                 });
-                var data = await res.json();
+                var data = await window.DarallaApiClient.responseJson(res);
                 if (!res.ok || !data.success) throw new Error(data.error || 'Ошибка сохранения');
                 var normalized = normalizeTariffList(data.tariffs);
                 if (normalized.length) renderTariffEditor(normalized);

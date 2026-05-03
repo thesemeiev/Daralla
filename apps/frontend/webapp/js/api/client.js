@@ -1,6 +1,31 @@
 (function (window) {
     'use strict';
 
+    /**
+     * Читает тело ответа и парсит JSON. Если пришла HTML/текст ошибки прокси («Service…»),
+     * даёт понятную ошибку вместо SyntaxError от JSON.parse.
+     */
+    async function responseJson(response) {
+        var text = await response.text();
+        var trimmed = (text || '').trim();
+        if (!trimmed) {
+            return {};
+        }
+        try {
+            return JSON.parse(trimmed);
+        } catch (parseErr) {
+            var preview = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
+            var hint = '';
+            var low = trimmed.slice(0, 40).toLowerCase();
+            if (response.status >= 502 || low.indexOf('<!doctype') >= 0 || low.indexOf('<html') >= 0) {
+                hint = 'Сервис временно недоступен или вернул страницу ошибки вместо JSON. ';
+            } else if (/^service\s/i.test(trimmed)) {
+                hint = 'Прокси или бэкенд вернули текст ошибки вместо JSON. ';
+            }
+            throw new Error(hint + 'HTTP ' + response.status + ': ' + preview);
+        }
+    }
+
     async function apiFetch(url, options, deps) {
         options = options || {};
         deps = deps || {};
@@ -45,6 +70,7 @@
     }
 
     window.DarallaApiClient = {
-        apiFetch: apiFetch
+        apiFetch: apiFetch,
+        responseJson: responseJson
     };
 })(window);

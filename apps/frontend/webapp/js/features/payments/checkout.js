@@ -107,10 +107,10 @@
                 });
 
                 if (!response.ok) {
-                    var error = await response.json();
+                    var error = await window.DarallaApiClient.responseJson(response);
                     throw new Error(error.error || 'Ошибка создания платежа');
                 }
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 if (!data.success || !data.payment_id) throw new Error('Не удалось создать платёж');
 
                 try {
@@ -205,10 +205,10 @@
                 });
 
                 if (!response.ok) {
-                    var error = await response.json();
+                    var error = await window.DarallaApiClient.responseJson(response);
                     throw new Error(error.error || 'Ошибка создания платежа');
                 }
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 if (!data.success || !data.payment_id) throw new Error('Не удалось создать платёж');
 
                 if (gateway === 'yookassa') {
@@ -440,7 +440,7 @@
                         paymentCheckInterval = null;
                         var finalResponse = await _deps.apiFetch('/api/user/payment/status/' + paymentId);
                         if (finalResponse.ok) {
-                            var finalData = await finalResponse.json();
+                            var finalData = await window.DarallaApiClient.responseJson(finalResponse);
                             if (finalData.success && finalData.status === 'pending') {
                                 var currentPage = document.querySelector('.page.active');
                                 var isOnPaymentPage = currentPage && currentPage.id === 'page-payment';
@@ -457,7 +457,7 @@
 
                     var response = await _deps.apiFetch('/api/user/payment/status/' + paymentId);
                     if (!response.ok) return;
-                    var data = await response.json();
+                    var data = await window.DarallaApiClient.responseJson(response);
                     if (data.success && data.status === 'succeeded' && data.activated) {
                         clearInterval(paymentCheckInterval);
                         paymentCheckInterval = null;

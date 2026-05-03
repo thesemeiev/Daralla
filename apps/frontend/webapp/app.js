@@ -1003,7 +1003,7 @@ async function loadAdminEventsPage() {
     if (listWrap) listWrap.style.display = 'none';
     try {
         var r = await apiFetch('/api/events/admin/list');
-        var data = r.ok ? await r.json() : { events: [] };
+        var data = r.ok ? await window.DarallaApiClient.responseJson(r) : { events: [] };
         var events = data.events || [];
         if (loadingEl) loadingEl.style.display = 'none';
         if (listWrap) listWrap.style.display = 'block';
@@ -1040,7 +1040,7 @@ function showAdminEventForm(editId) {
     document.getElementById('admin-event-reward2').value = '';
     document.getElementById('admin-event-reward3').value = '';
     if (editId) {
-        apiFetch('/api/events/' + editId).then(function (r) { return r.ok ? r.json() : null; }).then(function (ev) {
+        apiFetch('/api/events/' + editId).then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve(null); }).then(function (ev) {
             if (!ev) return;
             document.getElementById('admin-event-name').value = ev.name || '';
             document.getElementById('admin-event-description').value = ev.description || '';
@@ -1101,7 +1101,7 @@ async function submitAdminEventForm(event) {
             body: JSON.stringify(payload)
         });
         if (r.ok) { closeAdminEventForm(); loadAdminEventsPage(); } else {
-            var d = await r.json().catch(function () { return {}; });
+            var d = await window.DarallaApiClient.responseJson(r).catch(function () { return {}; });
             await appShowAlert(d.error || 'Ошибка', { title: 'Ошибка', variant: 'error' });
         }
     } catch (e) {
@@ -2019,7 +2019,7 @@ async function loadServerMap() {
             throw new Error('Ошибка загрузки данных серверов');
         }
         
-        const result = await response.json();
+        const result = await window.DarallaApiClient.responseJson(response);
         if (!result.success || !result.servers || result.servers.length === 0) {
             if (mapError) {
                 mapError.style.display = 'none';
@@ -2272,7 +2272,7 @@ async function updateReferralCodeBlockVisibility() {
     try {
         var r = await apiFetch('/api/events/');
         if (!r.ok) return;
-        var data = await r.json();
+        var data = await window.DarallaApiClient.responseJson(r);
         var hasActive = (data.active || []).length > 0;
         chooseBlock.style.display = hasActive ? 'block' : 'none';
     } catch (e) {
@@ -2542,11 +2542,11 @@ async function renameSubscription(subId, newName) {
         });
         
         if (!response.ok) {
-            const error = await response.json();
+            const error = await window.DarallaApiClient.responseJson(response);
             throw new Error(error.error || 'Ошибка переименования');
         }
         
-        const data = await response.json();
+        const data = await window.DarallaApiClient.responseJson(response);
         
         // Обновляем локальные данные
         currentSubscriptionDetail.name = newName;
@@ -2629,7 +2629,7 @@ async function checkAdminAccess() {
         });
         
         if (response.ok) {
-            const data = await response.json();
+            const data = await window.DarallaApiClient.responseJson(response);
             isAdmin = data.is_admin || false;
             
             console.log('Результат проверки прав админа:', isAdmin);
@@ -2683,7 +2683,7 @@ async function loadAdminSubscriptions(page = 1, options = {}) {
             throw new Error('Ошибка загрузки подписок');
         }
 
-        const data = await response.json();
+        const data = await window.DarallaApiClient.responseJson(response);
 
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
@@ -3003,7 +3003,7 @@ async function loadPrices() {
     try {
         var res = await fetch('/api/prices');
         if (res.ok) {
-            var data = await res.json();
+            var data = await window.DarallaApiClient.responseJson(res);
             applyLoadedPrices(data || fallback);
             return;
         }
@@ -3078,7 +3078,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: webAuthToken ? JSON.stringify({ token: webAuthToken }) : '{}'
             });
-            var result = await response.json();
+            var result = await window.DarallaApiClient.responseJson(response);
             if (result.success) {
                 currentUserId = result.user_id;
                 await checkAdminAccess();
@@ -3171,7 +3171,7 @@ async function initTelegramFlow() {
             });
             
             if (response.ok) {
-                const data = await response.json();
+                const data = await window.DarallaApiClient.responseJson(response);
                 if (data.trial_created) {
                     console.log('Пробная подписка создана для нового пользователя');
                 }

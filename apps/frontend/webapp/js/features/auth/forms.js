@@ -27,7 +27,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, password: password, remember: remember })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     if (remember) {
                         _deps.setAuthToken(result.token);
@@ -84,7 +84,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, password: password })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     _deps.setAuthToken(result.token);
                     _deps.setCurrentUserId(result.user_id);

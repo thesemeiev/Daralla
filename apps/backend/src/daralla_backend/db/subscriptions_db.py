@@ -395,8 +395,8 @@ def _utc_day(ts: int | None = None) -> str:
     return datetime.datetime.utcfromtimestamp(int(ts or time.time())).strftime("%Y-%m-%d")
 
 
-async def ensure_default_unlimited_bucket(subscription_id: int, name: str = "unlimited") -> int:
-    now = int(time.time())
+async def get_existing_default_unlimited_bucket_id(subscription_id: int, name: str = "unlimited") -> int | None:
+    """Только чтение: id пакета unlimited, если уже есть (без INSERT)."""
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
@@ -407,8 +407,15 @@ async def ensure_default_unlimited_bucket(subscription_id: int, name: str = "unl
             (int(subscription_id), str(name)),
         ) as cur:
             row = await cur.fetchone()
-            if row:
-                return int(row[0])
+            return int(row[0]) if row else None
+
+
+async def ensure_default_unlimited_bucket(subscription_id: int, name: str = "unlimited") -> int:
+    existing = await get_existing_default_unlimited_bucket_id(subscription_id, name=name)
+    if existing is not None:
+        return existing
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
             INSERT INTO subscription_traffic_buckets

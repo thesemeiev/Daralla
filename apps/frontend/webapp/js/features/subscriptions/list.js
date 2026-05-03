@@ -217,7 +217,7 @@
                     throw new Error('HTTP error! status: ' + response.status);
                 }
 
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 if (!data.success) {
                     throw new Error(data.error || 'Ошибка получения данных');
                 }

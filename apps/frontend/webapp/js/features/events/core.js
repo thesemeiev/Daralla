@@ -14,7 +14,7 @@
                 var response = await _deps.apiFetch('/api/events/');
                 var data = { events: [], active: [], upcoming: [] };
                 if (response.ok) {
-                    try { data = await response.json(); } catch (e) {}
+                    try { data = await window.DarallaApiClient.responseJson(response); } catch (e) {}
                 }
                 var active = data.active || [];
                 var upcoming = data.upcoming || [];
@@ -70,10 +70,10 @@
             if (!contentEl) return;
             contentEl.innerHTML = '<div class="loading"><p>Загрузка...</p></div>';
             Promise.all([
-                _deps.apiFetch('/api/events/' + eventId).then(function (r) { return r.ok ? r.json() : null; }),
-                _deps.apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
-                _deps.apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; }),
-                _deps.apiFetch('/api/events/my-code').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.code || ''; })
+                _deps.apiFetch('/api/events/' + eventId).then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve(null); }),
+                _deps.apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve({ leaderboard: [] }); }).then(function (d) { return d.leaderboard || []; }),
+                _deps.apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve({}); }).then(function (d) { return d.place || null; }),
+                _deps.apiFetch('/api/events/my-code').then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve({}); }).then(function (d) { return d.code || ''; })
             ]).then(function (results) {
                 var ev = results[0];
                 var leaderboard = results[1];
@@ -143,8 +143,8 @@
                             return;
                         }
                         Promise.all([
-                            _deps.apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? r.json() : { leaderboard: [] }; }).then(function (d) { return d.leaderboard || []; }),
-                            _deps.apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d.place || null; })
+                            _deps.apiFetch('/api/events/' + eventId + '/leaderboard?limit=20').then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve({ leaderboard: [] }); }).then(function (d) { return d.leaderboard || []; }),
+                            _deps.apiFetch('/api/events/' + eventId + '/my-place').then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve({}); }).then(function (d) { return d.place || null; })
                         ]).then(function (res) {
                             var list = res[0];
                             var place = res[1];

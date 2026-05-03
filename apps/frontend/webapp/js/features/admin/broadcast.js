@@ -30,7 +30,7 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (!statsResponse.ok) throw new Error('Ошибка загрузки данных');
-                var statsData = await statsResponse.json();
+                var statsData = await window.DarallaApiClient.responseJson(statsResponse);
                 state.totalUsers = (statsData.stats && statsData.stats.users && statsData.stats.users.total) || 0;
 
                 state.selectedUsers = [];
@@ -148,7 +148,7 @@
                         body: JSON.stringify({ page: 1, limit: 50, search: search })
                     });
                     if (!response.ok) throw new Error('Ошибка поиска пользователей');
-                    var data = await response.json();
+                    var data = await window.DarallaApiClient.responseJson(response);
                     if (!data.users || data.users.length === 0) {
                         listEl.innerHTML = '<div class="broadcast-empty-state hint broadcast-empty-state-box">Пользователи не найдены</div>';
                         return;
@@ -295,10 +295,10 @@
                     body: JSON.stringify(requestBody)
                 });
                 if (!response.ok) {
-                    var errorData = await response.json();
+                    var errorData = await window.DarallaApiClient.responseJson(response);
                     throw new Error(errorData.error || 'Ошибка отправки рассылки');
                 }
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 document.getElementById('broadcast-sent-count').textContent = data.sent || 0;
                 document.getElementById('broadcast-failed-count').textContent = data.failed || 0;
                 document.getElementById('broadcast-total-count').textContent = data.total || 0;

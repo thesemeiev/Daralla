@@ -31,11 +31,11 @@
                     body: JSON.stringify(formData)
                 });
                 if (!response.ok) {
-                    var error = await response.json();
+                    var error = await window.DarallaApiClient.responseJson(response);
                     throw new Error(error.error || 'Ошибка создания подписки');
                 }
 
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 var message = 'Подписка успешно создана!';
                 if (data.failed_servers && data.failed_servers.length > 0) {
                     message += '\n\nПредупреждение: не удалось создать клиентов на серверах: '

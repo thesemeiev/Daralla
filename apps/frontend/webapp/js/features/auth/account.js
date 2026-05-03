@@ -44,7 +44,7 @@
                         password: password
                     })
                 });
-                var result = await response.json();
+                var result = await window.DarallaApiClient.responseJson(response);
                 if (result.success) {
                     _deps.closeModal('web-access-modal');
                     await refreshAboutAccount();
@@ -86,7 +86,7 @@
 
             try {
                 var r = await _deps.apiFetch('/api/user/link-status', { method: 'GET' });
-                var data = await r.json();
+                var data = await window.DarallaApiClient.responseJson(r);
                 if (data.success) {
                     userIdEl.textContent = data.user_id || '—';
                     loginEl.textContent = data.username || '—';
@@ -157,7 +157,7 @@
             }
             try {
                 var r = await _deps.apiFetch('/api/user/link-telegram/start', { method: 'POST' });
-                var data = await r.json();
+                var data = await window.DarallaApiClient.responseJson(r);
                 if (data.success && data.link) {
                     window.location.href = data.link;
                     return;
@@ -201,7 +201,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ current_password: cur, new_login: neu })
                 });
-                var data = await r.json();
+                var data = await window.DarallaApiClient.responseJson(r);
                 if (data.success) {
                     current.value = '';
                     newLogin.value = '';
@@ -255,7 +255,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ current_password: cur, new_password: neu })
                 });
-                var data = await r.json();
+                var data = await window.DarallaApiClient.responseJson(r);
                 if (data.success) {
                     current.value = '';
                     newPw.value = '';
@@ -297,7 +297,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ current_password: pwd })
                 });
-                var data = await r.json();
+                var data = await window.DarallaApiClient.responseJson(r);
                 if (data.success) {
                     password.value = '';
                     _deps.closeModal('unlink-telegram-modal');

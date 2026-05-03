@@ -100,6 +100,46 @@ async def test_apply_template_creates_buckets_and_map(db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_dry_run_does_not_insert_traffic_buckets(db, monkeypatch):
+    """Dry-run не должен создавать пакеты в БД (раньше вызывался ensure_default_unlimited_bucket)."""
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    gid = await add_server_group(f"GDry_{suffix}", description="t", is_default=False)
+    s_lim = f"lim_d_{suffix}"
+    s_free = f"free_d_{suffix}"
+    await add_server_config(gid, s_lim, "https://example.com", "u", "p")
+    await add_server_config(gid, s_free, "https://example.com", "u", "p")
+    await upsert_server_group_traffic_template(
+        gid,
+        enabled=True,
+        limited_bucket_name="L",
+        limit_bytes=10 * 1024 * 1024 * 1024,
+        is_unlimited=False,
+        window_days=30,
+        credit_periods_total=1,
+    )
+    await replace_server_group_traffic_limited_servers(gid, [s_lim])
+
+    subscriber_id = await get_or_create_subscriber(f"u_dry_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=gid,
+    )
+    assert len(await list_subscription_traffic_buckets(sub_id)) == 0
+
+    r = await apply_template_to_subscription(sub_id, force=False, dry_run=True)
+    assert r.get("ok") is True
+    assert r.get("would_apply") is True
+
+    assert len(await list_subscription_traffic_buckets(sub_id)) == 0
+
+
+@pytest.mark.asyncio
 async def test_apply_skips_when_custom_bucket(db, monkeypatch):
     monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
     suffix = uuid.uuid4().hex[:8]

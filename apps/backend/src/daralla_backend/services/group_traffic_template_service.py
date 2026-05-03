@@ -12,6 +12,7 @@ from daralla_backend.db.servers_db import (
 from daralla_backend.db.subscriptions_db import (
     create_subscription_traffic_bucket,
     ensure_default_unlimited_bucket,
+    get_existing_default_unlimited_bucket_id,
     get_subscription_by_id_only,
     list_subscription_traffic_buckets,
     set_subscription_server_bucket,
@@ -100,7 +101,12 @@ async def apply_template_to_subscription(
         if await async_has_non_template_traffic_customization(subscription_id, gid):
             return {"ok": True, "skipped": True, "reason": "custom_traffic", "dry_run": dry_run}
 
-    default_id = await ensure_default_unlimited_bucket(subscription_id)
+    # Dry-run не должен создавать строки в БД — иначе «Проверка» меняет данные и счётчики сбиваются с реальным apply.
+    if dry_run:
+        _existing_def = await get_existing_default_unlimited_bucket_id(subscription_id)
+        default_id = int(_existing_def) if _existing_def is not None else -1
+    else:
+        default_id = await ensure_default_unlimited_bucket(subscription_id)
     stable_name = group_limited_bucket_stable_name(gid)
 
     if not limited_set:

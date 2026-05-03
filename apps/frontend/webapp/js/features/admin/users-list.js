@@ -14,7 +14,7 @@
                 });
                 if (!response.ok) throw new Error('Ошибка загрузки пользователей');
 
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 document.getElementById('admin-users-loading').style.display = 'none';
                 document.getElementById('admin-users-content').style.display = 'block';
                 document.getElementById('admin-total-users').textContent = data.total || 0;
@@ -117,7 +117,7 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (!response.ok) throw new Error('Ошибка загрузки информации о пользователе');
-                var data = await response.json();
+                var data = await window.DarallaApiClient.responseJson(response);
                 document.getElementById('admin-user-detail-loading').style.display = 'none';
                 _deps.setCurrentAdminUserDetailUserId(userId);
 
