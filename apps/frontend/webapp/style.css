@@ -880,31 +880,33 @@ header:has(.back-button):not(:has(h1)) {
     color: var(--text-primary);
 }
 .admin-server-group-hint {
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .traffic-template-panel {
-    margin-bottom: 20px;
-    padding: 16px 18px;
+    margin-bottom: 14px;
+    padding: 12px 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--card-border);
-    background: var(--card-bg);
+    background: transparent;
 }
 .traffic-template-panel-title {
-    margin: 0 0 8px 0;
-    font-size: 1rem;
+    margin: 0 0 6px 0;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
 }
 .traffic-template-panel-lead {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.45;
 }
 .traffic-template-toggle {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    margin: 10px 0;
-    font-size: 14px;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 13px;
     color: var(--text-primary);
     cursor: pointer;
 }
@@ -918,32 +920,32 @@ header:has(.back-button):not(:has(h1)) {
 .traffic-template-fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px 14px;
-    margin-top: 8px;
+    gap: 8px 10px;
+    margin-top: 6px;
 }
 .traffic-template-field span {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
 }
 .traffic-template-hint-small {
-    margin: 12px 0 6px 0;
+    margin: 10px 0 6px 0;
     font-size: 12px;
 }
 .traffic-template-server-checks {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: 6px;
+    margin-bottom: 10px;
 }
 .traffic-template-server-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 6px 10px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--input-border);
     background: var(--input-bg);
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
 }
 .traffic-template-server-pill input {
@@ -952,13 +954,43 @@ header:has(.back-button):not(:has(h1)) {
 .traffic-template-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     margin-top: 8px;
-    padding-top: 12px;
+    padding-top: 10px;
     border-top: 1px solid var(--card-border);
+}
+.traffic-template-actions--primary .btn-primary,
+.traffic-template-actions--primary .btn-secondary {
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 13px;
 }
 .traffic-template-btn-danger {
     margin-left: auto;
+}
+.traffic-template-advanced {
+    margin-top: 8px;
+    border-top: 1px dashed var(--card-border);
+    padding-top: 8px;
+}
+.traffic-template-advanced-summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.traffic-template-advanced-summary::-webkit-details-marker {
+    display: none;
+}
+.traffic-template-advanced-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+.traffic-template-hint-footnote {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
 }
 
 .admin-server-rows .admin-server-row {
@@ -2092,6 +2124,35 @@ h1 {
 #sub-status-display {
     background: var(--card-bg);
     border-radius: 4px;
+}
+
+.sub-group-display-line {
+    margin: 0 0 6px 0;
+}
+
+.sub-edit-tab-hint {
+    margin-top: 12px;
+    margin-bottom: 0;
+}
+
+.sub-edit-sync-info {
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+}
+
+.sub-edit-sync-title {
+    margin-top: 0;
+    margin-bottom: 6px;
+    font-size: 15px;
+}
+
+.sub-edit-sync-body {
+    margin-bottom: 0;
+    font-size: 12px;
+    line-height: 1.45;
 }
 
 #subscription-changes-list {
@@ -4442,16 +4503,16 @@ a.instruction-platform-btn {
     color: var(--text-secondary);
 }
 .admin-group-detail-panel.group-detail-block {
-    margin-top: 20px;
-    padding: 18px 16px 16px;
+    margin-top: 14px;
+    padding: 12px 12px 10px;
     border-left: none;
-    border-radius: 14px;
-    background: var(--card-bg-hover);
+    border-radius: 12px;
+    background: transparent;
     border: 1px solid var(--card-border);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.14);
+    box-shadow: none;
 }
 [data-theme="light"] .admin-group-detail-panel.group-detail-block {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+    box-shadow: none;
 }
 .group-detail-actions {
     display: flex;
@@ -4461,7 +4522,7 @@ a.instruction-platform-btn {
     flex-shrink: 0;
 }
 .group-detail-hint-details {
-    margin-top: 6px;
+    margin-top: 2px;
     max-width: 42rem;
 }
 .group-detail-hint-summary {
@@ -4476,7 +4537,7 @@ a.instruction-platform-btn {
 .group-detail-hint-body {
     margin: 8px 0 0;
     padding: 0;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
     color: var(--text-secondary);
 }
@@ -4494,10 +4555,10 @@ a.instruction-platform-btn {
 
 /* Блок «Серверы» — базовый (переопределяется .admin-group-detail-panel) */
 .group-detail-block {
-    margin-top: 12px;
-    padding-top: 16px;
-    padding-left: 12px;
-    border-left: 3px solid var(--accent-ring-strong);
+    margin-top: 10px;
+    padding-top: 10px;
+    padding-left: 0;
+    border-left: none;
 }
 
 /* Заголовок блока «Серверы» и кнопка «+ Сервер» */
@@ -4506,7 +4567,7 @@ a.instruction-platform-btn {
     justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 .group-detail-heading-text {
     flex: 1;
@@ -4514,13 +4575,13 @@ a.instruction-platform-btn {
 }
 .group-detail-title {
     margin: 0;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
 }
 .group-detail-subtitle {
-    margin: 6px 0 0;
-    font-size: 12px;
+    margin: 4px 0 0;
+    font-size: 11px;
     line-height: 1.45;
     color: var(--text-secondary, #888);
     max-width: 42rem;
@@ -4636,6 +4697,16 @@ a.instruction-platform-btn {
     .group-detail-actions {
         width: 100%;
         justify-content: stretch;
+    }
+
+    .traffic-template-actions--primary .btn-primary,
+    .traffic-template-actions--primary .btn-secondary,
+    .traffic-template-actions--danger .btn-danger {
+        width: 100%;
+    }
+
+    .traffic-template-fields {
+        grid-template-columns: 1fr;
     }
 
     .card-action-btn {
@@ -5965,29 +6036,25 @@ a.instruction-platform-btn {
 .tab-content.traffic-tab-layout.active {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
     max-width: 920px;
 }
 
 .traffic-panel {
-    padding: 18px 20px;
+    padding: 12px 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--card-border);
-    background: var(--card-bg);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    background: transparent;
+    box-shadow: none;
 }
 
 .traffic-panel--intro {
-    background: linear-gradient(
-        165deg,
-        color-mix(in srgb, var(--card-bg) 92%, var(--accent) 8%) 0%,
-        var(--card-bg) 48%
-    );
+    background: transparent;
 }
 
 .traffic-panel-title {
-    margin: 0 0 10px 0;
-    font-size: 1.05rem;
+    margin: 0 0 8px 0;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
     letter-spacing: -0.01em;
@@ -6000,15 +6067,39 @@ a.instruction-platform-btn {
 
 .traffic-panel-lead {
     margin: 0;
-    font-size: 14px;
-    line-height: 1.55;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.traffic-panel-more {
+    margin-top: 10px;
+    border-top: 1px dashed var(--card-border);
+    padding-top: 8px;
+}
+
+.traffic-panel-more-summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.traffic-panel-more-summary::-webkit-details-marker {
+    display: none;
+}
+
+.traffic-panel-more-body {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
     color: var(--text-secondary);
 }
 
 .traffic-panel-hint {
-    margin: 14px 0 0 0;
-    font-size: 12px;
-    line-height: 1.45;
+    margin: 10px 0 0 0;
+    font-size: 11px;
+    line-height: 1.4;
     color: var(--text-secondary);
 }
 
@@ -6098,15 +6189,10 @@ a.instruction-platform-btn {
     box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
-.traffic-unlimited-hint {
-    margin: 0;
-    grid-column: 1 / -1;
-}
-
 .traffic-create-form {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
 }
 
 .traffic-create-row--name {
@@ -6222,7 +6308,7 @@ a.instruction-platform-btn {
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    padding: 16px 18px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--card-border);
     background: color-mix(in srgb, var(--card-bg) 96%, var(--text-primary) 4%);
 }
@@ -6298,12 +6384,12 @@ a.instruction-platform-btn {
 }
 
 .traffic-bucket-block {
-    padding: 16px 18px;
+    padding: 12px 14px;
     border-top: 1px solid var(--card-border);
 }
 
 .traffic-bucket-block-title {
-    margin: 0 0 12px 0;
+    margin: 0 0 8px 0;
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -6348,7 +6434,7 @@ a.instruction-platform-btn {
 }
 
 .traffic-bucket-block-actions {
-    margin-top: 14px;
+    margin-top: 10px;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;

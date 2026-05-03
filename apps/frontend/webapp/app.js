@@ -1818,17 +1818,12 @@ class CustomGlobe {
     
     draw() {
         const ctx = this.ctx;
-        var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
         var rootStyles = getComputedStyle(document.documentElement);
-        var cardBg = rootStyles.getPropertyValue('--card-bg').trim() || (themeLight ? '#ececee' : '#18181a');
-        var bgPage = rootStyles.getPropertyValue('--bg-page').trim() || (themeLight ? '#f0f0f2' : '#131314');
-        var cardHover = rootStyles.getPropertyValue('--card-bg-hover').trim() || (themeLight ? '#e2e2e6' : '#222226');
-        var globeGradient = themeLight
-            ? [cardBg, cardHover, bgPage]
-            : [cardHover, cardBg, bgPage];
+        /* Глобус всегда в палитре dark-темы, независимо от выбранной темы интерфейса */
+        var globeGradient = ['#34343a', '#222226', '#131314'];
         var globeGridStroke = 'rgba(255, 255, 255, 0.14)';
-        var labelColor = rootStyles.getPropertyValue('--text-primary').trim() || (themeLight ? '#1a1a1e' : '#ececed');
-        var labelStroke = themeLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.55)';
+        var labelColor = '#ececed';
+        var labelStroke = 'rgba(0, 0, 0, 0.55)';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;

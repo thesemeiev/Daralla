@@ -1110,8 +1110,8 @@
 
                         <div class="form-group" id="sub-group-row">
                             <label>Группа серверов (как в базе)</label>
-                            <p id="sub-group-display" class="hint" style="margin: 0 0 8px 0;"></p>
-                            <small class="hint">Ключи на нодах создаются синхронизацией по этой группе. Массовое применение шаблона трафика в админке группы перебирает подписки с тем же <strong>group_id</strong>, а не «по факту ключей».</small>
+                            <p id="sub-group-display" class="hint sub-group-display-line"></p>
+                            <small class="hint">Синхронизация и массовые операции по группе опираются на <strong>group_id</strong> в базе.</small>
                         </div>
                         
                         <div class="form-group" id="sub-status-display-group" style="display: none;">
@@ -1125,15 +1125,14 @@
                             <button type="submit" class="btn-primary">Сохранить</button>
                         </div>
                     </form>
-                    <p class="hint" style="margin-top: 16px; margin-bottom: 0;">
-                        Пакеты трафика по нодам, назначение нод на пакеты и квота оплаченного периода — на вкладке «Трафик».
+                    <p class="hint sub-edit-tab-hint">
+                        Пакеты трафика, назначение нод и квота периода — на вкладке «Трафик».
                     </p>
                     
-                    <div class="info-section" style="margin-top: 24px; padding: 16px;">
-                        <h3 class="text-accent" style="margin-top: 0;">Автоматическая синхронизация</h3>
-                        <p class="hint" style="margin-bottom: 0;">
-                            При сохранении изменений подписка автоматически синхронизируется со всеми X-UI серверами.
-                            Поля этой вкладки (название, срок, лимит устройств) применяются на всех серверах; лимиты и учёт трафика настраиваются отдельно на вкладке «Трафик».
+                    <div class="info-section sub-edit-sync-info">
+                        <h3 class="text-accent sub-edit-sync-title">Автоматическая синхронизация</h3>
+                        <p class="hint sub-edit-sync-body">
+                            После сохранения параметры подписки синхронизируются со всеми X-UI. Трафик и пакеты — отдельно на вкладке «Трафик».
                         </p>
                     </div>
                     
@@ -1160,18 +1159,22 @@
                 <!-- Вкладка: лимиты трафика по нодам (buckets) -->
                 <div id="subscription-tab-traffic" class="tab-content traffic-tab-layout">
                     <section class="traffic-panel traffic-panel--intro" aria-labelledby="traffic-intro-title">
-                        <h3 id="traffic-intro-title" class="traffic-panel-title">Лимиты трафика по нодам</h3>
+                        <h3 id="traffic-intro-title" class="traffic-panel-title">Трафик</h3>
                         <p class="traffic-panel-lead">
-                            <strong>Пакеты</strong> — какая нода подписки на каком лимите (безлимитный или лимитный пакет).
-                            <strong>Включённый трафик на оплаченный период</strong> и докупка считаются в блоке «Квота оплаченного периода» (обновление после оплат; тариф задаёт множитель месяцев).
-                            С панелей списание идёт сначала из включённого объёма, затем из докупки.
-                            Каждая нода назначается ровно на один пакет; при исчерпании лимита клиент на этой ноде отключается в X-UI.
+                            Пакеты задают лимит по нодам. Периодная квота и докупка — в блоке «Квота периода» ниже.
+                            Каждая нода в одном пакете; при исчерпании лимита нода отключается в X-UI.
                         </p>
+                        <details class="traffic-panel-more">
+                            <summary class="traffic-panel-more-summary">Подробнее про учёт</summary>
+                            <p class="traffic-panel-more-body">
+                                Списание на панелях: сначала включённый объём периода, затем докупка. Квота периода обновляется после оплат; множитель месяцев задаёт тариф в коммерции.
+                            </p>
+                        </details>
                     </section>
                     <section id="subscription-traffic-period-quota" class="traffic-panel traffic-panel--quota" aria-labelledby="traffic-quota-title" hidden></section>
                     <section class="traffic-panel traffic-panel--assign" aria-labelledby="traffic-assign-title">
-                        <h3 id="traffic-assign-title" class="traffic-panel-title">Назначение нод на пакеты</h3>
-                        <p class="traffic-panel-hint">Для каждой строки выберите пакет; затем нажмите «Сохранить назначения» (отдельно от кнопок в карточках пакетов).</p>
+                        <h3 id="traffic-assign-title" class="traffic-panel-title">Назначение нод</h3>
+                        <p class="traffic-panel-hint">Выберите пакет для каждой ноды и нажмите «Сохранить назначения».</p>
                         <div id="subscription-traffic-assignment-matrix" class="traffic-assignment-matrix-host" aria-live="polite"></div>
                         <div class="traffic-assign-actions">
                             <button type="button" class="btn-primary" data-action="saveAllTrafficAssignments">Сохранить назначения</button>
@@ -1185,7 +1188,7 @@
                         </div>
                     </div>
                     <section class="traffic-panel traffic-panel--create" aria-labelledby="traffic-create-title">
-                        <h3 id="traffic-create-title" class="traffic-panel-title">Новый пакет трафика</h3>
+                        <h3 id="traffic-create-title" class="traffic-panel-title">Новый пакет</h3>
                         <div class="traffic-create-form">
                             <div class="traffic-create-row traffic-create-row--name">
                                 <label class="traffic-field">
@@ -1201,10 +1204,10 @@
                             </div>
                             <label class="traffic-toggle traffic-toggle--full">
                                 <input type="checkbox" id="new-bucket-unlimited">
-                                <span>Без лимита трафика в этом пакете</span>
+                                <span>Без лимита в этом пакете</span>
                             </label>
                         </div>
-                        <p class="traffic-panel-hint">ГиБ — двоичные гигабайты (1024³ байт). Если лимит включён, укажите положительное значение в поле «Лимит».</p>
+                        <p class="traffic-panel-hint">ГиБ — двоичные (1024³). Для лимита укажите значение &gt; 0 или включите «без лимита».</p>
                         <div class="traffic-create-actions">
                             <button type="button" class="btn-secondary" data-action="loadTrafficBuckets">Обновить список</button>
                             <button type="button" class="btn-primary" data-action="createTrafficBucket">Создать пакет</button>
@@ -1261,27 +1264,34 @@
                 </details>
                 <section class="traffic-template-panel" id="admin-group-traffic-template-section" aria-labelledby="admin-group-traffic-heading">
                     <h3 id="admin-group-traffic-heading" class="traffic-template-panel-title">Шаблон трафика</h3>
-                    <p class="hint traffic-template-panel-lead">Отметьте лимитные ноды; остальные получат безлимитный пакет. «Лимит, ГиБ» — месячная база <strong>включённого</strong> трафика на оплаченный период (множитель месяцев — по тарифам в коммерции). Шаблон подставляется при создании подписки, если включён ниже, задано <code>DARALLA_TRAFFIC_BUCKETS_ENABLED=1</code> и подписка в этой группе.</p>
-                    <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-enabled"> <span>Включить шаблон для этой группы</span></label>
+                    <p class="hint traffic-template-panel-lead">Отметьте лимитные ноды, остальные будут безлимитными. Шаблон применяется к подпискам этой группы и используется при создании новых подписок.</p>
+                    <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-enabled"> <span>Включить шаблон для группы</span></label>
                     <div class="traffic-template-fields">
                         <label class="form-group traffic-template-field">
                             <span>Название пакета</span>
                             <input type="text" id="sg-traffic-bucket-name" placeholder="Лимитированные ноды" autocomplete="off">
                         </label>
                         <label class="form-group traffic-template-field">
-                            <span>Лимит, ГиБ (двоичных)</span>
+                            <span>Лимит, ГиБ</span>
                             <input type="number" id="sg-traffic-limit-gib" min="0" step="0.001" placeholder="50">
                         </label>
                     </div>
-                    <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-unlimited"> <span>Без лимита трафика для отмеченных нод (отдельный пакет)</span></label>
-                    <p class="hint traffic-template-hint-small">Ноды с лимитом (чекбоксы):</p>
+                    <label class="traffic-template-toggle"><input type="checkbox" id="sg-traffic-unlimited"> <span>Для отмеченных нод использовать отдельный безлимитный пакет</span></label>
+                    <p class="hint traffic-template-hint-small">Ноды с лимитом:</p>
                     <div id="sg-traffic-limited-servers" class="traffic-template-server-checks"></div>
-                    <div class="traffic-template-actions">
-                        <button type="button" class="btn-primary" data-action="saveGroupTrafficTemplate">Сохранить шаблон</button>
-                        <button type="button" class="btn-secondary" data-action="previewGroupTrafficTemplate">Проверить применение (dry-run)</button>
-                        <button type="button" class="btn-secondary" data-action="applyGroupTrafficTemplate">Применить ко всем подпискам группы</button>
-                        <button type="button" class="btn-danger traffic-template-btn-danger" data-action="applyGroupTrafficTemplateForce">Перезаписать по шаблону (force)</button>
+                    <div class="traffic-template-actions traffic-template-actions--primary">
+                        <button type="button" class="btn-primary" data-action="saveGroupTrafficTemplate">Сохранить</button>
+                        <button type="button" class="btn-secondary" data-action="previewGroupTrafficTemplate">Проверить (dry-run)</button>
+                        <button type="button" class="btn-secondary" data-action="applyGroupTrafficTemplate">Применить по группе</button>
                     </div>
+                    <details class="traffic-template-advanced">
+                        <summary class="traffic-template-advanced-summary">Расширенные действия</summary>
+                        <div class="traffic-template-actions traffic-template-actions--danger">
+                            <button type="button" class="btn-danger traffic-template-btn-danger" data-action="applyGroupTrafficTemplateForce">Перезаписать по шаблону (force)</button>
+                        </div>
+                        <p class="hint traffic-template-advanced-hint">Force принудительно перезаписывает кастомные пакеты у подписок группы. Используйте только если уверены.</p>
+                    </details>
+                    <p class="hint traffic-template-hint-footnote">Трафик-шаблон работает, когда включен режим трафик-пакетов на сервере.</p>
                 </section>
                 <div id="admin-servers-in-group-list" class="admin-servers-in-group-list"></div>
             </div>

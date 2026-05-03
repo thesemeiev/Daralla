@@ -369,8 +369,8 @@
 
             host.innerHTML = ''
                 + '<div class="traffic-assign-matrix-shell">'
-                + '<table class="traffic-assign-table" aria-label="Назначение нод на пакеты трафика">'
-                + '<thead><tr><th scope="col">Нода</th><th scope="col">Пакет трафика</th></tr></thead>'
+                + '<table class="traffic-assign-table" aria-label="Назначение нод на пакеты">'
+                + '<thead><tr><th scope="col">Нода</th><th scope="col">Пакет</th></tr></thead>'
                 + '<tbody>' + rows + '</tbody>'
                 + '</table></div>';
         }
@@ -390,13 +390,13 @@
             var purchased = Number(q.purchased_remaining_bytes || 0);
             var incRemain = Math.max(0, allowance - incUsed);
             host.innerHTML = ''
-                + '<h3 id="traffic-quota-title" class="traffic-panel-title">Квота оплаченного периода</h3>'
-                + '<p class="traffic-panel-hint">Включённый объём пересчитывается при успешной оплате продления; докупленный не сгорает при продлении.</p>'
+                + '<h3 id="traffic-quota-title" class="traffic-panel-title">Квота периода</h3>'
+                + '<p class="traffic-panel-hint">Включённый объём пересчитывается при оплате продления; докупка не сгорает.</p>'
                 + '<div class="traffic-metric-grid" role="region" aria-label="Периодная квота">'
-                + '  <div class="traffic-metric"><span class="traffic-metric-label">Включено на период</span><span class="traffic-metric-value">' + _formatBytes(allowance) + '</span></div>'
-                + '  <div class="traffic-metric"><span class="traffic-metric-label">Из включённого израсходовано</span><span class="traffic-metric-value">' + _formatBytes(incUsed) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Включено</span><span class="traffic-metric-value">' + _formatBytes(allowance) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Израсходовано</span><span class="traffic-metric-value">' + _formatBytes(incUsed) + '</span></div>'
                 + '  <div class="traffic-metric"><span class="traffic-metric-label">Остаток включённого</span><span class="traffic-metric-value">' + _formatBytes(incRemain) + '</span></div>'
-                + '  <div class="traffic-metric"><span class="traffic-metric-label">Докупленный остаток</span><span class="traffic-metric-value">' + _formatBytes(purchased) + '</span></div>'
+                + '  <div class="traffic-metric"><span class="traffic-metric-label">Докупка</span><span class="traffic-metric-value">' + _formatBytes(purchased) + '</span></div>'
                 + '</div>'
                 + '<div class="traffic-quota-admin-actions">'
                 + '  <label class="traffic-field">'
@@ -450,7 +450,7 @@
             if (!root) return;
             var buckets = _currentBucketSnapshot.buckets || [];
             if (!buckets.length) {
-                root.innerHTML = '<div class="empty-state"><p>Пакеты трафика ещё не созданы. Заполните форму «Новый пакет трафика» ниже или нажмите «Обновить список».</p></div>';
+                root.innerHTML = '<div class="empty-state"><p>Пакеты ещё не созданы. Заполните блок «Новый пакет» ниже или нажмите «Обновить список».</p></div>';
                 return;
             }
             var html = buckets.map(function (b) {
@@ -470,16 +470,10 @@
                 var remainRu = isUnlimited ? '—' : (hasDisplayMetrics
                     ? _formatBytes(Number(b.display_remaining_bytes || 0))
                     : _formatBytes(Math.max(0, rawLimit - windowUsed)));
-                var limLabel = usesPeriodQuota && !isUnlimited ? 'Эффективный лимит' : 'Лимит пакета';
-                var usedLabel = usesPeriodQuota && !isUnlimited ? 'Учтено (период)' : 'Использовано';
-                var remLabel = usesPeriodQuota && !isUnlimited ? 'Доступно сейчас' : 'Остаток';
+                var limLabel = usesPeriodQuota && !isUnlimited ? 'Лимит' : 'Лимит пакета';
+                var usedLabel = usesPeriodQuota && !isUnlimited ? 'Учёт' : 'Использовано';
+                var remLabel = usesPeriodQuota && !isUnlimited ? 'Доступно' : 'Остаток';
                 var gibVal = isUnlimited ? '' : _gibFromBytes(rawLimit);
-                var quotaHintHtml = (usesPeriodQuota && !isUnlimited)
-                    ? '  <p class="hint traffic-period-quota-bucket-hint">Сводка совпадает с блоком «Квота оплаченного периода». Поле «Лимит, ГиБ» — база пакета (шаблон группы / синк); исчерпание по включённому и докупке считается там.</p>\n'
-                    : '';
-                var adjustHintHtml = (usesPeriodQuota && !isUnlimited)
-                    ? '    <p class="hint traffic-adjust-quota-hint">Дельта меняет дневной учёт и строку периодной квоты для этого пакета.</p>\n'
-                    : '';
                 var canDeleteBucket = buckets.length > 1 && !isUnlimited;
                 var limitFieldHtml = isUnlimited
                     ? ''
@@ -491,7 +485,6 @@
                 var toggleBlockHtml = isUnlimited
                     ? ''
                     + '    <div class="traffic-bucket-toggles">'
-                    + '      <p class="hint traffic-unlimited-hint">Безлимитный пакет.</p>'
                     + '      <label class="traffic-toggle">'
                     + '        <input type="checkbox" id="bucket-enabled-' + id + '" ' + (b.is_enabled ? 'checked' : '') + '>'
                     + '        <span>Учёт включён</span>'
@@ -517,7 +510,6 @@
                     + '    <h4 class="traffic-bucket-title">' + _deps.escapeHtml(b.name || ('Пакет #' + id)) + '</h4>'
                     + '    <span class="traffic-bucket-status ' + statusClass + '" role="status">' + statusText + '</span>'
                     + '  </header>'
-                    + quotaHintHtml
                     + '  <div class="traffic-metric-grid" aria-label="Сводка по трафику">'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">Тип</span><span class="traffic-metric-value">' + typeRu + '</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">' + limLabel + '</span><span class="traffic-metric-value">' + limitRu + '</span></div>'
@@ -525,7 +517,7 @@
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">' + remLabel + '</span><span class="traffic-metric-value">' + remainRu + '</span></div>'
                     + '  </div>'
                     + '  <section class="traffic-bucket-block" aria-labelledby="bucket-params-' + id + '">'
-                    + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Настройки пакета</h5>'
+                    + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Параметры</h5>'
                     + '    <div class="traffic-bucket-fields">'
                     + '      <label class="traffic-field traffic-field--span2">'
                     + '        <span class="traffic-field-label">Название</span>'
@@ -535,13 +527,12 @@
                     + '    </div>'
                     + toggleBlockHtml
                     + '    <div class="traffic-bucket-block-actions">'
-                    + '      <button type="button" class="btn-primary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить настройки</button>'
+                    + '      <button type="button" class="btn-primary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить</button>'
                     + deleteBtnHtml
                     + '    </div>'
                     + '  </section>'
                     + '  <section class="traffic-bucket-block traffic-bucket-block--adjust" aria-labelledby="bucket-adjust-' + id + '">'
-                    + '    <h5 class="traffic-bucket-block-title" id="bucket-adjust-' + id + '">Корректировка учёта</h5>'
-                    + adjustHintHtml
+                    + '    <h5 class="traffic-bucket-block-title" id="bucket-adjust-' + id + '">Корректировка</h5>'
                     + '    <div class="traffic-bucket-adjust-fields">'
                     + '      <label class="traffic-field">'
                     + '        <span class="traffic-field-label">Дельта, ГиБ (+ или −)</span>'
@@ -553,7 +544,7 @@
                     + '      </label>'
                     + '    </div>'
                     + '    <div class="traffic-bucket-block-actions">'
-                    + '      <button type="button" class="btn-secondary" data-action="adjustTrafficBucketUsage" data-bucket-id="' + id + '">Применить корректировку</button>'
+                    + '      <button type="button" class="btn-secondary" data-action="adjustTrafficBucketUsage" data-bucket-id="' + id + '">Применить</button>'
                     + '    </div>'
                     + '  </section>'
                     + '</article>';
