@@ -136,8 +136,10 @@
                 return parts[2] + '.' + parts[1];
             });
             var values = data.map(function (d) { return d.revenue || 0; });
-            var isDark = document.body.classList.contains('dark')
-                || getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim().startsWith('#1');
+            var rootStyles = getComputedStyle(document.documentElement);
+            var chartBar = rootStyles.getPropertyValue('--chart-bar').trim() || 'rgba(99,132,255,0.6)';
+            var chartAxis = rootStyles.getPropertyValue('--chart-axis').trim() || '#888';
+            var chartGrid = rootStyles.getPropertyValue('--chart-grid').trim() || 'rgba(255,255,255,0.06)';
 
             var tickCap = labels.length <= 14 ? 14 : labels.length <= 31 ? 10 : 8;
 
@@ -147,7 +149,7 @@
                     labels: labels,
                     datasets: [{
                         data: values,
-                        backgroundColor: isDark ? 'rgba(99,132,255,0.6)' : 'rgba(54,120,220,0.7)',
+                        backgroundColor: chartBar,
                         borderRadius: 4,
                         maxBarThickness: 18
                     }]
@@ -166,15 +168,15 @@
                                 maxRotation: 0,
                                 autoSkip: true,
                                 maxTicksLimit: tickCap,
-                                color: isDark ? '#888' : '#666',
+                                color: chartAxis,
                                 font: { size: 11 }
                             }
                         },
                         y: {
-                            grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
+                            grid: { color: chartGrid },
                             ticks: {
                                 callback: function (v) { return v >= 1000 ? (v / 1000) + 'k' : v; },
-                                color: isDark ? '#888' : '#666',
+                                color: chartAxis,
                                 font: { size: 11 }
                             },
                             beginAtZero: true

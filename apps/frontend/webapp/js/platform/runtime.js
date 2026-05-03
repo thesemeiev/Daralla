@@ -90,7 +90,8 @@
                 _tg.ready();
                 _tg.expand();
                 if (_tg.disableVerticalSwipes) _tg.disableVerticalSwipes();
-                var color = getTheme() === 'light' ? '#f0f0f2' : '#131314';
+                var color = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim()
+                    || (getTheme() === 'light' ? '#f0f0f2' : '#131314');
                 _tg.setHeaderColor(color);
                 _tg.setBackgroundColor(color);
             } catch (e) {}

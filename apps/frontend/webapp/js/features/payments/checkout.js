@@ -172,7 +172,7 @@
             if (ts) {
                 ts.style.display = 'block';
                 ts.innerHTML = ''
-                    + '<p class="choose-section-label" style="margin-bottom: 8px;">Докупка трафика</p>'
+                    + '<p class="choose-section-label choose-section-label--compact">Докупка трафика</p>'
                     + '<div class="traffic-topup-checkout-card">'
                     + '<div class="traffic-topup-checkout-title">' + esc(pkg.title) + '</div>'
                     + '<div class="traffic-topup-checkout-meta">' + esc(String(pkg.gib)) + ' ГиБ · ' + esc(String(pkg.price)) + '₽</div>'

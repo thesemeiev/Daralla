@@ -66,7 +66,10 @@ function applyTheme() {
     var root = document.documentElement;
     if (root) root.setAttribute('data-theme', theme);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'light' ? '#f0f0f2' : '#131314');
+    if (meta) {
+        var bgPage = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim();
+        meta.setAttribute('content', bgPage || (theme === 'light' ? '#f0f0f2' : '#131314'));
+    }
     if (typeof platform !== 'undefined' && platform.reapplyTgUi) platform.reapplyTgUi();
     if (typeof serverGlobe !== 'undefined' && serverGlobe && typeof serverGlobe.draw === 'function') {
         try {
@@ -1816,12 +1819,15 @@ class CustomGlobe {
     draw() {
         const ctx = this.ctx;
         var themeLight = typeof getTheme === 'function' && getTheme() === 'light';
-        /* Светлая тема: тот же градиент, что в тёмной, но на шаг светлее по каждому стопу */
+        var rootStyles = getComputedStyle(document.documentElement);
+        var cardBg = rootStyles.getPropertyValue('--card-bg').trim() || (themeLight ? '#ececee' : '#18181a');
+        var bgPage = rootStyles.getPropertyValue('--bg-page').trim() || (themeLight ? '#f0f0f2' : '#131314');
+        var cardHover = rootStyles.getPropertyValue('--card-bg-hover').trim() || (themeLight ? '#e2e2e6' : '#222226');
         var globeGradient = themeLight
-            ? ['#3f3f47', '#2d2d34', '#1e1e24']
-            : ['#34343a', '#222226', '#131314'];
+            ? [cardBg, cardHover, bgPage]
+            : [cardHover, cardBg, bgPage];
         var globeGridStroke = 'rgba(255, 255, 255, 0.14)';
-        var labelColor = themeLight ? '#1a1a1e' : '#ececed';
+        var labelColor = rootStyles.getPropertyValue('--text-primary').trim() || (themeLight ? '#1a1a1e' : '#ececed');
         var labelStroke = themeLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.55)';
         // Получаем реальные размеры с учетом devicePixelRatio
         const dpr = window.devicePixelRatio || 1;

@@ -137,7 +137,7 @@
                 + '            <div class="sub-sheet__surface">\n'
                 + '                <header class="sub-sheet__header">\n'
                 + '                    <h2 class="sub-sheet__title" id="subscription-name-display">' + _deps.escapeHtml(sub.name) + '</h2>\n'
-                + '                    <span class="sub-sheet__status detail-status ' + statusClass + '">' + statusText + '</span>\n'
+                + '                    <span class="sub-sheet__status detail-status ' + statusClass + '" aria-live="polite">' + statusText + '</span>\n'
                 + '                </header>\n'
                 + '                <div class="sub-sheet__stats" role="list">\n'
                 + '                    <div class="sub-sheet__stat" role="listitem"><span class="sub-sheet__stat-label">Устройств</span><span class="sub-sheet__stat-value">' + sub.device_limit + '</span></div>\n'
@@ -264,8 +264,7 @@
                 if (subscriptionsListEl && !document.getElementById('buy-subscription-button')) {
                     var buyButton = document.createElement('button');
                     buyButton.id = 'buy-subscription-button';
-                    buyButton.className = 'btn-primary';
-                    buyButton.style.cssText = 'width: 100%; margin-top: 16px;';
+                    buyButton.className = 'btn-primary subscriptions-buy-btn';
                     buyButton.textContent = 'Купить подписку';
                     buyButton.onclick = function () {
                         if (typeof _deps.onBuySubscription === 'function') _deps.onBuySubscription();

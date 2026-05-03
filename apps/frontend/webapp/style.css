@@ -28,6 +28,38 @@
     --color-danger: #ff6b6b;
     --color-danger-border: rgba(220, 53, 69, 0.4);
     --color-warning: #f5a623;
+    --color-neutral: #9ea0a8;
+
+    /* Status semantic tokens */
+    --status-success-bg: rgba(52, 199, 89, 0.22);
+    --status-success-border: rgba(52, 199, 89, 0.42);
+    --status-success-text: #7ee49a;
+    --status-danger-bg: rgba(255, 107, 107, 0.2);
+    --status-danger-border: rgba(255, 107, 107, 0.4);
+    --status-danger-text: #ff8585;
+    --status-info-bg: rgba(139, 163, 232, 0.2);
+    --status-info-border: rgba(139, 163, 232, 0.38);
+    --status-info-text: #a7b9ee;
+    --status-neutral-bg: rgba(158, 160, 168, 0.2);
+    --status-neutral-border: rgba(158, 160, 168, 0.34);
+    --status-neutral-text: #b8bac2;
+
+    /* Charts */
+    --chart-bar: rgba(139, 163, 232, 0.6);
+    --chart-axis: #8f929c;
+    --chart-grid: rgba(255, 255, 255, 0.08);
+
+    /* Text/link helpers */
+    --hint-weak: rgba(255, 255, 255, 0.56);
+    --link-underline: rgba(255, 255, 255, 0.24);
+    --link-underline-hover: rgba(255, 255, 255, 0.42);
+
+    /* Page shell density */
+    --page-pad-top-mobile: max(112px, calc(14px + env(safe-area-inset-top, 28px)));
+    --page-pad-top-desktop: calc(16px + env(safe-area-inset-top, 0px));
+    --page-pad-x-mobile: 12px;
+    --page-pad-bottom-mobile: calc(116px + env(safe-area-inset-bottom));
+    --page-pad-bottom-desktop: calc(96px + env(safe-area-inset-bottom));
 
     /* Spacing (8px rhythm) */
     --space-xs: 4px;
@@ -150,13 +182,34 @@
     --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
     --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.12);
     --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.15);
+
+    --status-success-bg: rgba(52, 199, 89, 0.16);
+    --status-success-border: rgba(52, 199, 89, 0.32);
+    --status-success-text: #1f7c36;
+    --status-danger-bg: rgba(220, 53, 69, 0.12);
+    --status-danger-border: rgba(220, 53, 69, 0.28);
+    --status-danger-text: #aa3342;
+    --status-info-bg: rgba(100, 120, 180, 0.14);
+    --status-info-border: rgba(100, 120, 180, 0.25);
+    --status-info-text: #4f5f96;
+    --status-neutral-bg: rgba(26, 26, 26, 0.08);
+    --status-neutral-border: rgba(26, 26, 26, 0.16);
+    --status-neutral-text: #5a5a63;
+
+    --chart-bar: rgba(82, 120, 208, 0.72);
+    --chart-axis: #61646e;
+    --chart-grid: rgba(0, 0, 0, 0.08);
+
+    --hint-weak: rgba(0, 0, 0, 0.56);
+    --link-underline: rgba(0, 0, 0, 0.24);
+    --link-underline-hover: rgba(0, 0, 0, 0.42);
 }
 
 [data-theme="light"] .form-message--error {
-    color: #c44;
+    color: var(--status-danger-text);
 }
 [data-theme="light"] .form-message--success {
-    color: #1a7a2e;
+    color: var(--status-success-text);
 }
 [data-theme="light"] .bottom-nav {
     background:
@@ -185,27 +238,27 @@
     -webkit-backdrop-filter: none;
 }
 [data-theme="light"] .landing-scroll-hint {
-    color: rgba(0, 0, 0, 0.5);
+    color: var(--hint-weak);
 }
 
 [data-theme="light"] .legal-inline a {
-    border-bottom-color: rgba(0, 0, 0, 0.24);
+    border-bottom-color: var(--link-underline);
 }
 
 [data-theme="light"] .legal-inline a:hover {
-    border-bottom-color: rgba(0, 0, 0, 0.42);
+    border-bottom-color: var(--link-underline-hover);
 }
 
 [data-theme="light"] .delete-section .hint.warning {
-    color: #c44;
+    color: var(--status-danger-text);
 }
 
 [data-theme="light"] .broadcast-count-success {
-    color: #1a7a2e;
+    color: var(--status-success-text);
 }
 
 [data-theme="light"] .broadcast-count-error {
-    color: #c44;
+    color: var(--status-danger-text);
 }
 
 [data-theme="light"] .event-winner-block {
@@ -214,7 +267,7 @@
 }
 
 [data-theme="light"] .event-winner-text {
-    color: #1a7a2e;
+    color: var(--status-success-text);
 }
 
 [data-theme="light"] .event-winner-hint {
@@ -222,8 +275,8 @@
 }
 
 [data-theme="light"] .btn-danger {
-    background: rgba(220, 53, 69, 0.15);
-    color: #c44;
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -237,72 +290,72 @@
 }
 
 [data-theme="light"] .subscription-change-field {
-    color: #1a7a2e;
+    color: var(--status-success-text);
 }
 
 /* Статусы в светлой теме — видимость */
 [data-theme="light"] .subscription-status.active,
 [data-theme="light"] .server-status-badge.online {
-    background: rgba(76, 175, 80, 0.25);
-    color: #1a7a2e;
-    border-color: rgba(76, 175, 80, 0.5);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border-color: var(--status-success-border);
 }
 
 [data-theme="light"] .subscription-status.expired,
 [data-theme="light"] .server-status-badge.offline {
-    background: rgba(220, 53, 69, 0.2);
-    color: #c44;
-    border-color: rgba(220, 53, 69, 0.4);
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
+    border-color: var(--status-danger-border);
 }
 
 [data-theme="light"] .detail-status.active,
 [data-theme="light"] .detail-status.success {
-    background: rgba(76, 175, 80, 0.2);
-    color: #1a7a2e;
-    border-color: rgba(76, 175, 80, 0.4);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border-color: var(--status-success-border);
 }
 
 [data-theme="light"] .detail-status.expired {
-    background: rgba(220, 53, 69, 0.15);
-    color: #c44;
-    border-color: rgba(220, 53, 69, 0.35);
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
+    border-color: var(--status-danger-border);
 }
 
 [data-theme="light"] .event-badge--live,
 [data-theme="light"] .event-detail-status--live {
-    background: rgba(76, 175, 80, 0.25);
-    color: #1a7a2e;
-    border-color: rgba(76, 175, 80, 0.5);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border-color: var(--status-success-border);
 }
 
 [data-theme="light"] .event-badge--upcoming,
 [data-theme="light"] .event-detail-status--upcoming {
-    background: rgba(100, 120, 180, 0.25);
-    color: #6b7bc4;
-    border-color: rgba(100, 120, 180, 0.45);
+    background: var(--status-info-bg);
+    color: var(--status-info-text);
+    border-color: var(--status-info-border);
 }
 
 [data-theme="light"] .event-badge--ended,
 [data-theme="light"] .event-detail-status--ended {
-    background: rgba(0, 0, 0, 0.08);
-    color: #555;
-    border-color: rgba(0, 0, 0, 0.12);
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
+    border-color: var(--status-neutral-border);
 }
 
 [data-theme="light"] .admin-subscription-status.active {
-    background: rgba(76, 175, 80, 0.2);
-    color: #1a7a2e;
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
 }
 
 [data-theme="light"] .admin-subscription-status.expired,
 [data-theme="light"] .admin-subscription-status.deleted {
-    background: rgba(220, 53, 69, 0.15);
-    color: #c44;
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
 }
 
 [data-theme="light"] .admin-subscription-status.canceled {
-    background: rgba(0, 0, 0, 0.08);
-    color: #555;
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
 }
 
 * {
@@ -321,14 +374,14 @@
     line-height: 1.4;
 }
 .form-message--error {
-    background: rgba(220, 53, 69, 0.15);
-    border: 1px solid rgba(220, 53, 69, 0.4);
-    color: #f8a0a0;
+    background: var(--status-danger-bg);
+    border: 1px solid var(--status-danger-border);
+    color: var(--status-danger-text);
 }
 .form-message--success {
-    background: rgba(40, 167, 69, 0.15);
-    border: 1px solid rgba(40, 167, 69, 0.4);
-    color: #90d4a0;
+    background: var(--status-success-bg);
+    border: 1px solid var(--status-success-border);
+    color: var(--status-success-text);
 }
 
 /* Лендинг до входа — полноэкран, scroll-snap, минимализм */
@@ -520,7 +573,7 @@
 .legal-inline a {
     color: inherit;
     text-decoration: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    border-bottom: 1px solid var(--link-underline);
     text-underline-offset: 2px;
     text-decoration-thickness: 1px;
     transition: border-color 0.2s ease;
@@ -536,7 +589,7 @@
 
 @media (hover: hover) and (pointer: fine) {
 .legal-inline a:hover {
-    border-color: rgba(255, 255, 255, 0.38);
+    border-color: var(--link-underline-hover);
 }
 }
 
@@ -566,7 +619,7 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 101;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--hint-weak);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.4s ease;
@@ -592,8 +645,8 @@ body {
     background: var(--bg-page);
     color: var(--text-primary);
     position: relative;
-    /* Верх: не меньше 170px, иначе 16px + safe-area (монобровь/Dynamic Island — все разделы/страницы) */
-    padding: max(170px, calc(16px + env(safe-area-inset-top, 40px))) 16px calc(100px + env(safe-area-inset-bottom)) 16px;
+    /* Компактная shell-плотность с safe-area */
+    padding: var(--page-pad-top-mobile) var(--page-pad-x-mobile) var(--page-pad-bottom-desktop) var(--page-pad-x-mobile);
     min-height: 100vh;
     line-height: var(--line-height-body);
     -webkit-font-smoothing: antialiased;
@@ -607,7 +660,7 @@ body {
 /* На широком экране (>480px) — без большого отступа сверху, иначе интерфейс «падает» */
 @media (min-width: 481px) {
     body {
-        padding-top: calc(16px + env(safe-area-inset-top, 0px));
+        padding-top: var(--page-pad-top-desktop);
     }
 }
 
@@ -628,11 +681,11 @@ input, textarea, select {
 }
 
 .app-dialog--error #app-dialog-title {
-    color: #e57373;
+    color: var(--status-danger-text);
 }
 
 .app-dialog--success #app-dialog-title {
-    color: #81c784;
+    color: var(--status-success-text);
 }
 
 .app-copy-manual-field {
@@ -740,10 +793,10 @@ input, textarea, select {
 
 header {
     text-align: center;
-    margin-bottom: 24px;
-    /* Доп. отступ сверху под монобровь/Dynamic Island — едино для всех страниц */
-    padding-top: calc(36px + env(safe-area-inset-top, 0px));
-    padding-bottom: 12px;
+    margin-bottom: 16px;
+    /* Компактная шапка без потери safe-area */
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+    padding-bottom: 8px;
     position: relative;
     z-index: 10;
     /* Прозрачно: фон только у body — нет отдельной плашки под заголовком */
@@ -1497,6 +1550,11 @@ h1 {
     font-weight: 600;
 }
 
+.subscriptions-buy-btn {
+    width: 100%;
+    margin-top: 12px;
+}
+
 .stats {
     display: flex;
     gap: 16px;
@@ -1590,16 +1648,16 @@ h1 {
 
 .subscription-status.active,
 .server-status-badge.online {
-    background: rgba(76, 175, 80, 0.4);
-    color: #5ee85e;
-    border: 1px solid rgba(76, 175, 80, 0.5);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border: 1px solid var(--status-success-border);
 }
 
 .subscription-status.expired,
 .server-status-badge.offline {
-    background: rgba(255, 59, 48, 0.4);
-    color: #ff5c5c;
-    border: 1px solid rgba(255, 59, 48, 0.5);
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
+    border: 1px solid var(--status-danger-border);
 }
 
 .subscription-status-blink,
@@ -1647,9 +1705,9 @@ h1 {
 }
 
 .event-badge--live {
-    background: rgba(76, 175, 80, 0.4);
-    color: #5ee85e;
-    border: 1px solid rgba(76, 175, 80, 0.5);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border: 1px solid var(--status-success-border);
 }
 
 .event-badge--live.event-badge--blink {
@@ -1657,14 +1715,15 @@ h1 {
 }
 
 .event-badge--ended {
-    background: rgba(120, 120, 120, 0.4);
-    color: #aaa;
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
+    border: 1px solid var(--status-neutral-border);
 }
 
 .event-badge--upcoming {
-    background: rgba(100, 120, 180, 0.35);
-    color: #8ba3e8;
-    border: 1px solid rgba(100, 120, 180, 0.5);
+    background: var(--status-info-bg);
+    color: var(--status-info-text);
+    border: 1px solid var(--status-info-border);
 }
 
 .event-icon-svg {
@@ -1697,21 +1756,21 @@ h1 {
 }
 
 .event-detail-status--live {
-    background: rgba(76, 175, 80, 0.4);
-    color: #5ee85e;
-    border: 1px solid rgba(76, 175, 80, 0.5);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border: 1px solid var(--status-success-border);
 }
 
 .event-detail-status--upcoming {
-    background: rgba(100, 120, 180, 0.35);
-    color: #8ba3e8;
-    border: 1px solid rgba(100, 120, 180, 0.5);
+    background: var(--status-info-bg);
+    color: var(--status-info-text);
+    border: 1px solid var(--status-info-border);
 }
 
 .event-detail-status--ended {
-    background: rgba(120, 120, 120, 0.35);
-    color: #aaa;
-    border: 1px solid rgba(120, 120, 120, 0.5);
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
+    border: 1px solid var(--status-neutral-border);
 }
 
 .live-ranking {
@@ -1764,17 +1823,17 @@ h1 {
     margin: 8px 0 0 0;
     font-size: 13px;
     font-weight: 500;
-    color: #8ba3e8;
+    color: var(--status-info-text);
 }
 
 .event-card--live .event-days,
 .event-detail-live .event-days {
-    color: #5ee85e;
+    color: var(--status-success-text);
 }
 
 [data-theme="light"] .event-card--live .event-days,
 [data-theme="light"] .event-detail-live .event-days {
-    color: #1a7a2e;
+    color: var(--status-success-text);
 }
 
 .event-card-rewards {
@@ -1880,12 +1939,13 @@ h1 {
 
 .action-button {
     width: 100%;
-    padding: 12px;
-    border: none;
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid var(--card-border);
     background: var(--card-bg-hover);
     color: var(--text-primary);
     border-radius: 10px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s ease;
@@ -1899,6 +1959,7 @@ h1 {
 
 .action-button:active {
     background: var(--card-border);
+    transform: scale(0.98);
 }
 
 .action-button:disabled,
@@ -1997,6 +2058,10 @@ h1 {
     font-size: 14px;
     color: var(--text-secondary);
     font-weight: 500;
+}
+
+.choose-section-label--compact {
+    margin-bottom: 8px;
 }
 .choose-options-row {
     display: flex;
@@ -2316,8 +2381,8 @@ h1 {
 
 /* Страница подписки — редизайн (sub-sheet) */
 #subscription-detail-content {
-    padding: 4px 16px 28px;
-    max-width: 520px;
+    padding: 2px 12px 22px;
+    max-width: 640px;
     margin: 0 auto;
 }
 
@@ -2326,11 +2391,11 @@ h1 {
 }
 
 .sub-sheet__surface {
-    background: var(--card-bg);
+    background: transparent;
     border: 1px solid var(--card-border);
-    border-radius: 16px;
-    padding: 18px 18px 16px;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 28px rgba(0, 0, 0, 0.12);
+    border-radius: 14px;
+    padding: 12px 12px 10px;
+    box-shadow: none;
 }
 
 .sub-sheet__header {
@@ -2338,16 +2403,16 @@ h1 {
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 10px 12px;
-    margin-bottom: 16px;
-    padding-bottom: 14px;
+    gap: 8px 10px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--card-border);
 }
 
 .sub-sheet__title {
     margin: 0;
     flex: 1 1 200px;
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -2361,21 +2426,21 @@ h1 {
 
 .sub-sheet__stats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 16px;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
 }
 
 .sub-sheet__stat {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 10px 12px;
-    min-height: 58px;
+    padding: 8px 10px;
+    min-height: 48px;
     justify-content: center;
-    border-radius: 11px;
-    background: var(--card-bg-hover);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid var(--card-border);
 }
 
 .sub-sheet__stat--wide {
@@ -2383,7 +2448,7 @@ h1 {
 }
 
 .sub-sheet__stat-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.45px;
@@ -2391,14 +2456,14 @@ h1 {
 }
 
 .sub-sheet__stat-value {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--text-primary);
     line-height: 1.25;
 }
 
 .sub-sheet__primary {
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .subscription-detail-copy-btn.sub-sheet__copy-btn {
@@ -2411,11 +2476,11 @@ h1 {
 
 /* Панель трафика — отдельный визуальный блок внутри листа */
 .sub-traffic {
-    margin-bottom: 18px;
-    padding: 14px 14px 12px;
-    border-radius: 14px;
-    background: var(--accent-muted-subtle);
-    border: 1px solid var(--accent-line);
+    margin-bottom: 12px;
+    padding: 10px 10px 8px;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid var(--card-border);
 }
 
 .sub-traffic__title {
@@ -2427,7 +2492,7 @@ h1 {
 }
 
 .sub-traffic__lead {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     font-size: 12px;
     line-height: 1.5;
     color: var(--text-secondary);
@@ -2484,7 +2549,7 @@ h1 {
 }
 
 .sub-traffic__hint {
-    margin: 0 0 10px;
+    margin: 0 0 8px;
     font-size: 11px;
     line-height: 1.45;
     color: var(--text-secondary);
@@ -2502,23 +2567,30 @@ h1 {
 .sub-sheet__footer {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    padding-top: 4px;
+    gap: 8px;
+    padding-top: 2px;
 }
 
 .sub-sheet__footer .sub-sheet__btn {
-    flex: 1 1 calc(50% - 5px);
-    min-width: min(100%, 148px);
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .sub-sheet__footer:has(> :only-child) .sub-sheet__btn {
     flex: 1 1 100%;
 }
 
+.sub-sheet__footer .sub-sheet__btn:only-child {
+    width: 100%;
+    flex-basis: 100%;
+}
+
 .sub-sheet__btn {
-    padding: 11px 14px;
+    min-height: 44px;
+    padding: 10px 12px;
     border-radius: 11px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
@@ -2692,7 +2764,7 @@ h1 {
 
 .bottom-nav.nav-indicator-has-color .nav-item.indicator-over,
 .bottom-nav.nav-indicator-has-color .nav-item.indicator-over svg {
-    color: #8ba3e8;
+    color: var(--status-info-text);
 }
 
 /* При увеличении (drag) цвет иконки не трогаем — она остаётся обычной */
@@ -2717,6 +2789,12 @@ h1 {
 }
 
 /* Детальная страница подписки */
+#page-subscription-detail > header {
+    margin-bottom: 10px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-bottom: 4px;
+}
+
 .back-button {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -2758,23 +2836,23 @@ h1 {
 }
 
 .detail-status.active {
-    background: rgba(76, 175, 80, 0.2);
-    color: #4caf50;
-    border: 1px solid rgba(76, 175, 80, 0.3);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border: 1px solid var(--status-success-border);
 }
 
 .detail-status.expired {
-    background: rgba(255, 59, 48, 0.2);
-    color: #ff3b30;
-    border: 1px solid rgba(255, 59, 48, 0.3);
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
+    border: 1px solid var(--status-danger-border);
     text-transform: none;
     letter-spacing: 0;
 }
 
 .detail-status.success {
-    background: rgba(76, 175, 80, 0.25);
-    color: #4caf50;
-    border: 1px solid rgba(76, 175, 80, 0.4);
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+    border: 1px solid var(--status-success-border);
     text-transform: none;
     letter-spacing: 0;
 }
@@ -3430,7 +3508,7 @@ body.about-page-active {
 .about-section h2 {
     font-size: 22px;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     margin-bottom: 12px;
     letter-spacing: -0.3px;
 }
@@ -3745,7 +3823,7 @@ a.instruction-platform-btn {
 
 @media (max-width: 480px) {
     body {
-        padding: 16px 12px calc(200px + env(safe-area-inset-bottom)) 12px;
+        padding: calc(12px + env(safe-area-inset-top, 0px)) 10px var(--page-pad-bottom-mobile) 10px;
     }
     body.about-page-active {
         padding-top: 0 !important;
@@ -3774,6 +3852,42 @@ a.instruction-platform-btn {
     .detail-info-grid {
         grid-template-columns: 1fr;
     }
+
+    #page-subscription-detail > header {
+        margin-bottom: 8px;
+        padding-top: calc(8px + env(safe-area-inset-top, 0px));
+        padding-bottom: 4px;
+    }
+
+    #subscription-detail-content {
+        padding: 0 8px 16px;
+    }
+
+    .traffic-topup-pack-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .traffic-topup-pack-btn {
+        padding: 10px 10px;
+        min-height: 60px;
+    }
+}
+
+.sub-sheet__title,
+.sub-sheet__stat-value,
+.sub-traffic__meter-value {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.sub-sheet__btn:focus-visible,
+.subscription-detail-copy-btn.sub-sheet__copy-btn:focus-visible,
+.traffic-topup-pack-btn:focus-visible,
+.action-button:focus-visible,
+.back-button:focus-visible,
+.theme-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-ring-strong);
 }
 
 /* ==================== АДМИН-ПАНЕЛЬ ==================== */
@@ -4441,7 +4555,7 @@ a.instruction-platform-btn {
     justify-content: center;
     border-radius: 8px;
     background: var(--accent-muted-subtle);
-    color: #8ba3e8;
+    color: var(--status-info-text);
     border: 1px solid var(--accent-line);
 }
 .server-reorder-nudge {
@@ -5170,23 +5284,23 @@ a.instruction-platform-btn {
 }
 
 .admin-subscription-status.active {
-    background: rgba(76, 175, 80, 0.22);
-    color: #81c784;
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
 }
 
 .admin-subscription-status.expired {
-    background: rgba(220, 53, 69, 0.2);
-    color: #e57373;
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
 }
 
 .admin-subscription-status.deleted {
-    background: rgba(120, 120, 120, 0.2);
-    color: var(--text-secondary);
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
 }
 
 .admin-subscription-status.canceled {
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-secondary);
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral-text);
 }
 
 .admin-subscription-row-main {
@@ -5228,15 +5342,15 @@ a.instruction-platform-btn {
     min-width: 60px;
 }
 
-.time-left-ok { color: #4caf50; }
-.time-left-warning { color: #ff9800; }
-.time-left-danger { color: #f44336; }
-.time-left-deleted { color: #9e9e9e; text-decoration: line-through; }
+.time-left-ok { color: var(--status-success-text); }
+.time-left-warning { color: var(--color-warning); }
+.time-left-danger { color: var(--status-danger-text); }
+.time-left-deleted { color: var(--status-neutral-text); text-decoration: line-through; }
 
-[data-theme="light"] .time-left-ok { color: #2e7d32; }
-[data-theme="light"] .time-left-warning { color: #f57c00; }
-[data-theme="light"] .time-left-danger { color: #d32f2f; }
-[data-theme="light"] .time-left-deleted { color: #757575; }
+[data-theme="light"] .time-left-ok { color: var(--status-success-text); }
+[data-theme="light"] .time-left-warning { color: var(--color-warning); }
+[data-theme="light"] .time-left-danger { color: var(--status-danger-text); }
+[data-theme="light"] .time-left-deleted { color: var(--status-neutral-text); }
 
 @media (max-width: 480px) {
     .admin-toolbar {
@@ -5580,8 +5694,8 @@ a.instruction-platform-btn {
     margin: 8px 0;
 }
 
-.broadcast-count-success { color: #5ee85e; font-weight: 600; }
-.broadcast-count-error { color: #ff5c5c; font-weight: 600; }
+.broadcast-count-success { color: var(--status-success-text); font-weight: 600; }
+.broadcast-count-error { color: var(--status-danger-text); font-weight: 600; }
 .broadcast-count-total { color: var(--text-primary); font-weight: 600; }
 
 .sub-status-display {
@@ -5590,19 +5704,19 @@ a.instruction-platform-btn {
 }
 
 .sub-status-display.sub-status-active {
-    color: #5ee85e;
+    color: var(--status-success-text);
 }
 
 .sub-status-display.sub-status-expired {
-    color: #ff5c5c;
+    color: var(--status-danger-text);
 }
 
 [data-theme="light"] .sub-status-display.sub-status-active {
-    color: #1a7a2e;
+    color: var(--status-success-text);
 }
 
 [data-theme="light"] .sub-status-display.sub-status-expired {
-    color: #c44;
+    color: var(--status-danger-text);
 }
 
 .sub-status-hint {
@@ -6130,13 +6244,13 @@ a.instruction-platform-btn {
 }
 
 .traffic-status-active {
-    background: rgba(76, 175, 80, 0.18);
-    color: #4caf50;
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
 }
 
 .traffic-status-exhausted {
-    background: rgba(220, 53, 69, 0.2);
-    color: #f07178;
+    background: var(--status-danger-bg);
+    color: var(--status-danger-text);
 }
 
 .traffic-metric-grid {

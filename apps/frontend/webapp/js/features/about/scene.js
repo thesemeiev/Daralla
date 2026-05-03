@@ -68,7 +68,9 @@
                 aboutPageState.smoothedProgress = smoothedProgress;
                 var themeLight = getTheme() === 'light';
                 var isLight = themeLight ? (smoothedProgress < 0.5) : (smoothedProgress > 0.5);
-                document.body.style.backgroundColor = isLight ? '#f0f0f2' : '#131314';
+                var rootStyles = getComputedStyle(document.documentElement);
+                var bgPage = rootStyles.getPropertyValue('--bg-page').trim();
+                document.body.style.backgroundColor = bgPage || (isLight ? '#f0f0f2' : '#131314');
                 pageEl.classList.toggle('about-bg-light', isLight);
                 if (aboutPageState.mesh) {
                     var grp = aboutPageState.mesh;
