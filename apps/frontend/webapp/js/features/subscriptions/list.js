@@ -69,22 +69,35 @@
             });
         }
 
+        function bindCopySubscriptionLinkButton(containerEl, token) {
+            if (!containerEl || typeof window.copySubscriptionLink !== 'function') return;
+            var btn = containerEl.querySelector('.subscription-detail-copy-btn');
+            if (!btn) return;
+            btn.onclick = function () {
+                window.copySubscriptionLink(token);
+            };
+        }
+
+        var TRAFFIC_LEAD_COPY = 'Этот объём общий для серверов с лимитом в подписке. Через остальные серверы этот пакет не расходуется.';
+
+        function _trafficIncludedPercentUsed(quota) {
+            var cap = Number(quota.included_allowance_bytes) || 0;
+            var used = Number(quota.included_used_bytes) || 0;
+            if (cap <= 0) return 0;
+            return Math.min(100, Math.round((used / cap) * 100));
+        }
+
         function showSubscriptionDetail(sub) {
             window.scrollTo(0, 0);
             document.documentElement.scrollTop = 0;
             document.body.scrollTop = 0;
 
             var pageEl = document.getElementById('page-subscription-detail');
-            var nameEl = document.getElementById('detail-subscription-name');
             var contentEl = document.getElementById('subscription-detail-content');
             if (!pageEl || !contentEl) return;
 
             if (typeof _deps.setCurrentSubscriptionDetail === 'function') {
                 _deps.setCurrentSubscriptionDetail(sub);
-            }
-
-            if (nameEl) {
-                nameEl.textContent = _deps.escapeHtml(sub.name);
             }
 
             var isActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
@@ -97,54 +110,57 @@
                         ? 'Пробная'
                         : sub.status;
 
+            var pctUsed = sub.traffic_quota ? _trafficIncludedPercentUsed(sub.traffic_quota) : 0;
+            var availableNow = sub.traffic_quota
+                ? Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes) + sub.traffic_quota.purchased_remaining_bytes
+                : 0;
+
             contentEl.innerHTML = '\n'
-                + '        <div class="detail-card">\n'
-                + '            <div class="detail-header">\n'
+                + '        <div class="subscription-detail-stack">\n'
+                + '        <div class="detail-card subscription-detail-hero">\n'
+                + '            <div class="subscription-detail-hero-head">\n'
+                + '                <h2 class="subscription-detail-title" id="subscription-name-display">' + _deps.escapeHtml(sub.name) + '</h2>\n'
                 + '                <div class="detail-status ' + statusClass + '">' + statusText + '</div>\n'
                 + '            </div>\n'
-                + '            <div class="detail-info-grid">\n'
-                + '                <div class="detail-info-item">\n'
-                + '                    <div class="detail-info-label">Название</div>\n'
-                + '                    <div class="detail-info-value" id="subscription-name-display">' + _deps.escapeHtml(sub.name) + '</div>\n'
-                + '                </div>\n'
-                + '                <div class="detail-info-item">\n'
-                + '                    <div class="detail-info-label">Устройств</div>\n'
-                + '                    <div class="detail-info-value">' + sub.device_limit + '</div>\n'
-                + '                </div>\n'
-                + '                <div class="detail-info-item">\n'
-                + '                    <div class="detail-info-label">Создана</div>\n'
-                + '                    <div class="detail-info-value">' + sub.created_at_formatted + '</div>\n'
-                + '                </div>\n'
-                + '                <div class="detail-info-item">\n'
-                + '                    <div class="detail-info-label">' + (isActive ? 'Истекает' : 'Истекла') + '</div>\n'
-                + '                    <div class="detail-info-value">' + sub.expires_at_formatted + '</div>\n'
-                + '                </div>\n'
-                + (isActive && sub.expires_at
-                    ? '                <div class="detail-info-item full-width"><div class="detail-info-label">Осталось</div><div class="detail-info-value days-highlight">' + _deps.formatTimeRemaining(sub.expires_at) + '</div></div>\n'
-                    : '')
+                + '            <div class="detail-info-grid subscription-detail-meta">\n'
+                + '                <div class="detail-info-item"><div class="detail-info-label">Устройств</div><div class="detail-info-value">' + sub.device_limit + '</div></div>\n'
+                + '                <div class="detail-info-item"><div class="detail-info-label">Создана</div><div class="detail-info-value">' + sub.created_at_formatted + '</div></div>\n'
+                + '                <div class="detail-info-item full-width"><div class="detail-info-label">' + (isActive ? 'Истекает' : 'Истекла') + '</div><div class="detail-info-value">' + sub.expires_at_formatted + '</div></div>\n'
                 + '            </div>\n'
+                + (isActive && sub.expires_at
+                    ? '            <div class="subscription-detail-countdown"><span class="subscription-detail-countdown-label">Осталось до конца периода</span><span class="subscription-detail-countdown-value">' + _deps.formatTimeRemaining(sub.expires_at) + '</span></div>\n'
+                    : '')
+                + (isActive
+                    ? '            <div class="subscription-detail-primary-action"><button type="button" class="btn-primary subscription-detail-copy-btn">Копировать ссылку подписки</button></div>\n'
+                    : '')
+                + '        </div>\n'
                 + (sub.traffic_quota
-                    ? '            <div class="detail-card subscription-traffic-card">\n'
-                    + '                <h4 class="subscription-traffic-heading">Трафик (лимитные ноды)</h4>\n'
-                    + '                <div class="detail-info-grid">\n'
-                    + '                    <div class="detail-info-item"><div class="detail-info-label">Включено на период</div><div class="detail-info-value">' + formatBinaryBytes(sub.traffic_quota.included_allowance_bytes) + '</div></div>\n'
-                    + '                    <div class="detail-info-item"><div class="detail-info-label">Из включённого израсходовано</div><div class="detail-info-value">' + formatBinaryBytes(sub.traffic_quota.included_used_bytes) + '</div></div>\n'
-                    + '                    <div class="detail-info-item"><div class="detail-info-label">Остаток включённого</div><div class="detail-info-value">' + formatBinaryBytes(Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes)) + '</div></div>\n'
-                    + '                    <div class="detail-info-item"><div class="detail-info-label">Докуплено (остаток)</div><div class="detail-info-value">' + formatBinaryBytes(sub.traffic_quota.purchased_remaining_bytes) + '</div></div>\n'
+                    ? '        <div class="detail-card subscription-traffic-card">\n'
+                    + '                <h4 class="subscription-traffic-heading">Трафик</h4>\n'
+                    + '                <p class="subscription-traffic-lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
+                    + '                <div class="subscription-traffic-available">\n'
+                    + '                    <span class="subscription-traffic-available-label">Доступно сейчас</span>\n'
+                    + '                    <span class="subscription-traffic-available-value">' + formatBinaryBytes(availableNow) + '</span>\n'
+                    + '                </div>\n'
+                    + '                <div class="subscription-traffic-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctUsed + '" aria-label="Израсходовано включённого трафика за период">\n'
+                    + '                    <div class="subscription-traffic-progress-fill" style="width: ' + pctUsed + '%"></div>\n'
+                    + '                </div>\n'
+                    + '                <p class="subscription-traffic-progress-caption">Использовано включённого: ' + pctUsed + '% периодного пакета</p>\n'
+                    + '                <div class="subscription-traffic-breakdown">\n'
+                    + '                    <div class="subscription-traffic-breakdown-row"><span>Включено на период</span><strong>' + formatBinaryBytes(sub.traffic_quota.included_allowance_bytes) + '</strong></div>\n'
+                    + '                    <div class="subscription-traffic-breakdown-row"><span>Израсходовано из включённого</span><strong>' + formatBinaryBytes(sub.traffic_quota.included_used_bytes) + '</strong></div>\n'
+                    + '                    <div class="subscription-traffic-breakdown-row"><span>Докуплено (остаток)</span><strong>' + formatBinaryBytes(sub.traffic_quota.purchased_remaining_bytes) + '</strong></div>\n'
                     + '                </div>\n'
                     + '                <p class="hint subscription-traffic-hint">Включённый объём обновляется при оплате продления. Докупка не сгорает при продлении.</p>\n'
                     + _trafficTopupButtonsHtml(sub)
                     + '            </div>\n'
                     : '')
-                + '            <div class="detail-actions">\n'
-                + '                <button class="action-button" onclick="showRenameSubscriptionModal()" style="margin-bottom: 12px;">Переименовать подписку</button>\n'
-                + (isActive
-                    ? "                <button class=\"action-button\" onclick=\"copySubscriptionLink('" + sub.token + "')\" style=\"margin-bottom: 12px;\">Копировать ссылку подписки</button>\n"
-                    : '')
+                + '        <div class="detail-actions subscription-detail-secondary-actions">\n'
+                + '                <button type="button" class="action-button action-button--quiet" onclick="showRenameSubscriptionModal()">Переименовать подписку</button>\n'
                 + ((sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial')
                     ? '                <button type="button" class="action-button action-button--accent" onclick="showExtendSubscriptionModal(' + sub.id + ')">Продлить подписку</button>\n'
                     : '')
-                + '            </div>\n'
+                + '        </div>\n'
                 + '        </div>\n';
 
             bindTrafficTopupButtons(contentEl);
@@ -176,9 +192,10 @@
                     ? '        <div class="days-badge"><span class="info-label">Осталось</span><span class="days-remaining">' + _deps.formatTimeRemaining(sub.expires_at) + '</span></div>\n'
                     : '')
                 + (sub.traffic_quota
-                    ? '        <div class="subscription-traffic-teaser"><span class="subscription-traffic-teaser-label">Трафик (лимитные ноды)</span>'
+                    ? '        <div class="subscription-traffic-teaser">'
+                    + '<span class="subscription-traffic-teaser-label">Трафик</span>'
                     + '<span class="subscription-traffic-teaser-value">' + formatBinaryBytes(Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes) + sub.traffic_quota.purchased_remaining_bytes) + '</span>'
-                    + '<span class="subscription-traffic-teaser-note">доступно сейчас</span></div>\n'
+                    + '<span class="subscription-traffic-teaser-note">доступно (лимитные серверы в подписке)</span></div>\n'
                     : '');
             return card;
         }

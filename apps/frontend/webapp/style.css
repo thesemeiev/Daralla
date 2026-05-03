@@ -2291,7 +2291,7 @@ h1 {
     border: 1px solid var(--accent-line);
     background: var(--accent-muted-subtle);
     display: grid;
-    gap: 2px;
+    gap: 4px;
 }
 
 .subscription-traffic-teaser-label {
@@ -2311,6 +2311,160 @@ h1 {
 .subscription-traffic-teaser-note {
     font-size: 11px;
     color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+/* Страница подписки: стек карточек, герой, прогресс трафика */
+.subscription-detail-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.subscription-detail-hero-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px 12px;
+    margin-bottom: 16px;
+}
+
+.subscription-detail-title {
+    margin: 0;
+    flex: 1 1 200px;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    line-height: 1.25;
+}
+
+.subscription-detail-meta.detail-info-grid {
+    margin-bottom: 0;
+}
+
+.subscription-detail-countdown {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--accent-line);
+    background: var(--accent-muted-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.subscription-detail-countdown-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-tertiary);
+}
+
+.subscription-detail-countdown-value {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+.subscription-detail-primary-action {
+    margin-top: 18px;
+}
+
+.subscription-detail-copy-btn {
+    width: 100%;
+    min-height: 48px;
+    font-weight: 600;
+}
+
+.subscription-traffic-lead {
+    margin: 0 0 var(--space-md);
+    font-size: var(--font-size-caption);
+    line-height: var(--line-height-body);
+    color: var(--text-secondary);
+}
+
+.subscription-traffic-available {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: var(--space-sm);
+}
+
+.subscription-traffic-available-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-tertiary);
+}
+
+.subscription-traffic-available-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+}
+
+.subscription-traffic-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--card-border);
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.subscription-traffic-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    transition: width 0.25s ease;
+}
+
+.subscription-traffic-progress-caption {
+    margin: 0 0 var(--space-md);
+    font-size: var(--font-size-caption);
+    color: var(--text-secondary);
+}
+
+.subscription-traffic-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: var(--space-sm);
+    padding: var(--space-sm) 0;
+    border-top: 1px solid var(--accent-line);
+    border-bottom: 1px solid var(--accent-line);
+}
+
+.subscription-traffic-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    font-size: var(--font-size-caption);
+    color: var(--text-secondary);
+}
+
+.subscription-traffic-breakdown-row strong {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: var(--font-size-body);
+}
+
+.action-button--quiet {
+    background: transparent;
+    border: 1px solid var(--card-border);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .action-button--quiet:hover {
+        background: var(--card-bg-hover);
+        border-color: var(--card-border-hover);
+    }
 }
 
 /* Нижняя навигация — liquid glass (в духе bergice/liquidglass, без WebGL) */
@@ -2567,6 +2721,22 @@ h1 {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid var(--card-border);
+}
+
+.subscription-detail-stack > .detail-actions.subscription-detail-secondary-actions {
+    margin-top: 0;
+    padding: 16px 20px;
+    border-top: none;
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    gap: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.subscription-detail-stack .subscription-traffic-card {
+    margin-top: 0;
 }
 
 .subscription-traffic-card {

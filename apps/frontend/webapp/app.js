@@ -2552,11 +2552,10 @@ async function renameSubscription(subId, newName) {
         currentSubscriptionDetail.name = newName;
         
         // Обновляем отображение
-        const nameEl = document.getElementById('detail-subscription-name');
+        const nameEl = document.getElementById('subscription-name-display');
         if (nameEl) {
             nameEl.textContent = escapeHtml(newName);
         }
-        document.getElementById('subscription-name-display').textContent = escapeHtml(newName);
         
         // Показываем уведомление об успехе
         showFormMessage('subscription-detail-message', 'success', 'Подписка успешно переименована');
