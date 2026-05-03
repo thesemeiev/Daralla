@@ -44,6 +44,25 @@
             return '\n\nОшибки (' + errors.length + '): ' + parts.join('; ') + tail;
         }
 
+        /** Расшифровка reason из API при массовом apply шаблона трафика. */
+        function formatTrafficTemplateSkippedReasons(reasonMap) {
+            if (!reasonMap || typeof reasonMap !== 'object') return '';
+            var keys = Object.keys(reasonMap);
+            if (!keys.length) return '';
+            var ru = {
+                custom_traffic: 'кастомные пакеты (не unlimited + group:{id}:limited) — без Force не перезаписываются',
+                no_group_id: 'у подписки в БД нет group_id',
+                traffic_buckets_disabled: 'выключен DARALLA_TRAFFIC_BUCKETS_ENABLED',
+                template_disabled: 'шаблон группы выключен в сохранённых настройках',
+                unknown: 'прочее'
+            };
+            var lines = keys.map(function (k) {
+                var label = ru[k] || k;
+                return '• ' + label + ': ' + reasonMap[k];
+            });
+            return '\n\nПропуски по причинам:\n' + lines.join('\n');
+        }
+
         function adminSyncSubscriptionsAlertMessage(result) {
             var parts = [];
             if (result.sync_stats) {
@@ -355,7 +374,9 @@
                 var a = result.applied != null ? result.applied : 0;
                 var s = result.skipped != null ? result.skipped : 0;
                 var msg = 'Dry-run: подписок ' + t + ', будет применено ' + a + ', пропущено ' + s + '.'
-                    + '\n\nУчитываются только подписки с group_id этой группы (поле в БД). Подписки с ручными пакетами трафика при «Применить» без force будут пропущены — их число видно в «пропущено».';
+                    + '\n\nВ массовый проход попадают только подписки, у которых в БД group_id = этой группе (не удалённые). Чужой group_id или NULL — шаблон на них не действует.'
+                    + '\nОграничение в клиенте действует только на ноды, отмеченные в шаблоне как лимитные; остальные ноды группы остаются безлимитными по пакету unlimited.';
+                msg += formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
                 if (result.errors && result.errors.length) {
                     msg += formatTrafficTemplateApplyErrors(result.errors);
                 }
@@ -386,10 +407,16 @@
                 var applied = result.applied != null ? result.applied : 0;
                 var skipped = result.skipped != null ? result.skipped : 0;
                 var errN = (result.errors && result.errors.length) ? result.errors.length : 0;
+                var skipExplain = formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
                 if (errN) {
                     await _deps.appShowAlert(
-                        'Применено ' + applied + ', пропущено ' + skipped + '.' + formatTrafficTemplateApplyErrors(result.errors),
+                        'Применено ' + applied + ', пропущено ' + skipped + '.' + skipExplain + formatTrafficTemplateApplyErrors(result.errors),
                         { title: 'Частичные ошибки', variant: 'error' }
+                    );
+                } else if (skipped > 0 && skipExplain) {
+                    await _deps.appShowAlert(
+                        'Применено ' + applied + ', пропущено ' + skipped + '.' + skipExplain,
+                        { title: 'Готово', variant: 'success' }
                     );
                 } else {
                     showAdminToast('Готово: применено ' + applied + ', пропущено ' + skipped);
@@ -417,10 +444,16 @@
                 var applied = result.applied != null ? result.applied : 0;
                 var skipped = result.skipped != null ? result.skipped : 0;
                 var errN = (result.errors && result.errors.length) ? result.errors.length : 0;
+                var skipExplainF = formatTrafficTemplateSkippedReasons(result.skipped_by_reason);
                 if (errN) {
                     await _deps.appShowAlert(
-                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + formatTrafficTemplateApplyErrors(result.errors),
+                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + skipExplainF + formatTrafficTemplateApplyErrors(result.errors),
                         { title: 'Частичные ошибки', variant: 'error' }
+                    );
+                } else if (skipped > 0 && skipExplainF) {
+                    await _deps.appShowAlert(
+                        'Force: применено ' + applied + ', пропущено ' + skipped + '.' + skipExplainF,
+                        { title: 'Готово', variant: 'success' }
                     );
                 } else {
                     showAdminToast('Force: применено ' + applied + ', пропущено ' + skipped);

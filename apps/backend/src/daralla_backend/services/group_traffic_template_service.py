@@ -215,6 +215,7 @@ async def apply_group_traffic_template_bulk(
     ids = [int(x) for x in subscription_ids] if subscription_ids else await list_subscription_ids_for_group(gid)
     applied = 0
     skipped = 0
+    skipped_by_reason: dict[str, int] = {}
     errors: list[dict] = []
     details: list[dict] = []
 
@@ -226,6 +227,8 @@ async def apply_group_traffic_template_bulk(
                 continue
             if r.get("skipped"):
                 skipped += 1
+                reason_key = str(r.get("reason") or "unknown")
+                skipped_by_reason[reason_key] = skipped_by_reason.get(reason_key, 0) + 1
             elif r.get("applied") or r.get("would_apply"):
                 applied += 1
             details.append({"subscription_id": sid, **{k: v for k, v in r.items() if k != "ok"}})
@@ -239,6 +242,7 @@ async def apply_group_traffic_template_bulk(
         "total": len(ids),
         "applied": applied,
         "skipped": skipped,
+        "skipped_by_reason": skipped_by_reason,
         "errors": errors,
         "details": details if dry_run else None,
     }

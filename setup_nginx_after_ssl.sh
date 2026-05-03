@@ -111,10 +111,10 @@ server {
         error_page 502 503 504 = @fallback;
     }
     
-    # Fallback страница (если бот не запущен)
+    # Пока контейнер не поднялся — JSON, чтобы фронт и curl не ловили «не JSON» (см. DarallaApiClient.responseJson)
     location @fallback {
-        return 503 "Service temporarily unavailable. Bot is starting...";
-        add_header Content-Type text/plain;
+        default_type application/json;
+        return 503 '{"success":false,"ok":false,"error":"service_starting","message":"Сервис запускается, подождите и обновите страницу."}';
     }
 }
 EOF
