@@ -2462,27 +2462,38 @@ h1 {
 .sub-sheet__header {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 8px 10px;
+    gap: 10px 12px;
     margin-bottom: 12px;
-    padding-bottom: 10px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--card-border);
 }
 
 .sub-sheet__title {
     margin: 0;
-    flex: 1 1 200px;
-    font-size: 1rem;
+    flex: 1 1 160px;
+    min-width: 0;
+    font-size: 1.0625rem;
     font-weight: 600;
     letter-spacing: -0.02em;
-    line-height: 1.25;
+    line-height: 1.35;
     color: var(--text-primary);
 }
 
+/* Бейдж по высоте ближе к строке заголовка; при переносе названия — по центру блока */
 .sub-sheet__status.detail-status {
     flex-shrink: 0;
-    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    border-radius: 10px;
 }
 
 .sub-sheet__stats {
@@ -2849,7 +2860,12 @@ h1 {
     transition: color 0.3s ease;
 }
 
-/* Детальная страница подписки — верх и safe-area в .subscription-detail-shell */
+/* Детальная страница подписки */
+#page-subscription-detail > header {
+    margin-bottom: 10px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-bottom: 4px;
+}
 
 .back-button {
     background: var(--card-bg);
@@ -3909,21 +3925,14 @@ a.instruction-platform-btn {
         grid-template-columns: 1fr;
     }
 
-    .subscription-detail-shell {
-        padding: calc(8px + env(safe-area-inset-top, 0px)) 8px 16px;
+    #page-subscription-detail > header {
+        margin-bottom: 8px;
+        padding-top: calc(8px + env(safe-area-inset-top, 0px));
+        padding-bottom: 4px;
     }
 
-    .subscription-detail-panel__toolbar {
-        padding: 8px 10px;
-    }
-
-    .subscription-detail-panel__message {
-        margin-left: 10px;
-        margin-right: 10px;
-    }
-
-    .subscription-detail-panel__body {
-        padding: 0 10px 14px;
+    #subscription-detail-content {
+        padding: 0 8px 16px;
     }
 
     .traffic-topup-pack-grid {

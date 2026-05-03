@@ -62,7 +62,20 @@
         }
 
         async function showNotificationRuleForm(ruleId) {
-            _deps.setNotifRuleEditingId(ruleId || null);
+            /* data-action без data-arg передаёт сюда MouseEvent — не считаем это id правила */
+            var raw = ruleId;
+            if (raw != null && typeof raw === 'object' && typeof raw.preventDefault === 'function') {
+                raw = null;
+            }
+            var editId = null;
+            if (raw != null && raw !== '') {
+                var n = Number(raw);
+                if (Number.isFinite(n) && n > 0) {
+                    editId = n;
+                }
+            }
+
+            _deps.setNotifRuleEditingId(editId);
             _deps.setNotifSelectedTriggerHours(null);
 
             var formTitle = document.getElementById('admin-notification-form-title');
@@ -73,13 +86,13 @@
             var showExpiryEl = document.getElementById('notif-rule-show-expiry');
             var activeEl = document.getElementById('notif-rule-active');
 
-            formTitle.textContent = ruleId ? 'Изменить правило' : 'Создать правило';
+            formTitle.textContent = editId ? 'Изменить правило' : 'Создать правило';
 
-            if (ruleId) {
+            if (editId) {
                 try {
                     var resp = await _deps.apiFetch('/api/admin/notification-rules', { method: 'GET' });
                     var data = await window.DarallaApiClient.responseJson(resp);
-                    var rule = (data.rules || []).find(function (r) { return r.id === ruleId; });
+                    var rule = (data.rules || []).find(function (r) { return Number(r.id) === editId; });
                     if (!rule) {
                         await _deps.appShowAlert('Правило не найдено или уже удалено.', { title: 'Не удалось открыть', variant: 'error' });
                         return;
