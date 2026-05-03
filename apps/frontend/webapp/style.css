@@ -7502,9 +7502,30 @@ a.instruction-platform-btn {
     font-size: 14px;
     font-weight: 500;
     line-height: 1.4;
+    min-height: 2.75rem;
+    box-sizing: border-box;
     color: var(--text-primary);
     background: var(--accent-muted-subtle);
     border: 1px solid var(--accent-line-soft);
+}
+
+/* «Другое»: в .form-group у input width:100% ломает flex-ряд и даёт рывки при вводе */
+#admin-notification-form #notif-trigger-custom-wrap .admin-inline-row {
+    width: 100%;
+    align-items: stretch;
+}
+
+#admin-notification-form #notif-trigger-custom-wrap input#notif-rule-trigger-value {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 4.5rem;
+    max-width: 100%;
+}
+
+#admin-notification-form #notif-trigger-custom-wrap select#notif-rule-trigger-unit {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 7.5rem;
 }
 
 .notif-modal-options__label {
@@ -7519,22 +7540,99 @@ a.instruction-platform-btn {
     padding: 6px 0;
 }
 
-.notif-modal-active-row {
-    display: flex;
+/* Явно строка: иначе .form-group задаёт column и всё «прилипает» к центру */
+#admin-notification-form .form-group.notif-modal-active-row {
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    flex-wrap: wrap;
+    width: 100%;
 }
 
 .notif-modal-active-row__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
     font-size: 14px;
     font-weight: 500;
     color: var(--text-primary);
 }
 
+#admin-notification-form .form-group.notif-modal-active-row .toggle-switch {
+    flex-shrink: 0;
+}
+
 .notif-repeat-panel {
-    margin-top: 4px;
+    margin-top: 8px;
+    padding: 12px 12px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+}
+
+.notif-repeat-grid {
+    display: grid;
+    grid-template-columns: minmax(7.5rem, 10rem) minmax(0, 1fr);
+    gap: 10px 12px;
+    align-items: center;
+}
+
+.notif-repeat-label {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.notif-repeat-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.notif-repeat-controls--single {
+    flex-wrap: nowrap;
+}
+
+/* Не даём глобальному width:100% у .form-group input ломать ряд */
+#admin-notification-form .notif-repeat-panel input.notif-repeat-num {
+    width: 5.25rem;
+    min-width: 4.5rem;
+    max-width: 100%;
+    flex: 0 0 auto;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+#admin-notification-form .notif-repeat-panel select.notif-repeat-unit {
+    width: auto;
+    min-width: 7.5rem;
+    flex: 1 1 6rem;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.notif-repeat-hint {
+    margin: 10px 0 0 0;
+}
+
+@media (max-width: 380px) {
+    .notif-repeat-grid {
+        grid-template-columns: 1fr;
+        gap: 6px 0;
+    }
+
+    .notif-repeat-label {
+        margin-bottom: -2px;
+    }
+
+    .notif-repeat-controls {
+        margin-bottom: 4px;
+    }
 }
 
 .notif-modal-footer {

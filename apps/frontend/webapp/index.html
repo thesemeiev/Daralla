@@ -766,20 +766,22 @@
                                     <input type="checkbox" id="notif-rule-repeat">
                                     <span>Повторять уведомление</span>
                                 </label>
-                                <div id="notif-repeat-fields" class="admin-inline-hidden admin-stack-gap-sm notif-repeat-panel">
-                                    <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
-                                        <span class="admin-inline-text">Каждые</span>
-                                        <input type="number" id="notif-rule-repeat-value" min="1" value="3" class="admin-field-xs">
-                                        <select id="notif-rule-repeat-unit" class="admin-field-unit">
-                                            <option value="hours">Часов</option>
-                                            <option value="days" selected>Дней</option>
-                                        </select>
+                                <div id="notif-repeat-fields" class="admin-inline-hidden notif-repeat-panel">
+                                    <div class="notif-repeat-grid">
+                                        <label class="notif-repeat-label" for="notif-rule-repeat-value">Каждые</label>
+                                        <div class="notif-repeat-controls">
+                                            <input type="number" id="notif-rule-repeat-value" min="1" value="3" class="notif-repeat-num" inputmode="numeric" aria-label="Интервал повтора, число">
+                                            <select id="notif-rule-repeat-unit" class="notif-repeat-unit" aria-label="Интервал повтора, единица">
+                                                <option value="hours">Часов</option>
+                                                <option value="days" selected>Дней</option>
+                                            </select>
+                                        </div>
+                                        <label class="notif-repeat-label" for="notif-rule-max-repeats">Макс. отправок</label>
+                                        <div class="notif-repeat-controls notif-repeat-controls--single">
+                                            <input type="number" id="notif-rule-max-repeats" min="1" value="5" class="notif-repeat-num" inputmode="numeric" aria-label="Максимум отправок">
+                                        </div>
                                     </div>
-                                    <div class="admin-inline-row admin-inline-row-compact admin-inline-row-center">
-                                        <span class="admin-inline-text">Макс. отправок</span>
-                                        <input type="number" id="notif-rule-max-repeats" min="1" value="5" class="admin-field-xs">
-                                    </div>
-                                    <p class="hint admin-hint-subtle">
+                                    <p class="hint admin-hint-subtle notif-repeat-hint">
                                         Сначала срабатывание по времени выше, затем повтор с интервалом, не больше указанного числа раз.
                                     </p>
                                 </div>

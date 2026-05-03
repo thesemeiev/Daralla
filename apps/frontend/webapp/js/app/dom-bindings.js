@@ -26,7 +26,9 @@
     function bindInputById(elementId, handler) {
         var el = document.getElementById(elementId);
         if (!el || typeof handler !== 'function') return;
-        el.addEventListener('input', function () { handler(); });
+        var fn = function () { handler(); };
+        el.addEventListener('input', fn);
+        el.addEventListener('change', fn);
     }
 
     function bindProxyCheckboxToggle(containerId, inputId) {
