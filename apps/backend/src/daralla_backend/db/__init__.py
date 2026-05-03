@@ -162,6 +162,14 @@ async def init_all_db():
         logger.info("Применено %d миграций", applied)
     await init_payments_db()
     await init_notifications_db()
+    try:
+        from daralla_backend.events.db.migrations import init_events_tables
+
+        await init_events_tables()
+    except ImportError:
+        pass
+    except (RuntimeError, ValueError) as e:
+        logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
     if await ensure_servers_config_client_sort_order_column():
         logger.info("Схема восстановлена: servers_config.client_sort_order")
     try:

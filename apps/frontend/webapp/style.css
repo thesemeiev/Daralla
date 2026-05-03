@@ -2460,11 +2460,11 @@ h1 {
 }
 
 .sub-sheet__header {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px 12px;
+    column-gap: 12px;
+    row-gap: 8px;
     margin-bottom: 12px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--card-border);
@@ -2472,8 +2472,9 @@ h1 {
 
 .sub-sheet__title {
     margin: 0;
-    flex: 1 1 160px;
     min-width: 0;
+    justify-self: start;
+    text-align: left;
     font-size: 1.0625rem;
     font-weight: 600;
     letter-spacing: -0.02em;
@@ -2481,9 +2482,9 @@ h1 {
     color: var(--text-primary);
 }
 
-/* Бейдж по высоте ближе к строке заголовка; при переносе названия — по центру блока */
+/* Бейдж в правой колонке; название — в левой, на всю доступную ширину */
 .sub-sheet__status.detail-status {
-    flex-shrink: 0;
+    justify-self: end;
     display: inline-flex;
     align-items: center;
     justify-content: center;

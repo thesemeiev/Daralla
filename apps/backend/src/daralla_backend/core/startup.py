@@ -29,16 +29,6 @@ async def ensure_db_and_servers_ready():
     except Exception as e:
         logger.warning("Не удалось подтянуть цены из БД: %s", e)
 
-    try:
-        from daralla_backend.events import EVENTS_MODULE_ENABLED
-        if EVENTS_MODULE_ENABLED:
-            from daralla_backend.events.db.migrations import init_events_tables
-            await init_events_tables()
-    except ImportError:
-        pass
-    except (RuntimeError, ValueError) as e:
-        logger.warning("Модуль событий: не удалось инициализировать таблицы: %s", e)
-
     from ..bot import init_server_managers
     await init_server_managers()
     logger.info("БД и менеджер серверов готовы (до приёма HTTP-запросов)")

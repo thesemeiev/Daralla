@@ -1007,7 +1007,19 @@ async function loadAdminEventsPage() {
     if (listWrap) listWrap.style.display = 'none';
     try {
         var r = await apiFetch('/api/events/admin/list');
-        var data = r.ok ? await window.DarallaApiClient.responseJson(r) : { events: [] };
+        var data;
+        if (r.ok) {
+            data = await window.DarallaApiClient.responseJson(r);
+        } else {
+            data = await window.DarallaApiClient.responseJson(r).catch(function () { return {}; });
+            var listErr = (data && data.error) ? String(data.error) : ('Ошибка ' + r.status);
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (listWrap) listWrap.style.display = 'block';
+            if (listEl) {
+                listEl.innerHTML = '<p class="hint">' + escapeHtml(listErr) + '</p>';
+            }
+            return;
+        }
         var events = data.events || [];
         if (loadingEl) loadingEl.style.display = 'none';
         if (listWrap) listWrap.style.display = 'block';
@@ -1034,8 +1046,18 @@ async function loadAdminEventsPage() {
     }
 }
 function showAdminEventForm(editId) {
-    adminEventEditingId = editId || null;
-    document.getElementById('admin-event-form-title').textContent = editId ? 'Редактировать событие' : 'Создать событие';
+    /* Кнопка «Создать» через data-action без data-arg передаёт MouseEvent */
+    var raw = editId;
+    if (raw != null && typeof raw === 'object' && typeof raw.preventDefault === 'function') {
+        raw = null;
+    }
+    var id = null;
+    if (raw != null && raw !== '') {
+        var n = Number(raw);
+        if (Number.isFinite(n) && n > 0) id = n;
+    }
+    adminEventEditingId = id;
+    document.getElementById('admin-event-form-title').textContent = id ? 'Редактировать событие' : 'Создать событие';
     document.getElementById('admin-event-name').value = '';
     document.getElementById('admin-event-description').value = '';
     document.getElementById('admin-event-start').value = '';
@@ -1043,8 +1065,8 @@ function showAdminEventForm(editId) {
     document.getElementById('admin-event-reward1').value = '';
     document.getElementById('admin-event-reward2').value = '';
     document.getElementById('admin-event-reward3').value = '';
-    if (editId) {
-        apiFetch('/api/events/' + editId).then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve(null); }).then(function (ev) {
+    if (id) {
+        apiFetch('/api/events/' + id).then(function (r) { return r.ok ? window.DarallaApiClient.responseJson(r) : Promise.resolve(null); }).then(function (ev) {
             if (!ev) return;
             document.getElementById('admin-event-name').value = ev.name || '';
             document.getElementById('admin-event-description').value = ev.description || '';
@@ -1065,15 +1087,23 @@ function closeAdminEventForm() {
     document.getElementById('admin-event-form-modal').style.display = 'none';
     adminEventEditingId = null;
 }
+function _normalizeAdminEventDatetimeLocal(s) {
+    var v = (s || '').trim();
+    if (!v) return v;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return v + ':00';
+    return v;
+}
+
 async function submitAdminEventForm(event) {
     event.preventDefault();
     var name = document.getElementById('admin-event-name').value.trim();
     var description = document.getElementById('admin-event-description').value.trim();
     var startAt = (document.getElementById('admin-event-start').value || '').trim();
     var endAt = (document.getElementById('admin-event-end').value || '').trim();
+    if (!name) { await appShowAlert('Укажите название события', { title: 'Ошибка', variant: 'error' }); return; }
     if (!startAt || !endAt) { await appShowAlert('Укажите начало и окончание', { title: 'Ошибка', variant: 'error' }); return; }
-    if (startAt.length === 16) startAt += ':00';
-    if (endAt.length === 16) endAt += ':00';
+    startAt = _normalizeAdminEventDatetimeLocal(startAt);
+    endAt = _normalizeAdminEventDatetimeLocal(endAt);
     var forParse = function (v) {
         if (v.indexOf('T') < 0 && v.indexOf(' ') > 0) return v.replace(' ', 'T');
         return v;
@@ -1096,8 +1126,9 @@ async function submitAdminEventForm(event) {
     if (r2) rewards.push({ place: 2, description: r2 });
     if (r3) rewards.push({ place: 3, description: r3 });
     var payload = { name: name, description: description, start_at: startAt, end_at: endAt, rewards: rewards };
-    var url = adminEventEditingId ? '/api/events/admin/' + adminEventEditingId : '/api/events/admin/create';
-    var method = adminEventEditingId ? 'PUT' : 'POST';
+    var editNum = adminEventEditingId != null ? Number(adminEventEditingId) : NaN;
+    var url = Number.isFinite(editNum) && editNum > 0 ? '/api/events/admin/' + editNum : '/api/events/admin/create';
+    var method = Number.isFinite(editNum) && editNum > 0 ? 'PUT' : 'POST';
     try {
         var r = await apiFetch(url, {
             method: method,
@@ -1106,7 +1137,11 @@ async function submitAdminEventForm(event) {
         });
         if (r.ok) { closeAdminEventForm(); loadAdminEventsPage(); } else {
             var d = await window.DarallaApiClient.responseJson(r).catch(function () { return {}; });
-            await appShowAlert(d.error || 'Ошибка', { title: 'Ошибка', variant: 'error' });
+            var errMsg = d.error || 'Ошибка';
+            if (r.status === 503 && typeof errMsg === 'string' && errMsg.toLowerCase().indexOf('disabled') >= 0) {
+                errMsg = 'Модуль событий выключен на сервере. Задайте EVENTS_MODULE_ENABLED=1 в окружении и перезапустите бэкенд.';
+            }
+            await appShowAlert(errMsg, { title: 'Ошибка', variant: 'error' });
         }
     } catch (e) {
         await appShowAlert('Ошибка сети', { title: 'Ошибка', variant: 'error' });
