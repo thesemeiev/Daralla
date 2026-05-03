@@ -6310,6 +6310,35 @@ a.instruction-platform-btn {
     border-top: 1px solid var(--card-border);
 }
 
+/* Список пакетов: зазор между карточками; раньше margin-bottom: 0 — «слипались» */
+.traffic-buckets-list-host {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.traffic-buckets-list-host > .empty-state,
+.traffic-buckets-list-host > .loading {
+    margin: 0;
+}
+
+/* Разделитель между безлимитными и лимитными пакетами */
+.traffic-buckets-group-gap {
+    margin: 4px 0 2px;
+    padding: 12px 0 2px;
+    border-top: 1px dashed var(--card-border);
+}
+
+.traffic-buckets-group-gap-label {
+    display: block;
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+}
+
 .traffic-bucket-card {
     border: 1px solid var(--card-border);
     border-radius: var(--radius-md);
@@ -6318,6 +6347,14 @@ a.instruction-platform-btn {
     margin-bottom: 0;
     overflow: hidden;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.traffic-bucket-card--unlimited {
+    border-left: 3px solid var(--accent);
+}
+
+.traffic-bucket-card--limited {
+    border-left: 3px solid color-mix(in srgb, var(--text-secondary) 45%, var(--card-border));
 }
 
 [data-theme="dark"] .traffic-bucket-card {
@@ -6378,6 +6415,48 @@ a.instruction-platform-btn {
 @media (max-width: 420px) {
     .traffic-metric-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Квота периода: отступ сетки от подсказки; строка «ГиБ + кнопка» */
+.traffic-panel--quota .traffic-metric-grid {
+    margin-top: 10px;
+}
+
+.traffic-quota-admin-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--card-border);
+}
+
+.traffic-quota-admin-actions .traffic-field {
+    flex: 1 1 140px;
+    min-width: 0;
+    max-width: 200px;
+}
+
+.traffic-quota-admin-actions .btn-secondary {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+    .traffic-quota-admin-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .traffic-quota-admin-actions .traffic-field {
+        max-width: none;
+    }
+
+    .traffic-quota-admin-actions .btn-secondary {
+        width: 100%;
+        white-space: normal;
     }
 }
 

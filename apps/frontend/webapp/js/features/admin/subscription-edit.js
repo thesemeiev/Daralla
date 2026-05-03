@@ -453,7 +453,13 @@
                 root.innerHTML = '<div class="empty-state"><p>Пакеты ещё не созданы. Заполните блок «Новый пакет» ниже или нажмите «Обновить список».</p></div>';
                 return;
             }
-            var html = buckets.map(function (b) {
+            var displayBuckets = buckets.slice().sort(function (a, b) {
+                var ua = a.is_unlimited ? 0 : 1;
+                var ub = b.is_unlimited ? 0 : 1;
+                if (ua !== ub) return ua - ub;
+                return Number(a.id) - Number(b.id);
+            });
+            function cardHtml(b) {
                 var id = String(b.id);
                 var isUnlimited = !!b.is_unlimited;
                 var usesPeriodQuota = !!b.uses_period_quota;
@@ -475,6 +481,7 @@
                 var remLabel = usesPeriodQuota && !isUnlimited ? 'Доступно' : 'Остаток';
                 var gibVal = isUnlimited ? '' : _gibFromBytes(rawLimit);
                 var canDeleteBucket = buckets.length > 1 && !isUnlimited;
+                var kindClass = isUnlimited ? 'traffic-bucket-card--unlimited' : 'traffic-bucket-card--limited';
                 var limitFieldHtml = isUnlimited
                     ? ''
                     : ''
@@ -505,7 +512,7 @@
                     ? '      <button type="button" class="btn-danger" data-action="deleteTrafficBucket" data-bucket-id="' + id + '">Удалить пакет</button>'
                     : '';
                 return ''
-                    + '<article class="traffic-bucket-card" data-bucket-id="' + id + '">'
+                    + '<article class="traffic-bucket-card ' + kindClass + '" data-bucket-id="' + id + '">'
                     + '  <header class="traffic-bucket-head">'
                     + '    <h4 class="traffic-bucket-title">' + _deps.escapeHtml(b.name || ('Пакет #' + id)) + '</h4>'
                     + '    <span class="traffic-bucket-status ' + statusClass + '" role="status">' + statusText + '</span>'
@@ -548,8 +555,19 @@
                     + '    </div>'
                     + '  </section>'
                     + '</article>';
-            }).join('');
-            root.innerHTML = html;
+            }
+            var parts = [];
+            displayBuckets.forEach(function (b, i) {
+                if (i > 0 && displayBuckets[i - 1].is_unlimited && !b.is_unlimited) {
+                    parts.push(
+                        '<div class="traffic-buckets-group-gap" role="separator" aria-label="Пакеты с лимитом трафика">'
+                        + '<span class="traffic-buckets-group-gap-label">Пакеты с лимитом трафика</span>'
+                        + '</div>'
+                    );
+                }
+                parts.push(cardHtml(b));
+            });
+            root.innerHTML = parts.join('');
             _bindTrafficBucketActions();
         }
 
