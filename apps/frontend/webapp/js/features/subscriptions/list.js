@@ -111,9 +111,23 @@
                         : sub.status;
 
             var pctUsed = sub.traffic_quota ? _trafficIncludedPercentUsed(sub.traffic_quota) : 0;
+            var allowanceBytes = sub.traffic_quota ? (Number(sub.traffic_quota.included_allowance_bytes) || 0) : 0;
+            var usedBytes = sub.traffic_quota ? (Number(sub.traffic_quota.included_used_bytes) || 0) : 0;
             var availableNow = sub.traffic_quota
-                ? Math.max(0, sub.traffic_quota.included_allowance_bytes - sub.traffic_quota.included_used_bytes) + sub.traffic_quota.purchased_remaining_bytes
+                ? Math.max(0, allowanceBytes - usedBytes) + (Number(sub.traffic_quota.purchased_remaining_bytes) || 0)
                 : 0;
+
+            var trafficPeriodBlock = '';
+            if (sub.traffic_quota && allowanceBytes > 0) {
+                trafficPeriodBlock = '\n'
+                    + '                <div class="subscription-traffic-used-summary">\n'
+                    + '                    <span class="subscription-traffic-used-label">Использовано</span>\n'
+                    + '                    <span class="subscription-traffic-used-value">' + formatBinaryBytes(usedBytes) + ' из ' + formatBinaryBytes(allowanceBytes) + '</span>\n'
+                    + '                </div>\n'
+                    + '                <div class="subscription-traffic-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctUsed + '" aria-label="Доля израсходованного включённого трафика">\n'
+                    + '                    <div class="subscription-traffic-progress-fill" style="width: ' + pctUsed + '%"></div>\n'
+                    + '                </div>\n';
+            }
 
             contentEl.innerHTML = '\n'
                 + '        <div class="subscription-detail-stack subscription-detail-stack--compact">\n'
@@ -138,19 +152,9 @@
                     ? '        <div class="detail-card subscription-traffic-card subscription-traffic-card--compact">\n'
                     + '                <h4 class="subscription-traffic-heading">Трафик</h4>\n'
                     + '                <p class="subscription-traffic-lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
-                    + '                <div class="subscription-traffic-breakdown subscription-traffic-breakdown--top">\n'
-                    + '                    <div class="subscription-traffic-breakdown-row subscription-traffic-breakdown-row--emphasis"><span>Доступно сейчас</span><strong>' + formatBinaryBytes(availableNow) + '</strong></div>\n'
-                    + '                </div>\n'
-                    + '                <div class="subscription-traffic-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctUsed + '" aria-label="Израсходовано включённого трафика за период">\n'
-                    + '                    <div class="subscription-traffic-progress-fill" style="width: ' + pctUsed + '%"></div>\n'
-                    + '                </div>\n'
-                    + '                <p class="subscription-traffic-progress-caption">Включённый пакет: использовано ' + pctUsed + '%</p>\n'
-                    + '                <div class="subscription-traffic-breakdown">\n'
-                    + '                    <div class="subscription-traffic-breakdown-row"><span>Включено на период</span><strong>' + formatBinaryBytes(sub.traffic_quota.included_allowance_bytes) + '</strong></div>\n'
-                    + '                    <div class="subscription-traffic-breakdown-row"><span>Израсходовано из включённого</span><strong>' + formatBinaryBytes(sub.traffic_quota.included_used_bytes) + '</strong></div>\n'
-                    + '                    <div class="subscription-traffic-breakdown-row"><span>Докуплено (остаток)</span><strong>' + formatBinaryBytes(sub.traffic_quota.purchased_remaining_bytes) + '</strong></div>\n'
-                    + '                </div>\n'
-                    + '                <p class="hint subscription-traffic-hint">Включённый объём обновляется при оплате продления. Докупка не сгорает при продлении.</p>\n'
+                    + trafficPeriodBlock
+                    + '                <p class="subscription-traffic-available-line">Доступно сейчас: <strong>' + formatBinaryBytes(availableNow) + '</strong></p>\n'
+                    + '                <p class="hint subscription-traffic-hint">Включённый объём обновляется при оплате продления. Докупка не сгорает при продлении и уже входит в «доступно».</p>\n'
                     + _trafficTopupButtonsHtml(sub)
                     + '            </div>\n'
                     : '')
