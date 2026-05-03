@@ -6,6 +6,7 @@
             var loadingEl = document.getElementById('admin-notifications-loading');
             var listEl = document.getElementById('admin-notifications-list');
             var errorEl = document.getElementById('admin-notifications-error');
+            if (!loadingEl || !listEl || !errorEl) return;
             loadingEl.style.display = 'block';
             listEl.style.display = 'none';
             errorEl.style.display = 'none';
@@ -15,10 +16,15 @@
                 if (!response.ok) throw new Error('Ошибка загрузки');
                 var data = await window.DarallaApiClient.responseJson(response);
                 loadingEl.style.display = 'none';
-                listEl.style.display = 'block';
+                listEl.style.display = 'flex';
 
                 if (!data.rules || data.rules.length === 0) {
-                    listEl.innerHTML = '<p style="text-align:center;opacity:0.5;">Нет правил</p>';
+                    listEl.innerHTML =
+                        '<div class="admin-empty-state admin-empty-state-notifications">' +
+                        '<p class="admin-empty-state-title">Пока нет правил</p>' +
+                        '<p class="admin-empty-state-text">Создайте первое: когда слать уведомление, какой текст показать и нужны ли повторы.</p>' +
+                        '<button type="button" class="btn-primary admin-empty-state-btn" onclick="showNotificationRuleForm()">Создать правило</button>' +
+                        '</div>';
                     return;
                 }
 
@@ -50,7 +56,7 @@
                 }).join('');
             } catch (e) {
                 loadingEl.style.display = 'none';
-                errorEl.textContent = 'Ошибка загрузки правил';
+                errorEl.textContent = 'Не удалось загрузить правила. Проверьте сеть и попробуйте снова.';
                 errorEl.style.display = 'block';
             }
         }
@@ -74,23 +80,28 @@
                     var resp = await _deps.apiFetch('/api/admin/notification-rules', { method: 'GET' });
                     var data = await window.DarallaApiClient.responseJson(resp);
                     var rule = (data.rules || []).find(function (r) { return r.id === ruleId; });
-                    if (rule) {
-                        eventTypeEl.value = rule.event_type;
-                        var t = _deps.notifParseTemplate(rule.message_template);
-                        titleEl.value = t.title || '';
-                        bodyEl.value = t.body || '';
-                        showTimeEl.checked = !!t.show_time_remaining;
-                        showExpiryEl.checked = !!t.show_expiry_date;
-                        activeEl.checked = !!rule.is_active;
-                        _deps.setRepeatData(rule.repeat_every_hours || 0, rule.max_repeats || 1);
-
-                        var hint = document.getElementById('notif-rule-trigger-hint');
-                        hint.textContent = rule.event_type === 'expiry_warning'
-                            ? 'За сколько ДО истечения подписки отправить уведомление'
-                            : 'Через сколько ПОСЛЕ потери подписки отправить уведомление';
-                        _deps.setNotifTriggerFromHours(Math.abs(rule.trigger_hours), rule.event_type);
+                    if (!rule) {
+                        await _deps.appShowAlert('Правило не найдено или уже удалено.', { title: 'Не удалось открыть', variant: 'error' });
+                        return;
                     }
-                } catch (e) {}
+                    eventTypeEl.value = rule.event_type;
+                    var t = _deps.notifParseTemplate(rule.message_template);
+                    titleEl.value = t.title || '';
+                    bodyEl.value = t.body || '';
+                    showTimeEl.checked = !!t.show_time_remaining;
+                    showExpiryEl.checked = !!t.show_expiry_date;
+                    activeEl.checked = !!rule.is_active;
+                    _deps.setRepeatData(rule.repeat_every_hours || 0, rule.max_repeats || 1);
+
+                    var hint = document.getElementById('notif-rule-trigger-hint');
+                    hint.textContent = rule.event_type === 'expiry_warning'
+                        ? 'За сколько ДО истечения подписки отправить уведомление'
+                        : 'Через сколько ПОСЛЕ потери подписки отправить уведомление';
+                    _deps.setNotifTriggerFromHours(Math.abs(rule.trigger_hours), rule.event_type);
+                } catch (e) {
+                    await _deps.appShowAlert('Не удалось загрузить правило.', { title: 'Ошибка', variant: 'error' });
+                    return;
+                }
             } else {
                 eventTypeEl.value = 'expiry_warning';
                 titleEl.value = '';

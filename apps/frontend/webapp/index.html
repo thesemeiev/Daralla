@@ -670,15 +670,19 @@
             </header>
             <div id="admin-notifications-content" class="admin-page-content">
                 <h2 class="admin-content-page-title">Уведомления</h2>
+                <p class="admin-page-lead">Автоматические сообщения в Telegram: до истечения подписки или после её окончания. Можно настроить текст, время и повторы.</p>
                 <button type="button" class="btn-primary admin-action-full" data-action="showNotificationRuleForm">+ Добавить правило</button>
                 <div id="admin-notifications-loading" class="loading"><div class="spinner"></div><p>Загрузка...</p></div>
                 <div id="admin-notifications-error" class="error" style="display: none;"></div>
-                <div id="admin-notifications-list" style="display: none;"></div>
+                <div id="admin-notifications-list" class="admin-notifications-list" style="display: none;"></div>
             </div>
         </div>
         <div id="admin-notification-form-modal" class="modal" style="display: none;">
-            <div class="modal-content admin-modal-content-wide">
-                <h2 id="admin-notification-form-title">Создать правило</h2>
+            <div class="modal-content admin-modal-content-wide admin-notification-modal">
+                <div class="admin-notification-modal-head">
+                    <h2 id="admin-notification-form-title">Создать правило</h2>
+                    <button type="button" class="modal-close-btn admin-notification-modal-close" data-action="closeNotificationRuleForm" aria-label="Закрыть">&times;</button>
+                </div>
                 <form id="admin-notification-form">
                     <div class="form-group">
                         <label for="notif-rule-event-type">Тип события</label>
@@ -705,11 +709,12 @@
                     </div>
                     <div class="form-group">
                         <label for="notif-rule-title">Заголовок</label>
-                        <input type="text" id="notif-rule-title" required placeholder="Ваша подписка истекает!" oninput="updateNotifPreview()">
+                        <input type="text" id="notif-rule-title" placeholder="Ваша подписка истекает!" oninput="updateNotifPreview()" autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="notif-rule-body">Текст сообщения</label>
-                        <textarea id="notif-rule-body" rows="3" required placeholder="Продлите подписку заранее, чтобы не прерывать использование VPN." oninput="updateNotifPreview()"></textarea>
+                        <textarea id="notif-rule-body" rows="3" placeholder="Продлите подписку заранее, чтобы не прерывать использование VPN." oninput="updateNotifPreview()"></textarea>
+                        <p class="hint admin-hint-subtle">Нужен хотя бы заголовок или текст — оба поля необязательны по отдельности.</p>
                     </div>
                     <div class="form-group">
                         <label class="admin-form-label-compact">Дополнительные блоки</label>
@@ -1699,7 +1704,7 @@
     <script src="/js/features/admin/servers.js?v=2"></script>
     <script src="/js/features/servers/list.js?v=1"></script>
     <script src="/js/features/events/core.js?v=1"></script>
-    <script src="/js/features/notifications/rules.js?v=1"></script>
+    <script src="/js/features/notifications/rules.js?v=2"></script>
     <script src="/js/features/payments/checkout.js?v=1"></script>
     <script src="/js/features/instructions/modal.js?v=1"></script>
     <script src="/js/features/instructions/setup.js?v=1"></script>

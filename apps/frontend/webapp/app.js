@@ -1245,6 +1245,14 @@ function onNotifRuleEventTypeChange() {
     hint.textContent = et === 'expiry_warning'
         ? 'За сколько ДО истечения подписки отправить уведомление'
         : 'Через сколько ПОСЛЕ потери подписки отправить уведомление';
+    var presets = NOTIF_TRIGGER_PRESETS[et] || [];
+    if (presets.length) {
+        var firstChip = document.querySelector('#notif-trigger-chips .notif-chip[data-hours]:not([data-hours="custom"])');
+        if (firstChip) {
+            var h = parseInt(firstChip.getAttribute('data-hours'), 10);
+            if (h) selectNotifTriggerChip(firstChip, h);
+        }
+    }
     updateNotifPreview();
 }
 
@@ -1623,8 +1631,8 @@ class CustomGlobe {
             ctx.strokeRect(Math.floor(pos.x - size/2), Math.floor(pos.y - size/2), size, size);
 
             const label = city.name;
-            const fontSize = 10;
-            ctx.font = `${fontSize}px Arial, sans-serif`;
+            const fontSize = 12;
+            ctx.font = `${fontSize}px system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
 
@@ -1632,11 +1640,11 @@ class CustomGlobe {
             const labelX = Math.round(pos.x + size + padding);
             const labelY = Math.round(pos.y);
 
-            ctx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = true;
 
             ctx.fillStyle = cityLabelFill;
             ctx.strokeStyle = cityLabelStroke;
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.5;
             ctx.lineJoin = 'round';
             ctx.strokeText(label, labelX, labelY);
             ctx.fillText(label, labelX, labelY);
@@ -1944,30 +1952,25 @@ class CustomGlobe {
             const label = this.getGlobeServerLabel(server);
             if (label) {
                 // Размер шрифта фиксированный, не масштабируется с зумом
-                const fontSize = 10;
-                ctx.font = `${fontSize}px Arial, sans-serif`;
+                const fontSize = 12;
+                ctx.font = `${fontSize}px system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
-                
-                // Отключаем сглаживание для четкого текста
-                ctx.imageSmoothingEnabled = false;
-                
-                // Измеряем размер текста
-                const textMetrics = ctx.measureText(label);
-                const textWidth = textMetrics.width;
-                const textHeight = fontSize;
+
+                ctx.imageSmoothingEnabled = true;
+
                 // Padding фиксированный
                 const padding = 4;
-                
+
                 // Позиция подписи (справа от точки)
                 // Выравниваем по пикселям для четкости
                 const labelX = Math.round(pos.x + size + padding);
                 const labelY = Math.round(pos.y);
-                
+
                 // Рисуем текст без фона (или с очень прозрачным фоном для читаемости)
                 ctx.fillStyle = labelColor;
                 ctx.strokeStyle = labelStroke;
-                ctx.lineWidth = 1.5;
+                ctx.lineWidth = 1.25;
                 ctx.lineJoin = 'round';
                 ctx.miterLimit = 2;
                 // Обводка для читаемости
@@ -2068,7 +2071,7 @@ async function loadServerMap() {
         canvas.style.top = '0';
         canvas.style.left = '0';
         canvas.style.cursor = 'grab';
-        canvas.style.imageRendering = 'pixelated';
+        /* default imageRendering — иначе «pixelated» ломает читаемость текста на глобусе */
         canvas.style.pointerEvents = 'auto'; // Чтобы события работали
         canvas.style.background = 'transparent';
         
@@ -3367,6 +3370,7 @@ var PUBLIC_UI_API_NAMES = [
     'confirmDeleteSubscription',
     'confirmSaveSubscriptionChanges',
     'createSubscription',
+    'deleteNotificationRule',
     'editServerGroup',
     'goBackFromChoosePayment',
     'goBackFromCreateSubscription',
@@ -3412,6 +3416,7 @@ var PUBLIC_UI_API_NAMES = [
     'syncAllServers',
     'testSendNotificationRule',
     'toggleAdminServerReorderMode',
+    'toggleNotificationRule',
     'toggleRepeatFields',
     'updateNotifPreview'
 ];

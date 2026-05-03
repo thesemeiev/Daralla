@@ -2849,12 +2849,7 @@ h1 {
     transition: color 0.3s ease;
 }
 
-/* Детальная страница подписки */
-#page-subscription-detail > header {
-    margin-bottom: 10px;
-    padding-top: calc(10px + env(safe-area-inset-top, 0px));
-    padding-bottom: 4px;
-}
+/* Детальная страница подписки — верх и safe-area в .subscription-detail-shell */
 
 .back-button {
     background: var(--card-bg);
@@ -3914,14 +3909,21 @@ a.instruction-platform-btn {
         grid-template-columns: 1fr;
     }
 
-    #page-subscription-detail > header {
-        margin-bottom: 8px;
-        padding-top: calc(8px + env(safe-area-inset-top, 0px));
-        padding-bottom: 4px;
+    .subscription-detail-shell {
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 8px 16px;
     }
 
-    #subscription-detail-content {
-        padding: 0 8px 16px;
+    .subscription-detail-panel__toolbar {
+        padding: 8px 10px;
+    }
+
+    .subscription-detail-panel__message {
+        margin-left: 10px;
+        margin-right: 10px;
+    }
+
+    .subscription-detail-panel__body {
+        padding: 0 10px 14px;
     }
 
     .traffic-topup-pack-grid {
@@ -5083,6 +5085,16 @@ a.instruction-platform-btn {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.admin-page-lead {
+    margin: -6px auto 16px auto;
+    padding: 0 4px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    text-align: center;
+    max-width: 36rem;
 }
 
 /* Админ-формы: единая плотность и типографика */
@@ -7323,6 +7335,77 @@ a.instruction-platform-btn {
 
 /* ── Notification Rules ── */
 
+.admin-notifications-list {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.admin-empty-state-notifications {
+    text-align: center;
+    padding: 28px 16px 24px;
+    border: 1px dashed var(--card-border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-page);
+}
+
+.admin-empty-state-title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.admin-empty-state-text {
+    margin: 0 0 18px 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.admin-empty-state-btn {
+    min-width: 200px;
+}
+
+.admin-notification-modal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.admin-notification-modal-head h2 {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+
+.admin-notification-modal-close {
+    flex-shrink: 0;
+    margin: -6px -8px 0 0;
+    padding: 6px 10px;
+    font-size: 24px;
+    line-height: 1;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    transition: background 0.15s, color 0.15s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .admin-notification-modal-close:hover {
+        background: var(--accent-muted-subtle);
+        color: var(--text-primary);
+    }
+}
+
 .admin-notification-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -7413,6 +7496,7 @@ a.instruction-platform-btn {
 
 .notif-rule-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
