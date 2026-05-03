@@ -9,6 +9,7 @@ from daralla_backend.db import (
     add_server_group,
     create_subscription,
     create_subscription_traffic_bucket,
+    ensure_default_unlimited_bucket,
     get_or_create_subscriber,
     get_server_group_traffic_template,
     get_subscription_server_bucket_map,
@@ -137,6 +138,55 @@ async def test_dry_run_does_not_insert_traffic_buckets(db, monkeypatch):
     assert r.get("would_apply") is True
 
     assert len(await list_subscription_traffic_buckets(sub_id)) == 0
+
+
+@pytest.mark.asyncio
+async def test_legacy_limited_bucket_russian_label_applies_and_renames(db, monkeypatch):
+    """Старый лейбл «Лимитированные ноды» не считается кастомом; при apply переименовывается в group:{id}:limited."""
+    monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    suffix = uuid.uuid4().hex[:8]
+    gid = await add_server_group(f"GLegacy_{suffix}", description="t", is_default=False)
+    s_lim = f"lim_l_{suffix}"
+    s_free = f"free_l_{suffix}"
+    await add_server_config(gid, s_lim, "https://example.com", "u", "p")
+    await add_server_config(gid, s_free, "https://example.com", "u", "p")
+    await upsert_server_group_traffic_template(
+        gid,
+        enabled=True,
+        limited_bucket_name="EU Pack",
+        limit_bytes=5 * 1024 * 1024 * 1024,
+        is_unlimited=False,
+        window_days=30,
+        credit_periods_total=1,
+    )
+    await replace_server_group_traffic_limited_servers(gid, [s_lim])
+
+    subscriber_id = await get_or_create_subscriber(f"u_leg_{suffix}")
+    now = int(time.time())
+    sub_id, _ = await create_subscription(
+        subscriber_id=subscriber_id,
+        period="month",
+        device_limit=1,
+        price=1.0,
+        expires_at=now + 86400 * 30,
+        group_id=gid,
+    )
+    await ensure_default_unlimited_bucket(sub_id)
+    await create_subscription_traffic_bucket(
+        sub_id,
+        "Лимитированные ноды",
+        limit_bytes=1024**3,
+        is_unlimited=False,
+    )
+
+    r = await apply_template_to_subscription(sub_id, force=False, dry_run=False)
+    assert r.get("applied") is True
+
+    buckets = await list_subscription_traffic_buckets(sub_id)
+    names = {b["name"] for b in buckets}
+    assert "unlimited" in names
+    assert group_limited_bucket_stable_name(gid) in names
+    assert "Лимитированные ноды" not in names
 
 
 @pytest.mark.asyncio

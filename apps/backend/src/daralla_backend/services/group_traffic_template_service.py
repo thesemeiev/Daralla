@@ -30,20 +30,70 @@ from daralla_backend.services.group_traffic_bucket_names import group_limited_bu
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_LEGACY_LIMITED_LABEL = "Лимитированные ноды"
 
-async def async_has_non_template_traffic_customization(subscription_id: int, group_id: int) -> bool:
-    allowed = {"unlimited", group_limited_bucket_stable_name(group_id)}
+
+def _limited_bucket_name_aliases(group_id: int, tmpl: dict | None) -> set[str]:
+    """Имена лимитного пакета, считающиеся эквивалентом шаблона (старые подписи UI + стабильное имя)."""
+    gid = int(group_id)
+    out: set[str] = {group_limited_bucket_stable_name(gid)}
+    if tmpl:
+        ln = (tmpl.get("limited_bucket_name") or "").strip()
+        if ln:
+            out.add(ln)
+    out.add(_DEFAULT_LEGACY_LIMITED_LABEL)
+    return out
+
+
+def _find_limited_bucket_row(buckets: list, *, group_id: int, tmpl: dict | None) -> dict | None:
+    """Ищет строку лимитного пакета: сначала стабильное имя, иначе единственный пакет по алиасам шаблона."""
+    gid = int(group_id)
+    stable = group_limited_bucket_stable_name(gid)
+    aliases = _limited_bucket_name_aliases(gid, tmpl)
+    by_name = {str(b.get("name") or ""): b for b in buckets}
+    if stable in by_name:
+        return by_name[stable]
+    hits: list[dict] = []
+    for b in buckets:
+        n = str(b.get("name") or "")
+        if n == "unlimited":
+            continue
+        if n in aliases:
+            hits.append(b)
+    if len(hits) == 1:
+        return hits[0]
+    return None
+
+
+async def async_has_non_template_traffic_customization(
+    subscription_id: int, group_id: int, *, tmpl: dict | None = None
+) -> bool:
+    """
+    True, если у подписки есть посторонние пакеты или «лишний» лимитный (не из набора имён шаблона).
+    Учитывает legacy-имя «Лимитированные ноды» и limited_bucket_name из шаблона группы — это не кастом.
+    """
+    gid = int(group_id)
+    if tmpl is None:
+        tmpl = await get_server_group_traffic_template(gid)
+    limited_aliases = _limited_bucket_name_aliases(gid, tmpl)
+    allowed_all = {"unlimited"} | limited_aliases
+
     buckets = await list_subscription_traffic_buckets(subscription_id)
     if len(buckets) > 2:
         return True
     for b in buckets:
         n = str(b.get("name") or "")
-        if n not in allowed:
+        if n not in allowed_all:
             return True
     if len(buckets) == 2:
         names = {str(b.get("name") or "") for b in buckets}
-        if names != allowed:
+        if "unlimited" not in names:
             return True
+        lim_only = names - {"unlimited"}
+        if len(lim_only) != 1:
+            return True
+        lim_name = next(iter(lim_only))
+        return lim_name not in limited_aliases
     return False
 
 
@@ -98,7 +148,7 @@ async def apply_template_to_subscription(
         return {"ok": False, "error": "limit_bytes_required_when_limited_servers_selected"}
 
     if not force:
-        if await async_has_non_template_traffic_customization(subscription_id, gid):
+        if await async_has_non_template_traffic_customization(subscription_id, gid, tmpl=tmpl):
             return {"ok": True, "skipped": True, "reason": "custom_traffic", "dry_run": dry_run}
 
     # Dry-run не должен создавать строки в БД — иначе «Проверка» меняет данные и счётчики сбиваются с реальным apply.
@@ -125,20 +175,21 @@ async def apply_template_to_subscription(
         return {"ok": True, "applied": True, "mode": "all_unlimited", "servers": len(active_servers)}
 
     buckets = await list_subscription_traffic_buckets(subscription_id)
-    limited_row = next((b for b in buckets if str(b.get("name") or "") == stable_name), None)
+    limited_row = _find_limited_bucket_row(buckets, group_id=gid, tmpl=tmpl)
     limited_id: int
     if limited_row:
         limited_id = int(limited_row["id"])
         if not dry_run:
-            await update_subscription_traffic_bucket(
-                limited_id,
-                {
-                    "limit_bytes": max(0, limit_bytes),
-                    "is_unlimited": is_unlimited_pack,
-                    "window_days": window_days,
-                    "credit_periods_total": credit_total,
-                },
-            )
+            current_nm = str(limited_row.get("name") or "")
+            upd = {
+                "limit_bytes": max(0, limit_bytes),
+                "is_unlimited": is_unlimited_pack,
+                "window_days": window_days,
+                "credit_periods_total": credit_total,
+            }
+            if current_nm != stable_name:
+                upd["name"] = stable_name
+            await update_subscription_traffic_bucket(limited_id, upd)
     else:
         if dry_run:
             limited_id = -1
