@@ -151,8 +151,10 @@
                             var statusLabel = sub.status === 'active' ? 'Активна' : sub.status === 'expired' ? 'Истекла' : sub.status === 'trial' ? 'Пробная' : sub.status === 'deleted' ? 'Удалена' : 'Отменена';
                             return '\n'
                                 + '                        <div class="admin-subscription-card" onclick="showAdminSubscriptionEdit(' + sub.id + ')">\n'
-                                + '                            <div class="admin-subscription-name">' + _deps.escapeHtml(sub.name) + '</div>\n'
-                                + '                            <div class="admin-subscription-status ' + statusClass + '">' + statusLabel + '</div>\n'
+                                + '                            <div class="admin-subscription-head">\n'
+                                + '                                <div class="admin-subscription-name">' + _deps.escapeHtml(sub.name) + '</div>\n'
+                                + '                                <div class="admin-subscription-status ' + statusClass + '">' + statusLabel + '</div>\n'
+                                + '                            </div>\n'
                                 + '                            <div class="admin-subscription-info">\n'
                                 + '                                <div>Создана: ' + _deps.escapeHtml(sub.created_at_formatted) + '</div>\n'
                                 + '                                <div>Истекает: ' + _deps.escapeHtml(sub.expires_at_formatted) + '</div>\n'

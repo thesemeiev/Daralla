@@ -5355,6 +5355,26 @@ a.instruction-platform-btn {
     transform: scale(0.98);
 }
 
+.admin-subscription-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 6px;
+    margin-bottom: 10px;
+}
+
+.admin-subscription-head .admin-subscription-name {
+    justify-self: start;
+    min-width: 0;
+}
+
+.admin-subscription-head .admin-subscription-status {
+    justify-self: end;
+    margin-bottom: 0;
+    align-self: center;
+}
+
 .admin-subscription-info {
     display: flex;
     flex-direction: column;
