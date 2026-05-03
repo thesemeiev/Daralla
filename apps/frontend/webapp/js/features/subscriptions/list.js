@@ -116,7 +116,7 @@
                 : 0;
 
             contentEl.innerHTML = '\n'
-                + '        <div class="subscription-detail-stack">\n'
+                + '        <div class="subscription-detail-stack subscription-detail-stack--compact">\n'
                 + '        <div class="detail-card subscription-detail-hero">\n'
                 + '            <div class="subscription-detail-hero-head">\n'
                 + '                <h2 class="subscription-detail-title" id="subscription-name-display">' + _deps.escapeHtml(sub.name) + '</h2>\n'
@@ -126,26 +126,25 @@
                 + '                <div class="detail-info-item"><div class="detail-info-label">Устройств</div><div class="detail-info-value">' + sub.device_limit + '</div></div>\n'
                 + '                <div class="detail-info-item"><div class="detail-info-label">Создана</div><div class="detail-info-value">' + sub.created_at_formatted + '</div></div>\n'
                 + '                <div class="detail-info-item full-width"><div class="detail-info-label">' + (isActive ? 'Истекает' : 'Истекла') + '</div><div class="detail-info-value">' + sub.expires_at_formatted + '</div></div>\n'
-                + '            </div>\n'
                 + (isActive && sub.expires_at
-                    ? '            <div class="subscription-detail-countdown"><span class="subscription-detail-countdown-label">Осталось до конца периода</span><span class="subscription-detail-countdown-value">' + _deps.formatTimeRemaining(sub.expires_at) + '</span></div>\n'
+                    ? '                <div class="detail-info-item full-width"><div class="detail-info-label">Осталось</div><div class="detail-info-value">' + _deps.formatTimeRemaining(sub.expires_at) + '</div></div>\n'
                     : '')
+                + '            </div>\n'
                 + (isActive
                     ? '            <div class="subscription-detail-primary-action"><button type="button" class="btn-primary subscription-detail-copy-btn">Копировать ссылку подписки</button></div>\n'
                     : '')
                 + '        </div>\n'
                 + (sub.traffic_quota
-                    ? '        <div class="detail-card subscription-traffic-card">\n'
+                    ? '        <div class="detail-card subscription-traffic-card subscription-traffic-card--compact">\n'
                     + '                <h4 class="subscription-traffic-heading">Трафик</h4>\n'
                     + '                <p class="subscription-traffic-lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
-                    + '                <div class="subscription-traffic-available">\n'
-                    + '                    <span class="subscription-traffic-available-label">Доступно сейчас</span>\n'
-                    + '                    <span class="subscription-traffic-available-value">' + formatBinaryBytes(availableNow) + '</span>\n'
+                    + '                <div class="subscription-traffic-breakdown subscription-traffic-breakdown--top">\n'
+                    + '                    <div class="subscription-traffic-breakdown-row subscription-traffic-breakdown-row--emphasis"><span>Доступно сейчас</span><strong>' + formatBinaryBytes(availableNow) + '</strong></div>\n'
                     + '                </div>\n'
                     + '                <div class="subscription-traffic-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctUsed + '" aria-label="Израсходовано включённого трафика за период">\n'
                     + '                    <div class="subscription-traffic-progress-fill" style="width: ' + pctUsed + '%"></div>\n'
                     + '                </div>\n'
-                    + '                <p class="subscription-traffic-progress-caption">Использовано включённого: ' + pctUsed + '% периодного пакета</p>\n'
+                    + '                <p class="subscription-traffic-progress-caption">Включённый пакет: использовано ' + pctUsed + '%</p>\n'
                     + '                <div class="subscription-traffic-breakdown">\n'
                     + '                    <div class="subscription-traffic-breakdown-row"><span>Включено на период</span><strong>' + formatBinaryBytes(sub.traffic_quota.included_allowance_bytes) + '</strong></div>\n'
                     + '                    <div class="subscription-traffic-breakdown-row"><span>Израсходовано из включённого</span><strong>' + formatBinaryBytes(sub.traffic_quota.included_used_bytes) + '</strong></div>\n'
@@ -164,6 +163,7 @@
                 + '        </div>\n';
 
             bindTrafficTopupButtons(contentEl);
+            bindCopySubscriptionLinkButton(contentEl, sub.token);
             _deps.showPage('subscription-detail', { id: String(sub.id) });
         }
 
