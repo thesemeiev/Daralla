@@ -8,6 +8,7 @@ import logging
 import os
 
 from daralla_backend.db.notifications_db import clear_subscription_notifications
+from daralla_backend.db.servers_db import get_server_group_by_id
 from daralla_backend.db.subscriptions_db import (
     add_subscription_purchased_traffic_bytes,
     adjust_subscription_traffic_quota_for_bucket_usage,
@@ -43,7 +44,9 @@ from daralla_backend.services.sync_outbox_service import enqueue_subscription_sy
 from daralla_backend.services.traffic_bucket_service import get_traffic_bucket_service
 
 
-def serialize_subscription(sub: dict) -> dict:
+def serialize_subscription(sub: dict, *, group_name: str | None = None) -> dict:
+    """Поля подписки для админки; group_id — число в subscriptions, по нему же массовый шаблон трафика группы."""
+    gid = sub.get("group_id")
     return {
         "id": sub["id"],
         "name": (sub.get("name") or "").strip() or f"Подписка {sub['id']}",
@@ -56,7 +59,20 @@ def serialize_subscription(sub: dict) -> dict:
         "expires_at_formatted": datetime.datetime.fromtimestamp(sub["expires_at"]).strftime("%d.%m.%Y %H:%M"),
         "price": sub["price"],
         "token": sub["subscription_token"],
+        "group_id": int(gid) if gid is not None else None,
+        "group_name": group_name,
     }
+
+
+async def serialize_subscription_admin(sub: dict) -> dict:
+    """serialize_subscription + имя группы серверов из БД."""
+    gid = sub.get("group_id")
+    gname = None
+    if gid is not None:
+        grow = await get_server_group_by_id(int(gid))
+        if grow:
+            gname = (grow.get("name") or "").strip() or None
+    return serialize_subscription(sub, group_name=gname)
 
 
 async def list_subscriptions_payload(page: int, limit: int, status: str | None, owner_query: str | None, long_only: bool):
@@ -116,7 +132,7 @@ async def subscription_info_payload(sub_id: int):
     servers = await get_subscription_servers(sub_id)
     return {
         "success": True,
-        "subscription": serialize_subscription(sub),
+        "subscription": await serialize_subscription_admin(sub),
         "servers": servers,
     }
 
@@ -521,7 +537,7 @@ async def update_subscription_payload(sub_id: int, updates: dict, logger: loggin
 
     return {
         "success": True,
-        "subscription": serialize_subscription(updated_sub),
+        "subscription": await serialize_subscription_admin(updated_sub),
         "sync_outbox_enqueued": outbox_enqueued,
         "legacy_sync_fallback": fallback_enabled,
     }, None, None

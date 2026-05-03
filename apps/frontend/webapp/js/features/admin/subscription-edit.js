@@ -77,6 +77,16 @@
                 document.getElementById('sub-name').value = sub.name || '';
                 document.getElementById('sub-device-limit').value = sub.device_limit || 1;
 
+                var groupDisp = document.getElementById('sub-group-display');
+                if (groupDisp) {
+                    if (sub.group_id != null && sub.group_id !== '') {
+                        var glabel = sub.group_name ? String(sub.group_name) + ' — id ' + sub.group_id : 'id ' + sub.group_id;
+                        groupDisp.textContent = glabel;
+                    } else {
+                        groupDisp.textContent = 'не указана (group_id пустой). Шаблон группы «на все подписки группы» эту запись не затронет, даже если в списке ниже есть серверы.';
+                    }
+                }
+
                 var statusDisplayGroup = document.getElementById('sub-status-display-group');
                 var statusDisplay = document.getElementById('sub-status-display');
                 var statusHint = document.getElementById('sub-status-hint');

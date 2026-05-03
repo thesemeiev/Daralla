@@ -244,6 +244,15 @@ async def get_server_groups(only_active: bool = True):
             return [dict(row) for row in rows]
 
 
+async def get_server_group_by_id(group_id: int) -> dict | None:
+    """Одна группа серверов по id (для админки и подписок)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM server_groups WHERE id = ?", (int(group_id),)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
 async def get_servers_config(group_id: int = None, only_active: bool = True):
     """Возвращает конфигурацию серверов, опционально фильтруя по группе"""
     async with aiosqlite.connect(DB_PATH) as db:
