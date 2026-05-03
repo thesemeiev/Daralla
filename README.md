@@ -39,11 +39,12 @@
 - Сводка и графики, пользователи, подписки, серверы и группы
 - Рассылка в Telegram с ограничением частоты
 - Правила уведомлений (см. выше) и тестовая отправка
-- **Коммерция** — тарифы и лимит устройств по умолчанию, API `GET/POST /api/admin/commerce`
+- **Коммерция** — тарифы, пакеты докупки трафика и лимит устройств по умолчанию, API `GET/POST /api/admin/commerce`
+- **События** (при `EVENTS_MODULE_ENABLED=1`) — создание событий, лидерборд, начисление наград
 
 ### Модуль событий (опционально)
 
-Включается `EVENTS_MODULE_ENABLED`: реферальные события, коды участников, лидерборд, награды в данных события.
+Таблицы модуля создаются при инициализации БД вместе с остальной схемой. HTTP API и сценарии в интерфейсе доступны только при **`EVENTS_MODULE_ENABLED=1`** (в Docker — не забудьте пробросить переменную в `environment`, см. `.env.example`). Реферальные события, коды участников, лидерборд, награды в данных события.
 
 ---
 
@@ -128,6 +129,11 @@ cp .env.example apps/backend/src/.env
 | `WEBSITE_URL` | опционально: лендинг (`profile-web-page-url` / `website` в ответе VPN subscription URL `/sub`) |
 | `SUPPORT_URL` | поддержка для `/sub` (`support-url`), редирект `/support`; вместе с сайтом/каналом — две разные кнопки. Fallback: `TELEGRAM_URL` (устар.) |
 | `TELEGRAM_CHANNEL_URL` | опционально: кнопка «канал/новости» в `/sub` (`profile-web-page-url`), если нет `WEBSITE_URL` / `WEBAPP_URL` |
+
+**Пакеты трафика по нодам (опционально)**
+
+| Переменная | Назначение |
+|------------|------------|
 | `DARALLA_TRAFFIC_BUCKETS_ENABLED` | включает **пакеты трафика по нодам** (bucket map), синхронизацию расхода с панелей и enforcement на X-UI; для лимитных нод с шаблоном группы дополнительно ведётся **периодная квота подписки** (`subscription_traffic_quota`: включённый объём на оплаченный период × длительность тарифа + отдельный остаток докупки; сброс включённого при успешной оплате продления через webhook) |
 | `DARALLA_TRAFFIC_BUCKETS_SYNC_INTERVAL_SECONDS` | интервал фонового пересчёта usage и статуса «исчерпан» для bucket |
 | `DARALLA_TRAFFIC_BUCKETS_SYNC_ON_SUB` | опционально пересчитывает usage прямо в запросе `/sub` (дороже, но ближе к real-time) |
@@ -222,19 +228,21 @@ Daralla/
 │   ├── icons/
 │   ├── legal/                   # terms, privacy
 │   └── js/
-│       ├── app/
+│       ├── app/                 # composition, dom-bindings, state, actions
 │       ├── api/
 │       ├── auth/
-│       ├── features/
+│       ├── features/          # подписки, платежи, админка, уведомления, события и др.
 │       ├── platform/
-│       └── shared/, ui/
+│       ├── shared/
+│       └── ui/
 ├── shared/contracts/            # контракты HTTP и примеры JSON
-├── scripts/                     # архитектура, смоук фронта, контракты
+├── scripts/                     # архитектура, смоук фронта, контракты, vulture
 ├── tests/
 ├── images/                      # изображения для бота
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
+├── requirements-dev.txt
 ├── .env.example
 ├── README.md
 └── LICENSE
@@ -250,12 +258,15 @@ Daralla/
 pytest
 ```
 
+Опционально для локальных проверок кода: `pip install -r requirements-dev.txt` (например, `vulture` для `scripts/check_dead_code.py`).
+
 Дополнительные скрипты:
 
 ```bash
 python scripts/check_arch_rules.py
 python scripts/check_frontend_smoke.py
 python scripts/check_http_contracts.py
+python scripts/check_dead_code.py
 ```
 
 Контракты: `shared/contracts/http_contracts_v1.json` и каталог `shared/contracts/examples/`.
