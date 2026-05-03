@@ -97,9 +97,9 @@ server {
         proxy_set_header X-Forwarded-Port \$server_port;
         
         # Таймауты для долгих запросов
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
         
         # Буферизация
         proxy_buffering off;

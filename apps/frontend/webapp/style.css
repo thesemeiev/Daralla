@@ -2418,26 +2418,8 @@ h1 {
     border: 1px solid var(--accent-line);
 }
 
-.sub-traffic__head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-
-.sub-traffic__glyph {
-    width: 34px;
-    height: 34px;
-    flex-shrink: 0;
-    border-radius: 10px;
-    background:
-        linear-gradient(145deg, rgba(255, 255, 255, 0.12) 0%, transparent 55%),
-        var(--accent-muted);
-    border: 1px solid var(--accent-line);
-}
-
 .sub-traffic__title {
-    margin: 0;
+    margin: 0 0 8px;
     font-size: 15px;
     font-weight: 600;
     letter-spacing: -0.02em;

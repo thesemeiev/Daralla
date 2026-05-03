@@ -152,10 +152,7 @@
                     : '')
                 + (sub.traffic_quota
                     ? '                <section class="sub-traffic" aria-labelledby="sub-traffic-heading">\n'
-                    + '                    <div class="sub-traffic__head">\n'
-                    + '                        <span class="sub-traffic__glyph" aria-hidden="true"></span>\n'
-                    + '                        <h3 class="sub-traffic__title" id="sub-traffic-heading">Трафик</h3>\n'
-                    + '                    </div>\n'
+                    + '                    <h3 class="sub-traffic__title" id="sub-traffic-heading">Трафик</h3>\n'
                     + '                    <p class="sub-traffic__lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
                     + trafficPeriodBlock
                     + '                    <p class="sub-traffic__hint">При продлении обновляется периодный объём. Докупка переносится и учитывается вместе с остатком периода.</p>\n'
