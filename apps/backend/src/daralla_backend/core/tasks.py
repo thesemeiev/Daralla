@@ -15,6 +15,7 @@ from daralla_backend.services.traffic_bucket_service import (
     traffic_buckets_enabled,
     traffic_bucket_sync_interval_seconds,
 )
+from daralla_backend.services.traffic_quota_period_service import run_calendar_reset_for_all
 from daralla_backend.utils.logging_helpers import log_event
 from daralla_backend.web.observability import inc_metric
 
@@ -59,7 +60,9 @@ async def start_background_tasks(sync_manager, subscription_manager, notificatio
 
     if traffic_buckets_enabled():
         asyncio.create_task(traffic_bucket_usage_loop(server_manager))
+        asyncio.create_task(traffic_quota_calendar_loop())
         logger.info("Traffic buckets sync loop: включён (DARALLA_TRAFFIC_BUCKETS_ENABLED=1)")
+        logger.info("Traffic quota calendar reset: почасовой цикл (UTC 1-е число)")
     else:
         logger.info("Traffic buckets sync loop выключен (DARALLA_TRAFFIC_BUCKETS_ENABLED=0)")
     
@@ -389,6 +392,32 @@ async def sync_outbox_worker_loop(subscription_manager):
             logger.error("Ошибка outbox worker loop: %s", e, exc_info=True)
             inc_metric("background_task_error_total", task="sync_outbox_worker")
         await asyncio.sleep(interval)
+
+
+async def traffic_quota_calendar_loop():
+    """Сброс базовой квоты в начале каждого UTC-месяца; догон при рестарте после 1-го числа."""
+    await asyncio.sleep(5)
+    while True:
+        try:
+            summary = await run_calendar_reset_for_all()
+            if summary.get("enabled") and summary.get("reset", 0) > 0:
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "traffic_quota_calendar_reset_tick",
+                    month_start_utc=summary.get("month_start_utc"),
+                    reset=summary.get("reset"),
+                    skipped=summary.get("skipped"),
+                    errors=summary.get("errors"),
+                    candidates=summary.get("candidates"),
+                )
+            inc_metric("background_task_success_total", task="traffic_quota_calendar")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Ошибка traffic_quota_calendar_loop: %s", exc, exc_info=True)
+            inc_metric("background_task_error_total", task="traffic_quota_calendar")
+        await asyncio.sleep(3600)
 
 
 async def traffic_bucket_usage_loop(server_manager):

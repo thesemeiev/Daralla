@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from unittest.mock import AsyncMock, MagicMock
 
 import aiosqlite
 import pytest
@@ -21,7 +22,10 @@ from daralla_backend.db.subscriptions_db import (
 )
 from daralla_backend.db.users_db import get_or_create_subscriber
 from daralla_backend.services import traffic_quota_period_service as tq_mod
-from daralla_backend.services.traffic_quota_period_service import reset_included_quota_after_payment
+from daralla_backend.services.traffic_quota_period_service import (
+    current_month_start_unix,
+    reset_included_quota_calendar,
+)
 
 
 async def _clear_subscription_group_id(subscription_id: int) -> None:
@@ -108,8 +112,14 @@ async def test_allocate_quota_delta_spills_to_purchased(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_reset_included_quota_after_payment_keeps_purchased(db, monkeypatch):
+async def test_reset_included_quota_calendar_keeps_purchased(db, monkeypatch):
     monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    svc = MagicMock()
+    svc.enqueue_enforcement_if_needed = AsyncMock(return_value=0)
+    monkeypatch.setattr(
+        "daralla_backend.services.traffic_bucket_service.get_traffic_bucket_service",
+        lambda: svc,
+    )
     suffix = uuid.uuid4().hex[:8]
     subscriber_id = await get_or_create_subscriber(f"u_tqr_{suffix}")
     now = int(time.time())
@@ -134,6 +144,7 @@ async def test_reset_included_quota_after_payment_keeps_purchased(db, monkeypatc
         included_used_bytes=77,
         purchased_remaining_bytes=999,
         bump_period_version=False,
+        period_started_at=0,
     )
 
     async def fake_resolve(_sid: int, _gid: int):
@@ -158,13 +169,15 @@ async def test_reset_included_quota_after_payment_keeps_purchased(db, monkeypatc
         sub_with_group,
     )
 
-    await reset_included_quota_after_payment(sub_id, paid_period_key="3month", payment_days=90)
+    ms = current_month_start_unix()
+    assert await reset_included_quota_calendar(sub_id, month_start_utc=ms) is True
 
     row = await get_subscription_traffic_quota(sub_id)
     assert int(row["included_used_bytes"]) == 0
     assert int(row["purchased_remaining_bytes"]) == 999
-    assert int(row["included_allowance_bytes"]) == 3 * int(1024**3)
+    assert int(row["included_allowance_bytes"]) == int(1024**3)
     assert int(row["traffic_period_version"]) >= 1
+    assert int(row["period_started_at"]) == ms
 
 
 @pytest.mark.asyncio
@@ -342,8 +355,14 @@ async def test_quota_adjust_negative_returns_to_purchased(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_reset_included_quota_after_payment_without_group_uses_bucket_limit(db, monkeypatch):
+async def test_reset_included_quota_calendar_without_group_uses_bucket_limit(db, monkeypatch):
     monkeypatch.setenv("DARALLA_TRAFFIC_BUCKETS_ENABLED", "1")
+    svc = MagicMock()
+    svc.enqueue_enforcement_if_needed = AsyncMock(return_value=0)
+    monkeypatch.setattr(
+        "daralla_backend.services.traffic_bucket_service.get_traffic_bucket_service",
+        lambda: svc,
+    )
     suffix = uuid.uuid4().hex[:8]
     subscriber_id = await get_or_create_subscriber(f"u_tqnogrp_{suffix}")
     now = int(time.time())
@@ -368,8 +387,11 @@ async def test_reset_included_quota_after_payment_without_group_uses_bucket_limi
         included_allowance_bytes=int(1024**3),
         included_used_bytes=500,
         purchased_remaining_bytes=100,
+        bump_period_version=False,
+        period_started_at=0,
     )
-    await reset_included_quota_after_payment(sub_id, paid_period_key="month", payment_days=30)
+    ms = current_month_start_unix()
+    assert await reset_included_quota_calendar(sub_id, month_start_utc=ms) is True
 
     row = await get_subscription_traffic_quota(sub_id)
     assert int(row["included_used_bytes"]) == 0

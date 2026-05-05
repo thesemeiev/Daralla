@@ -238,21 +238,6 @@ async def process_extension_payment(payment_id, user_id, meta):
                 new_expires_at,
             )
 
-            try:
-                from daralla_backend.services.traffic_quota_period_service import reset_included_quota_after_payment
-
-                await reset_included_quota_after_payment(
-                    int(extension_subscription_id),
-                    paid_period_key=actual_period,
-                    payment_days=days,
-                )
-            except Exception as quota_e:
-                logger.warning(
-                    "traffic_quota reset after extension failed sub=%s: %s",
-                    extension_subscription_id,
-                    quota_e,
-                )
-
             # Проверяем, что синхронизация прошла на всех серверах
             if failed_extensions:
                 logger.warning(
@@ -504,21 +489,6 @@ async def process_new_purchase_payment(payment_id, user_id, meta):
         # Нездоровые серверы уже привязаны к подписке, клиенты будут созданы при синхронизации
         await update_payment_status(payment_id, 'succeeded')
         await update_payment_activation(payment_id, 1)
-
-        try:
-            from daralla_backend.services.traffic_quota_period_service import reset_included_quota_after_payment
-
-            await reset_included_quota_after_payment(
-                int(sub_dict["id"]),
-                paid_period_key=period,
-                payment_days=days,
-            )
-        except Exception as quota_e:
-            logger.warning(
-                "traffic_quota reset after new purchase failed sub=%s: %s",
-                sub_dict.get("id"),
-                quota_e,
-            )
 
         try:
             from daralla_backend.events import EVENTS_MODULE_ENABLED, on_payment_success as events_on_payment_success

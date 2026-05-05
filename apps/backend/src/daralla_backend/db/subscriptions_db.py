@@ -820,9 +820,14 @@ async def upsert_subscription_traffic_quota_row(
     included_used_bytes: int | None = None,
     purchased_remaining_bytes: int | None = None,
     bump_period_version: bool = False,
+    period_started_at: int | None = None,
 ) -> None:
-    """Создаёт или обновляет строку квоты; при bump_period_version инкрементирует traffic_period_version."""
+    """Создаёт или обновляет строку квоты; при bump_period_version инкрементирует traffic_period_version.
+
+    period_started_at: если задано — записывается вместо текущего времени (календарный сброс квоты).
+    """
     now = int(time.time())
+    period_at = int(period_started_at) if period_started_at is not None else now
     sid = int(subscription_id)
     bid = int(limited_bucket_id)
     allowance = max(0, int(included_allowance_bytes))
@@ -854,7 +859,7 @@ async def upsert_subscription_traffic_quota_row(
                     updated_at = ?
                 WHERE subscription_id = ?
                 """,
-                (bid, allowance, used, purchased, ver, now, now, sid),
+                (bid, allowance, used, purchased, ver, period_at, now, sid),
             )
             await db.commit()
         return
@@ -868,9 +873,25 @@ async def upsert_subscription_traffic_quota_row(
              purchased_remaining_bytes, traffic_period_version, period_started_at, updated_at)
             VALUES (?, ?, ?, ?, ?, 0, ?, ?)
             """,
-            (sid, bid, allowance, used_i, purchased_i, now, now),
+            (sid, bid, allowance, used_i, purchased_i, period_at, now),
         )
         await db.commit()
+
+
+async def list_subscription_ids_for_calendar_quota_reset() -> list[int]:
+    """Подписки со строкой квоты, кроме status='deleted' (в т.ч. active, expired, trial)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT q.subscription_id
+            FROM subscription_traffic_quota q
+            JOIN subscriptions s ON s.id = q.subscription_id
+            WHERE s.status != 'deleted'
+            ORDER BY q.subscription_id ASC
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+            return [int(r[0]) for r in rows]
 
 
 async def adjust_subscription_traffic_quota_for_bucket_usage(subscription_id: int, bucket_id: int, delta: int) -> None:
