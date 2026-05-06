@@ -391,7 +391,7 @@
             var incRemain = Math.max(0, allowance - incUsed);
             host.innerHTML = ''
                 + '<h3 id="traffic-quota-title" class="traffic-panel-title">Квота периода</h3>'
-                + '<p class="traffic-panel-hint">Включённый объём пересчитывается при оплате продления; докупка не сгорает.</p>'
+                + '<p class="traffic-panel-hint">Включённый объём сбрасывается 1-го числа каждого месяца (UTC); докупка не сгорает.</p>'
                 + '<div class="traffic-metric-grid" role="region" aria-label="Периодная квота">'
                 + '  <div class="traffic-metric"><span class="traffic-metric-label">Включено</span><span class="traffic-metric-value">' + _formatBytes(allowance) + '</span></div>'
                 + '  <div class="traffic-metric"><span class="traffic-metric-label">Израсходовано</span><span class="traffic-metric-value">' + _formatBytes(incUsed) + '</span></div>'

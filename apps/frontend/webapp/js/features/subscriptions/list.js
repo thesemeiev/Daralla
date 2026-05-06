@@ -78,7 +78,7 @@
             };
         }
 
-        var TRAFFIC_LEAD_COPY = 'Учёт ниже — только по серверам с лимитом. Остальные точки подключения этот пакет не расходуют.';
+        var TRAFFIC_LEAD_COPY = 'Учёт ниже — только по серверам с лимитом. Остальные точки подключения этот пакет не расходуют. Лимит на серверы белых списков — вынужденная мера: трафик на этих нодах дорогой и тарифицируется отдельно.';
 
         function _trafficIncludedPercentUsed(quota) {
             var cap = Number(quota.included_allowance_bytes) || 0;
@@ -155,7 +155,7 @@
                     + '                    <h3 class="sub-traffic__title" id="sub-traffic-heading">Трафик</h3>\n'
                     + '                    <p class="sub-traffic__lead">' + _deps.escapeHtml(TRAFFIC_LEAD_COPY) + '</p>\n'
                     + trafficPeriodBlock
-                    + '                    <p class="sub-traffic__hint">При продлении обновляется периодный объём. Докупка переносится и учитывается вместе с остатком периода.</p>\n'
+                    + '                    <p class="sub-traffic__hint">Базовый объём обновляется 1-го числа каждого месяца (UTC). Докупка не сгорает и хранится до удаления подписки.</p>\n'
                     + '                    <div class="sub-traffic__topup">' + _trafficTopupButtonsHtml(sub) + '</div>\n'
                     + '                </section>\n'
                     : '')
