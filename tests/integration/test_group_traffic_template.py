@@ -8,9 +8,11 @@ from daralla_backend.db import (
     add_server_config,
     add_server_group,
     create_subscription,
+    delete_server_config,
     create_subscription_traffic_bucket,
     ensure_default_unlimited_bucket,
     get_or_create_subscriber,
+    get_server_group_traffic_limited_servers,
     get_server_group_traffic_template,
     get_subscription_server_bucket_map,
     list_subscription_traffic_buckets,
@@ -260,3 +262,29 @@ async def test_bulk_dry_run(db, monkeypatch):
     assert out["ok"] is True
     assert out["total"] >= 1
     assert out["applied"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_delete_server_removes_group_limited_mapping(db):
+    suffix = uuid.uuid4().hex[:8]
+    gid = await add_server_group(f"GDel_{suffix}", description="t", is_default=False)
+    s_lim = f"lim_del_{suffix}"
+    s_free = f"free_del_{suffix}"
+    sid_lim = await add_server_config(gid, s_lim, "https://example.com", "u", "p")
+    await add_server_config(gid, s_free, "https://example.com", "u", "p")
+
+    await upsert_server_group_traffic_template(
+        gid,
+        enabled=True,
+        limited_bucket_name="L",
+        limit_bytes=1024**3,
+        is_unlimited=False,
+        window_days=30,
+        credit_periods_total=1,
+    )
+    await replace_server_group_traffic_limited_servers(gid, [s_lim])
+    assert await get_server_group_traffic_limited_servers(gid) == [s_lim]
+
+    await delete_server_config(sid_lim)
+
+    assert await get_server_group_traffic_limited_servers(gid) == []

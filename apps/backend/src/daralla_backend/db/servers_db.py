@@ -5,6 +5,7 @@
 import aiosqlite
 import datetime
 import logging
+import sqlite3
 import time
 from . import DB_PATH
 
@@ -568,6 +569,22 @@ async def update_server_config(server_id: int, **kwargs):
 async def delete_server_config(server_id: int):
     """Удаляет конфигурацию сервера"""
     async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT group_id, name FROM servers_config WHERE id = ?",
+            (server_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row:
+            try:
+                await db.execute(
+                    "DELETE FROM server_group_traffic_limited_servers WHERE group_id = ? AND server_name = ?",
+                    (int(row["group_id"]), str(row["name"])),
+                )
+            except sqlite3.OperationalError as exc:
+                # Таблица шаблонов трафика может отсутствовать в старых БД до миграции 009.
+                if "no such table" not in str(exc).lower():
+                    raise
         await db.execute("DELETE FROM servers_config WHERE id = ?", (server_id,))
         await db.commit()
         return True
