@@ -95,6 +95,8 @@ async def test_login_then_list_inbounds_calls_correct_paths():
 
     def handler(request: httpx.Request) -> httpx.Response:
         rec.requests.append(request)
+        if request.url.path.endswith("/csrf-token"):
+            return httpx.Response(404)
         if request.url.path.endswith("/login"):
             return httpx.Response(200, json={"success": True})
         if request.url.path.endswith("/panel/api/inbounds/list"):
@@ -109,8 +111,9 @@ async def test_login_then_list_inbounds_calls_correct_paths():
 
     assert inbounds == [{"id": 1, "protocol": "vless"}]
     paths = [r.url.path for r in rec.requests]
-    assert paths[0].endswith("/login")
-    assert paths[1].endswith("/panel/api/inbounds/list")
+    assert paths[0].endswith("/csrf-token")
+    assert paths[1].endswith("/login")
+    assert paths[2].endswith("/panel/api/inbounds/list")
 
 
 @pytest.mark.asyncio
@@ -218,6 +221,8 @@ async def test_relogin_on_401_then_succeeds():
     state = {"calls": 0, "logins": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/csrf-token"):
+            return httpx.Response(404)
         if request.url.path.endswith("/login"):
             state["logins"] += 1
             return httpx.Response(200, json={"success": True})
@@ -269,6 +274,127 @@ async def test_login_failure_raises_panel_error():
         await client.aclose()
 
     assert "bad credentials" in str(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_login_with_csrf_token_v3_panel():
+    rec = _Recorder()
+    csrf = "csrf-test-token-abc"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rec.requests.append(request)
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(200, json={"success": True, "obj": csrf})
+        if path.endswith("/login"):
+            assert request.headers.get("X-CSRF-Token") == csrf
+            return httpx.Response(200, json={"success": True})
+        if path.endswith("/panel/api/inbounds/list"):
+            return _ok([{"id": 1, "protocol": "vless"}])
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        inbounds = await client.list_inbounds()
+    finally:
+        await client.aclose()
+
+    assert inbounds == [{"id": 1, "protocol": "vless"}]
+    paths = [r.url.path for r in rec.requests]
+    assert paths[0].endswith("/csrf-token")
+    assert paths[1].endswith("/login")
+    assert paths[2].endswith("/panel/api/inbounds/list")
+
+
+@pytest.mark.asyncio
+async def test_post_api_includes_csrf_after_login():
+    rec = _Recorder()
+    csrf = "csrf-for-post"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rec.requests.append(request)
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(200, json={"success": True, "obj": csrf})
+        if path.endswith("/login"):
+            return httpx.Response(200, json={"success": True})
+        if path.endswith("/panel/api/inbounds/addClient"):
+            assert request.headers.get("X-CSRF-Token") == csrf
+            return _ok()
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        await client.add_client(3, {"email": "u1", "id": "uuid"})
+    finally:
+        await client.aclose()
+
+    post_reqs = [r for r in rec.requests if r.method == "POST" and "addClient" in r.url.path]
+    assert len(post_reqs) == 1
+    assert post_reqs[0].headers.get("X-CSRF-Token") == csrf
+
+
+@pytest.mark.asyncio
+async def test_legacy_panel_without_csrf_endpoint_still_works():
+    rec = _Recorder()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rec.requests.append(request)
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(404)
+        if path.endswith("/login"):
+            assert request.headers.get("X-CSRF-Token") is None
+            return httpx.Response(200, json={"success": True})
+        if path.endswith("/panel/api/inbounds/list"):
+            return _ok([])
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        result = await client.list_inbounds()
+    finally:
+        await client.aclose()
+
+    assert result == []
+    paths = [r.url.path for r in rec.requests]
+    assert paths[0].endswith("/csrf-token")
+    assert paths[1].endswith("/login")
+
+
+@pytest.mark.asyncio
+async def test_bearer_api_token_skips_login_and_csrf():
+    rec = _Recorder()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rec.requests.append(request)
+        path = request.url.path
+        if path.endswith("/login") or path.endswith("/csrf-token"):
+            return _fail("should not login", status=500)
+        if path.endswith("/panel/api/inbounds/list"):
+            assert request.headers.get("Authorization") == "Bearer panel-api-token"
+            assert request.headers.get("X-CSRF-Token") is None
+            return _ok([{"id": 2}])
+        return _fail("unexpected", status=404)
+
+    client = XUiPanelClient(
+        host="https://panel.example.com:2053/secret",
+        login="admin",
+        password="pw",
+        verify_tls=False,
+        api_token="panel-api-token",
+    )
+    transport = httpx.MockTransport(handler)
+    st = client._loop_http_state()
+    st.client = httpx.AsyncClient(transport=transport, timeout=client._timeout)
+    st.login_lock = asyncio.Lock()
+    try:
+        inbounds = await client.list_inbounds()
+    finally:
+        await client.aclose()
+
+    assert inbounds == [{"id": 2}]
+    assert not any(r.url.path.endswith("/login") for r in rec.requests)
 
 
 @pytest.mark.asyncio

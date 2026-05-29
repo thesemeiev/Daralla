@@ -60,13 +60,23 @@ class XUiPanelError(Exception):
 class _LoopHttpState:
     """Состояние HTTP-сессии для одного asyncio event loop."""
 
-    __slots__ = ("client", "login_lock", "logged_in", "login_ts")
+    __slots__ = (
+        "client",
+        "login_lock",
+        "logged_in",
+        "login_ts",
+        "csrf_token",
+        "csrf_required",
+    )
 
     def __init__(self) -> None:
         self.client: Optional[httpx.AsyncClient] = None
         self.login_lock: Optional[asyncio.Lock] = None
         self.logged_in: bool = False
         self.login_ts: float = 0.0
+        self.csrf_token: Optional[str] = None
+        # None = ещё не проверяли; True = панель v3+ с CSRF; False = legacy без /csrf-token.
+        self.csrf_required: Optional[bool] = None
 
 
 class XUiPanelClient:
@@ -88,10 +98,12 @@ class XUiPanelClient:
         verify_tls: Optional[bool] = None,
         max_retries: Optional[int] = None,
         session_ttl_sec: Optional[float] = None,
+        api_token: Optional[str] = None,
     ) -> None:
         self.login = login
         self.password = password
         self.host = host.rstrip("/")
+        self.api_token = (api_token or "").strip() or None
         if verify_tls is None:
             verify_tls = self.host.startswith("https://")
         self._verify_tls = bool(verify_tls)
@@ -159,7 +171,51 @@ class XUiPanelClient:
         st.login_lock = None
         st.logged_in = False
         st.login_ts = 0.0
+        st.csrf_token = None
+        st.csrf_required = None
         await self._ensure_http_client(st)
+
+    @staticmethod
+    def _is_safe_method(method: str) -> bool:
+        return method.upper() in {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+    def _request_headers(self, st: _LoopHttpState, method: str) -> Dict[str, str]:
+        headers = {"Accept": "application/json"}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+            return headers
+        if st.csrf_required and st.csrf_token and not self._is_safe_method(method):
+            headers["X-CSRF-Token"] = st.csrf_token
+        return headers
+
+    async def _probe_csrf(self, st: _LoopHttpState) -> None:
+        """Определяет, нужен ли CSRF (3x-ui v3+), и получает токен сессии."""
+        if st.csrf_required is not None:
+            return
+        assert st.client is not None
+        url = self._url("csrf-token")
+        try:
+            resp = await st.client.get(url, headers={"Accept": "application/json"})
+        except httpx.HTTPError as exc:
+            logger.debug("XUiPanelClient: csrf-token probe failed: %s", exc)
+            st.csrf_required = False
+            return
+        if resp.status_code == 404:
+            st.csrf_required = False
+            return
+        body = _safe_json(resp)
+        if resp.status_code == 200 and isinstance(body, dict) and body.get("success"):
+            token = body.get("obj")
+            if isinstance(token, str) and token:
+                st.csrf_token = token
+                st.csrf_required = True
+                return
+        st.csrf_required = False
+
+    async def _refresh_csrf(self, st: _LoopHttpState) -> None:
+        st.csrf_token = None
+        st.csrf_required = None
+        await self._probe_csrf(st)
 
     # ---- low-level ---------------------------------------------------------
 
@@ -196,6 +252,9 @@ class XUiPanelClient:
     async def _ensure_login(self) -> None:
         st = self._loop_http_state()
         await self._ensure_http_client(st)
+        if self.api_token:
+            st.logged_in = True
+            return
         assert st.login_lock is not None
         now = time.monotonic()
         if st.logged_in and (now - st.login_ts) < self._session_ttl:
@@ -214,18 +273,36 @@ class XUiPanelClient:
             await self._do_login(st)
 
     async def _do_login(self, st: _LoopHttpState) -> None:
+        if self.api_token:
+            st.logged_in = True
+            st.login_ts = time.monotonic()
+            return
         assert st.client is not None
+        await self._refresh_csrf(st)
         url = self._url("login")
         logger.debug("XUiPanelClient: login at %s", _mask_host(self.host))
         resp = await st.client.post(
             url,
             data={"username": self.login, "password": self.password},
-            headers={"Accept": "application/json"},
+            headers=self._request_headers(st, "POST"),
         )
         body = _safe_json(resp)
+        if resp.status_code == 403 and st.csrf_required:
+            # Сессия/CSRF могли сброситься — один повтор с новым токеном.
+            await self._refresh_csrf(st)
+            resp = await st.client.post(
+                url,
+                data={"username": self.login, "password": self.password},
+                headers=self._request_headers(st, "POST"),
+            )
+            body = _safe_json(resp)
         if resp.status_code != 200 or (isinstance(body, dict) and not body.get("success", True)):
             msg = (body.get("msg") if isinstance(body, dict) else None) or "login failed"
-            raise XUiPanelError(f"3x-ui login failed: {msg}", status=resp.status_code, body=body)
+            raise XUiPanelError(
+                f"3x-ui login failed: {msg}",
+                status=resp.status_code,
+                body=body,
+            )
         st.logged_in = True
         st.login_ts = time.monotonic()
 
@@ -255,7 +332,7 @@ class XUiPanelClient:
                     url,
                     data=data,
                     json=json_body,
-                    headers={"Accept": "application/json"},
+                    headers=self._request_headers(st, method),
                 )
             except (httpx.HTTPError, RuntimeError, ValueError) as exc:
                 last_exc = exc
@@ -283,10 +360,12 @@ class XUiPanelClient:
                 await asyncio.sleep(min(0.5 * attempt, 4.0))
                 continue
 
-            # Сессия истекла — релогин и повтор
+            # Сессия истекла или CSRF отклонён — релогин / обновление CSRF и повтор.
             if resp.status_code in (401, 403):
                 logger.debug("XUiPanelClient: %s %s -> %s, relogin", method, path, resp.status_code)
                 st.logged_in = False
+                if resp.status_code == 403 and not self.api_token and st.csrf_required:
+                    await self._refresh_csrf(st)
                 await self._relogin()
                 continue
 
