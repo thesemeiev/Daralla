@@ -21,6 +21,7 @@ from daralla_backend.db import (
     mark_job_retry,
     mark_bucket_enforced,
     retry_dead_jobs,
+    server_name_exists_in_config,
 )
 from daralla_backend.services.admin_subscriptions_service import get_user_id_from_subscription_id
 
@@ -196,6 +197,10 @@ async def _apply_outbox_job(job: dict, *, subscription_manager) -> tuple[bool, s
     current_rev = int(sub.get("sync_revision") or 0)
     if desired_rev < current_rev:
         return True, None, True
+
+    if op in ("ensure_client", "apply_bucket_enforcement", "delete_client"):
+        if not await server_name_exists_in_config(server_name):
+            return True, None, True
 
     if op == "delete_client":
         found = subscription_manager.server_manager.find_server_by_name(server_name)

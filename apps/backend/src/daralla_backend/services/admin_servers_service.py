@@ -363,14 +363,22 @@ async def handle_server_config_delete(data: dict):
     if not server_id:
         return {"error": "Server ID is required"}, 400
     old_server = await get_server_by_id(int(server_id))
-    await delete_server_config(server_id)
+    deleted, purge_stats = await delete_server_config(server_id)
+    if not deleted:
+        return {"error": "Server not found"}, 404
+    if any(purge_stats.values()):
+        logger.info(
+            "Удаление сервера id=%s: purge_stats=%s",
+            server_id,
+            purge_stats,
+        )
     sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(need_sync=True)
     try:
         if old_server and old_server.get("group_id") is not None:
             await enqueue_group_sync_jobs(int(old_server["group_id"]), reason="admin_server_delete")
     except Exception as e:
         logger.warning("Outbox enqueue server delete failed server=%s: %s", server_id, e)
-    payload = {"success": True}
+    payload = {"success": True, "purge_stats": purge_stats}
     if sync_stats is not None:
         payload["sync_stats"] = sync_stats
     if sync_error:

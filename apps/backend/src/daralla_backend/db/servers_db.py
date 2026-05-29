@@ -513,7 +513,6 @@ async def update_server_config(server_id: int, **kwargs):
             row_before = await cur.fetchone()
         if not row_before:
             return False
-
         old_name = row_before["name"]
 
         if "group_id" in kwargs and "client_sort_order" not in kwargs:
@@ -529,65 +528,147 @@ async def update_server_config(server_id: int, **kwargs):
                     r = await cur.fetchone()
                 kwargs = {**kwargs, "client_sort_order": int(r[0]) if r and r[0] is not None else 0}
 
-        updates = []
-        params = []
-        for key, value in kwargs.items():
-            if key in SERVER_CONFIG_UPDATE_KEYS:
-                updates.append(f"{key} = ?")
-                params.append(value)
+    rename_stats: dict[str, int] = {}
+    new_name = kwargs.get("name")
+    if new_name and old_name and old_name != new_name:
+        rename_stats = await rename_server_references(old_name, new_name)
+        if any(rename_stats.values()):
+            logger.info(
+                "Переименование ссылок сервера '%s' -> '%s': %s",
+                old_name,
+                new_name,
+                rename_stats,
+            )
 
-        if updates:
-            params.append(server_id)
-            query = f"UPDATE servers_config SET {', '.join(updates)} WHERE id = ?"
-            await db.execute(query, params)
+    updates = []
+    params = []
+    for key, value in kwargs.items():
+        if key in SERVER_CONFIG_UPDATE_KEYS:
+            updates.append(f"{key} = ?")
+            params.append(value)
 
-            if 'name' in kwargs and old_name and old_name != kwargs['name']:
-                new_name = kwargs['name']
-                async with db.execute(
-                    "UPDATE subscription_servers SET server_name = ? WHERE server_name = ?",
-                    (new_name, old_name)
-                ) as cur:
-                    updated_count = cur.rowcount
-                if updated_count > 0:
-                    logger.info(f"Обновлено {updated_count} записей в subscription_servers: '{old_name}' -> '{new_name}'")
-                else:
-                    logger.debug(f"Нет записей в subscription_servers для обновления: '{old_name}' -> '{new_name}'")
-
-                async with db.execute(
-                    "UPDATE server_load_history SET server_name = ? WHERE server_name = ?",
-                    (new_name, old_name)
-                ) as cur:
-                    history_updated = cur.rowcount
-                if history_updated > 0:
-                    logger.info(f"Обновлено {history_updated} записей в server_load_history: '{old_name}' -> '{new_name}'")
-
-            await db.commit()
-            return True
+    if not updates:
         return False
 
+    async with aiosqlite.connect(DB_PATH) as db:
+        params.append(server_id)
+        query = f"UPDATE servers_config SET {', '.join(updates)} WHERE id = ?"
+        await db.execute(query, params)
+        await db.commit()
+    return True
 
-async def delete_server_config(server_id: int):
-    """Удаляет конфигурацию сервера"""
+
+# --- Lifecycle сервера: purge/rename ссылок по server_name ---
+
+_SERVER_REF_TABLES = (
+    ("subscription_server_traffic_bucket_map", "bucket_map"),
+    ("subscription_servers", "subscription_servers"),
+    ("subscription_server_traffic_snapshots", "traffic_snapshots"),
+    ("server_group_traffic_limited_servers", "limited_servers"),
+    ("sync_outbox", "sync_outbox"),
+)
+
+
+async def _table_exists(db: aiosqlite.Connection, table_name: str) -> bool:
+    async with db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (table_name,),
+    ) as cur:
+        return await cur.fetchone() is not None
+
+
+async def server_name_exists_in_config(server_name: str) -> bool:
+    name = str(server_name or "").strip()
+    if not name:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM servers_config WHERE name = ? LIMIT 1",
+            (name,),
+        ) as cur:
+            return await cur.fetchone() is not None
+
+
+async def purge_server_references(server_name: str) -> dict[str, int]:
+    """Удаляет все строки БД, привязанные к server_name (кроме servers_config)."""
+    name = str(server_name or "").strip()
+    stats: dict[str, int] = {key: 0 for _, key in _SERVER_REF_TABLES}
+    if not name:
+        return stats
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        for table, key in _SERVER_REF_TABLES:
+            if not await _table_exists(db, table):
+                continue
+            cur = await db.execute(f"DELETE FROM {table} WHERE server_name = ?", (name,))
+            stats[key] = int(cur.rowcount or 0)
+        await db.commit()
+    return stats
+
+
+async def rename_server_references(old_name: str, new_name: str) -> dict[str, int]:
+    """Переносит server_name во всех связанных таблицах."""
+    old = str(old_name or "").strip()
+    new = str(new_name or "").strip()
+    stats: dict[str, int] = {key: 0 for _, key in _SERVER_REF_TABLES}
+    stats["server_load_history"] = 0
+    if not old or not new or old == new:
+        return stats
+    rename_tables = list(_SERVER_REF_TABLES) + [("server_load_history", "server_load_history")]
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        for table, key in rename_tables:
+            if not await _table_exists(db, table):
+                continue
+            cur = await db.execute(
+                f"UPDATE {table} SET server_name = ? WHERE server_name = ?",
+                (new, old),
+            )
+            stats[key] = int(cur.rowcount or 0)
+        await db.commit()
+    return stats
+
+
+async def purge_orphan_server_references() -> dict[str, int]:
+    """Удаляет ссылки на server_name, которых нет в servers_config (страховка)."""
+    stats: dict[str, int] = {key: 0 for _, key in _SERVER_REF_TABLES}
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        if not await _table_exists(db, "servers_config"):
+            await db.execute("COMMIT")
+            return stats
+        for table, key in _SERVER_REF_TABLES:
+            if not await _table_exists(db, table):
+                continue
+            cur = await db.execute(
+                f"""
+                DELETE FROM {table}
+                WHERE server_name NOT IN (SELECT name FROM servers_config)
+                """
+            )
+            stats[key] = int(cur.rowcount or 0)
+        await db.commit()
+    return stats
+
+
+async def delete_server_config(server_id: int) -> tuple[bool, dict[str, int]]:
+    """Удаляет конфигурацию сервера и все связанные ссылки по server_name."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT group_id, name FROM servers_config WHERE id = ?",
+            "SELECT name FROM servers_config WHERE id = ?",
             (server_id,),
         ) as cur:
             row = await cur.fetchone()
-        if row:
-            try:
-                await db.execute(
-                    "DELETE FROM server_group_traffic_limited_servers WHERE group_id = ? AND server_name = ?",
-                    (int(row["group_id"]), str(row["name"])),
-                )
-            except sqlite3.OperationalError as exc:
-                # Таблица шаблонов трафика может отсутствовать в старых БД до миграции 009.
-                if "no such table" not in str(exc).lower():
-                    raise
-        await db.execute("DELETE FROM servers_config WHERE id = ?", (server_id,))
+        if not row:
+            return False, {}
+    purge_stats = await purge_server_references(str(row["name"]))
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("DELETE FROM servers_config WHERE id = ?", (server_id,))
         await db.commit()
-        return True
+        deleted = int(cur.rowcount or 0) > 0
+    purge_stats["servers_config"] = 1 if deleted else 0
+    return deleted, purge_stats
 
 
 # --- Шаблоны трафика для группы серверов (см. миграция 009) ---

@@ -16,6 +16,7 @@ def create_subscription_blueprint(bot_app):
             token=token,
             method=request.method,
             headers=dict(request.headers),
+            query=request.args.to_dict(flat=True),
         )
         if headers is None:
             return body, status

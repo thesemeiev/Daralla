@@ -23,6 +23,11 @@ from daralla_backend.services.traffic_bucket_service import (
     traffic_buckets_enabled,
 )
 from daralla_backend.services.xui_panel_client import XUiPanelError
+from daralla_backend.services.clash_subscription_service import (
+    build_clash_subscription_yaml,
+    clash_subscription_headers_overrides,
+    is_clash_subscription_client,
+)
 from daralla_backend.utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
@@ -261,19 +266,26 @@ async def _sum_traffic_from_servers(subscription_id: int, servers: list) -> tupl
     return total_upload, total_download, total_traffic
 
 
-async def handle_subscription_request(token: str, method: str, headers: dict):
+async def handle_subscription_request(
+    token: str,
+    method: str,
+    headers: dict,
+    query: dict | None = None,
+):
     user_agent = (headers.get("User-Agent") or "").lower()
     x_client = (headers.get("X-Client") or "").lower()
     is_happ_client = "happ" in user_agent or "happ" in x_client
     is_v2raytun_client = "v2raytun" in user_agent or "v2raytun" in x_client
+    is_clash_client = is_clash_subscription_client(user_agent, x_client, query=query)
 
-    if user_agent or x_client:
+    if user_agent or x_client or query:
         logger.debug(
-            "Определение клиента: User-Agent='%s', X-Client='%s', is_happ=%s, is_v2raytun=%s",
+            "Определение клиента: User-Agent='%s', X-Client='%s', is_happ=%s, is_v2raytun=%s, is_clash=%s",
             user_agent[:100],
             x_client,
             is_happ_client,
             is_v2raytun_client,
+            is_clash_client,
         )
 
     if method == "OPTIONS":
@@ -346,13 +358,24 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
                 inactive_reason=inactive_reason,
                 now_ts=now_ts,
             )
-            empty_b64 = base64.b64encode(b"").decode("ascii")
+            if is_clash_client:
+                clash_filename = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip().replace(" ", "-").lower()
+                if not clash_filename:
+                    clash_filename = "daralla-vpn"
+                response_text = build_clash_subscription_yaml([], group_name=vpn_brand_name)
+                response_headers.update(clash_subscription_headers_overrides())
+                response_headers["Content-Disposition"] = (
+                    f'attachment; filename="{clash_filename}.yaml"'
+                )
+            else:
+                response_text = base64.b64encode(b"").decode("ascii")
             logger.info(
-                "Возвращаем пустую подписку 200 для token=%s state=%s",
+                "Возвращаем пустую подписку 200 для token=%s state=%s clash=%s",
                 token_masked,
                 inactive_reason,
+                is_clash_client,
             )
-            return empty_b64, 200, response_headers
+            return response_text, 200, response_headers
 
         logger.info("Подписка %s валидна, генерируем ссылки...", sub["id"])
 
@@ -439,7 +462,10 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
         )
 
         links_plain = "\n".join(links)
-        response_text = base64.b64encode(links_plain.encode("utf-8")).decode("ascii")
+        if is_clash_client:
+            response_text = build_clash_subscription_yaml(links, group_name=vpn_brand_name)
+        else:
+            response_text = base64.b64encode(links_plain.encode("utf-8")).decode("ascii")
 
         if links:
             first_link = links[0]
@@ -500,6 +526,14 @@ async def handle_subscription_request(token: str, method: str, headers: dict):
             inactive_reason=None,
             now_ts=int(time.time()),
         )
+        if is_clash_client:
+            response_headers.update(clash_subscription_headers_overrides())
+            clash_filename = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip().replace(" ", "-").lower()
+            if not clash_filename:
+                clash_filename = "daralla-vpn"
+            response_headers["Content-Disposition"] = (
+                f'attachment; filename="{clash_filename}.yaml"'
+            )
 
         return response_text, 200, response_headers
     except Exception as exc:

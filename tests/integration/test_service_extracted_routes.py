@@ -302,6 +302,40 @@ async def test_subscription_positive_contract_with_mocked_dependencies(
 
 
 @pytest.mark.asyncio
+async def test_subscription_returns_clash_yaml_for_flclash_client(
+    quart_app_with_routes: Quart, db
+):
+    set_ctx(
+        AppContext(
+            subscription_manager=_FakeSubscriptionManager(),
+            server_manager=None,
+            vpn_brand_name="Daralla VPN",
+        )
+    )
+    client = quart_app_with_routes.test_client()
+    with patch(
+        "daralla_backend.services.subscription_route_service.get_subscription_by_token",
+        return_value={"id": 101, "status": "active", "expires_at": 1893456000},
+    ), patch(
+        "daralla_backend.services.subscription_route_service.get_subscription_servers",
+        return_value=[{"server_name": "srv-1", "client_email": "u1@example.com"}],
+    ), patch(
+        "daralla_backend.services.subscription_route_service.is_subscription_active",
+        return_value=True,
+    ):
+        response = await client.get(
+            "/sub/token-101",
+            headers={"User-Agent": "FlClash/0.8.87"},
+        )
+    assert response.status_code == 200
+    body = await response.get_data(as_text=True)
+    assert "proxies:" in body
+    assert "type: vless" in body
+    assert response.headers.get("Content-Type", "").startswith("application/yaml")
+    assert response.headers.get("subscription-userinfo")
+
+
+@pytest.mark.asyncio
 async def test_subscription_support_url_prefers_support_env(
     quart_app_with_routes: Quart, db
 ):

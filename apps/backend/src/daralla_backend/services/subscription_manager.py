@@ -217,7 +217,7 @@ class SubscriptionManager:
             
             found = self.server_manager.find_server_by_name(server_name)
             if found is None:
-                logger.error("Сервер %s не в конфиге бота", server_name)
+                logger.warning("Сервер %s не в конфиге бота", server_name)
                 return False, False
             xui, resolved_name = found
             if xui is None:

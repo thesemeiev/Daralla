@@ -33,6 +33,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
 async def start_background_tasks(sync_manager, subscription_manager, notification_manager, server_manager=None):
     """Запускает все фоновые задачи"""
     logger.info("🚀 Запуск цикла фоновых задач...")
@@ -305,6 +312,7 @@ async def retention_maintenance_loop():
         cleanup_inactive_users,
         cleanup_old_daily_aggregates,
         get_table_row_counts,
+        purge_orphan_server_references,
     )
     from ..events.db.queries import cleanup_old_event_raw
 
@@ -330,6 +338,17 @@ async def retention_maintenance_loop():
                 dry_run=policy.dry_run,
             )
 
+            orphan_stats: dict[str, int] = {}
+            if _bool_env("DARALLA_SERVER_REF_SANITIZE_ENABLED", False):
+                orphan_stats = await purge_orphan_server_references()
+                if any(orphan_stats.values()):
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "server_ref_sanitize_completed",
+                        **orphan_stats,
+                    )
+
             mode = "dry_run" if policy.dry_run else "apply"
             log_event(
                 logger,
@@ -340,6 +359,7 @@ async def retention_maintenance_loop():
                 users=users_deleted,
                 events_raw=events_deleted,
                 daily_aggregates=agg_deleted,
+                server_ref_orphans=sum(orphan_stats.values()) if orphan_stats else 0,
             )
 
             table_counts = await get_table_row_counts()
