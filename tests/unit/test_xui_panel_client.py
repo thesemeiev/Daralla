@@ -318,18 +318,24 @@ async def test_post_api_includes_csrf_after_login():
             return httpx.Response(200, json={"success": True, "obj": csrf})
         if path.endswith("/login"):
             return httpx.Response(200, json={"success": True})
-        if path.endswith("/panel/api/inbounds/addClient"):
+        if path.endswith("/panel/api/clients/add"):
             assert request.headers.get("X-CSRF-Token") == csrf
+            body = json.loads(request.content.decode())
+            assert body["inboundIds"] == [3]
+            assert body["client"]["email"] == "u1"
+            assert "protocol" not in body["client"]
             return _ok()
         return _fail("unexpected", status=404)
 
     client = await _make_client(handler)
     try:
-        await client.add_client(3, {"email": "u1", "id": "uuid"})
+        await client.add_client(
+            3, {"email": "u1", "id": "uuid", "protocol": "vless"}
+        )
     finally:
         await client.aclose()
 
-    post_reqs = [r for r in rec.requests if r.method == "POST" and "addClient" in r.url.path]
+    post_reqs = [r for r in rec.requests if r.method == "POST" and "/clients/add" in r.url.path]
     assert len(post_reqs) == 1
     assert post_reqs[0].headers.get("X-CSRF-Token") == csrf
 
@@ -402,6 +408,8 @@ async def test_online_emails_returns_list():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/login"):
             return httpx.Response(200, json={"success": True})
+        if request.url.path.endswith("/csrf-token"):
+            return httpx.Response(404)
         if request.url.path.endswith("/panel/api/inbounds/onlines"):
             return _ok(["u1", "u2"])
         return _fail("unexpected", status=404)
@@ -413,3 +421,71 @@ async def test_online_emails_returns_list():
         await client.aclose()
 
     assert sorted(emails) == ["u1", "u2"]
+
+
+@pytest.mark.asyncio
+async def test_v3_online_emails_uses_clients_onlines():
+    csrf = "csrf-onlines"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(200, json={"success": True, "obj": csrf})
+        if path.endswith("/login"):
+            return httpx.Response(200, json={"success": True})
+        if path.endswith("/panel/api/clients/onlines"):
+            assert request.headers.get("X-CSRF-Token") == csrf
+            return _ok(["ee@x", "fi@x"])
+        if path.endswith("/panel/api/inbounds/onlines"):
+            return _fail("legacy onlines should not be called", status=404)
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        emails = await client.online_emails()
+    finally:
+        await client.aclose()
+
+    assert sorted(emails) == ["ee@x", "fi@x"]
+
+
+@pytest.mark.asyncio
+async def test_v3_update_and_delete_client_by_email():
+    csrf = "csrf-crud"
+    rec = _Recorder()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rec.requests.append(request)
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(200, json={"success": True, "obj": csrf})
+        if path.endswith("/login"):
+            return httpx.Response(200, json={"success": True})
+        if "/panel/api/clients/update/" in path:
+            body = json.loads(request.content.decode())
+            assert body["email"] == "user@example.com"
+            assert body["enable"] is True
+            return _ok()
+        if "/panel/api/clients/del/" in path:
+            return _ok()
+        if "/panel/api/clients/traffic/" in path:
+            return _ok({"up": 1, "down": 2, "total": 0})
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        await client.update_client(
+            client_url_id="uuid-id",
+            inbound_id=5,
+            client_payload={"email": "user@example.com", "enable": True, "protocol": "vless"},
+        )
+        await client.delete_client_by_email(5, "user@example.com")
+        traffic = await client.get_client_traffics_by_email("user@example.com")
+    finally:
+        await client.aclose()
+
+    assert traffic == {"up": 1, "down": 2, "total": 0}
+    paths = [r.url.path for r in rec.requests]
+    assert any("/panel/api/clients/update/" in p for p in paths)
+    assert any("/panel/api/clients/del/" in p for p in paths)
+    assert any("/panel/api/clients/traffic/" in p for p in paths)

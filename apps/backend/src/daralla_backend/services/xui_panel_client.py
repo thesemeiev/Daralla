@@ -253,6 +253,8 @@ class XUiPanelClient:
         st = self._loop_http_state()
         await self._ensure_http_client(st)
         if self.api_token:
+            if st.csrf_required is None:
+                await self._probe_csrf(st)
             st.logged_in = True
             return
         assert st.login_lock is not None
@@ -427,13 +429,48 @@ class XUiPanelClient:
 
     # ---- clients -----------------------------------------------------------
 
+    @staticmethod
+    def _uses_v3_clients_api(st: _LoopHttpState) -> bool:
+        """3x-ui v3.2+ moved client CRUD to /panel/api/clients/* (CSRF panels)."""
+        return bool(st.csrf_required)
+
+    @staticmethod
+    def _v3_client_body(client_payload: Dict[str, Any]) -> Dict[str, Any]:
+        body = dict(client_payload)
+        body.pop("protocol", None)
+        return body
+
     async def add_client(self, inbound_id: int, client_payload: Dict[str, Any]) -> None:
-        """`POST /panel/api/inbounds/addClient` для одного клиента."""
+        """Legacy: POST /panel/api/inbounds/addClient. v3: POST /panel/api/clients/add."""
+        await self._ensure_login()
+        st = self._loop_http_state()
+        if self._uses_v3_clients_api(st):
+            await self._request(
+                "POST",
+                "panel/api/clients/add",
+                json_body={
+                    "client": self._v3_client_body(client_payload),
+                    "inboundIds": [int(inbound_id)],
+                },
+            )
+            return
         body = {
             "id": int(inbound_id),
             "settings": json.dumps({"clients": [client_payload]}),
         }
-        await self._request("POST", "panel/api/inbounds/addClient", data=body)
+        try:
+            await self._request("POST", "panel/api/inbounds/addClient", data=body)
+        except XUiPanelError as exc:
+            if exc.status != 404:
+                raise
+            await self._request(
+                "POST",
+                "panel/api/clients/add",
+                json_body={
+                    "client": self._v3_client_body(client_payload),
+                    "inboundIds": [int(inbound_id)],
+                },
+            )
 
     async def update_client(
         self,
@@ -441,20 +478,52 @@ class XUiPanelClient:
         inbound_id: int,
         client_payload: Dict[str, Any],
     ) -> None:
-        """`POST /panel/api/inbounds/updateClient/{clientId}` с одним клиентом."""
+        """Legacy: POST /panel/api/inbounds/updateClient/{id}. v3: POST /panel/api/clients/update/{email}."""
         if not client_url_id:
             raise ValueError("update_client: client_url_id is empty")
+        await self._ensure_login()
+        st = self._loop_http_state()
+        if self._uses_v3_clients_api(st):
+            email = str(client_payload.get("email") or "").strip()
+            if not email:
+                raise XUiPanelError("update_client v3: email required in payload")
+            await self._request(
+                "POST",
+                f"panel/api/clients/update/{quote(email, safe='')}",
+                json_body=self._v3_client_body(client_payload),
+            )
+            return
         body = {
             "id": int(inbound_id),
             "settings": json.dumps({"clients": [client_payload]}),
         }
         endpoint = f"panel/api/inbounds/updateClient/{quote(str(client_url_id), safe='')}"
-        await self._request("POST", endpoint, data=body)
+        try:
+            await self._request("POST", endpoint, data=body)
+        except XUiPanelError as exc:
+            if exc.status != 404:
+                raise
+            email = str(client_payload.get("email") or "").strip()
+            if not email:
+                raise XUiPanelError(
+                    "update_client v3 fallback: email required in payload"
+                ) from exc
+            await self._request(
+                "POST",
+                f"panel/api/clients/update/{quote(email, safe='')}",
+                json_body=self._v3_client_body(client_payload),
+            )
 
     async def delete_client(self, inbound_id: int, client_url_id: str) -> None:
-        """`POST /panel/api/inbounds/{id}/delClient/{clientId}`."""
+        """Legacy: POST /panel/api/inbounds/{id}/delClient/{clientId}. v3: email-based delete only."""
         if not client_url_id:
             raise ValueError("delete_client: client_url_id is empty")
+        await self._ensure_login()
+        st = self._loop_http_state()
+        if self._uses_v3_clients_api(st):
+            raise XUiPanelError(
+                "delete_client on v3 panel requires delete_client_by_email (email-based API)"
+            )
         endpoint = (
             f"panel/api/inbounds/{int(inbound_id)}"
             f"/delClient/{quote(str(client_url_id), safe='')}"
@@ -462,33 +531,66 @@ class XUiPanelClient:
         await self._request("POST", endpoint)
 
     async def delete_client_by_email(self, inbound_id: int, email: str) -> None:
-        """`POST /panel/api/inbounds/{id}/delClientByEmail/{email}` — страховка для delete."""
+        """Legacy: delClientByEmail. v3: POST /panel/api/clients/del/{email}."""
         if not email:
             raise ValueError("delete_client_by_email: email is empty")
+        await self._ensure_login()
+        st = self._loop_http_state()
+        email_q = quote(str(email), safe="")
+        if self._uses_v3_clients_api(st):
+            await self._request("POST", f"panel/api/clients/del/{email_q}")
+            return
         endpoint = (
             f"panel/api/inbounds/{int(inbound_id)}"
-            f"/delClientByEmail/{quote(str(email), safe='')}"
+            f"/delClientByEmail/{email_q}"
         )
-        await self._request("POST", endpoint)
+        try:
+            await self._request("POST", endpoint)
+        except XUiPanelError as exc:
+            if exc.status != 404:
+                raise
+            await self._request("POST", f"panel/api/clients/del/{email_q}")
 
     async def online_emails(self) -> List[str]:
-        """`POST /panel/api/inbounds/onlines` -> список email-ов онлайн-клиентов."""
-        result = await self._request("POST", "panel/api/inbounds/onlines")
+        """Legacy: POST /panel/api/inbounds/onlines. v3: POST /panel/api/clients/onlines."""
+        await self._ensure_login()
+        st = self._loop_http_state()
+        if self._uses_v3_clients_api(st):
+            result = await self._request("POST", "panel/api/clients/onlines")
+        else:
+            try:
+                result = await self._request("POST", "panel/api/inbounds/onlines")
+            except XUiPanelError as exc:
+                if exc.status != 404:
+                    raise
+                result = await self._request("POST", "panel/api/clients/onlines")
         if isinstance(result, list):
             return [str(x) for x in result if x is not None]
         return []
 
     async def get_client_traffics_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        """`GET /panel/api/inbounds/getClientTraffics/{email}` -> dict со статистикой
-        конкретного клиента (поля up, down, total, ...). None — если клиент не найден.
-        """
+        """Legacy: getClientTraffics. v3: GET /panel/api/clients/traffic/{email}."""
         if not email:
             return None
+        await self._ensure_login()
+        st = self._loop_http_state()
+        email_q = quote(str(email), safe="")
         try:
-            result = await self._request(
-                "GET",
-                f"panel/api/inbounds/getClientTraffics/{quote(str(email), safe='')}",
-            )
+            if self._uses_v3_clients_api(st):
+                result = await self._request("GET", f"panel/api/clients/traffic/{email_q}")
+            else:
+                try:
+                    result = await self._request(
+                        "GET",
+                        f"panel/api/inbounds/getClientTraffics/{email_q}",
+                    )
+                except XUiPanelError as exc:
+                    if exc.status != 404:
+                        raise
+                    result = await self._request(
+                        "GET",
+                        f"panel/api/clients/traffic/{email_q}",
+                    )
         except XUiPanelError as exc:
             msg = str(exc).lower()
             if "not found" in msg or "no records" in msg:
