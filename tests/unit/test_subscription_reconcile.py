@@ -92,6 +92,7 @@ def _make_x3():
     from daralla_backend.services.xui_service import X3
     x3 = X3.__new__(X3)
     x3._panel = MagicMock()
+    x3._panel.uses_v3_clients_api = AsyncMock(return_value=False)
     x3._ensure_login = AsyncMock()
     x3._post_inbound_update_client = AsyncMock()
     return x3

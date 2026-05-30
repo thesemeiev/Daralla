@@ -25,8 +25,9 @@ from .xui_helpers import (
     flow_matches_desired,
     panel_client_settings_dict,
     panel_snapshot_matches_desired,
+    v3_client_wire_payload,
 )
-from .xui_panel_client import XUiPanelClient
+from .xui_panel_client import XUiPanelClient, XUiPanelError
 from ..utils.logging_helpers import mask_secret
 
 logger = logging.getLogger(__name__)
@@ -182,13 +183,22 @@ class X3:
         return await self.list(timeout=timeout)
 
     async def client_exists(self, user_email: str) -> bool:
-        """Проверяет наличие клиента по email через снимок списка inbound."""
+        """Проверяет наличие клиента по email (v3: clients/get, legacy: inbound settings)."""
+        target = str(user_email).strip()
+        if not target:
+            return False
+        try:
+            await self._ensure_login()
+            if await self._panel.uses_v3_clients_api():
+                bundle = await self._panel.get_client_by_email(target)
+                return bool(bundle and bundle.get("client"))
+        except Exception:
+            logger.debug("client_exists v3 get failed", exc_info=True)
         try:
             data = await self.list()
         except Exception:
             logger.debug("client_exists list call failed", exc_info=True)
             return False
-        target = str(user_email).strip()
         for inbound in data.get("obj", []):
             try:
                 settings = json.loads(inbound.get("settings", "{}"))
@@ -222,12 +232,17 @@ class X3:
         flow: Optional[str],
     ) -> Dict[str, Any]:
         protocol_norm = X3._normalize_protocol_name(protocol, None)
+        tg_id_int = 0
+        try:
+            tg_id_int = int(str(tg_id).strip() or "0")
+        except (TypeError, ValueError):
+            tg_id_int = 0
         payload: Dict[str, Any] = {
             "email": str(user_email),
             "enable": True,
             "limitIp": int(limit_ip),
             "expiryTime": int(expiry_ms),
-            "tgId": str(tg_id),
+            "tgId": tg_id_int,
             "subId": key_name or "",
             "protocol": protocol_norm,
         }
@@ -326,9 +341,29 @@ class X3:
             limit_ip=limit_ip_value,
             flow=flow,
         )
-        await self._post_inbound_add_clients(
-            int(inbound_id_resolved), [payload], protocol_hint=protocol,
-        )
+        try:
+            await self._post_inbound_add_clients(
+                int(inbound_id_resolved), [payload], protocol_hint=protocol,
+            )
+        except XUiPanelError as exc:
+            msg = str(exc).lower()
+            if await self._panel.uses_v3_clients_api() and "already in use" in msg:
+                exp_sec = int(x_time // 1000)
+                ok, _ = await self.reconcile_client(
+                    user_email,
+                    expiry_sec=exp_sec,
+                    limit_ip=limit_ip_value,
+                    flow_from_config=flow,
+                    target_protocol=protocol,
+                    target_inbound_id=int(inbound_id_resolved),
+                )
+                if ok:
+                    return {
+                        "ok": True,
+                        "protocol": protocol,
+                        "inbound_id": int(inbound_id_resolved),
+                    }
+            raise
         return {
             "ok": True,
             "protocol": protocol,
@@ -491,6 +526,12 @@ class X3:
             flow_override=flow_override,
             protocol_hint=protocol_norm,
         )
+        if await self._panel.uses_v3_clients_api() and email:
+            bundle = await self._panel.get_client_by_email(str(email))
+            if bundle and isinstance(bundle.get("client"), dict):
+                merged = v3_client_wire_payload(bundle["client"])
+                merged.update(body)
+                body = merged
         await self._panel.update_client(str(client_url_id), int(inbound_id), body)
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
@@ -521,6 +562,36 @@ class X3:
         exp_ms = int(expiry_sec) * 1000
         li = int(limit_ip)
         needle = str(user_email).strip()
+
+        if await self._panel.uses_v3_clients_api():
+            bundle = await self._panel.get_client_by_email(needle)
+            if bundle is None or not isinstance(bundle.get("client"), dict):
+                return False, False
+            inbound_ids = bundle.get("inboundIds") or []
+            if target_inbound_id is not None:
+                inbound_ids = [
+                    int(ib) for ib in inbound_ids if int(ib) == int(target_inbound_id)
+                ]
+            if not inbound_ids:
+                return False, False
+            c = v3_client_wire_payload(bundle["client"])
+            self._client_set_expiry_ms(c, exp_ms)
+            self._client_set_limit_ip(c, li)
+            self._client_set(c, "enable", True)
+            inv_protocol = (target_protocol or "").strip().lower()
+            if not inv_protocol and inbound_ids:
+                inv = await self._panel.get_inbound(int(inbound_ids[0]))
+                if inv is not None:
+                    inv_protocol = self._extract_protocol(inv)
+            if inv_protocol == "vless":
+                self._client_set(c, "flow", want_flow)
+            body = panel_client_settings_dict(
+                c,
+                flow_override=want_flow if inv_protocol == "vless" else None,
+                protocol_hint=inv_protocol or None,
+            )
+            await self._panel.update_client(needle, int(inbound_ids[0]), body)
+            return True, True
 
         data = await self.list()
         wanted_protocol = (target_protocol or "").strip().lower()
@@ -577,6 +648,28 @@ class X3:
         клиент находится по email в settings.clients/users.
         """
         target = str(email).strip()
+        await self._ensure_login()
+        if await self._panel.uses_v3_clients_api():
+            bundle = await self._panel.get_client_by_email(target)
+            if bundle and isinstance(bundle.get("client"), dict):
+                client_rec = v3_client_wire_payload(bundle["client"])
+                inbound_ids = bundle.get("inboundIds") or []
+                if target_inbound_id is not None:
+                    inbound_ids = [
+                        int(ib) for ib in inbound_ids if int(ib) == int(target_inbound_id)
+                    ]
+                if not inbound_ids:
+                    return None
+                inv = await self._panel.get_inbound(int(inbound_ids[0]))
+                protocol = (
+                    self._normalize_protocol_name(
+                        str(inv.get("protocol") or "vless").strip().lower(), None
+                    )
+                    if inv is not None
+                    else "vless"
+                )
+                return int(inbound_ids[0]), protocol, client_rec
+            return None
         inbounds = await self._panel.list_inbounds()
         for inv in inbounds:
             inv_id = inv.get("id")

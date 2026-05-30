@@ -450,6 +450,83 @@ async def test_v3_online_emails_uses_clients_onlines():
 
 
 @pytest.mark.asyncio
+async def test_v3_get_client_by_email():
+    csrf = "csrf-get"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(200, json={"success": True, "obj": csrf})
+        if path.endswith("/login"):
+            return httpx.Response(200, json={"success": True})
+        if "/panel/api/clients/get/" in path:
+            return _ok(
+                {
+                    "client": {
+                        "id": 42,
+                        "uuid": "550e8400-e29b-41d4-a716-446655440000",
+                        "email": "user@example.com",
+                        "enable": True,
+                        "limitIp": 2,
+                        "expiryTime": 1700000000000,
+                        "subId": "tok",
+                        "tgId": 12345,
+                    },
+                    "inboundIds": [7],
+                }
+            )
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        bundle = await client.get_client_by_email("user@example.com")
+    finally:
+        await client.aclose()
+
+    assert bundle is not None
+    assert bundle["inboundIds"] == [7]
+    assert bundle["client"]["email"] == "user@example.com"
+
+
+@pytest.mark.asyncio
+async def test_v3_update_sends_uuid_as_id_not_db_pk():
+    csrf = "csrf-update-uuid"
+    rec = _Recorder()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rec.requests.append(request)
+        path = request.url.path
+        if path.endswith("/csrf-token"):
+            return httpx.Response(200, json={"success": True, "obj": csrf})
+        if path.endswith("/login"):
+            return httpx.Response(200, json={"success": True})
+        if "/panel/api/clients/update/" in path:
+            body = json.loads(request.content.decode())
+            assert body["id"] == "550e8400-e29b-41d4-a716-446655440000"
+            assert body["id"] != 42
+            return _ok()
+        return _fail("unexpected", status=404)
+
+    client = await _make_client(handler)
+    try:
+        await client.update_client(
+            client_url_id="ignored",
+            inbound_id=7,
+            client_payload={
+                "id": 42,
+                "uuid": "550e8400-e29b-41d4-a716-446655440000",
+                "email": "user@example.com",
+                "enable": True,
+                "protocol": "vless",
+            },
+        )
+    finally:
+        await client.aclose()
+
+    assert any("/panel/api/clients/update/" in r.url.path for r in rec.requests)
+
+
+@pytest.mark.asyncio
 async def test_v3_update_and_delete_client_by_email():
     csrf = "csrf-crud"
     rec = _Recorder()

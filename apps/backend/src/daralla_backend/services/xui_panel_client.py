@@ -38,6 +38,8 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
+from .xui_helpers import v3_client_wire_payload
+
 logger = logging.getLogger(__name__)
 
 
@@ -436,9 +438,35 @@ class XUiPanelClient:
 
     @staticmethod
     def _v3_client_body(client_payload: Dict[str, Any]) -> Dict[str, Any]:
-        body = dict(client_payload)
+        body = v3_client_wire_payload(client_payload)
         body.pop("protocol", None)
         return body
+
+    async def uses_v3_clients_api(self) -> bool:
+        """True после логина, если панель 3x-ui v3.2+ (CSRF + /panel/api/clients/*)."""
+        await self._ensure_login()
+        return self._uses_v3_clients_api(self._loop_http_state())
+
+    async def get_client_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """GET /panel/api/clients/get/{email} -> {client, inboundIds} (v3.2+)."""
+        if not email:
+            return None
+        await self._ensure_login()
+        st = self._loop_http_state()
+        email_q = quote(str(email).strip(), safe="")
+        try:
+            if self._uses_v3_clients_api(st):
+                result = await self._request("GET", f"panel/api/clients/get/{email_q}")
+            else:
+                return None
+        except XUiPanelError as exc:
+            msg = str(exc).lower()
+            if exc.status == 404 or "not found" in msg or "record not found" in msg:
+                return None
+            raise
+        if isinstance(result, dict):
+            return result
+        return None
 
     async def add_client(self, inbound_id: int, client_payload: Dict[str, Any]) -> None:
         """Legacy: POST /panel/api/inbounds/addClient. v3: POST /panel/api/clients/add."""

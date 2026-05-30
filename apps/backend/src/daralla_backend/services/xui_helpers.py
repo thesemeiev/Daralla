@@ -68,6 +68,30 @@ def normalize_client_flow_value(v: Any) -> str:
     return str(v).strip()
 
 
+def v3_client_wire_payload(record: Any) -> Dict[str, Any]:
+    """Преобразует ClientRecord (GET /panel/api/clients/get) в JSON для update/add v3.
+
+    В v3.2 в ответе API поле ``id`` — это PK в БД панели, а UUID клиента Xray лежит
+    в ``uuid``. В теле update нужен wire-format Client с ``id`` = UUID.
+    """
+    d = client_to_api_dict(record)
+    uuid_val = str(d.get("uuid") or "").strip()
+    id_val = d.get("id")
+    if uuid_val:
+        d["id"] = uuid_val
+    elif isinstance(id_val, int):
+        d.pop("id", None)
+    if not str(d.get("security") or "").strip():
+        d["security"] = "auto"
+    tg = d.get("tgId")
+    if tg is not None and tg != "":
+        try:
+            d["tgId"] = int(tg)
+        except (TypeError, ValueError):
+            d["tgId"] = 0
+    return d
+
+
 def dedupe_flow_json_key(d: Dict[str, Any]) -> None:
     """Оставляет только lower-case ключ `flow`."""
     for k in list(d.keys()):

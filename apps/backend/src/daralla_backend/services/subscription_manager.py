@@ -29,6 +29,7 @@ from .server_manager import MultiServerManager
 from .group_traffic_template_service import apply_template_to_subscription
 from .traffic_bucket_service import get_traffic_bucket_service, traffic_buckets_enabled
 from .xui_helpers import panel_snapshot_matches_desired
+from .xui_panel_client import XUiPanelError
 from .subscription_helpers import (
     clients_by_email_from_xui_list_response,
     panel_entry_from_snapshot,
@@ -450,7 +451,28 @@ class SubscriptionManager:
                     return False, False
                     
         except Exception as e:
-            logger.error(f"Ошибка ensure_client_on_server для {server_name}: {e}")
+            root = e
+            last_attempt = getattr(e, "last_attempt", None)
+            if last_attempt is not None:
+                try:
+                    root = last_attempt.exception() or e
+                except Exception:
+                    root = e
+            if isinstance(root, XUiPanelError):
+                logger.error(
+                    "Ошибка ensure_client_on_server для %s: %s (status=%s msg=%s)",
+                    server_name,
+                    root,
+                    root.status,
+                    (root.body or {}).get("msg") if isinstance(root.body, dict) else root.body,
+                )
+            else:
+                logger.error(
+                    "Ошибка ensure_client_on_server для %s: %s (root=%r)",
+                    server_name,
+                    e,
+                    root,
+                )
             return False, False
 
     async def build_links_for_subscription(

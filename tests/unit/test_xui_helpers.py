@@ -2,6 +2,7 @@ from daralla_backend.services.xui_helpers import (
     client_to_api_dict,
     panel_client_settings_dict,
     panel_snapshot_matches_desired,
+    v3_client_wire_payload,
 )
 
 
@@ -31,6 +32,19 @@ def test_panel_client_settings_dict_drops_flow_for_non_vless():
     client = {"email": "u_1", "protocol": "hysteria2", "flow": "xtls-rprx-vision"}
     out = panel_client_settings_dict(client, flow_override="xtls-rprx-vision")
     assert "flow" not in out
+
+
+def test_v3_client_wire_payload_maps_uuid_to_id():
+    rec = {
+        "id": 99,
+        "uuid": "550e8400-e29b-41d4-a716-446655440000",
+        "email": "u@test",
+        "tgId": "123",
+    }
+    out = v3_client_wire_payload(rec)
+    assert out["id"] == "550e8400-e29b-41d4-a716-446655440000"
+    assert out["tgId"] == 123
+    assert out["security"] == "auto"
 
 
 def test_panel_snapshot_matches_desired_true_on_equal_snapshot():
