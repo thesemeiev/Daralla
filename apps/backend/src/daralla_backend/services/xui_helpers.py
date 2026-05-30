@@ -62,6 +62,33 @@ def parse_inbound_settings(settings_raw: Any) -> Dict[str, Any]:
     return {}
 
 
+def clients_from_inbound_row(inbound: Dict[str, Any]) -> list[dict]:
+    """Клиенты инбаунда из settings и clientStats (v3 часто пустой settings, stats в list)."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    settings = parse_inbound_settings(inbound.get("settings"))
+    for c in clients_from_settings_payload(settings):
+        email = str(c.get("email") or "").strip()
+        if email and email not in seen:
+            seen.add(email)
+            out.append(c)
+    stats = inbound.get("clientStats")
+    rows: list[Any] = []
+    if isinstance(stats, list):
+        rows = stats
+    elif isinstance(stats, dict):
+        rows = list(stats.values())
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        c = client_to_api_dict(raw)
+        email = str(c.get("email") or "").strip()
+        if email and email not in seen:
+            seen.add(email)
+            out.append(c)
+    return out
+
+
 def clients_from_settings_payload(settings: Dict[str, Any]) -> list[dict]:
     """
     Возвращает плоский список клиентов из 3x-ui settings JSON.

@@ -593,7 +593,17 @@ class XUiPanelClient:
                     raise
                 result = await self._request("POST", "panel/api/clients/onlines")
         if isinstance(result, list):
-            return [str(x) for x in result if x is not None]
+            emails: List[str] = []
+            for x in result:
+                if x is None:
+                    continue
+                if isinstance(x, str):
+                    emails.append(x)
+                elif isinstance(x, dict):
+                    e = x.get("email") or x.get("Email")
+                    if e:
+                        emails.append(str(e))
+            return emails
         return []
 
     async def get_client_traffics_by_email(self, email: str) -> Optional[Dict[str, Any]]:

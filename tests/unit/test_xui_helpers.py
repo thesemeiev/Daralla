@@ -1,5 +1,6 @@
 from daralla_backend.services.xui_helpers import (
     client_to_api_dict,
+    clients_from_inbound_row,
     panel_client_settings_dict,
     panel_snapshot_matches_desired,
     parse_inbound_settings,
@@ -39,6 +40,28 @@ def test_parse_inbound_settings_accepts_dict_or_json_string():
     assert parse_inbound_settings({"clients": [{"email": "a"}]}) == {"clients": [{"email": "a"}]}
     assert parse_inbound_settings('{"clients":[]}') == {"clients": []}
     assert parse_inbound_settings("") == {}
+
+
+def test_clients_from_inbound_row_merges_settings_and_client_stats():
+    inbound = {
+        "settings": {"clients": [{"email": "a", "expiryTime": 0}]},
+        "clientStats": [
+            {"email": "a", "expiryTime": 0},
+            {"email": "b", "expiryTime": 0},
+        ],
+    }
+    emails = {c["email"] for c in clients_from_inbound_row(inbound)}
+    assert emails == {"a", "b"}
+
+
+def test_clients_from_inbound_row_v3_dict_settings_with_client_stats_only():
+    inbound = {
+        "settings": {},
+        "clientStats": [{"email": "usr_x", "expiryTime": 9999999999999, "enable": True}],
+    }
+    rows = clients_from_inbound_row(inbound)
+    assert len(rows) == 1
+    assert rows[0]["email"] == "usr_x"
 
 
 def test_v3_client_wire_payload_maps_uuid_to_id():

@@ -1004,6 +1004,12 @@ class SubscriptionManager:
             error_count=len(stats["errors"]),
             duration_ms=duration_ms,
         )
+        if stats["errors"]:
+            logger.warning(
+                "sync_servers_with_config: %s ошибок, примеры: %s",
+                len(stats["errors"]),
+                "; ".join(str(e) for e in stats["errors"][:5]),
+            )
 
         return stats
 

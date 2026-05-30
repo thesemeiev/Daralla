@@ -20,6 +20,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .xui_helpers import (
+    clients_from_inbound_row,
     clients_from_settings_payload,
     client_to_api_dict,
     flow_matches_desired,
@@ -807,28 +808,35 @@ class X3:
             if not inbounds:
                 return 0, 0, 0
             online_emails, _ = await self.get_online_clients_ids(timeout=timeout)
+            online_set = {str(e).strip() for e in (online_emails or []) if e}
             current_ms = int(datetime.datetime.now().timestamp() * 1000)
             total_active = 0
             online_count = 0
             offline_count = 0
+            seen_emails: set[str] = set()
             for inbound in inbounds:
                 try:
-                    settings = json.loads(inbound.get("settings", "{}"))
-                except (json.JSONDecodeError, TypeError):
-                    continue
-                try:
-                    for client in clients_from_settings_payload(settings):
+                    for client in clients_from_inbound_row(inbound):
+                        email = str(client.get("email") or "").strip()
+                        if not email or email in seen_emails:
+                            continue
+                        if client.get("enable") is False:
+                            continue
                         expiry_ms = client.get("expiryTime", 0) or 0
-                        if expiry_ms == 0 or current_ms < expiry_ms:
-                            total_active += 1
-                            email = client.get("email")
-                            is_online = bool(email and str(email) in online_emails)
-                            if is_online:
-                                online_count += 1
-                            else:
-                                offline_count += 1
+                        if expiry_ms != 0 and current_ms >= expiry_ms:
+                            continue
+                        seen_emails.add(email)
+                        total_active += 1
+                        if email in online_set:
+                            online_count += 1
+                        else:
+                            offline_count += 1
                 except Exception:
                     continue
+            if total_active == 0 and online_set:
+                online_count = len(online_set)
+                total_active = online_count
+                offline_count = 0
             return total_active, online_count, offline_count
         except Exception as e:
             logger.error("Ошибка при подсчёте онлайн клиентов на %s: %s", self.host, e, exc_info=True)
