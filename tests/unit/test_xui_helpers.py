@@ -2,6 +2,7 @@ from daralla_backend.services.xui_helpers import (
     client_to_api_dict,
     panel_client_settings_dict,
     panel_snapshot_matches_desired,
+    parse_inbound_settings,
     v3_client_wire_payload,
 )
 
@@ -32,6 +33,12 @@ def test_panel_client_settings_dict_drops_flow_for_non_vless():
     client = {"email": "u_1", "protocol": "hysteria2", "flow": "xtls-rprx-vision"}
     out = panel_client_settings_dict(client, flow_override="xtls-rprx-vision")
     assert "flow" not in out
+
+
+def test_parse_inbound_settings_accepts_dict_or_json_string():
+    assert parse_inbound_settings({"clients": [{"email": "a"}]}) == {"clients": [{"email": "a"}]}
+    assert parse_inbound_settings('{"clients":[]}') == {"clients": []}
+    assert parse_inbound_settings("") == {}
 
 
 def test_v3_client_wire_payload_maps_uuid_to_id():

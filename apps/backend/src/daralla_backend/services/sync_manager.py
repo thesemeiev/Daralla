@@ -22,7 +22,7 @@ from ..db.subscriptions_db import (
 from ..db.notifications_db import clear_subscription_notifications
 from ..core.retention_policy import get_retention_policy
 from .subscription_manager import SubscriptionManager
-from .xui_helpers import clients_from_settings_payload
+from .xui_helpers import clients_from_settings_payload, parse_inbound_settings
 from ..utils.logging_helpers import log_event
 
 logger = logging.getLogger(__name__)
@@ -459,7 +459,7 @@ class SyncManager:
                 
                 for inbound in response['obj']:
                     try:
-                        settings = json.loads(inbound['settings'])
+                        settings = parse_inbound_settings(inbound.get("settings"))
                         clients = clients_from_settings_payload(settings)
                         
                         for client in clients:

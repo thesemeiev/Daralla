@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from typing import Any, Dict, Optional
 
@@ -43,6 +44,22 @@ def client_to_api_dict(c: Any) -> dict:
     }
     out = {key_map.get(k, k): v for k, v in d.items()}
     return out
+
+
+def parse_inbound_settings(settings_raw: Any) -> Dict[str, Any]:
+    """Нормализует inbound.settings: v3 list API может вернуть dict, legacy — JSON-строку."""
+    if isinstance(settings_raw, dict):
+        return settings_raw
+    if isinstance(settings_raw, str):
+        text = settings_raw.strip()
+        if not text:
+            return {}
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
 
 
 def clients_from_settings_payload(settings: Dict[str, Any]) -> list[dict]:
