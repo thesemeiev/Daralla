@@ -968,23 +968,35 @@ class X3:
             host_for_sub = host_for_sub.rsplit(":", 1)[0]
         return f"{scheme}://{host_for_sub}:{self.subscription_port}/sub"
 
-    def _subscription_clash_base_url(self) -> str:
-        """Base URL for 3x-ui Clash subscription (no sub_id)."""
-        sub_base = self._subscription_sub_base_url()
-        clash_seg = self._clash_sub_path_segment()
-        if sub_base.endswith("/sub"):
-            return f"{sub_base[:-4]}/{clash_seg}"
-        return f"{sub_base.rstrip('/')}/{clash_seg}"
+    def _subscription_clash_base_urls(self) -> List[str]:
+        """
+        Candidate base URLs for 3x-ui Clash/Mihomo subscription (no sub_id).
 
-    async def _resolve_subscription_sub_id(
-        self,
-        user_email: str,
-        *,
-        subscription_token: Optional[str] = None,
-    ) -> Optional[str]:
-        token = str(subscription_token).strip() if subscription_token else ""
-        if token:
-            return token
+        3x-ui default: subClashURI = subURI + subClashPath → …/sub/clash (append).
+        Older Daralla builds used …/{clash} as a sibling of …/sub — kept as fallback.
+        """
+        sub_base = self._subscription_sub_base_url().rstrip("/")
+        clash_seg = self._clash_sub_path_segment()
+        custom = (os.getenv("DARALLA_CLASH_SUB_BASE_URL") or "").strip().rstrip("/")
+        candidates: List[str] = []
+        if custom:
+            candidates.append(custom)
+        if sub_base.endswith("/sub"):
+            candidates.append(f"{sub_base}/{clash_seg}")
+            legacy = f"{sub_base[:-4]}/{clash_seg}"
+            if legacy not in candidates:
+                candidates.append(legacy)
+        else:
+            candidates.append(f"{sub_base}/{clash_seg}")
+        seen: set[str] = set()
+        ordered: List[str] = []
+        for item in candidates:
+            if item not in seen:
+                seen.add(item)
+                ordered.append(item)
+        return ordered
+
+    async def _lookup_panel_sub_id(self, user_email: str) -> Optional[str]:
         email_norm = str(user_email).strip()
         if not email_norm:
             return None
@@ -1004,6 +1016,20 @@ class X3:
                     return str(sub_id).strip()
         return None
 
+    async def _resolve_subscription_sub_id(
+        self,
+        user_email: str,
+        *,
+        subscription_token: Optional[str] = None,
+    ) -> Optional[str]:
+        panel_sub_id = await self._lookup_panel_sub_id(user_email)
+        if panel_sub_id:
+            return panel_sub_id
+        token = str(subscription_token).strip() if subscription_token else ""
+        if token:
+            return token
+        return None
+
     async def get_clash_subscription_yaml(
         self,
         user_email: str,
@@ -1011,7 +1037,8 @@ class X3:
         subscription_token: Optional[str] = None,
     ) -> Optional[str]:
         """
-        Fetch Mihomo YAML from panel GET /clash/{sub_id} (3x-ui SubClashService).
+        Fetch Mihomo YAML from panel Clash subscription (3x-ui SubClashService).
+        Tries default …/sub/clash/{sub_id} and legacy …/{clash}/{sub_id} paths.
         Returns raw YAML text or None if unavailable/invalid.
         """
         await self._ensure_login()
@@ -1026,27 +1053,35 @@ class X3:
                     user_email,
                 )
                 return None
-            clash_url = f"{self._subscription_clash_base_url().rstrip('/')}/{sub_id}"
-            clash_url_log = f"{self._subscription_clash_base_url().rstrip('/')}/{mask_secret(sub_id)}"
+            masked_sub_id = mask_secret(sub_id)
             async with httpx.AsyncClient(verify=False, timeout=15.0) as hc:
-                r = await hc.get(clash_url)
-            if r.status_code != 200:
-                logger.warning(
-                    "Clash subscription endpoint returned %s: url=%s body_len=%s",
-                    r.status_code,
-                    clash_url_log,
-                    len(r.text or ""),
-                )
-                return None
-            text = (r.text or "").strip()
-            if not is_valid_panel_clash_body(text):
-                logger.warning(
-                    "Clash subscription body invalid: url=%s body_preview=%s",
-                    clash_url_log,
-                    text[:120],
-                )
-                return None
-            return text
+                for base in self._subscription_clash_base_urls():
+                    clash_url = f"{base.rstrip('/')}/{sub_id}"
+                    clash_url_log = f"{base.rstrip('/')}/{masked_sub_id}"
+                    r = await hc.get(clash_url)
+                    if r.status_code != 200:
+                        logger.warning(
+                            "Clash subscription endpoint returned %s: url=%s body_len=%s",
+                            r.status_code,
+                            clash_url_log,
+                            len(r.text or ""),
+                        )
+                        continue
+                    text = (r.text or "").strip()
+                    if not is_valid_panel_clash_body(text):
+                        logger.warning(
+                            "Clash subscription body invalid: url=%s body_preview=%s",
+                            clash_url_log,
+                            text[:120],
+                        )
+                        continue
+                    logger.debug(
+                        "Clash subscription fetched: url=%s body_len=%s",
+                        clash_url_log,
+                        len(text),
+                    )
+                    return text
+            return None
         except Exception as e:
             logger.warning(
                 "get_clash_subscription_yaml failed for %s: %s",

@@ -10,6 +10,7 @@ from daralla_backend.services.clash_subscription_service import (
 
 def test_is_clash_subscription_client_detects_flclash_user_agent():
     assert is_clash_subscription_client("FlClash/0.8.87", "")
+    assert is_clash_subscription_client("FiClash/1.0", "")
     assert is_clash_subscription_client("", "mihomo/1.18.0")
     assert not is_clash_subscription_client("V2RayTun/1.0", "")
 

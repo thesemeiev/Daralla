@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 _CLASH_CLIENT_MARKERS = (
     "flclash",
+    "ficlash",
     "fi clash",
     "clash.meta",
     "clash meta",
