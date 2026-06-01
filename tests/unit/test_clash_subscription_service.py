@@ -51,6 +51,33 @@ proxies:
     assert proxies[0]["xhttp-opts"]["mode"] == "packet-up"
 
 
+def test_parse_panel_clash_yaml_copies_servername_to_sni():
+    text = """
+proxies:
+  - name: TestTrojan
+    type: trojan
+    server: 1.2.3.4
+    port: 443
+    password: p
+    servername: example.com
+"""
+    proxies = parse_panel_clash_yaml(text)
+    assert len(proxies) == 1
+    assert proxies[0]["sni"] == "example.com"
+    assert proxies[0]["servername"] == "example.com"
+
+
+def test_relabel_panel_clash_proxies_uses_display_name():
+    from daralla_backend.services.clash_subscription_service import _relabel_panel_clash_proxies
+
+    proxies = [
+        {"name": "Finland-1.1-6735703554_abc123,10H⏳", "type": "vless"},
+    ]
+    renamed = _relabel_panel_clash_proxies(proxies, "Finland")
+    assert len(renamed) == 1
+    assert renamed[0]["name"] == "Finland"
+
+
 def test_merge_panel_clash_proxies_dedupes_names():
     merged = merge_panel_clash_proxies(
         [
@@ -60,6 +87,17 @@ def test_merge_panel_clash_proxies_dedupes_names():
     )
     names = [p["name"] for p in merged]
     assert names == ["Node", "Node-2"]
+
+
+def test_simplify_proxy_names_for_long_panel_ids():
+    merged = merge_panel_clash_proxies(
+        [
+            [{"name": "Finland-1.1-6735703554_abcdef12-3456-7890-1234-56789abcdef0,10H⏳"}],
+            [{"name": "Finland-2.1-12345678_abcdef12"}],
+        ]
+    )
+    names = [p["name"] for p in merged]
+    assert names == ["Finland", "Finland-2"]
 
 
 def test_build_clash_subscription_from_panels_merges_two_panels():

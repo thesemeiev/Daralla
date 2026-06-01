@@ -30,7 +30,12 @@ from .group_traffic_template_service import apply_template_to_subscription
 from .traffic_bucket_service import get_traffic_bucket_service, traffic_buckets_enabled
 from .xui_helpers import panel_snapshot_matches_desired
 from .xui_panel_client import XUiPanelError
-from .clash_subscription_service import build_clash_subscription_from_panels
+from .clash_subscription_service import (
+    build_clash_subscription_from_panels,
+    build_clash_subscription_from_proxy_lists,
+    parse_panel_clash_yaml,
+    _relabel_panel_clash_proxies,
+)
 from .subscription_helpers import (
     clients_by_email_from_xui_list_response,
     panel_entry_from_snapshot,
@@ -654,13 +659,24 @@ class SubscriptionManager:
                         resolved_name,
                         client_email,
                     )
-                else:
+                    proxies = parse_panel_clash_yaml(body)
+                    if proxies:
+                        server_config = self.server_manager.get_server_config(server_name)
+                        server_display_name = server_config.get("display_name") or resolved_name
+                        proxies = _relabel_panel_clash_proxies(proxies, server_display_name)
+                        return proxies
                     logger.warning(
-                        "Clash sub: пустой/невалидный ответ с %s email=%s",
+                        "Clash sub: нет прокси в YAML с %s email=%s",
                         resolved_name,
                         client_email,
                     )
-                return body
+                    return None
+                logger.warning(
+                    "Clash sub: пустой/невалидный ответ с %s email=%s",
+                    resolved_name,
+                    client_email,
+                )
+                return None
             except Exception as exc:
                 logger.warning(
                     "Clash sub: ошибка запроса %s email=%s: %s",
@@ -681,7 +697,7 @@ class SubscriptionManager:
                 subscription_id,
             )
             return None
-        yaml_text = build_clash_subscription_from_panels(
+        yaml_text = build_clash_subscription_from_proxy_lists(
             panel_bodies,
             group_name=group_name,
         )

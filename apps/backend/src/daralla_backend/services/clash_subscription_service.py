@@ -65,6 +65,12 @@ def is_valid_panel_clash_body(text: str) -> bool:
     return True
 
 
+def _normalize_panel_clash_proxy(proxy: dict[str, Any]) -> dict[str, Any]:
+    if "sni" not in proxy and proxy.get("servername"):
+        proxy["sni"] = proxy["servername"]
+    return proxy
+
+
 def parse_panel_clash_yaml(text: str) -> list[dict[str, Any]]:
     """Extract proxy list from panel Clash YAML (ignore panel proxy-groups/rules)."""
     raw = (text or "").strip()
@@ -83,8 +89,35 @@ def parse_panel_clash_yaml(text: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for item in proxies:
         if isinstance(item, dict) and item.get("name"):
-            out.append(dict(item))
+            out.append(_normalize_panel_clash_proxy(dict(item)))
     return out
+
+
+def _relabel_panel_clash_proxies(
+    proxies: list[dict[str, Any]],
+    server_display_name: str,
+) -> list[dict[str, Any]]:
+    if not proxies or not server_display_name:
+        return proxies
+    normalized: list[dict[str, Any]] = []
+    for idx, proxy in enumerate(proxies, start=1):
+        entry = dict(proxy)
+        entry["name"] = server_display_name if idx == 1 else f"{server_display_name}-{idx}"
+        normalized.append(entry)
+    return normalized
+
+
+def _simplify_proxy_name(name: str) -> str:
+    if not name:
+        return name
+    raw = str(name).strip()
+    if not raw:
+        return raw
+    # Keep human-friendly prefix and drop long panel IDs or expiration suffixes.
+    simplified = re.split(r"[,]|-[0-9]|_[0-9a-fA-F]", raw, 1)[0].strip()
+    if not simplified:
+        return raw
+    return simplified
 
 
 def merge_panel_clash_proxies(proxy_lists: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
@@ -93,7 +126,7 @@ def merge_panel_clash_proxies(proxy_lists: list[list[dict[str, Any]]]) -> list[d
     seen_names: set[str] = set()
     for proxies in proxy_lists:
         for proxy in proxies:
-            name = str(proxy.get("name") or "").strip()
+            name = _simplify_proxy_name(str(proxy.get("name") or "").strip())
             if not name:
                 continue
             base_name = name
@@ -188,6 +221,15 @@ def build_clash_subscription_from_panels(
 ) -> str:
     """Parse panel YAML bodies, merge proxies, emit final subscription YAML."""
     proxy_lists = [parse_panel_clash_yaml(body) for body in panel_bodies]
+    return build_clash_subscription_from_proxy_lists(proxy_lists, group_name=group_name)
+
+
+def build_clash_subscription_from_proxy_lists(
+    proxy_lists: list[list[dict[str, Any]]],
+    *,
+    group_name: str,
+) -> str:
+    """Merge proxy lists and emit final Clash subscription YAML."""
     proxies = merge_panel_clash_proxies(proxy_lists)
     return render_clash_subscription_yaml(proxies, group_name=group_name)
 
