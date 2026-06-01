@@ -52,6 +52,47 @@ def test_build_clash_subscription_yaml_from_links():
     assert "MATCH,Daralla VPN" in yaml_text
 
 
+def test_vless_xhttp_uri_to_clash_proxy_includes_xhttp_opts():
+    uri = (
+        "vless://11111111-2222-3333-4444-555555555555@edge.example.net:443"
+        "?encryption=none&security=reality&sni=www.example.com&fp=chrome"
+        "&pbk=PublicKeyExample&sid=76f3e39bb4a74296&type=xhttp&path=%2F&mode=packet-up"
+        "#Estonia-XHTTP"
+    )
+    proxy = uri_to_clash_proxy(uri)
+    assert proxy is not None
+    assert proxy["network"] == "xhttp"
+    assert "flow" not in proxy
+    assert proxy["xhttp-opts"]["path"] == "/"
+    assert proxy["xhttp-opts"]["mode"] == "packet-up"
+
+
+def test_vless_xhttp_defaults_path_and_mode_when_missing_in_uri():
+    uri = (
+        "vless://11111111-2222-3333-4444-555555555555@edge.example.net:443"
+        "?security=tls&sni=host.example&type=xhttp#Node"
+    )
+    proxy = uri_to_clash_proxy(uri)
+    assert proxy is not None
+    assert proxy["xhttp-opts"]["path"] == "/"
+    assert proxy["xhttp-opts"]["mode"] == "packet-up"
+
+
+def test_trojan_reality_grpc_uri_to_clash_proxy():
+    uri = (
+        "trojan://secret@tr.example:443"
+        "?security=reality&sni=tr.example&fp=chrome&pbk=PubKey&sid=abc123"
+        "&type=grpc&serviceName=GunService#Node-Trojan"
+    )
+    proxy = uri_to_clash_proxy(uri)
+    assert proxy is not None
+    assert proxy["type"] == "trojan"
+    assert proxy["tls"] is True
+    assert proxy["reality-opts"]["public-key"] == "PubKey"
+    assert proxy["network"] == "grpc"
+    assert proxy["grpc-opts"]["grpc-service-name"] == "GunService"
+
+
 def test_build_clash_subscription_yaml_is_plaintext_not_base64():
     links = [
         "vless://uuid@host:443?encryption=none&security=tls&sni=host#Test",

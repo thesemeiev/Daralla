@@ -58,6 +58,17 @@ def _truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _reality_opts_from_params(params: dict[str, list[str]]) -> dict[str, str]:
+    public_key = _first(params, "pbk") or _first(params, "publicKey")
+    short_id = _first(params, "sid") or _first(params, "shortId")
+    reality_opts: dict[str, str] = {}
+    if public_key:
+        reality_opts["public-key"] = public_key
+    if short_id:
+        reality_opts["short-id"] = short_id
+    return reality_opts
+
+
 def _yaml_quote(value: str) -> str:
     if value == "":
         return '""'
@@ -130,12 +141,15 @@ def _vless_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
         "udp": True,
     }
 
-    network = _first(params, "type", "tcp") or "tcp"
+    network_raw = _first(params, "type", "tcp") or "tcp"
+    network = network_raw.lower()
+    if network in {"splithttp"}:
+        network = "xhttp"
     if network:
         proxy["network"] = network
 
     flow = _first(params, "flow")
-    if flow:
+    if flow and network not in {"xhttp", "splithttp"}:
         proxy["flow"] = flow
 
     security = _first(params, "security", "none").lower()
@@ -155,18 +169,20 @@ def _vless_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
     if alpn:
         proxy["alpn"] = [part.strip() for part in alpn.split(",") if part.strip()]
 
-    if security == "reality":
-        public_key = _first(params, "pbk") or _first(params, "publicKey")
-        short_id = _first(params, "sid") or _first(params, "shortId")
-        reality_opts: dict[str, str] = {}
-        if public_key:
-            reality_opts["public-key"] = public_key
-        if short_id:
-            reality_opts["short-id"] = short_id
-        if reality_opts:
-            proxy["reality-opts"] = reality_opts
+    reality_opts = _reality_opts_from_params(params)
+    if security == "reality" and reality_opts:
+        proxy["reality-opts"] = reality_opts
 
-    if network == "ws":
+    if network == "xhttp":
+        xhttp_opts: dict[str, Any] = {
+            "path": _first(params, "path", "/") or "/",
+            "mode": _first(params, "mode") or _first(params, "xhttpMode") or "packet-up",
+        }
+        xhttp_host = _first(params, "host")
+        if xhttp_host:
+            xhttp_opts["host"] = xhttp_host
+        proxy["xhttp-opts"] = xhttp_opts
+    elif network == "ws":
         ws_opts: dict[str, Any] = {}
         path = _first(params, "path", "/") or "/"
         ws_opts["path"] = path
@@ -175,7 +191,7 @@ def _vless_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
             ws_opts["headers"] = {"Host": ws_host}
         proxy["ws-opts"] = ws_opts
     elif network == "grpc":
-        service_name = _first(params, "serviceName") or _first(params, "serviceName")
+        service_name = _first(params, "serviceName")
         if service_name:
             proxy["grpc-opts"] = {"grpc-service-name": service_name}
     elif network in {"http", "h2"}:
@@ -220,12 +236,20 @@ def _trojan_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
     fp = _first(params, "fp")
     if fp:
         proxy["client-fingerprint"] = fp
-    if _truthy(_first(params, "allowInsecure")):
+    if _truthy(_first(params, "allowInsecure")) or _truthy(_first(params, "insecure")):
         proxy["skip-cert-verify"] = True
     alpn = _first(params, "alpn")
     if alpn:
         proxy["alpn"] = [part.strip() for part in alpn.split(",") if part.strip()]
-    network = _first(params, "type")
+
+    security = _first(params, "security", "").lower()
+    if security in {"reality", "tls"}:
+        proxy["tls"] = True
+    reality_opts = _reality_opts_from_params(params)
+    if security == "reality" and reality_opts:
+        proxy["reality-opts"] = reality_opts
+
+    network = (_first(params, "type", "tcp") or "tcp").lower()
     if network == "ws":
         ws_opts: dict[str, Any] = {"path": _first(params, "path", "/") or "/"}
         ws_host = _first(params, "host")
@@ -233,6 +257,11 @@ def _trojan_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
             ws_opts["headers"] = {"Host": ws_host}
         proxy["network"] = "ws"
         proxy["ws-opts"] = ws_opts
+    elif network == "grpc":
+        service_name = _first(params, "serviceName")
+        proxy["network"] = "grpc"
+        if service_name:
+            proxy["grpc-opts"] = {"grpc-service-name": service_name}
     return proxy
 
 
