@@ -100,3 +100,4 @@ def test_render_clash_subscription_yaml_empty_proxies():
     assert yaml_text.startswith("# Clash Meta")
     assert "proxies:" in yaml_text
     assert "MATCH,Test VPN" in yaml_text
+

@@ -404,7 +404,6 @@ async def handle_subscription_request(
 
         links = None
         clash_yaml = None
-        clash_uri_fallback = False
         for attempt in range(3):
             try:
                 if is_clash_client:
@@ -420,22 +419,6 @@ async def handle_subscription_request(
                             sub["id"],
                             group_name=vpn_brand_name,
                         )
-                    if not clash_yaml:
-                        logger.warning(
-                            "Clash sub: panel YAML недоступен для подписки %s, пробуем URI subscription (/sub)",
-                            sub["id"],
-                        )
-                        try:
-                            links = await subscription_manager.build_links_for_subscription(
-                                sub["id"],
-                                allowed_server_names=bucket_policy.get("allowed_servers"),
-                                server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
-                            )
-                        except TypeError:
-                            links = await subscription_manager.build_links_for_subscription(sub["id"])
-                        if links:
-                            clash_uri_fallback = True
-                            is_clash_client = False
                 else:
                     try:
                         links = await subscription_manager.build_links_for_subscription(
@@ -471,12 +454,6 @@ async def handle_subscription_request(
                     logger.warning("  - %s", server["server_name"])
                 return "No servers available", 503, None
             logger.info("Собран Clash YAML для подписки %s", sub["id"])
-        elif clash_uri_fallback:
-            logger.info(
-                "Clash sub: отдаём URI subscription (base64) для подписки %s, ссылок: %s",
-                sub["id"],
-                len(links or []),
-            )
         else:
             logger.info("Сгенерировано %s ссылок для подписки %s", len(links), sub["id"])
             if not links:

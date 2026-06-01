@@ -139,6 +139,7 @@ class X3:
         vpn_host: Optional[str] = None,
         subscription_port: int = 2096,
         subscription_url: Optional[str] = None,
+        subscription_clash_base_url: Optional[str] = None,
     ):
         self.login = login
         self.password = password
@@ -146,6 +147,9 @@ class X3:
         self.vpn_host = vpn_host
         self.subscription_port = subscription_port if subscription_port is not None else 2096
         self.subscription_url = (subscription_url or "").strip() or None
+        self.subscription_clash_base_url = (
+            (subscription_clash_base_url or "").strip().rstrip("/") or None
+        )
         use_tls_verify = host.startswith("https://")
         try:
             mr = int(os.getenv("XUI_PANEL_MAX_RETRIES", "5"))
@@ -977,9 +981,11 @@ class X3:
         """
         sub_base = self._subscription_sub_base_url().rstrip("/")
         clash_seg = self._clash_sub_path_segment()
-        custom = (os.getenv("DARALLA_CLASH_SUB_BASE_URL") or "").strip().rstrip("/")
         candidates: List[str] = []
-        if custom:
+        if self.subscription_clash_base_url:
+            candidates.append(self.subscription_clash_base_url)
+        custom = (os.getenv("DARALLA_CLASH_SUB_BASE_URL") or "").strip().rstrip("/")
+        if custom and custom not in candidates:
             candidates.append(custom)
         if sub_base.endswith("/sub"):
             candidates.append(f"{sub_base}/{clash_seg}")
@@ -1022,13 +1028,28 @@ class X3:
         *,
         subscription_token: Optional[str] = None,
     ) -> Optional[str]:
+        candidates = await self._resolve_subscription_sub_id_candidates(
+            user_email,
+            subscription_token=subscription_token,
+        )
+        return candidates[0] if candidates else None
+
+    async def _resolve_subscription_sub_id_candidates(
+        self,
+        user_email: str,
+        *,
+        subscription_token: Optional[str] = None,
+    ) -> List[str]:
+        """subId variants to try on panel Clash endpoint (panel field, then Daralla token)."""
+        ordered: List[str] = []
+        seen: set[str] = set()
         panel_sub_id = await self._lookup_panel_sub_id(user_email)
-        if panel_sub_id:
-            return panel_sub_id
-        token = str(subscription_token).strip() if subscription_token else ""
-        if token:
-            return token
-        return None
+        for value in (panel_sub_id, subscription_token):
+            item = str(value).strip() if value else ""
+            if item and item not in seen:
+                seen.add(item)
+                ordered.append(item)
+        return ordered
 
     async def get_clash_subscription_yaml(
         self,
@@ -1043,44 +1064,58 @@ class X3:
         """
         await self._ensure_login()
         try:
-            sub_id = await self._resolve_subscription_sub_id(
+            sub_ids = await self._resolve_subscription_sub_id_candidates(
                 user_email,
                 subscription_token=subscription_token,
             )
-            if not sub_id:
-                logger.debug(
-                    "get_clash_subscription_yaml: sub_id not found for email=%s",
+            if not sub_ids:
+                logger.warning(
+                    "get_clash_subscription_yaml: subId not found for email=%s",
                     user_email,
                 )
                 return None
-            masked_sub_id = mask_secret(sub_id)
+            bases = self._subscription_clash_base_urls()
             async with httpx.AsyncClient(verify=False, timeout=15.0) as hc:
-                for base in self._subscription_clash_base_urls():
-                    clash_url = f"{base.rstrip('/')}/{sub_id}"
-                    clash_url_log = f"{base.rstrip('/')}/{masked_sub_id}"
-                    r = await hc.get(clash_url)
-                    if r.status_code != 200:
-                        logger.warning(
-                            "Clash subscription endpoint returned %s: url=%s body_len=%s",
-                            r.status_code,
+                for sub_id in sub_ids:
+                    masked_sub_id = mask_secret(sub_id)
+                    for base in bases:
+                        clash_url = f"{base.rstrip('/')}/{sub_id}"
+                        clash_url_log = f"{base.rstrip('/')}/{masked_sub_id}"
+                        r = await hc.get(clash_url)
+                        text = (r.text or "").strip()
+                        if r.status_code != 200:
+                            logger.warning(
+                                "Clash subscription endpoint returned %s: url=%s body_len=%s",
+                                r.status_code,
+                                clash_url_log,
+                                len(text),
+                            )
+                            continue
+                        if not is_valid_panel_clash_body(text):
+                            hint = ""
+                            if text.lower().startswith("error"):
+                                hint = " (3x-ui: clash выключен, неверный subId или инбаунды только xhttp)"
+                            logger.warning(
+                                "Clash subscription body invalid: url=%s body_preview=%s%s",
+                                clash_url_log,
+                                text[:120],
+                                hint,
+                            )
+                            continue
+                        logger.info(
+                            "Clash subscription OK: url=%s body_len=%s subId_source=%s",
                             clash_url_log,
-                            len(r.text or ""),
+                            len(text),
+                            "panel" if sub_id == sub_ids[0] else "token",
                         )
-                        continue
-                    text = (r.text or "").strip()
-                    if not is_valid_panel_clash_body(text):
-                        logger.warning(
-                            "Clash subscription body invalid: url=%s body_preview=%s",
-                            clash_url_log,
-                            text[:120],
-                        )
-                        continue
-                    logger.debug(
-                        "Clash subscription fetched: url=%s body_len=%s",
-                        clash_url_log,
-                        len(text),
-                    )
-                    return text
+                        return text
+            logger.warning(
+                "get_clash_subscription_yaml: all clash URLs failed for email=%s "
+                "(tried %s subId(s), %s base path(s))",
+                user_email,
+                len(sub_ids),
+                len(bases),
+            )
             return None
         except Exception as e:
             logger.warning(

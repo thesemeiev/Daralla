@@ -45,7 +45,8 @@ class MultiServerManager:
                         host=server_config["host"],
                         vpn_host=server_config.get("vpn_host"),
                         subscription_port=server_config.get("subscription_port", 2096),
-                        subscription_url=server_config.get("subscription_url")
+                        subscription_url=server_config.get("subscription_url"),
+                        subscription_clash_base_url=server_config.get("subscription_clash_url"),
                     )
                     server_info = {
                         "name": server_config["name"],
@@ -183,7 +184,8 @@ class MultiServerManager:
                     host=server_config["host"],
                     vpn_host=server_config.get("vpn_host"),
                     subscription_port=server_config.get("subscription_port", 2096),
-                    subscription_url=server_config.get("subscription_url")
+                    subscription_url=server_config.get("subscription_url"),
+                    subscription_clash_base_url=server_config.get("subscription_clash_url"),
                 )
             
             # Проверяем доступность API (используем быструю проверку без retry)
