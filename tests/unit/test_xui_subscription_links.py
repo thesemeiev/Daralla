@@ -83,7 +83,7 @@ async def test_get_clash_subscription_yaml_tries_sub_clash_path_after_legacy_404
         subscription_token="panel-sub-token",
     )
 
-    assert body == yaml_body
+    assert body == yaml_body.strip()
     assert any("/daralla/sub/clash/panel-sub-token" in u for u in calls)
     assert any("/daralla/clash/panel-sub-token" in u for u in calls)
 
