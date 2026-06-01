@@ -52,7 +52,7 @@ def test_subscription_clash_base_urls_without_custom_sub_path():
 
 
 @pytest.mark.asyncio
-async def test_get_clash_subscription_yaml_tries_sub_clash_path_after_legacy_404(monkeypatch):
+async def test_get_clash_subscription_yaml_uses_sub_clash_without_legacy_retry(monkeypatch):
     yaml_body = "proxies:\n  - name: n1\n    type: vless\n    server: h\n"
     calls: list[str] = []
 
@@ -84,8 +84,50 @@ async def test_get_clash_subscription_yaml_tries_sub_clash_path_after_legacy_404
     )
 
     assert body == yaml_body.strip()
-    assert any("/daralla/sub/clash/panel-sub-token" in u for u in calls)
-    assert any("/daralla/clash/panel-sub-token" in u for u in calls)
+    assert calls == [
+        "https://panel.example.com:2096/daralla/sub/clash/panel-sub-token",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_clash_subscription_yaml_falls_back_to_legacy_clash_path(monkeypatch):
+    yaml_body = "proxies:\n  - name: n1\n    type: vless\n    server: h\n"
+    calls: list[str] = []
+
+    class _RoutingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url: str):
+            calls.append(url)
+            if "/sub/clash/" in url:
+                return _FakeResponse(404, "404 page not found")
+            if "/daralla/clash/" in url:
+                return _FakeResponse(200, yaml_body)
+            return _FakeResponse(404, "404 page not found")
+
+    x3 = _make_x3_for_subscription_links()
+    x3.subscription_url = "https://panel.example.com:2096/daralla/sub"
+    x3._lookup_panel_sub_id = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(
+        "daralla_backend.services.xui_service.httpx.AsyncClient",
+        lambda **kwargs: _RoutingClient(),
+    )
+
+    body = await x3.get_clash_subscription_yaml(
+        "user@example.com",
+        subscription_token="panel-sub-token",
+    )
+
+    assert body == yaml_body.strip()
+    assert calls == [
+        "https://panel.example.com:2096/daralla/sub/clash/panel-sub-token",
+        "https://panel.example.com:2096/daralla/clash/panel-sub-token",
+    ]
 
 
 @pytest.mark.asyncio
