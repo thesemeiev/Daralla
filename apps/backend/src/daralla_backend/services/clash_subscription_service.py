@@ -1,13 +1,12 @@
-"""Convert V2Ray-style subscription links to Clash Meta (Mihomo) YAML for FlClash."""
+"""Merge 3x-ui /clash/{subId} YAML into a single Mihomo subscription for FlClash."""
 
 from __future__ import annotations
 
-import base64
-import json
 import logging
 import re
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ _CLASH_CLIENT_MARKERS = (
     "surfboard",
 )
 
-_URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+_PANEL_CLASH_ERROR_MARKERS = ("error!",)
 
 
 def is_clash_subscription_client(
@@ -47,26 +46,65 @@ def is_clash_subscription_client(
     return flag in {"1", "true", "yes", "on"}
 
 
-def _first(params: dict[str, list[str]], key: str, default: str = "") -> str:
-    values = params.get(key)
-    if not values:
-        return default
-    return str(values[0]).strip()
+def is_valid_panel_clash_body(text: str) -> bool:
+    """Reject 3x-ui error responses and bodies without proxies."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    if lowered in _PANEL_CLASH_ERROR_MARKERS or lowered.startswith("error"):
+        return False
+    if "proxies:" not in raw and "proxies" not in raw:
+        try:
+            data = yaml.safe_load(raw)
+        except yaml.YAMLError:
+            return False
+        if not isinstance(data, dict) or not data.get("proxies"):
+            return False
+    return True
 
 
-def _truthy(value: str) -> bool:
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+def parse_panel_clash_yaml(text: str) -> list[dict[str, Any]]:
+    """Extract proxy list from panel Clash YAML (ignore panel proxy-groups/rules)."""
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    try:
+        data = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        logger.debug("parse_panel_clash_yaml: YAML parse failed", exc_info=True)
+        return []
+    if not isinstance(data, dict):
+        return []
+    proxies = data.get("proxies")
+    if not isinstance(proxies, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in proxies:
+        if isinstance(item, dict) and item.get("name"):
+            out.append(dict(item))
+    return out
 
 
-def _reality_opts_from_params(params: dict[str, list[str]]) -> dict[str, str]:
-    public_key = _first(params, "pbk") or _first(params, "publicKey")
-    short_id = _first(params, "sid") or _first(params, "shortId")
-    reality_opts: dict[str, str] = {}
-    if public_key:
-        reality_opts["public-key"] = public_key
-    if short_id:
-        reality_opts["short-id"] = short_id
-    return reality_opts
+def merge_panel_clash_proxies(proxy_lists: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Merge proxies from multiple panels; dedupe by name with numeric suffix."""
+    merged: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for proxies in proxy_lists:
+        for proxy in proxies:
+            name = str(proxy.get("name") or "").strip()
+            if not name:
+                continue
+            base_name = name
+            suffix = 2
+            while name in seen_names:
+                name = f"{base_name}-{suffix}"
+                suffix += 1
+            entry = dict(proxy)
+            entry["name"] = name
+            seen_names.add(name)
+            merged.append(entry)
+    return merged
 
 
 def _yaml_quote(value: str) -> str:
@@ -113,308 +151,10 @@ def _emit_yaml(value: Any, indent: int = 0) -> str:
     return _yaml_quote(str(value))
 
 
-def _proxy_name_from_uri(uri: str, fallback: str) -> str:
-    if "#" in uri:
-        name = unquote(uri.rsplit("#", 1)[1]).strip()
-        if name:
-            return name
-    return fallback
-
-
-def _vless_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
-    parsed = urlparse(uri)
-    if parsed.scheme != "vless":
-        return None
-    userinfo = parsed.username or ""
-    uuid = unquote(userinfo) if userinfo else ""
-    host = parsed.hostname or ""
-    port = parsed.port or 443
-    params = parse_qs(parsed.query, keep_blank_values=True)
-    name = _proxy_name_from_uri(uri, fallback_name)
-
-    proxy: dict[str, Any] = {
-        "name": name,
-        "type": "vless",
-        "server": host,
-        "port": int(port),
-        "uuid": uuid,
-        "udp": True,
-    }
-
-    network_raw = _first(params, "type", "tcp") or "tcp"
-    network = network_raw.lower()
-    if network in {"splithttp"}:
-        network = "xhttp"
-    if network:
-        proxy["network"] = network
-
-    flow = _first(params, "flow")
-    if flow and network not in {"xhttp", "splithttp"}:
-        proxy["flow"] = flow
-
-    security = _first(params, "security", "none").lower()
-    sni = _first(params, "sni") or _first(params, "host")
-    fp = _first(params, "fp") or _first(params, "fingerprint")
-
-    if security in {"reality", "tls"}:
-        proxy["tls"] = True
-    if sni:
-        proxy["servername"] = sni
-    if fp:
-        proxy["client-fingerprint"] = fp
-    if _truthy(_first(params, "allowInsecure")) or _truthy(_first(params, "insecure")):
-        proxy["skip-cert-verify"] = True
-
-    alpn = _first(params, "alpn")
-    if alpn:
-        proxy["alpn"] = [part.strip() for part in alpn.split(",") if part.strip()]
-
-    reality_opts = _reality_opts_from_params(params)
-    if security == "reality" and reality_opts:
-        proxy["reality-opts"] = reality_opts
-
-    if network == "xhttp":
-        xhttp_opts: dict[str, Any] = {
-            "path": _first(params, "path", "/") or "/",
-            "mode": _first(params, "mode") or _first(params, "xhttpMode") or "packet-up",
-        }
-        xhttp_host = _first(params, "host")
-        if xhttp_host:
-            xhttp_opts["host"] = xhttp_host
-        proxy["xhttp-opts"] = xhttp_opts
-    elif network == "ws":
-        ws_opts: dict[str, Any] = {}
-        path = _first(params, "path", "/") or "/"
-        ws_opts["path"] = path
-        ws_host = _first(params, "host")
-        if ws_host:
-            ws_opts["headers"] = {"Host": ws_host}
-        proxy["ws-opts"] = ws_opts
-    elif network == "grpc":
-        service_name = _first(params, "serviceName")
-        if service_name:
-            proxy["grpc-opts"] = {"grpc-service-name": service_name}
-    elif network in {"http", "h2"}:
-        http_opts: dict[str, Any] = {}
-        path = _first(params, "path")
-        if path:
-            http_opts["path"] = [path]
-        http_host = _first(params, "host")
-        if http_host:
-            http_opts["headers"] = {"Host": [http_host]}
-        if http_opts:
-            proxy["http-opts"] = http_opts
-
-    packet_encoding = _first(params, "packetEncoding")
-    if packet_encoding:
-        proxy["packet-encoding"] = packet_encoding
-
-    return proxy
-
-
-def _trojan_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
-    parsed = urlparse(uri)
-    if parsed.scheme != "trojan":
-        return None
-    password = unquote(parsed.username or "")
-    host = parsed.hostname or ""
-    port = parsed.port or 443
-    params = parse_qs(parsed.query, keep_blank_values=True)
-    name = _proxy_name_from_uri(uri, fallback_name)
-
-    proxy: dict[str, Any] = {
-        "name": name,
-        "type": "trojan",
-        "server": host,
-        "port": int(port),
-        "password": password,
-        "udp": True,
-    }
-    sni = _first(params, "sni") or _first(params, "peer")
-    if sni:
-        proxy["sni"] = sni
-    fp = _first(params, "fp")
-    if fp:
-        proxy["client-fingerprint"] = fp
-    if _truthy(_first(params, "allowInsecure")) or _truthy(_first(params, "insecure")):
-        proxy["skip-cert-verify"] = True
-    alpn = _first(params, "alpn")
-    if alpn:
-        proxy["alpn"] = [part.strip() for part in alpn.split(",") if part.strip()]
-
-    security = _first(params, "security", "").lower()
-    if security in {"reality", "tls"}:
-        proxy["tls"] = True
-    reality_opts = _reality_opts_from_params(params)
-    if security == "reality" and reality_opts:
-        proxy["reality-opts"] = reality_opts
-
-    network = (_first(params, "type", "tcp") or "tcp").lower()
-    if network == "ws":
-        ws_opts: dict[str, Any] = {"path": _first(params, "path", "/") or "/"}
-        ws_host = _first(params, "host")
-        if ws_host:
-            ws_opts["headers"] = {"Host": ws_host}
-        proxy["network"] = "ws"
-        proxy["ws-opts"] = ws_opts
-    elif network == "grpc":
-        service_name = _first(params, "serviceName")
-        proxy["network"] = "grpc"
-        if service_name:
-            proxy["grpc-opts"] = {"grpc-service-name": service_name}
-    return proxy
-
-
-def _vmess_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
-    if not uri.startswith("vmess://"):
-        return None
-    payload = uri[len("vmess://") :]
-    if "?" in payload:
-        payload = payload.split("?", 1)[0]
-    padding = "=" * (-len(payload) % 4)
-    try:
-        data = json.loads(base64.urlsafe_b64decode(payload + padding).decode("utf-8"))
-    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
-        try:
-            data = json.loads(base64.standard_b64decode(payload + padding).decode("utf-8"))
-        except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
-            logger.warning("vmess URI decode failed")
-            return None
-
-    name = _proxy_name_from_uri(uri, fallback_name) or str(data.get("ps") or fallback_name)
-    proxy: dict[str, Any] = {
-        "name": name,
-        "type": "vmess",
-        "server": str(data.get("add") or ""),
-        "port": int(data.get("port") or 443),
-        "uuid": str(data.get("id") or ""),
-        "alterId": int(data.get("aid") or 0),
-        "cipher": "auto",
-        "udp": True,
-    }
-    if data.get("tls") == "tls":
-        proxy["tls"] = True
-    if data.get("sni") or data.get("host"):
-        proxy["servername"] = str(data.get("sni") or data.get("host"))
-    network = str(data.get("net") or "tcp")
-    if network:
-        proxy["network"] = network
-    if network == "ws":
-        ws_opts: dict[str, Any] = {"path": str(data.get("path") or "/")}
-        host_header = data.get("host")
-        if host_header:
-            ws_opts["headers"] = {"Host": str(host_header)}
-        proxy["ws-opts"] = ws_opts
-    return proxy
-
-
-def _hysteria2_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
-    parsed = urlparse(uri)
-    if parsed.scheme not in {"hysteria2", "hy2"}:
-        return None
-    password = unquote(parsed.username or "")
-    host = parsed.hostname or ""
-    port = parsed.port or 443
-    params = parse_qs(parsed.query, keep_blank_values=True)
-    name = _proxy_name_from_uri(uri, fallback_name)
-    proxy: dict[str, Any] = {
-        "name": name,
-        "type": "hysteria2",
-        "server": host,
-        "port": int(port),
-        "password": password,
-        "udp": True,
-    }
-    sni = _first(params, "sni")
-    if sni:
-        proxy["sni"] = sni
-    alpn = _first(params, "alpn")
-    if alpn:
-        proxy["alpn"] = [part.strip() for part in alpn.split(",") if part.strip()]
-    if _truthy(_first(params, "insecure")):
-        proxy["skip-cert-verify"] = True
-    obfs = _first(params, "obfs")
-    obfs_password = _first(params, "obfs-password")
-    if obfs:
-        proxy["obfs"] = obfs
-    if obfs_password:
-        proxy["obfs-password"] = obfs_password
-    return proxy
-
-
-def _tuic_uri_to_proxy(uri: str, fallback_name: str) -> dict[str, Any] | None:
-    parsed = urlparse(uri)
-    if parsed.scheme != "tuic":
-        return None
-    uuid = unquote(parsed.username or "")
-    password = unquote(parsed.password or "")
-    host = parsed.hostname or ""
-    port = parsed.port or 443
-    params = parse_qs(parsed.query, keep_blank_values=True)
-    name = _proxy_name_from_uri(uri, fallback_name)
-    proxy: dict[str, Any] = {
-        "name": name,
-        "type": "tuic",
-        "server": host,
-        "port": int(port),
-        "uuid": uuid,
-        "password": password,
-        "udp": True,
-    }
-    sni = _first(params, "sni")
-    if sni:
-        proxy["sni"] = sni
-    cc = _first(params, "congestion_control") or _first(params, "congestion-control")
-    if cc:
-        proxy["congestion-controller"] = cc
-    alpn = _first(params, "alpn")
-    if alpn:
-        proxy["alpn"] = [part.strip() for part in alpn.split(",") if part.strip()]
-    if _truthy(_first(params, "allowInsecure")):
-        proxy["skip-cert-verify"] = True
-    return proxy
-
-
-def uri_to_clash_proxy(uri: str, *, fallback_name: str = "node") -> dict[str, Any] | None:
-    uri = (uri or "").strip()
-    if not uri or not _URI_SCHEME_RE.match(uri):
-        return None
-    scheme = uri.split(":", 1)[0].lower()
-    converters = {
-        "vless": _vless_uri_to_proxy,
-        "trojan": _trojan_uri_to_proxy,
-        "vmess": _vmess_uri_to_proxy,
-        "hysteria2": _hysteria2_uri_to_proxy,
-        "hy2": _hysteria2_uri_to_proxy,
-        "tuic": _tuic_uri_to_proxy,
-    }
-    converter = converters.get(scheme)
-    if not converter:
-        logger.debug("Clash export: unsupported scheme %s", scheme)
-        return None
-    return converter(uri, fallback_name)
-
-
-def build_clash_subscription_yaml(links: list[str], *, group_name: str) -> str:
-    """Build Mihomo-compatible YAML subscription from share links."""
-    proxies: list[dict[str, Any]] = []
-    seen_names: set[str] = set()
-    for index, link in enumerate(links, start=1):
-        proxy = uri_to_clash_proxy(link, fallback_name=f"node-{index}")
-        if not proxy:
-            continue
-        name = str(proxy.get("name") or f"node-{index}")
-        base_name = name
-        suffix = 2
-        while name in seen_names:
-            name = f"{base_name}-{suffix}"
-            suffix += 1
-        proxy["name"] = name
-        seen_names.add(name)
-        proxies.append(proxy)
-
+def build_merged_clash_config(proxies: list[dict[str, Any]], *, group_name: str) -> dict[str, Any]:
+    """Daralla-owned Mihomo shell (proxy-groups, rules) around merged panel proxies."""
     clean_group = (group_name or "Daralla VPN").strip() or "Daralla VPN"
-    proxy_names = [str(p["name"]) for p in proxies]
+    proxy_names = [str(p["name"]) for p in proxies if p.get("name")]
 
     select_proxies: list[str] = []
     if proxy_names:
@@ -441,7 +181,7 @@ def build_clash_subscription_yaml(links: list[str], *, group_name: str) -> str:
             }
         )
 
-    config: dict[str, Any] = {
+    return {
         "mixed-port": 7890,
         "allow-lan": False,
         "mode": "rule",
@@ -451,6 +191,26 @@ def build_clash_subscription_yaml(links: list[str], *, group_name: str) -> str:
         "rules": [f"MATCH,{clean_group}"],
     }
 
+
+def build_clash_subscription_from_panels(
+    panel_bodies: list[str],
+    *,
+    group_name: str,
+) -> str:
+    """Parse panel YAML bodies, merge proxies, emit final subscription YAML."""
+    proxy_lists = [parse_panel_clash_yaml(body) for body in panel_bodies]
+    proxies = merge_panel_clash_proxies(proxy_lists)
+    return render_clash_subscription_yaml(proxies, group_name=group_name)
+
+
+def render_clash_subscription_yaml(
+    proxies: list[dict[str, Any]],
+    *,
+    group_name: str,
+) -> str:
+    """Render full subscription document (used for empty inactive subs too)."""
+    clean_group = (group_name or "Daralla VPN").strip() or "Daralla VPN"
+    config = build_merged_clash_config(proxies, group_name=clean_group)
     header = (
         "# Clash Meta / Mihomo subscription\n"
         f"# profile-title: {clean_group}\n"

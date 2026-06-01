@@ -28,6 +28,7 @@ from .xui_helpers import (
     panel_snapshot_matches_desired,
     v3_client_wire_payload,
 )
+from .clash_subscription_service import is_valid_panel_clash_body
 from .xui_panel_client import XUiPanelClient, XUiPanelError
 from ..utils.logging_helpers import mask_secret
 
@@ -947,6 +948,114 @@ class X3:
         errors = [msg for status, msg in results if status == "err" and msg]
         return updated, skipped, errors
 
+    @staticmethod
+    def _clash_sub_path_segment() -> str:
+        raw = (os.getenv("DARALLA_CLASH_SUB_PATH") or "/clash/").strip().strip("/")
+        return raw or "clash"
+
+    def _subscription_sub_base_url(self) -> str:
+        """Base URL ending with /sub (no trailing sub_id)."""
+        if self.subscription_url:
+            return self.subscription_url.rstrip("/")
+        scheme = "https" if self.host.startswith("https") else "http"
+        host_part = self.host.split("//")[-1].split("/panel")[0]
+        if ":" in host_part:
+            host_only = host_part.rsplit(":", 1)[0]
+        else:
+            host_only = host_part
+        host_for_sub = (self.vpn_host or host_only).strip()
+        if host_for_sub and ":" in host_for_sub:
+            host_for_sub = host_for_sub.rsplit(":", 1)[0]
+        return f"{scheme}://{host_for_sub}:{self.subscription_port}/sub"
+
+    def _subscription_clash_base_url(self) -> str:
+        """Base URL for 3x-ui Clash subscription (no sub_id)."""
+        sub_base = self._subscription_sub_base_url()
+        clash_seg = self._clash_sub_path_segment()
+        if sub_base.endswith("/sub"):
+            return f"{sub_base[:-4]}/{clash_seg}"
+        return f"{sub_base.rstrip('/')}/{clash_seg}"
+
+    async def _resolve_subscription_sub_id(
+        self,
+        user_email: str,
+        *,
+        subscription_token: Optional[str] = None,
+    ) -> Optional[str]:
+        token = str(subscription_token).strip() if subscription_token else ""
+        if token:
+            return token
+        email_norm = str(user_email).strip()
+        if not email_norm:
+            return None
+        data = await self.list()
+        if not data.get("success"):
+            return None
+        for inv in data.get("obj", []):
+            try:
+                settings = json.loads(inv.get("settings", "{}"))
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                continue
+            for client in clients_from_settings_payload(settings):
+                if str(client.get("email", "")).strip() != email_norm:
+                    continue
+                sub_id = client.get("subId") or client.get("sub_id")
+                if sub_id:
+                    return str(sub_id).strip()
+        return None
+
+    async def get_clash_subscription_yaml(
+        self,
+        user_email: str,
+        *,
+        subscription_token: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Fetch Mihomo YAML from panel GET /clash/{sub_id} (3x-ui SubClashService).
+        Returns raw YAML text or None if unavailable/invalid.
+        """
+        await self._ensure_login()
+        try:
+            sub_id = await self._resolve_subscription_sub_id(
+                user_email,
+                subscription_token=subscription_token,
+            )
+            if not sub_id:
+                logger.debug(
+                    "get_clash_subscription_yaml: sub_id not found for email=%s",
+                    user_email,
+                )
+                return None
+            clash_url = f"{self._subscription_clash_base_url().rstrip('/')}/{sub_id}"
+            clash_url_log = f"{self._subscription_clash_base_url().rstrip('/')}/{mask_secret(sub_id)}"
+            async with httpx.AsyncClient(verify=False, timeout=15.0) as hc:
+                r = await hc.get(clash_url)
+            if r.status_code != 200:
+                logger.warning(
+                    "Clash subscription endpoint returned %s: url=%s body_len=%s",
+                    r.status_code,
+                    clash_url_log,
+                    len(r.text or ""),
+                )
+                return None
+            text = (r.text or "").strip()
+            if not is_valid_panel_clash_body(text):
+                logger.warning(
+                    "Clash subscription body invalid: url=%s body_preview=%s",
+                    clash_url_log,
+                    text[:120],
+                )
+                return None
+            return text
+        except Exception as e:
+            logger.warning(
+                "get_clash_subscription_yaml failed for %s: %s",
+                user_email,
+                e,
+                exc_info=True,
+            )
+            return None
+
     async def get_subscription_links(
         self,
         user_email: str,
@@ -961,44 +1070,14 @@ class X3:
         """
         await self._ensure_login()
         try:
-            data = await self.list()
-            if not data.get("success"):
-                return []
-            base_url = self.subscription_url
-            if not base_url and self.host:
-                scheme = "https" if self.host.startswith("https") else "http"
-                host_part = self.host.split("//")[-1].split("/panel")[0]
-                if ":" in host_part:
-                    host_only = host_part.rsplit(":", 1)[0]
-                else:
-                    host_only = host_part
-                host_for_sub = (self.vpn_host or host_only).strip()
-                if host_for_sub and ":" in host_for_sub:
-                    host_for_sub = host_for_sub.rsplit(":", 1)[0]
-                base_url = f"{scheme}://{host_for_sub}:{self.subscription_port}/sub"
-            # On some panels/protocols (notably hysteria2) get_by_email may fail with
-            # "Inbound Not Found For Email" even when client exists. Resolve sub_id from list snapshot.
-            sub_id = None
-            email_norm = str(user_email).strip()
-            for inv in data.get("obj", []):
-                try:
-                    settings = json.loads(inv.get("settings", "{}"))
-                except (json.JSONDecodeError, TypeError, AttributeError):
-                    continue
-                for client in clients_from_settings_payload(settings):
-                    if str(client.get("email", "")).strip() != email_norm:
-                        continue
-                    sub_id = client.get("subId") or client.get("sub_id")
-                    if sub_id:
-                        break
-                if sub_id:
-                    break
-            if not sub_id and subscription_token:
-                sub_id = subscription_token
-                logger.debug("get_subscription_links: используем subscription_token как sub_id для email=%s", user_email)
+            sub_id = await self._resolve_subscription_sub_id(
+                user_email,
+                subscription_token=subscription_token,
+            )
             if not sub_id:
-                logger.debug("get_subscription_links: sub_id не найден в list() для email=%s", user_email)
+                logger.debug("get_subscription_links: sub_id не найден для email=%s", user_email)
                 return []
+            base_url = self._subscription_sub_base_url()
             sub_url = f"{base_url.rstrip('/')}/{sub_id}"
             sub_url_log = f"{base_url.rstrip('/')}/{mask_secret(sub_id)}"
             try:

@@ -265,9 +265,33 @@ async def test_admin_commerce_update_success_contract(quart_app_with_routes: Qua
 
 
 class _FakeSubscriptionManager:
-    async def build_links_for_subscription(self, sub_id):
+    async def build_links_for_subscription(self, sub_id, **kwargs):
         assert sub_id == 101
         return ["vless://uuid@example.com:443?encryption=none#Daralla-Test"]
+
+    async def build_clash_yaml_for_subscription(self, sub_id, **kwargs):
+        assert sub_id == 101
+        return (
+            "# Clash Meta / Mihomo subscription\n"
+            "# profile-title: Daralla VPN\n"
+            "proxies:\n"
+            "  -\n"
+            "    name: Daralla-Test\n"
+            "    type: vless\n"
+            "    server: example.com\n"
+            "    port: 443\n"
+            "    uuid: uuid\n"
+            "proxy-groups:\n"
+            "  -\n"
+            "    name: Daralla VPN\n"
+            "    type: select\n"
+            "    proxies:\n"
+            "      - AUTO\n"
+            "      - Daralla-Test\n"
+            "      - DIRECT\n"
+            "rules:\n"
+            "  - MATCH,Daralla VPN\n"
+        )
 
 
 @pytest.mark.asyncio

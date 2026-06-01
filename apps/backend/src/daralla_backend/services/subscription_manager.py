@@ -30,6 +30,7 @@ from .group_traffic_template_service import apply_template_to_subscription
 from .traffic_bucket_service import get_traffic_bucket_service, traffic_buckets_enabled
 from .xui_helpers import panel_snapshot_matches_desired
 from .xui_panel_client import XUiPanelError
+from .clash_subscription_service import build_clash_subscription_from_panels
 from .subscription_helpers import (
     clients_by_email_from_xui_list_response,
     panel_entry_from_snapshot,
@@ -599,6 +600,97 @@ class SubscriptionManager:
 
         logger.info(f"Сгенерировано {len(links)} уникальных ссылок для подписки {subscription_id}")
         return links
+
+    async def build_clash_yaml_for_subscription(
+        self,
+        subscription_id: int,
+        *,
+        group_name: str,
+        allowed_server_names: set[str] | None = None,
+        server_tag_suffix_by_name: dict[str, str] | None = None,
+    ) -> Optional[str]:
+        """
+        Собирает Mihomo YAML: GET /clash/{subId} с каждой панели, merge proxies, Daralla proxy-groups.
+        """
+        servers = await get_subscription_servers(subscription_id)
+        sub_record = await get_subscription_by_id_only(subscription_id)
+        subscription_token = (sub_record or {}).get("subscription_token") or None
+
+        allowed_servers = (
+            {str(s) for s in allowed_server_names}
+            if allowed_server_names is not None
+            else None
+        )
+
+        async def _fetch_one(row: dict) -> Optional[str]:
+            server_name = row["server_name"]
+            client_email = row["client_email"]
+            if allowed_servers is not None and str(server_name) not in allowed_servers:
+                return None
+            found = self.server_manager.find_server_by_name(server_name)
+            if found is None:
+                logger.warning(
+                    "Clash sub: сервер %s не в конфиге, пропуск (sub=%s)",
+                    server_name,
+                    subscription_id,
+                )
+                return None
+            xui, resolved_name = found
+            if xui is None:
+                logger.warning(
+                    "Clash sub: сервер %s недоступен (sub=%s)",
+                    server_name,
+                    subscription_id,
+                )
+                return None
+            try:
+                body = await xui.get_clash_subscription_yaml(
+                    client_email,
+                    subscription_token=subscription_token,
+                )
+                if body:
+                    logger.debug(
+                        "Clash sub: получен YAML с %s для email=%s",
+                        resolved_name,
+                        client_email,
+                    )
+                else:
+                    logger.warning(
+                        "Clash sub: пустой/невалидный ответ с %s email=%s",
+                        resolved_name,
+                        client_email,
+                    )
+                return body
+            except Exception as exc:
+                logger.warning(
+                    "Clash sub: ошибка запроса %s email=%s: %s",
+                    resolved_name,
+                    client_email,
+                    exc,
+                )
+                return None
+
+        tasks = [_fetch_one(s) for s in servers]
+        if not tasks:
+            return None
+        results = await asyncio.gather(*tasks)
+        panel_bodies = [b for b in results if b]
+        if not panel_bodies:
+            logger.warning(
+                "Clash sub: ни одной панели не вернула YAML для subscription_id=%s",
+                subscription_id,
+            )
+            return None
+        yaml_text = build_clash_subscription_from_panels(
+            panel_bodies,
+            group_name=group_name,
+        )
+        logger.info(
+            "Clash sub: собран YAML для subscription_id=%s из %s панелей",
+            subscription_id,
+            len(panel_bodies),
+        )
+        return yaml_text
 
     async def sync_servers_with_config(self, auto_create_clients: bool = True) -> dict:
         """

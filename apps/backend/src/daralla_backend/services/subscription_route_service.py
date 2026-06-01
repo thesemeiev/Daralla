@@ -24,9 +24,9 @@ from daralla_backend.services.traffic_bucket_service import (
 )
 from daralla_backend.services.xui_panel_client import XUiPanelError
 from daralla_backend.services.clash_subscription_service import (
-    build_clash_subscription_yaml,
     clash_subscription_headers_overrides,
     is_clash_subscription_client,
+    render_clash_subscription_yaml,
 )
 from daralla_backend.utils.logging_helpers import mask_secret
 
@@ -362,7 +362,7 @@ async def handle_subscription_request(
                 clash_filename = re.sub(r"[^\w\s-]", "", vpn_brand_name).strip().replace(" ", "-").lower()
                 if not clash_filename:
                     clash_filename = "daralla-vpn"
-                response_text = build_clash_subscription_yaml([], group_name=vpn_brand_name)
+                response_text = render_clash_subscription_yaml([], group_name=vpn_brand_name)
                 response_headers.update(clash_subscription_headers_overrides())
                 response_headers["Content-Disposition"] = (
                     f'attachment; filename="{clash_filename}.yaml"'
@@ -396,48 +396,71 @@ async def handle_subscription_request(
             except Exception as bucket_policy_exc:
                 logger.warning("bucket delivery policy failed for sub=%s: %s", sub["id"], bucket_policy_exc)
 
+        vpn_brand_name = get_ctx().vpn_brand_name
+        servers = await get_subscription_servers(sub["id"])
+        allowed_servers = bucket_policy.get("allowed_servers")
+        if allowed_servers is not None:
+            servers = [s for s in servers if str(s.get("server_name")) in allowed_servers]
+
         links = None
+        clash_yaml = None
         for attempt in range(3):
             try:
-                try:
-                    links = await subscription_manager.build_links_for_subscription(
-                        sub["id"],
-                        allowed_server_names=bucket_policy.get("allowed_servers"),
-                        server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
-                    )
-                except TypeError:
-                    # Совместимость с тестовыми/legacy менеджерами без новых kwargs.
-                    links = await subscription_manager.build_links_for_subscription(sub["id"])
+                if is_clash_client:
+                    try:
+                        clash_yaml = await subscription_manager.build_clash_yaml_for_subscription(
+                            sub["id"],
+                            group_name=vpn_brand_name,
+                            allowed_server_names=bucket_policy.get("allowed_servers"),
+                            server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
+                        )
+                    except TypeError:
+                        clash_yaml = await subscription_manager.build_clash_yaml_for_subscription(
+                            sub["id"],
+                            group_name=vpn_brand_name,
+                        )
+                else:
+                    try:
+                        links = await subscription_manager.build_links_for_subscription(
+                            sub["id"],
+                            allowed_server_names=bucket_policy.get("allowed_servers"),
+                            server_tag_suffix_by_name=bucket_policy.get("name_suffix_by_server") or {},
+                        )
+                    except TypeError:
+                        links = await subscription_manager.build_links_for_subscription(sub["id"])
                 break
             except (httpx.HTTPError, XUiPanelError, OSError, ConnectionError) as panel_exc:
                 logger.warning(
-                    "Сбор ссылок подписки: попытка %s/3 не удалась (sub=%s): %s",
+                    "Сбор подписки: попытка %s/3 не удалась (sub=%s clash=%s): %s",
                     attempt + 1,
                     sub["id"],
+                    is_clash_client,
                     panel_exc,
                 )
                 if attempt < 2:
                     await asyncio.sleep(0.4 * (attempt + 1))
                     continue
                 logger.error(
-                    "Сбор ссылок подписки: исчерпаны повторы (sub=%s)",
+                    "Сбор подписки: исчерпаны повторы (sub=%s)",
                     sub["id"],
                     exc_info=True,
                 )
                 return "Service temporarily unavailable", 503, _cors_headers()
-        servers = await get_subscription_servers(sub["id"])
-        allowed_servers = bucket_policy.get("allowed_servers")
-        if allowed_servers is not None:
-            servers = [s for s in servers if str(s.get("server_name")) in allowed_servers]
-        logger.info("Сгенерировано %s ссылок для подписки %s", len(links), sub["id"])
 
-        if not links:
-            logger.warning("Серверов в подписке: %s", len(servers))
-            for server in servers:
-                logger.warning("  - %s", server["server_name"])
-            return "No servers available", 503, None
-
-        vpn_brand_name = get_ctx().vpn_brand_name
+        if is_clash_client:
+            if not clash_yaml:
+                logger.warning("Clash sub: нет YAML для подписки %s, серверов: %s", sub["id"], len(servers))
+                for server in servers:
+                    logger.warning("  - %s", server["server_name"])
+                return "No servers available", 503, None
+            logger.info("Собран Clash YAML для подписки %s", sub["id"])
+        else:
+            logger.info("Сгенерировано %s ссылок для подписки %s", len(links), sub["id"])
+            if not links:
+                logger.warning("Серверов в подписке: %s", len(servers))
+                for server in servers:
+                    logger.warning("  - %s", server["server_name"])
+                return "No servers available", 503, None
 
         expire_timestamp_seconds = sub["expires_at"]
 
@@ -461,10 +484,10 @@ async def handle_subscription_request(
             "%Y-%m-%d %H:%M:%S"
         )
 
-        links_plain = "\n".join(links)
         if is_clash_client:
-            response_text = build_clash_subscription_yaml(links, group_name=vpn_brand_name)
+            response_text = clash_yaml
         else:
+            links_plain = "\n".join(links)
             response_text = base64.b64encode(links_plain.encode("utf-8")).decode("ascii")
 
         if links:
@@ -475,12 +498,19 @@ async def handle_subscription_request(
             else:
                 logger.warning("В первой ссылке отсутствует tag!")
 
-        logger.info(
-            "Возвращаем %s ссылок для подписки %s с названием группы: '%s'",
-            len(links),
-            sub["id"],
-            vpn_brand_name,
-        )
+        if is_clash_client:
+            logger.info(
+                "Возвращаем Clash YAML для подписки %s с названием группы: '%s'",
+                sub["id"],
+                vpn_brand_name,
+            )
+        else:
+            logger.info(
+                "Возвращаем %s ссылок для подписки %s с названием группы: '%s'",
+                len(links),
+                sub["id"],
+                vpn_brand_name,
+            )
         logger.info(
             "Статистика трафика в ответе: upload=%s, download=%s, total=%s, expire=%s",
             total_upload,

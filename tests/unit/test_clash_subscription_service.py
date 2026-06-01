@@ -1,7 +1,10 @@
 from daralla_backend.services.clash_subscription_service import (
-    build_clash_subscription_yaml,
+    build_clash_subscription_from_panels,
     is_clash_subscription_client,
-    uri_to_clash_proxy,
+    is_valid_panel_clash_body,
+    merge_panel_clash_proxies,
+    parse_panel_clash_yaml,
+    render_clash_subscription_yaml,
 )
 
 
@@ -17,87 +20,82 @@ def test_is_clash_subscription_client_honors_query_format():
     assert not is_clash_subscription_client("", "", query={"format": "v2ray"})
 
 
-def test_vless_reality_uri_to_clash_proxy():
-    uri = (
-        "vless://11111111-2222-3333-4444-555555555555@edge.example.net:443"
-        "?encryption=none&flow=xtls-rprx-vision&security=reality"
-        "&sni=www.nvidia.com&fp=firefox&pbk=PublicKeyExample&sid=76f3e39bb4a74296&type=tcp"
-        "#Germany-1"
+def test_is_valid_panel_clash_body_rejects_error():
+    assert not is_valid_panel_clash_body("Error!")
+    assert not is_valid_panel_clash_body("")
+    assert is_valid_panel_clash_body("proxies:\n  - name: n1\n    type: vless\n    server: h\n")
+
+
+def test_parse_panel_clash_yaml_extracts_proxies_only():
+    text = """
+proxy-groups:
+  - name: g
+    type: select
+    proxies: []
+proxies:
+  - name: Finland
+    type: vless
+    server: 1.2.3.4
+    port: 443
+    uuid: abc
+    network: xhttp
+    xhttp-opts:
+      path: /
+      mode: packet-up
+"""
+    proxies = parse_panel_clash_yaml(text)
+    assert len(proxies) == 1
+    assert proxies[0]["name"] == "Finland"
+    assert proxies[0]["network"] == "xhttp"
+    assert proxies[0]["xhttp-opts"]["mode"] == "packet-up"
+
+
+def test_merge_panel_clash_proxies_dedupes_names():
+    merged = merge_panel_clash_proxies(
+        [
+            [{"name": "Node", "type": "vless"}],
+            [{"name": "Node", "type": "trojan"}],
+        ]
     )
-    proxy = uri_to_clash_proxy(uri)
-    assert proxy is not None
-    assert proxy["type"] == "vless"
-    assert proxy["server"] == "edge.example.net"
-    assert proxy["port"] == 443
-    assert proxy["uuid"] == "11111111-2222-3333-4444-555555555555"
-    assert proxy["flow"] == "xtls-rprx-vision"
-    assert proxy["servername"] == "www.nvidia.com"
-    assert proxy["client-fingerprint"] == "firefox"
-    assert proxy["reality-opts"]["public-key"] == "PublicKeyExample"
-    assert proxy["reality-opts"]["short-id"] == "76f3e39bb4a74296"
-    assert proxy["name"] == "Germany-1"
+    names = [p["name"] for p in merged]
+    assert names == ["Node", "Node-2"]
 
 
-def test_build_clash_subscription_yaml_from_links():
-    links = [
-        "vless://11111111-2222-3333-4444-555555555555@edge.example.net:443"
-        "?security=reality&sni=www.nvidia.com&pbk=key&sid=abc&type=tcp#Node-A",
-        "trojan://secret@tr.example:443?sni=tr.example#Node-B",
-    ]
-    yaml_text = build_clash_subscription_yaml(links, group_name="Daralla VPN")
-    assert "type: vless" in yaml_text
-    assert "type: trojan" in yaml_text
-    assert "Daralla VPN" in yaml_text
-    assert "name: AUTO" in yaml_text
+def test_build_clash_subscription_from_panels_merges_two_panels():
+    panel_a = """
+proxies:
+  - name: Germany
+    type: hysteria2
+    server: 1.1.1.1
+    port: 443
+    password: x
+"""
+    panel_b = """
+proxies:
+  - name: Finland
+    type: vless
+    server: 2.2.2.2
+    port: 443
+    uuid: u
+    network: xhttp
+    xhttp-opts:
+      path: /
+      mode: packet-up
+      x-padding-bytes: 100-1000
+"""
+    yaml_text = build_clash_subscription_from_panels(
+        [panel_a, panel_b],
+        group_name="Daralla VPN",
+    )
+    assert "type: hysteria2" in yaml_text
+    assert "network: xhttp" in yaml_text
+    assert "x-padding-bytes: 100-1000" in yaml_text
+    assert "profile-title: Daralla VPN" in yaml_text
     assert "MATCH,Daralla VPN" in yaml_text
 
 
-def test_vless_xhttp_uri_to_clash_proxy_includes_xhttp_opts():
-    uri = (
-        "vless://11111111-2222-3333-4444-555555555555@edge.example.net:443"
-        "?encryption=none&security=reality&sni=www.example.com&fp=chrome"
-        "&pbk=PublicKeyExample&sid=76f3e39bb4a74296&type=xhttp&path=%2F&mode=packet-up"
-        "#Estonia-XHTTP"
-    )
-    proxy = uri_to_clash_proxy(uri)
-    assert proxy is not None
-    assert proxy["network"] == "xhttp"
-    assert "flow" not in proxy
-    assert proxy["xhttp-opts"]["path"] == "/"
-    assert proxy["xhttp-opts"]["mode"] == "packet-up"
-
-
-def test_vless_xhttp_defaults_path_and_mode_when_missing_in_uri():
-    uri = (
-        "vless://11111111-2222-3333-4444-555555555555@edge.example.net:443"
-        "?security=tls&sni=host.example&type=xhttp#Node"
-    )
-    proxy = uri_to_clash_proxy(uri)
-    assert proxy is not None
-    assert proxy["xhttp-opts"]["path"] == "/"
-    assert proxy["xhttp-opts"]["mode"] == "packet-up"
-
-
-def test_trojan_reality_grpc_uri_to_clash_proxy():
-    uri = (
-        "trojan://secret@tr.example:443"
-        "?security=reality&sni=tr.example&fp=chrome&pbk=PubKey&sid=abc123"
-        "&type=grpc&serviceName=GunService#Node-Trojan"
-    )
-    proxy = uri_to_clash_proxy(uri)
-    assert proxy is not None
-    assert proxy["type"] == "trojan"
-    assert proxy["tls"] is True
-    assert proxy["reality-opts"]["public-key"] == "PubKey"
-    assert proxy["network"] == "grpc"
-    assert proxy["grpc-opts"]["grpc-service-name"] == "GunService"
-
-
-def test_build_clash_subscription_yaml_is_plaintext_not_base64():
-    links = [
-        "vless://uuid@host:443?encryption=none&security=tls&sni=host#Test",
-    ]
-    yaml_text = build_clash_subscription_yaml(links, group_name="Test VPN")
+def test_render_clash_subscription_yaml_empty_proxies():
+    yaml_text = render_clash_subscription_yaml([], group_name="Test VPN")
     assert yaml_text.startswith("# Clash Meta")
     assert "proxies:" in yaml_text
-    assert "vless://" not in yaml_text
+    assert "MATCH,Test VPN" in yaml_text

@@ -23,6 +23,9 @@ tenacity==8.2.3
 quart>=0.19
 hypercorn>=0.14
 
+# YAML (Clash subscription merge from 3x-ui panels)
+PyYAML>=6.0
+
 # Testing
 pytest>=7.0
 pytest-asyncio>=0.21
