@@ -982,8 +982,9 @@ class X3:
         sub_base = self._subscription_sub_base_url().rstrip("/")
         clash_seg = self._clash_sub_path_segment()
         candidates: List[str] = []
-        if self.subscription_clash_base_url:
-            candidates.append(self.subscription_clash_base_url)
+        custom_base = getattr(self, "subscription_clash_base_url", None)
+        if custom_base:
+            candidates.append(custom_base)
         custom = (os.getenv("DARALLA_CLASH_SUB_BASE_URL") or "").strip().rstrip("/")
         if custom and custom not in candidates:
             candidates.append(custom)
