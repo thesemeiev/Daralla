@@ -988,6 +988,20 @@ class X3:
         custom = (os.getenv("DARALLA_CLASH_SUB_BASE_URL") or "").strip().rstrip("/")
         if custom and custom not in candidates:
             candidates.append(custom)
+
+        scheme = "https" if self.host.startswith("https") else "http"
+        host_part = self.host.split("//")[-1].split("/panel")[0]
+        if ":" in host_part:
+            host_only = host_part.rsplit(":", 1)[0]
+        else:
+            host_only = host_part
+        host_for_sub = (self.vpn_host or host_only).strip()
+        if host_for_sub and ":" in host_for_sub:
+            host_for_sub = host_for_sub.rsplit(":", 1)[0]
+        root_clash = f"{scheme}://{host_for_sub}:{self.subscription_port}/{clash_seg}"
+        if root_clash not in candidates:
+            candidates.append(root_clash)
+
         if sub_base.endswith("/sub"):
             candidates.append(f"{sub_base}/{clash_seg}")
             legacy = f"{sub_base[:-4]}/{clash_seg}"
@@ -995,6 +1009,7 @@ class X3:
                 candidates.append(legacy)
         else:
             candidates.append(f"{sub_base}/{clash_seg}")
+
         seen: set[str] = set()
         ordered: List[str] = []
         for item in candidates:

@@ -38,17 +38,36 @@ def _make_x3_for_subscription_links() -> X3:
 
 def test_subscription_clash_base_urls_prefers_3x_ui_sub_clash_append():
     x3 = X3.__new__(X3)
+    x3.host = "https://panel.example.com/panel"
+    x3.vpn_host = "vpn.example.com"
+    x3.subscription_port = 2096
     x3.subscription_url = "https://141.98.7.234:2096/daralla/sub"
     urls = x3._subscription_clash_base_urls()
-    assert urls[0] == "https://141.98.7.234:2096/daralla/sub/clash"
+    assert urls[0] == "https://vpn.example.com:2096/clash"
+    assert "https://141.98.7.234:2096/daralla/sub/clash" in urls
     assert "https://141.98.7.234:2096/daralla/clash" in urls
 
 
 def test_subscription_clash_base_urls_without_custom_sub_path():
     x3 = _make_x3_for_subscription_links()
     urls = x3._subscription_clash_base_urls()
-    assert urls[0] == "https://vpn.example.com:2096/sub/clash"
-    assert "https://vpn.example.com:2096/clash" in urls
+    assert urls[0] == "https://vpn.example.com:2096/clash"
+    assert "https://vpn.example.com:2096/sub/clash" in urls
+
+
+def test_subscription_clash_base_urls_prefers_root_clash_for_direct_clash_path():
+    x3 = X3.__new__(X3)
+    x3.host = "https://panel.example.com/panel"
+    x3.vpn_host = "vpn.example.com"
+    x3.subscription_port = 2096
+    x3.subscription_url = "https://panel.example.com/daralla/sub"
+    x3._ensure_login = AsyncMock(return_value=None)
+    x3.list = AsyncMock(return_value={"success": True, "obj": []})
+
+    urls = x3._subscription_clash_base_urls()
+    assert urls[0] == "https://vpn.example.com:2096/clash"
+    assert "https://panel.example.com/daralla/sub/clash" in urls
+    assert "https://panel.example.com/daralla/clash" in urls
 
 
 @pytest.mark.asyncio
@@ -85,6 +104,7 @@ async def test_get_clash_subscription_yaml_uses_sub_clash_without_legacy_retry(m
 
     assert body == yaml_body.strip()
     assert calls == [
+        "https://vpn.example.com:2096/clash/panel-sub-token",
         "https://panel.example.com:2096/daralla/sub/clash/panel-sub-token",
     ]
 
@@ -125,6 +145,7 @@ async def test_get_clash_subscription_yaml_falls_back_to_legacy_clash_path(monke
 
     assert body == yaml_body.strip()
     assert calls == [
+        "https://vpn.example.com:2096/clash/panel-sub-token",
         "https://panel.example.com:2096/daralla/sub/clash/panel-sub-token",
         "https://panel.example.com:2096/daralla/clash/panel-sub-token",
     ]
