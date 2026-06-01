@@ -92,12 +92,14 @@ proxies:
     assert "network: xhttp" in yaml_text
     assert "x-padding-bytes: 100-1000" in yaml_text
     assert "profile-title: Daralla VPN" in yaml_text
-    assert "MATCH,Daralla VPN" in yaml_text
+    assert "name: PROXY" in yaml_text
+    assert "MATCH,PROXY" in yaml_text
 
 
 def test_render_clash_subscription_yaml_empty_proxies():
     yaml_text = render_clash_subscription_yaml([], group_name="Test VPN")
     assert yaml_text.startswith("# Clash Meta")
     assert "proxies:" in yaml_text
-    assert "MATCH,Test VPN" in yaml_text
+    assert "name: PROXY" in yaml_text
+    assert "MATCH,PROXY" in yaml_text
 

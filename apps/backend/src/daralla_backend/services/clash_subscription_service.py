@@ -153,34 +153,22 @@ def _emit_yaml(value: Any, indent: int = 0) -> str:
 
 
 def build_merged_clash_config(proxies: list[dict[str, Any]], *, group_name: str) -> dict[str, Any]:
-    """Daralla-owned Mihomo shell (proxy-groups, rules) around merged panel proxies."""
-    clean_group = (group_name or "Daralla VPN").strip() or "Daralla VPN"
+    """Panel-style Mihomo shell (proxy-groups, rules) for merged subscription proxies."""
     proxy_names = [str(p["name"]) for p in proxies if p.get("name")]
 
     select_proxies: list[str] = []
     if proxy_names:
-        select_proxies.extend(["AUTO", *proxy_names, "DIRECT"])
+        select_proxies.extend(proxy_names + ["DIRECT"])
     else:
         select_proxies.append("DIRECT")
 
     proxy_groups: list[dict[str, Any]] = [
         {
-            "name": clean_group,
+            "name": "PROXY",
             "type": "select",
             "proxies": select_proxies,
         },
     ]
-    if proxy_names:
-        proxy_groups.append(
-            {
-                "name": "AUTO",
-                "type": "url-test",
-                "proxies": proxy_names,
-                "url": "http://www.gstatic.com/generate_204",
-                "interval": 300,
-                "tolerance": 50,
-            }
-        )
 
     return {
         "mixed-port": 7890,
@@ -189,7 +177,7 @@ def build_merged_clash_config(proxies: list[dict[str, Any]], *, group_name: str)
         "log-level": "info",
         "proxies": proxies,
         "proxy-groups": proxy_groups,
-        "rules": [f"MATCH,{clean_group}"],
+        "rules": ["MATCH,PROXY"],
     }
 
 
