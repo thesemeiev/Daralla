@@ -88,7 +88,8 @@
             var parts = [];
             if (result.sync_stats) {
                 var s = result.sync_stats;
-                if (s.clients_created != null) parts.push('клиентов создано: ' + s.clients_created);
+                var created = s.clients_created != null ? s.clients_created : s.total_clients_created;
+                if (created != null) parts.push('клиентов создано: ' + created);
                 if (s.servers_added != null) parts.push('серверов добавлено: ' + s.servers_added);
                 if (s.servers_removed != null) parts.push('серверов снято: ' + s.servers_removed);
                 if (s.errors && s.errors.length) parts.push('ошибки: ' + s.errors.slice(0, 5).join('; '));
@@ -96,6 +97,17 @@
             var msg = 'Синхронизация подписок с серверами: ' + (parts.length ? parts.join(', ') : 'OK');
             if (result.sync_error) msg += '\nПредупреждение: ' + result.sync_error;
             return msg;
+        }
+
+        function adminServerSaveSuccessMessage(result, isNew) {
+            var parts = [isNew ? 'Сервер добавлен' : 'Сервер сохранён'];
+            if (result.sync_started) {
+                parts.push('синхронизация подписок запущена в фоне');
+            }
+            if (result.flow_sync_started && result.server_id) {
+                parts.push('синхронизация flow запущена в фоне');
+            }
+            return parts.join(' · ');
         }
 
         async function loadServerManagement() {
@@ -777,24 +789,24 @@
                     body: JSON.stringify(body)
                 });
                 var result = await window.DarallaApiClient.responseJson(response);
-                if (result.success) {
-                    _deps.closeModal('server-config-modal');
-                    await refreshAdminServersInGroup();
-                    if (result.flow_sync_started && result.server_id) {
-                        await _deps.appShowAlert(
-                            'Синхронизация flow для всех клиентов на этой ноде запущена в фоне. При необходимости повторите вручную через API или дождитесь завершения (см. логи бота).',
-                            { title: 'Flow', variant: 'success' }
-                        );
-                    }
-                    if (result.sync_stats || result.sync_error) {
-                        await _deps.appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
-                    }
-                } else {
-                    await _deps.appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.error || ('HTTP ' + response.status));
+                }
+                _deps.closeModal('server-config-modal');
+                await refreshAdminServersInGroup();
+                showAdminToast(adminServerSaveSuccessMessage(result, !id));
+                if (result.sync_stats || result.sync_error) {
+                    await _deps.appShowAlert(adminSyncSubscriptionsAlertMessage(result), {
+                        title: 'Синхронизация',
+                        variant: result.sync_error ? 'error' : 'info'
+                    });
                 }
             } catch (err) {
                 console.error('Ошибка сохранения сервера:', err);
-                await _deps.appShowAlert('Ошибка при сохранении', { variant: 'error' });
+                await _deps.appShowAlert(
+                    'Ошибка при сохранении: ' + (err.message || err),
+                    { title: 'Ошибка', variant: 'error' }
+                );
             }
         }
 
@@ -811,17 +823,23 @@
                     body: JSON.stringify({ id: serverId })
                 });
                 var result = await window.DarallaApiClient.responseJson(response);
-                if (result.success) {
-                    await refreshAdminServersInGroup();
-                    if (result.sync_stats || result.sync_error) {
-                        await _deps.appShowAlert(adminSyncSubscriptionsAlertMessage(result), { title: 'Синхронизация' });
-                    }
-                } else {
-                    await _deps.appShowAlert('Ошибка: ' + result.error, { variant: 'error' });
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.error || ('HTTP ' + response.status));
+                }
+                await refreshAdminServersInGroup();
+                showAdminToast(result.sync_started ? 'Сервер удалён · синхронизация в фоне' : 'Сервер удалён');
+                if (result.sync_stats || result.sync_error) {
+                    await _deps.appShowAlert(adminSyncSubscriptionsAlertMessage(result), {
+                        title: 'Синхронизация',
+                        variant: result.sync_error ? 'error' : 'info'
+                    });
                 }
             } catch (err) {
                 console.error('Ошибка удаления сервера:', err);
-                await _deps.appShowAlert('Ошибка при удалении', { variant: 'error' });
+                await _deps.appShowAlert(
+                    'Ошибка при удалении: ' + (err.message || err),
+                    { title: 'Ошибка', variant: 'error' }
+                );
             }
         }
 

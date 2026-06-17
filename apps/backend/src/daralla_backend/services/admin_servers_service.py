@@ -152,18 +152,56 @@ async def _run_sync_servers_with_config() -> tuple[dict | None, str | None]:
         return None, str(exc)
 
 
-async def _reload_and_sync_serialized(need_sync: bool) -> tuple[dict | None, str | None, bool]:
+async def _background_server_sync_job(reason: str) -> None:
+    try:
+        stats, err = await _run_sync_servers_with_config()
+        if err:
+            logger.warning("Фоновый sync после %s: %s", reason, err)
+        elif isinstance(stats, dict) and stats.get("errors"):
+            logger.warning(
+                "Фоновый sync после %s: частичные ошибки (%s), пример: %s",
+                reason,
+                len(stats["errors"]),
+                stats["errors"][:3],
+            )
+        else:
+            logger.info("Фоновый sync после %s завершён", reason)
+    except Exception:
+        logger.exception("Фоновый sync после %s завершился с исключением", reason)
+
+
+def _schedule_background_server_sync(reason: str) -> None:
+    """Полный sync после CRUD сервера — в фоне, чтобы не блокировать HTTP-ответ админки."""
+    try:
+        asyncio.create_task(
+            _background_server_sync_job(reason),
+            name=f"admin-server-sync:{reason}",
+        )
+    except RuntimeError:
+        logger.warning(
+            "Не удалось запланировать фоновый sync (%s): нет активного event loop",
+            reason,
+        )
+
+
+async def _reload_and_sync_serialized(
+    need_sync: bool, *, sync_reason: str = "server_config_change"
+) -> dict:
+    """
+    Быстро перезагружает runtime-конфиг серверов.
+    Полный sync с панелями (долгий) — только в фоне, не в HTTP-запросе.
+    """
     async with _SERVER_CONFIG_OP_LOCK:
         try:
             await _reload_server_manager()
         except Exception as mgr_e:
             logger.error("Ошибка обновления менеджера серверов: %s", mgr_e)
 
-        if not need_sync:
-            return None, None, False
-
-        sync_stats, sync_error = await _run_sync_servers_with_config()
-        return sync_stats, sync_error, False
+    extra: dict = {}
+    if need_sync:
+        _schedule_background_server_sync(sync_reason)
+        extra["sync_started"] = True
+    return extra
 
 
 async def handle_server_groups(data: dict):
@@ -260,21 +298,15 @@ async def handle_servers_config(data: dict):
             if pair:
                 return pair
             raise
-        sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
-            need_sync=(insert_active == 1)
+        sync_extra = await _reload_and_sync_serialized(
+            need_sync=(insert_active == 1),
+            sync_reason="admin_server_add",
         )
         try:
             await enqueue_group_sync_jobs(int(group_id), reason="admin_server_add")
         except Exception as e:
             logger.warning("Outbox enqueue server add failed group=%s: %s", group_id, e)
-        payload = {"success": True, "server_id": server_id}
-        if sync_stats is not None:
-            payload["sync_stats"] = sync_stats
-        if sync_error:
-            payload["sync_error"] = sync_error
-        if sync_debounced:
-            payload["sync_debounced"] = True
-        return payload, 200
+        return {"success": True, "server_id": server_id, **sync_extra}, 200
     if action == "reorder":
         group_id = data.get("group_id")
         server_ids = data.get("server_ids")
@@ -320,8 +352,9 @@ async def handle_server_config_update(data: dict):
         if pair:
             return pair
         raise
-    sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(
-        need_sync=_was_inactive_and_now_active(old_server, update_data)
+    sync_extra = await _reload_and_sync_serialized(
+        need_sync=_was_inactive_and_now_active(old_server, update_data),
+        sync_reason="admin_server_update",
     )
     try:
         if old_server and old_server.get("group_id") is not None:
@@ -332,13 +365,8 @@ async def handle_server_config_update(data: dict):
         "success": True,
         "client_flow_changed": client_flow_changed,
         "server_id": int(server_id),
+        **sync_extra,
     }
-    if sync_stats is not None:
-        payload["sync_stats"] = sync_stats
-    if sync_error:
-        payload["sync_error"] = sync_error
-    if sync_debounced:
-        payload["sync_debounced"] = True
     if client_flow_changed:
         asyncio.create_task(_background_sync_client_flow(int(server_id)))
         payload["flow_sync_started"] = True
@@ -384,20 +412,16 @@ async def handle_server_config_delete(data: dict):
             server_id,
             purge_stats,
         )
-    sync_stats, sync_error, sync_debounced = await _reload_and_sync_serialized(need_sync=True)
+    sync_extra = await _reload_and_sync_serialized(
+        need_sync=True,
+        sync_reason="admin_server_delete",
+    )
     try:
         if old_server and old_server.get("group_id") is not None:
             await enqueue_group_sync_jobs(int(old_server["group_id"]), reason="admin_server_delete")
     except Exception as e:
         logger.warning("Outbox enqueue server delete failed server=%s: %s", server_id, e)
-    payload = {"success": True, "purge_stats": purge_stats}
-    if sync_stats is not None:
-        payload["sync_stats"] = sync_stats
-    if sync_error:
-        payload["sync_error"] = sync_error
-    if sync_debounced:
-        payload["sync_debounced"] = True
-    return payload, 200
+    return {"success": True, "purge_stats": purge_stats, **sync_extra}, 200
 
 
 async def handle_server_group_traffic_template(data: dict):

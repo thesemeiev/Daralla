@@ -150,7 +150,7 @@ async def test_admin_servers_add_update_delete_contract(
     assert delete_resp.status_code == 200
     delete_data = await delete_resp.get_json()
     assert delete_data.get("success") is True
-    assert isinstance(delete_data.get("sync_error"), str)
+    assert delete_data.get("sync_started") is True
 
 
 @pytest.mark.asyncio
