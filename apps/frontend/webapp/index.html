@@ -1469,6 +1469,11 @@
                         <p id="server-flow-legacy-warning" class="hint admin-inline-hidden admin-flow-warning">В базе сохранено нестандартное значение flow — при сохранении будет заменено на xtls-rprx-vision.</p>
                     </div>
                     <div class="form-group">
+                        <label for="server-managed-inbound-ids-input">ID управляемых inbound</label>
+                        <input type="text" id="server-managed-inbound-ids-input" placeholder="1 или 1, 3" inputmode="numeric" autocomplete="off">
+                        <p class="admin-server-help-text">ID инбаундов на панели 3x-ui, которыми управляет бот (создание, sync, удаление). Пусто — все инбаунды. Каскадные и ручные инбаунды не указывайте.</p>
+                    </div>
+                    <div class="form-group">
                         <label for="server-map-label-input">Название на карте</label>
                         <input type="text" id="server-map-label-input" placeholder="Показывается на карте серверов">
                     </div>

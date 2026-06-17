@@ -16,6 +16,7 @@ SERVER_CONFIG_UPDATE_KEYS = [
     'group_id', 'name', 'display_name', 'host', 'login', 'password', 'vpn_host',
     'lat', 'lng', 'is_active', 'subscription_port', 'subscription_url', 'client_flow',
     'map_label', 'location', 'max_concurrent_clients', 'client_sort_order',
+    'managed_inbound_ids',
 ]
 
 
@@ -380,7 +381,7 @@ async def add_server_config(group_id: int, name: str, host: str, login: str, pas
                            display_name: str = None, vpn_host: str = None, lat: float = None, lng: float = None,
                            subscription_port: int = None, subscription_url: str = None, client_flow: str = None,
                            map_label: str = None, location: str = None, max_concurrent_clients: int = None,
-                           is_active: int = 1):
+                           is_active: int = 1, managed_inbound_ids: str = None):
     """Добавляет конфигурацию сервера. is_active: 1 по умолчанию."""
     port = 2096 if subscription_port is None else subscription_port
     cap = 50 if max_concurrent_clients is None else max_concurrent_clients
@@ -395,8 +396,8 @@ async def add_server_config(group_id: int, name: str, host: str, login: str, pas
         next_sort = int(sort_row[0]) if sort_row and sort_row[0] is not None else 0
         async with db.execute(
             """INSERT INTO servers_config 
-               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients, is_active, client_sort_order)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (group_id, name, display_name, host, login, password, vpn_host, lat, lng, subscription_port, subscription_url, client_flow, map_label, location, max_concurrent_clients, is_active, client_sort_order, managed_inbound_ids)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 group_id,
                 name,
@@ -415,6 +416,7 @@ async def add_server_config(group_id: int, name: str, host: str, login: str, pas
                 cap,
                 ia,
                 next_sort,
+                (managed_inbound_ids or "").strip() or None,
             ),
         ) as cur:
             server_id = cur.lastrowid

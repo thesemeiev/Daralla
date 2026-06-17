@@ -26,6 +26,11 @@ from ..db.subscriptions_db import (
     update_subscription_name,
 )
 from .server_manager import MultiServerManager
+from ..server_inbound_scope import (
+    inbound_in_scope,
+    parse_managed_inbound_ids,
+    primary_managed_inbound_id,
+)
 from .group_traffic_template_service import apply_template_to_subscription
 from .traffic_bucket_service import get_traffic_bucket_service, traffic_buckets_enabled
 from .xui_helpers import panel_snapshot_matches_desired
@@ -263,12 +268,8 @@ class SubscriptionManager:
             ) or None
             target_inbound_id = None
             if server_config:
-                raw_inbound_id = server_config.get("client_inbound_id")
-                if raw_inbound_id is not None and str(raw_inbound_id).strip():
-                    try:
-                        target_inbound_id = int(raw_inbound_id)
-                    except (TypeError, ValueError):
-                        target_inbound_id = None
+                managed_inbounds = parse_managed_inbound_ids(server_config.get("managed_inbound_ids"))
+                target_inbound_id = primary_managed_inbound_id(managed_inbounds)
             if not protocol_aware_enabled:
                 target_protocol = None
                 target_inbound_id = None
@@ -995,10 +996,16 @@ class SubscriptionManager:
                     if t.get("client_email") is not None and str(t.get("client_email")).strip()
                 }
                 expected_emails |= exhausted_keep_emails_by_server.get(server_name, set())
+                server_config = self.server_manager.get_server_config(server_name)
+                managed_inbounds = parse_managed_inbound_ids(
+                    server_config.get("managed_inbound_ids") if server_config else None
+                )
                 try:
                     latest = await xui.list()
                     panel_emails: set = set()
                     for inbound in latest.get("obj") or []:
+                        if not inbound_in_scope(inbound.get("id"), managed_inbounds):
+                            continue
                         try:
                             settings = json.loads(inbound.get("settings") or "{}")
                         except (json.JSONDecodeError, TypeError):

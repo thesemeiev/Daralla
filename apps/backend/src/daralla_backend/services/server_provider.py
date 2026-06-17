@@ -42,7 +42,8 @@ class ServerProvider:
                 "subscription_url": s.get("subscription_url"),
                 "client_flow": (s.get("client_flow") or "").strip() or None,
                 "location": (s.get("location") or "").strip() or None,
-                "max_concurrent_clients": cap
+                "max_concurrent_clients": cap,
+                "managed_inbound_ids": (s.get("managed_inbound_ids") or "").strip() or None,
             })
             
         return result

@@ -23,6 +23,7 @@ from ..db.notifications_db import clear_subscription_notifications
 from ..core.retention_policy import get_retention_policy
 from .subscription_manager import SubscriptionManager
 from .xui_helpers import clients_from_settings_payload, parse_inbound_settings
+from ..server_inbound_scope import inbound_in_scope, parse_managed_inbound_ids
 from ..utils.logging_helpers import log_event
 
 logger = logging.getLogger(__name__)
@@ -449,6 +450,11 @@ class SyncManager:
             # Получаем список валидных клиентов для этого сервера из БД
             valid_clients_for_server = valid_clients_by_server.get(server_name, set())
             logger.debug(f"Сервер {server_name}: в БД должно быть {len(valid_clients_for_server)} клиентов")
+
+            server_config = self.server_manager.get_server_config(server_name)
+            managed_inbounds = parse_managed_inbound_ids(
+                server_config.get("managed_inbound_ids") if server_config else None
+            )
             
             try:
                 # Получаем всех клиентов на сервере
@@ -458,6 +464,8 @@ class SyncManager:
                     continue
                 
                 for inbound in response['obj']:
+                    if not inbound_in_scope(inbound.get("id"), managed_inbounds):
+                        continue
                     try:
                         settings = parse_inbound_settings(inbound.get("settings"))
                         clients = clients_from_settings_payload(settings)

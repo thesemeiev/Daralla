@@ -8,6 +8,7 @@ import sqlite3
 
 from daralla_backend.app_context import get_ctx
 from daralla_backend.client_flow import normalize_client_flow_for_storage
+from daralla_backend.server_inbound_scope import normalize_managed_inbound_ids_for_storage
 from daralla_backend.db.servers_db import (
     add_server_config,
     add_server_group,
@@ -229,6 +230,9 @@ async def handle_servers_config(data: dict):
         cf_norm, cf_err = normalize_client_flow_for_storage(data.get("client_flow"))
         if cf_err:
             return {"error": cf_err}, 400
+        mi_norm, mi_err = normalize_managed_inbound_ids_for_storage(data.get("managed_inbound_ids"))
+        if mi_err:
+            return {"error": mi_err}, 400
         raw_active = data.get("is_active")
         insert_active = 1 if (raw_active is None or _coerce_server_active(raw_active)) else 0
         try:
@@ -249,6 +253,7 @@ async def handle_servers_config(data: dict):
                 location=data.get("location") or None,
                 max_concurrent_clients=data.get("max_concurrent_clients"),
                 is_active=insert_active,
+                managed_inbound_ids=mi_norm,
             )
         except sqlite3.IntegrityError as exc:
             pair = _json_conflict_from_integrity(exc)
@@ -294,6 +299,13 @@ async def handle_server_config_update(data: dict):
         if cf_err:
             return {"error": cf_err}, 400
         update_data["client_flow"] = cf_norm
+    if "managed_inbound_ids" in update_data:
+        mi_norm, mi_err = normalize_managed_inbound_ids_for_storage(
+            update_data.get("managed_inbound_ids")
+        )
+        if mi_err:
+            return {"error": mi_err}, 400
+        update_data["managed_inbound_ids"] = mi_norm
     old_server = await get_server_by_id(int(server_id))
 
     client_flow_changed = False

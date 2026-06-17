@@ -669,6 +669,27 @@
             return enable.checked ? SERVER_CLIENT_FLOW_VALUE : null;
         }
 
+        function formatManagedInboundIdsForForm(raw) {
+            if (raw == null || raw === '') return '';
+            if (Array.isArray(raw)) return raw.join(', ');
+            var s = String(raw).trim();
+            if (!s) return '';
+            if (s.charAt(0) === '[') {
+                try {
+                    var arr = JSON.parse(s);
+                    if (Array.isArray(arr)) return arr.join(', ');
+                } catch (e) { /* keep raw */ }
+            }
+            return s;
+        }
+
+        function getManagedInboundIdsPayload() {
+            var el = document.getElementById('server-managed-inbound-ids-input');
+            if (!el) return null;
+            var s = (el.value || '').trim();
+            return s ? s : null;
+        }
+
         function showAddServerConfigModal() {
             if (getGroupId() == null) {
                 void _deps.appShowAlert('Сначала откройте группу серверов.', { title: 'Группа не выбрана', variant: 'error' });
@@ -686,6 +707,8 @@
             if (subPortEl) subPortEl.value = '2096';
             document.getElementById('server-subscription-url-input').value = '';
             setServerClientFlowFormState('');
+            var managedInboundEl = document.getElementById('server-managed-inbound-ids-input');
+            if (managedInboundEl) managedInboundEl.value = '';
             document.getElementById('server-map-label-input').value = '';
             document.getElementById('server-lat-input').value = '';
             document.getElementById('server-lng-input').value = '';
@@ -709,6 +732,10 @@
             document.getElementById('server-vpnhost-input').value = server.vpn_host || '';
             document.getElementById('server-subscription-url-input').value = server.subscription_url || '';
             setServerClientFlowFormState(server.client_flow || '');
+            var managedInboundElEdit = document.getElementById('server-managed-inbound-ids-input');
+            if (managedInboundElEdit) {
+                managedInboundElEdit.value = formatManagedInboundIdsForForm(server.managed_inbound_ids);
+            }
             document.getElementById('server-map-label-input').value = server.map_label || '';
             document.getElementById('server-lat-input').value = server.lat || '';
             document.getElementById('server-lng-input').value = server.lng || '';
@@ -732,6 +759,7 @@
                 vpn_host: document.getElementById('server-vpnhost-input').value || null,
                 subscription_url: document.getElementById('server-subscription-url-input').value || null,
                 client_flow: getServerClientFlowPayload(),
+                managed_inbound_ids: getManagedInboundIdsPayload(),
                 map_label: document.getElementById('server-map-label-input').value ? document.getElementById('server-map-label-input').value.trim() : null,
                 lat: document.getElementById('server-lat-input').value ? parseFloat(document.getElementById('server-lat-input').value) : null,
                 lng: document.getElementById('server-lng-input').value ? parseFloat(document.getElementById('server-lng-input').value) : null,
