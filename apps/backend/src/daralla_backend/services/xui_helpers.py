@@ -179,6 +179,31 @@ def panel_client_settings_dict(
         d["flow"] = "" if fv is None else str(fv).strip()
     else:
         d.pop("flow", None)
+
+    # Some panels expect list-valued fields (e.g. AllowedIPs) but in DB/config
+    # they may be stored as a JSON string or a comma-separated string.
+    # Normalize common variants to a real list here to avoid sending a
+    # JSON string where the panel expects an array (which causes
+    # `cannot unmarshal string into Go struct field .allowedIPs of type []string`).
+    for list_key in ("allowedIPs", "allowedIps", "allowed_ips", "allowed-ips", "allowed_ip"):
+        if list_key in d:
+            val = d.get(list_key)
+            if isinstance(val, str):
+                s = val.strip()
+                if not s:
+                    d[list_key] = []
+                else:
+                    # Try to parse as JSON array first
+                    try:
+                        parsed = json.loads(s)
+                        if isinstance(parsed, list):
+                            d[list_key] = parsed
+                            continue
+                    except Exception:
+                        pass
+                    # Fallback: split on commas
+                    parts = [p.strip() for p in s.split(",") if p.strip()]
+                    d[list_key] = parts
     return d
 
 
