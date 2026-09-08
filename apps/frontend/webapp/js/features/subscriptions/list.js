@@ -225,7 +225,7 @@
                 commerceNotice.innerHTML = notices.length
                     ? '<span class="commerce-closed-icon" aria-hidden="true">i</span><span class="commerce-closed-copy"><strong>Часть возможностей на паузе</strong><small>' + notices.join('. ') + '. Действующие подключения продолжают работать.</small></span>'
                     : '';
-                commerceNotice.style.display = notices.length ? 'block' : 'none';
+                commerceNotice.style.display = notices.length ? 'flex' : 'none';
             }
 
             if (loadingEl) loadingEl.style.display = 'block';

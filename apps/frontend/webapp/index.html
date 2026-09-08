@@ -1196,13 +1196,10 @@
                 <!-- Вкладка: лимиты трафика по нодам (buckets) -->
                 <div id="subscription-tab-traffic" class="tab-content traffic-tab-layout">
                     <section class="traffic-panel traffic-panel--intro" aria-labelledby="traffic-intro-title">
-                        <h3 id="traffic-intro-title" class="traffic-panel-title">Трафик</h3>
-                        <p class="traffic-panel-lead">
-                            Пакеты задают лимит по нодам. Периодная квота и докупка — в блоке «Квота периода» ниже.
-                            Каждая нода в одном пакете; при исчерпании лимита нода отключается в X-UI.
-                        </p>
+                        <div class="traffic-intro-heading"><div><span class="traffic-eyebrow">Управление доступом</span><h3 id="traffic-intro-title" class="traffic-panel-title">Трафик по нодам</h3></div><span class="traffic-intro-mark" aria-hidden="true">TB</span></div>
+                        <p class="traffic-panel-lead">Назначьте каждой ноде пакет и контролируйте его остаток.</p>
                         <details class="traffic-panel-more">
-                            <summary class="traffic-panel-more-summary">Подробнее про учёт</summary>
+                            <summary class="traffic-panel-more-summary">Как это работает</summary>
                             <p class="traffic-panel-more-body">
                                 Списание на панелях: сначала базовый объём периода, затем докупка. Базовый объём обновляется 1-го числа каждого месяца (UTC), докупка не сгорает.
                             </p>
@@ -1210,8 +1207,8 @@
                     </section>
                     <section id="subscription-traffic-period-quota" class="traffic-panel traffic-panel--quota" aria-labelledby="traffic-quota-title" hidden></section>
                     <section class="traffic-panel traffic-panel--assign" aria-labelledby="traffic-assign-title">
-                        <h3 id="traffic-assign-title" class="traffic-panel-title">Назначение нод</h3>
-                        <p class="traffic-panel-hint">Выберите пакет для каждой ноды и нажмите «Сохранить назначения».</p>
+                        <h3 id="traffic-assign-title" class="traffic-panel-title">Ноды и пакеты</h3>
+                        <p class="traffic-panel-hint">Выберите пакет для каждой ноды. Изменения применятся после сохранения.</p>
                         <div id="subscription-traffic-assignment-matrix" class="traffic-assignment-matrix-host" aria-live="polite"></div>
                         <div class="traffic-assign-actions">
                             <button type="button" class="btn-primary" data-action="saveAllTrafficAssignments">Сохранить назначения</button>

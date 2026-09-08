@@ -523,8 +523,10 @@
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">' + usedLabel + '</span><span class="traffic-metric-value">' + _formatBytes(used) + '</span></div>'
                     + '    <div class="traffic-metric"><span class="traffic-metric-label">' + remLabel + '</span><span class="traffic-metric-value">' + remainRu + '</span></div>'
                     + '  </div>'
-                    + '  <section class="traffic-bucket-block" aria-labelledby="bucket-params-' + id + '">'
-                    + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Параметры</h5>'
+                    + '  <details class="traffic-bucket-details">'
+                    + '    <summary class="traffic-bucket-details-summary">Настройки пакета</summary>'
+                    + '    <section class="traffic-bucket-block" aria-labelledby="bucket-params-' + id + '">'
+                    + '    <h5 class="traffic-bucket-block-title" id="bucket-params-' + id + '">Название и лимит</h5>'
                     + '    <div class="traffic-bucket-fields">'
                     + '      <label class="traffic-field traffic-field--span2">'
                     + '        <span class="traffic-field-label">Название</span>'
@@ -537,9 +539,11 @@
                     + '      <button type="button" class="btn-primary" data-action="saveTrafficBucketUpdate" data-bucket-id="' + id + '">Сохранить</button>'
                     + deleteBtnHtml
                     + '    </div>'
-                    + '  </section>'
-                    + '  <section class="traffic-bucket-block traffic-bucket-block--adjust" aria-labelledby="bucket-adjust-' + id + '">'
-                    + '    <h5 class="traffic-bucket-block-title" id="bucket-adjust-' + id + '">Корректировка</h5>'
+                    + '    </section>'
+                    + '  </details>'
+                    + '  <details class="traffic-bucket-details traffic-bucket-details--adjust">'
+                    + '    <summary class="traffic-bucket-details-summary">Ручная корректировка учёта</summary>'
+                    + '    <section class="traffic-bucket-block traffic-bucket-block--adjust" aria-labelledby="bucket-adjust-' + id + '">'
                     + '    <div class="traffic-bucket-adjust-fields">'
                     + '      <label class="traffic-field">'
                     + '        <span class="traffic-field-label">Дельта, ГиБ (+ или −)</span>'
@@ -553,7 +557,8 @@
                     + '    <div class="traffic-bucket-block-actions">'
                     + '      <button type="button" class="btn-secondary" data-action="adjustTrafficBucketUsage" data-bucket-id="' + id + '">Применить</button>'
                     + '    </div>'
-                    + '  </section>'
+                    + '    </section>'
+                    + '  </details>'
                     + '</article>';
             }
             var parts = [];

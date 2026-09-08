@@ -2389,7 +2389,7 @@ function syncChooseOptionCards() {
         closedNotice.innerHTML = isRenewal
             ? '<span class="commerce-closed-icon" aria-hidden="true">↻</span><span class="commerce-closed-copy"><strong>Продления на паузе</strong><small>Мы временно не принимаем продления. Ваша подписка продолжает работать.</small></span>'
             : '<span class="commerce-closed-icon" aria-hidden="true">◌</span><span class="commerce-closed-copy"><strong>Продажи на паузе</strong><small>Новые подписки временно недоступны. Мы скоро вернём оформление.</small></span>';
-        closedNotice.style.display = commerceOpen ? 'none' : 'block';
+        closedNotice.style.display = commerceOpen ? 'none' : 'flex';
     }
     if (paymentOptions) paymentOptions.style.display = commerceOpen ? '' : 'none';
     if (submitBtn) {
