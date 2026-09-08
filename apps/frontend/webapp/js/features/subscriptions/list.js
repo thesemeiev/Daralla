@@ -222,7 +222,9 @@
                 var notices = [];
                 if (!availability.new_sales_enabled) notices.push('Новые подписки временно недоступны');
                 if (!availability.renewals_enabled) notices.push('Продления временно недоступны');
-                commerceNotice.textContent = notices.length ? notices.join('. ') + '. Действующие подключения продолжают работать.' : '';
+                commerceNotice.innerHTML = notices.length
+                    ? '<span class="commerce-closed-icon" aria-hidden="true">i</span><span class="commerce-closed-copy"><strong>Часть возможностей на паузе</strong><small>' + notices.join('. ') + '. Действующие подключения продолжают работать.</small></span>'
+                    : '';
                 commerceNotice.style.display = notices.length ? 'block' : 'none';
             }
 

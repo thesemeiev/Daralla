@@ -32,6 +32,10 @@
                 await _deps.appShowAlert('ID подписки не найден.', { title: 'Ошибка', variant: 'error' });
                 return;
             }
+            if (typeof window !== 'undefined' && window.commerceAvailability && window.commerceAvailability.renewals_enabled === false) {
+                await _deps.appShowAlert('Продления временно приостановлены. Ваша подписка продолжает работать.', { title: 'Продление недоступно' });
+                return;
+            }
             try {
                 window.trafficTopupCheckoutMode = false;
                 window.currentTrafficTopupPackageId = null;
@@ -44,6 +48,17 @@
         }
 
         function goToChoosePaymentMethod(period, subscriptionId) {
+            var availability = typeof window !== 'undefined' ? window.commerceAvailability : null;
+            var isRenewal = subscriptionId != null;
+            if (availability && ((isRenewal && availability.renewals_enabled === false) || (!isRenewal && availability.new_sales_enabled === false))) {
+                _deps.appShowAlert(
+                    isRenewal
+                        ? 'Продления временно приостановлены. Ваша подписка продолжает работать.'
+                        : 'Новые подписки временно недоступны. Попробуйте позже.',
+                    { title: 'Оформление недоступно' }
+                );
+                return;
+            }
             try {
                 window.trafficTopupCheckoutMode = false;
                 window.currentTrafficTopupPackageId = null;

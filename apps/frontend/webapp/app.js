@@ -195,6 +195,10 @@ var appFeatures = window.DarallaAppComposition.create({
     initTelegramFlow: function () { return initTelegramFlow(); },
     setCurrentSubscriptionDetail: function (value) { currentSubscriptionDetail = value; },
     onBuySubscription: function () {
+        if (window.commerceAvailability && window.commerceAvailability.new_sales_enabled === false) {
+            showPage('subscriptions');
+            return;
+        }
         currentPaymentPeriod = getDefaultPaymentPeriod();
         currentPaymentGateway = 'yookassa';
         currentPlategaPaymentMethod = 'sbp';
@@ -2371,6 +2375,7 @@ function syncChooseOptionCards() {
     var plategaProviderSubEl = document.getElementById('choose-platega-provider-sub');
     var submitBtn = document.getElementById('choose-payment-submit');
     var closedNotice = document.getElementById('commerce-closed-notice');
+    var paymentOptions = document.getElementById('choose-payment-options');
     var summaryPeriodEl = document.getElementById('choose-summary-period');
     var summaryTypeEl = document.getElementById('choose-summary-type');
     var summaryProviderEl = document.getElementById('choose-summary-provider');
@@ -2381,11 +2386,12 @@ function syncChooseOptionCards() {
     var isRenewal = !!currentExtendSubscriptionId;
     var commerceOpen = trafficMode || (isRenewal ? availability.renewals_enabled : availability.new_sales_enabled);
     if (closedNotice) {
-        closedNotice.textContent = isRenewal
-            ? 'Продления временно приостановлены. Ваша подписка продолжает работать.'
-            : 'Новые продажи временно приостановлены. Вернитесь позже, пожалуйста.';
+        closedNotice.innerHTML = isRenewal
+            ? '<span class="commerce-closed-icon" aria-hidden="true">↻</span><span class="commerce-closed-copy"><strong>Продления на паузе</strong><small>Мы временно не принимаем продления. Ваша подписка продолжает работать.</small></span>'
+            : '<span class="commerce-closed-icon" aria-hidden="true">◌</span><span class="commerce-closed-copy"><strong>Продажи на паузе</strong><small>Новые подписки временно недоступны. Мы скоро вернём оформление.</small></span>';
         closedNotice.style.display = commerceOpen ? 'none' : 'block';
     }
+    if (paymentOptions) paymentOptions.style.display = commerceOpen ? '' : 'none';
     if (submitBtn) {
         submitBtn.disabled = !commerceOpen;
         submitBtn.style.display = commerceOpen ? '' : 'none';
@@ -3150,7 +3156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         webAuthToken = await window.DarallaAuthSession.hydrateTokenFromIndexedDb(webAuthToken);
     }
 
-    loadPrices();
+    await loadPrices();
     preventCloseOnScroll();
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function () {}, function (err) { console.warn('SW register failed', err); });
@@ -3309,6 +3315,7 @@ async function initTelegramFlow() {
         }
     }
 
+    await loadPrices();
     await loadSubscriptions();
     await checkAdminAccess();
     var route = parseHashRoute();
