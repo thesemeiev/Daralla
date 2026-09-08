@@ -101,6 +101,7 @@
             }
 
             var isActive = sub.status === 'active' || (sub.status === 'trial' && sub.expires_at && new Date(sub.expires_at * 1000) > new Date());
+            var renewalsEnabled = !window.commerceAvailability || window.commerceAvailability.renewals_enabled !== false;
             var statusClass = isActive ? 'active' : 'expired';
             var statusText = sub.status === 'active'
                 ? 'Активна'
@@ -161,7 +162,7 @@
                     : '')
                 + '                <footer class="sub-sheet__footer">\n'
                 + '                    <button type="button" class="sub-sheet__btn sub-sheet__btn--ghost" onclick="showRenameSubscriptionModal()">Переименовать</button>\n'
-                + ((sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial')
+                + (renewalsEnabled && (sub.status === 'active' || sub.status === 'expired' || sub.status === 'trial')
                     ? '                    <button type="button" class="sub-sheet__btn sub-sheet__btn--accent" onclick="showExtendSubscriptionModal(' + sub.id + ')">Продлить</button>\n'
                     : '')
                 + '                </footer>\n'
@@ -215,6 +216,15 @@
             var errorEl = document.getElementById('error');
             var emptyEl = document.getElementById('empty');
             var subscriptionsEl = document.getElementById('subscriptions');
+            var availability = window.commerceAvailability || { new_sales_enabled: true, renewals_enabled: true };
+            var commerceNotice = document.getElementById('commerce-subscriptions-notice');
+            if (commerceNotice) {
+                var notices = [];
+                if (!availability.new_sales_enabled) notices.push('Новые подписки временно недоступны');
+                if (!availability.renewals_enabled) notices.push('Продления временно недоступны');
+                commerceNotice.textContent = notices.length ? notices.join('. ') + '. Действующие подключения продолжают работать.' : '';
+                commerceNotice.style.display = notices.length ? 'block' : 'none';
+            }
 
             if (loadingEl) loadingEl.style.display = 'block';
             if (errorEl) errorEl.style.display = 'none';
@@ -254,6 +264,8 @@
 
                 if (!data.subscriptions || data.subscriptions.length === 0) {
                     if (emptyEl) emptyEl.style.display = 'block';
+                    var emptyBuyButton = emptyEl && emptyEl.querySelector('[data-action="goToChoosePaymentMethod"]');
+                    if (emptyBuyButton) emptyBuyButton.style.display = availability.new_sales_enabled ? '' : 'none';
                 } else {
                     if (subscriptionsEl) subscriptionsEl.style.display = 'block';
                     window.allSubscriptions = data.subscriptions;
@@ -266,6 +278,7 @@
                     buyButton.id = 'buy-subscription-button';
                     buyButton.className = 'btn-primary subscriptions-buy-btn';
                     buyButton.textContent = 'Купить подписку';
+                    if (!availability.new_sales_enabled) buyButton.style.display = 'none';
                     buyButton.onclick = function () {
                         if (typeof _deps.onBuySubscription === 'function') _deps.onBuySubscription();
                     };

@@ -36,12 +36,31 @@ CONFIG_KEY_PRICE_3MONTH = "price_3month"
 CONFIG_KEY_DEFAULT_DEVICE_LIMIT = "default_device_limit"
 CONFIG_KEY_TARIFFS_JSON = "tariffs_json_v1"
 CONFIG_KEY_TRAFFIC_TOPUP_JSON = "traffic_topup_packages_json_v1"
+CONFIG_KEY_NEW_SALES_ENABLED = "new_sales_enabled"
+CONFIG_KEY_RENEWALS_ENABLED = "renewals_enabled"
 
 ALLOWED_BADGES = {"", "best", "hit"}
 
 _TRAFFIC_TOPUP_ID_RE = re.compile(r"^[a-z0-9_-]{2,40}$")
 
 TRAFFIC_TOPUP_PACKAGES: list[dict[str, Any]] = []
+
+
+async def get_commerce_availability() -> dict[str, bool]:
+    from daralla_backend.db.config_db import get_config
+
+    async def enabled(key: str) -> bool:
+        value = await get_config(key, "1")
+        return _config_bool(value)
+
+    return {
+        "new_sales_enabled": await enabled(CONFIG_KEY_NEW_SALES_ENABLED),
+        "renewals_enabled": await enabled(CONFIG_KEY_RENEWALS_ENABLED),
+    }
+
+
+def _config_bool(value: Any) -> bool:
+    return str(value).strip().lower() not in {"0", "false", "off", "no"}
 
 
 def _clamp_price(value: int) -> int:

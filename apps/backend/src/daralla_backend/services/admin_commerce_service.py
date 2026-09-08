@@ -6,6 +6,8 @@ import json
 
 from daralla_backend.db.config_db import set_config
 from daralla_backend.prices_config import (
+    CONFIG_KEY_NEW_SALES_ENABLED,
+    CONFIG_KEY_RENEWALS_ENABLED,
     CONFIG_KEY_DEFAULT_DEVICE_LIMIT,
     CONFIG_KEY_PRICE_3MONTH,
     CONFIG_KEY_PRICE_MONTH,
@@ -17,6 +19,7 @@ from daralla_backend.prices_config import (
     get_default_device_limit_async,
     get_tariffs,
     get_traffic_topup_packages,
+    get_commerce_availability,
     normalize_tariffs,
     normalize_traffic_topup_packages,
     refresh_prices_from_db,
@@ -35,6 +38,7 @@ async def admin_commerce_get_payload():
         "tariffs": tariffs,
         "traffic_topup_packages": traffic_topup_packages,
         "default_device_limit": default_dl,
+        "availability": await get_commerce_availability(),
     }, 200
 
 
@@ -89,6 +93,17 @@ async def admin_commerce_update_payload(data: dict):
         "Лимит устройств по умолчанию",
     )
 
+    availability = data.get("availability") if isinstance(data.get("availability"), dict) else {}
+    for key, label in (
+        (CONFIG_KEY_NEW_SALES_ENABLED, "Продажа новых подписок"),
+        (CONFIG_KEY_RENEWALS_ENABLED, "Продление подписок"),
+    ):
+        if key in availability:
+            raw_value = availability[key]
+            enabled = raw_value if isinstance(raw_value, bool) else str(raw_value).strip().lower() not in {"0", "false", "off", "no"}
+            value = "1" if enabled else "0"
+            ok = ok and await set_config(key, value, label)
+
     ttp_raw = data.get("traffic_topup_packages")
     if isinstance(ttp_raw, list):
         ttp_save = normalize_traffic_topup_packages(ttp_raw)
@@ -112,4 +127,5 @@ async def admin_commerce_update_payload(data: dict):
         "tariffs": tariffs,
         "traffic_topup_packages": get_traffic_topup_packages(),
         "default_device_limit": await get_default_device_limit_async(),
+        "availability": await get_commerce_availability(),
     }, 200

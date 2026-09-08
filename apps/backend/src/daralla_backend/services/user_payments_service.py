@@ -33,6 +33,7 @@ from daralla_backend.prices_config import (
     get_tariff,
     get_traffic_topup_package,
     refresh_prices_from_db,
+    get_commerce_availability,
 )
 from daralla_backend.web.routes.api_user_helpers import cryptocloud_extract_address
 
@@ -78,6 +79,11 @@ async def create_user_payment(
     tariff = get_tariff(period)
     if not period or not tariff:
         raise UserPaymentServiceError("Invalid period", 400)
+    availability = await get_commerce_availability()
+    if subscription_id and not availability["renewals_enabled"]:
+        raise UserPaymentServiceError("Продление подписок временно закрыто. Попробуйте позже.", 503)
+    if not subscription_id and not availability["new_sales_enabled"]:
+        raise UserPaymentServiceError("Продажа новых подписок временно закрыта. Попробуйте позже.", 503)
     if gateway not in ("yookassa", "cryptocloud", "platega"):
         gateway = "yookassa"
 

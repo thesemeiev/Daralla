@@ -1202,6 +1202,57 @@ header:has(.back-button):not(:has(h1)) {
     margin-bottom: 14px;
 }
 
+.admin-commerce-availability {
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 14px;
+    margin: 0 0 16px;
+    background: var(--bg-page, var(--card-bg));
+}
+
+.admin-commerce-availability-title {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+.commerce-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.commerce-toggle-row + .commerce-toggle-row {
+    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.commerce-toggle-row span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.commerce-toggle-row small {
+    color: var(--text-secondary);
+}
+
+.commerce-closed-notice {
+    border: 1px solid rgba(220, 140, 50, 0.45);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    color: var(--text-primary);
+    background: rgba(220, 140, 50, 0.12);
+    line-height: 1.45;
+}
+
+.commerce-closed-notice--subscriptions {
+    margin: 0 0 16px;
+}
+
 .admin-commerce-code {
     font-size: 0.88em;
     padding: 2px 6px;

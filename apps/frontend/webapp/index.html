@@ -167,6 +167,7 @@
                 </span>
                 <span class="profile-card-chevron" aria-hidden="true">›</span>
             </button>
+            <div id="commerce-subscriptions-notice" class="commerce-closed-notice commerce-closed-notice--subscriptions" role="status" aria-live="polite" style="display: none;"></div>
             
             <div id="loading" class="loading">
                 <div class="spinner"></div>
@@ -209,6 +210,7 @@
             </header>
             <div class="buy-subscription-content choose-payment-content" style="padding: 20px;">
                 <div id="choose-traffic-topup-summary" class="choose-traffic-topup-summary" style="display: none;" aria-live="polite"></div>
+                <div id="commerce-closed-notice" class="commerce-closed-notice" role="status" aria-live="polite" style="display: none;"></div>
                 <div id="choose-payment-period-section">
                 <p class="choose-section-label">Период</p>
                 <div class="choose-options-row" role="group" aria-label="Период подписки">
@@ -1346,6 +1348,12 @@
                     <section class="admin-commerce-card" aria-labelledby="admin-commerce-tariffs-heading">
                         <h3 id="admin-commerce-tariffs-heading" class="admin-commerce-card-title">Тарифы</h3>
                         <p class="admin-commerce-card-intro">Используются в мини-приложении и на экране оплаты. У каждого тарифа — свой ключ периода (например <code class="admin-commerce-code">month</code>), название для пользователя, длительность в днях, цена и опциональный бейдж.</p>
+                        <div class="admin-commerce-availability">
+                            <h4 class="admin-commerce-availability-title">Приём заказов</h4>
+                            <p class="admin-commerce-card-intro admin-commerce-card-intro--subtle">Отключение скрывает действие у пользователей и блокирует создание новых платежей. Уже активные подписки продолжают работать.</p>
+                            <label class="commerce-toggle-row"><input type="checkbox" id="admin-commerce-new-sales-enabled"><span><strong>Новые подписки</strong><small>Разрешить покупку первого тарифа</small></span></label>
+                            <label class="commerce-toggle-row"><input type="checkbox" id="admin-commerce-renewals-enabled"><span><strong>Продления</strong><small>Разрешить продление действующих и истёкших подписок</small></span></label>
+                        </div>
                         <div id="admin-commerce-tariffs" class="admin-commerce-tariffs"></div>
                         <button type="button" id="admin-commerce-add-tariff" class="btn-secondary admin-btn-full admin-commerce-add-tariff-btn">+ Добавить тариф</button>
                     </section>

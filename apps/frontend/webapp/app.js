@@ -2370,11 +2370,26 @@ function syncChooseOptionCards() {
     var plategaMethodRow = plategaMethodBlock && plategaMethodBlock.querySelector('.choose-options-row[aria-label="Метод оплаты Platega"]');
     var plategaProviderSubEl = document.getElementById('choose-platega-provider-sub');
     var submitBtn = document.getElementById('choose-payment-submit');
+    var closedNotice = document.getElementById('commerce-closed-notice');
     var summaryPeriodEl = document.getElementById('choose-summary-period');
     var summaryTypeEl = document.getElementById('choose-summary-type');
     var summaryProviderEl = document.getElementById('choose-summary-provider');
     var summaryPriceEl = document.getElementById('choose-summary-price');
     if (!periodRow || !paymentTypeRow || !paymentRow) return;
+
+    var availability = window.commerceAvailability || { new_sales_enabled: true, renewals_enabled: true };
+    var isRenewal = !!currentExtendSubscriptionId;
+    var commerceOpen = trafficMode || (isRenewal ? availability.renewals_enabled : availability.new_sales_enabled);
+    if (closedNotice) {
+        closedNotice.textContent = isRenewal
+            ? 'Продления временно приостановлены. Ваша подписка продолжает работать.'
+            : 'Новые продажи временно приостановлены. Вернитесь позже, пожалуйста.';
+        closedNotice.style.display = commerceOpen ? 'none' : 'block';
+    }
+    if (submitBtn) {
+        submitBtn.disabled = !commerceOpen;
+        submitBtn.style.display = commerceOpen ? '' : 'none';
+    }
 
     function getCurrentPaymentType() {
         if (currentPaymentGateway === 'cryptocloud') return 'crypto';
@@ -3041,6 +3056,11 @@ function renderChoosePaymentTariffCards(tariffs) {
 }
 
 function applyLoadedPrices(payload) {
+    var availability = payload && payload.availability ? payload.availability : {};
+    window.commerceAvailability = {
+        new_sales_enabled: availability.new_sales_enabled !== false,
+        renewals_enabled: availability.renewals_enabled !== false
+    };
     paymentTariffs = normalizeTariffsForUi(payload);
     var priceMap = {};
     paymentTariffs.forEach(function (t) { priceMap[t.period] = t.price; });

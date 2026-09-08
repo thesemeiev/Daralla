@@ -352,6 +352,11 @@
                 var data = await window.DarallaApiClient.responseJson(res);
                 if (!res.ok || !data.success) throw new Error(data.error || 'Не удалось загрузить настройки');
                 var dl = document.getElementById('admin-commerce-device-limit');
+                var availability = data.availability || {};
+                var newSales = document.getElementById('admin-commerce-new-sales-enabled');
+                var renewals = document.getElementById('admin-commerce-renewals-enabled');
+                if (newSales) newSales.checked = availability.new_sales_enabled !== false;
+                if (renewals) renewals.checked = availability.renewals_enabled !== false;
                 var tariffs = normalizeTariffList(data.tariffs);
                 if (!tariffs.length) tariffs = fallbackTariffsFromLegacy(data);
                 renderTariffEditor(tariffs);
@@ -391,13 +396,19 @@
             try {
                 var tariffs = collectTariffsFromForm();
                 var trafficTopups = collectTrafficTopupsFromForm();
+                var newSales = document.getElementById('admin-commerce-new-sales-enabled');
+                var renewals = document.getElementById('admin-commerce-renewals-enabled');
                 var res = await _deps.apiFetch('/api/admin/commerce', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         tariffs: tariffs,
                         traffic_topup_packages: trafficTopups,
-                        default_device_limit: dl
+                        default_device_limit: dl,
+                        availability: {
+                            new_sales_enabled: !!(newSales && newSales.checked),
+                            renewals_enabled: !!(renewals && renewals.checked)
+                        }
                     })
                 });
                 var data = await window.DarallaApiClient.responseJson(res);
